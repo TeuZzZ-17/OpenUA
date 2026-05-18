@@ -30,7 +30,7 @@ C:\Users\YourName\Desktop\UA_source-master
 or directly:
 C:\msys64\mingw64.exe
 
-8. Go to the project folder
+8. In MinGW64 go to the project folder
 Example:
 cd /c/Users/YourName/Desktop/UA_source-master
 
