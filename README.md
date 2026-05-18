@@ -5,9 +5,7 @@ Opensource reimplementation of **UrbanAssault** engine. You needed copy of origi
 
 **License** GPLv2
 
-64Bit compile guide for modern windows:
-
-UA Source on Windows (MSYS2 64-bit)
+# Building UA Source on Modern Windows (64-bit MSYS2):
 
 1. Install MSYS2
 Download and install MSYS2:
