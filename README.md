@@ -51,7 +51,7 @@ Use a clean, unmodified installation of the original game.
 UA_source.exe,
 res,
 fonts,
-locale
+locale/language.lng
 
 15. If UA_source.exe reports missing DLL files at startup:
 Copy the required DLLs from:
