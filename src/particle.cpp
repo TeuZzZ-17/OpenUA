@@ -531,6 +531,9 @@ size_t NC_STACK_particle::SavingIntoIFF(IFFile **file)
 
 size_t NC_STACK_particle::Emit(area_arg_65 *arg, InstanceOpts * uopts)
 {
+    if (!arg)
+        return 1;
+
     if (!uopts)
         return 1;
     
@@ -558,6 +561,12 @@ size_t NC_STACK_particle::Emit(area_arg_65 *arg, InstanceOpts * uopts)
     
     if (opts->Time >= 0)
     {
+        if ( !arg->OwnerTForm ||
+             !arg->sklt ||
+             _pointID < 0 ||
+             (size_t)_pointID >= arg->sklt->POO.size() )
+            return 1;
+
         vec3d v44 = arg->OwnerTForm->CalcSclRot.Transform( _magnifyStart + _magnifyDelta * opts->Age );
 
         vec3d v45 = arg->OwnerTForm->TForm * ( arg->sklt->POO[_pointID] );

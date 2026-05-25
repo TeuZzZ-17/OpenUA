@@ -8353,6 +8353,15 @@ void yw_RenderInfoVehicleName(NC_STACK_ypaworld *yw, sklt_wis *wis, CmdStream *c
 }
 
 
+void yw_RenderInfoWeaponName(NC_STACK_ypaworld *yw, sklt_wis *wis, CmdStream *cur, const std::string &name, float xpos, float ypos)
+{
+    if ( name.empty() )
+        return;
+
+    yw_RenderInfoVehicleName(yw, wis, cur, name, xpos, ypos);
+}
+
+
 void yw_RenderInfoWeaponWire(NC_STACK_ypaworld *yw, sklt_wis *wis, World::TWeapProto *wpn, float xpos, float ypos)
 {
     UAskeleton::Data *wairufureimu = NULL;
@@ -8509,6 +8518,9 @@ void yw_RenderHUDInfo(NC_STACK_ypaworld *yw, sklt_wis *wis, CmdStream *cur, floa
     {
         if ( v23 )
         {
+            if ( bact )
+                yw_RenderInfoWeaponName(yw, wis, cur, weap->name, xpos,  ypos - wis->field_92 * 12.0);
+
             yw_RenderInfoWeaponWire(yw, wis, weap, xpos,   ypos - wis->field_92 * 9.0);
 
             yw_RenderInfoReloadbar(yw, wis, cur, bact, weap, xpos,  ypos - wis->field_92 * 7.0);

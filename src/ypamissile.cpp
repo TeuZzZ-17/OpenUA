@@ -831,7 +831,15 @@ void NC_STACK_ypamissile::Impact()
             }
 
             if ( v10 )
+            {
+                if ( bct->_status == BACT_STATUS_DEAD ||
+                     (bct->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2)) )
+                {
+                    continue;
+                }
+
                 bct->ApplyImpulse(&arg83);
+            }
         }
     }
 
@@ -1098,5 +1106,4 @@ float NC_STACK_ypamissile::GetStartHeight()
 {
     return _mislStartHeight;
 }
-
 
