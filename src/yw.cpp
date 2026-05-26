@@ -1538,20 +1538,12 @@ NC_STACK_ypamissile * NC_STACK_ypaworld::ypaworld_func147(ypaworld_arg146 *arg)
        instead it was passed as 64-bit floats, so it's
        break TAG-Val array alignment.*/
     
-    if (_fixWeaponRadius)
-    {
-        wobj->SetRadiusHeli(wproto.radius_heli);
-        wobj->SetRadiusTank(wproto.radius_tank);
-        wobj->SetRadiusFlyer(wproto.radius_flyer);
-        wobj->SetRadiusRobo(wproto.radius_robo);
-    }
-    else
-    {
-        wobj->SetRadiusHeli(0.0);
-        wobj->SetRadiusTank(0.0);
-        wobj->SetRadiusFlyer(0.0);
-        wobj->SetRadiusRobo(0.0);
-    }
+    // Experimental OpenUA behavior: fix_weapon_radius no longer switches
+    // class-specific unit collision radii. weapon.radius is the only radius.
+    wobj->SetRadiusHeli(0.0);
+    wobj->SetRadiusTank(0.0);
+    wobj->SetRadiusFlyer(0.0);
+    wobj->SetRadiusRobo(0.0);
 
     wobj->_soundcarrier.Resize(wproto.sndFXes.size());
 

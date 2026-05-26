@@ -306,35 +306,9 @@ bool NC_STACK_ypamissile::TubeCollisionTest()
 
                             vec3d vp = dist_vect * to_enemy;
 
-                            float wpn_radius = 0.0;
-
-                            switch ( bct->_bact_type )
-                            {
-                            case BACT_TYPES_BACT:
-                                wpn_radius = _mislRadiusHeli;
-                                break;
-
-                            case BACT_TYPES_TANK:
-                            case BACT_TYPES_CAR:
-                                wpn_radius = _mislRadiusTank;
-                                break;
-
-                            case BACT_TYPES_FLYER:
-                            case BACT_TYPES_UFO:
-                                wpn_radius = _mislRadiusFlyer;
-                                break;
-
-                            case BACT_TYPES_ROBO:
-                                wpn_radius = _mislRadiusRobo;
-                                break;
-
-                            default:
-                                wpn_radius = _radius;
-                                break;
-                            }
-
-                            if ( wpn_radius == 0.0)
-                                wpn_radius = _radius;
+                            // Experimental OpenUA behavior: unit collision uses only weapon.radius.
+                            // Legacy class-specific weapon radii are parsed but intentionally ignored.
+                            float wpn_radius = _radius;
 
                             float vp_len = vp.length();
                             float to_enemy_len = to_enemy.length();
@@ -1106,4 +1080,3 @@ float NC_STACK_ypamissile::GetStartHeight()
 {
     return _mislStartHeight;
 }
-

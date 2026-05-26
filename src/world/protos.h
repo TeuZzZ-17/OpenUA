@@ -249,6 +249,8 @@ struct TWeapProto
     float energy_tank = 0.0;
     float energy_flyer = 0.0;
     float energy_robo = 0.0;
+    // Legacy/deprecated: parsed for old SCR compatibility, ignored for gameplay.
+    // Unit collision always uses radius.
     float radius_heli = 0.0;
     float radius_tank = 0.0;
     float radius_flyer = 0.0;

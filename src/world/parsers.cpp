@@ -1327,18 +1327,22 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     }
     else if ( !StriCmp(p1, "radius_heli") )
     {
+        // Legacy/deprecated: keep parsing for old SCR files, gameplay ignores it.
         _wpn->radius_heli = parser.stof(p2, 0);
     }
     else if ( !StriCmp(p1, "radius_tank") )
     {
+        // Legacy/deprecated: keep parsing for old SCR files, gameplay ignores it.
         _wpn->radius_tank = parser.stof(p2, 0);
     }
     else if ( !StriCmp(p1, "radius_flyer") )
     {
+        // Legacy/deprecated: keep parsing for old SCR files, gameplay ignores it.
         _wpn->radius_flyer = parser.stof(p2, 0);
     }
     else if ( !StriCmp(p1, "radius_robo") )
     {
+        // Legacy/deprecated: keep parsing for old SCR files, gameplay ignores it.
         _wpn->radius_robo = parser.stof(p2, 0);
     }
     else if ( !StriCmp(p1, "overeof") )
@@ -2069,6 +2073,8 @@ int MiscParser::Handle(ScriptParser::Parser &parser, const std::string &p1, cons
     }
     else if ( !StriCmp(p1, "fix_weapon_radius") )
     {
+        // Legacy/deprecated: parsed for INI compatibility; gameplay no longer uses
+        // class-specific weapon radii.
         if (IsModsAllow(true))
             _o._fixWeaponRadius = StrGetBool(p2);
     }

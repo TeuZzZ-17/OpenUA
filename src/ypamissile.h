@@ -126,6 +126,7 @@ protected:
     float _mislEnergyTank   = 0.0;
     float _mislEnergyFlyer  = 0.0;
     float _mislEnergyRobo   = 0.0;
+    // Legacy/deprecated: kept for script/API compatibility, ignored for gameplay.
     float _mislRadiusHeli   = 0.0;
     float _mislRadiusTank   = 0.0;
     float _mislRadiusFlyer  = 0.0;
