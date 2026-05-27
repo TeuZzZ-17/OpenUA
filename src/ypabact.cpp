@@ -3331,31 +3331,60 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
             wobj->_fly_dir = _rotation.AxisZ();
         }
 
-        float weaponSpread = wproto.spread;
-        if ( (_oflags & BACT_OFLAG_USERINPT) && wproto.spread_user_set )
-            weaponSpread = wproto.spread_user;
+        bool userInput = (_oflags & BACT_OFLAG_USERINPT);
+        bool axisSpread = wproto.spread_x_set || wproto.spread_y_set;
+        float weaponSpreadX = wproto.spread_x_set ? wproto.spread_x : 0.0;
+        float weaponSpreadY = wproto.spread_y_set ? wproto.spread_y : 0.0;
 
-        if ( weaponSpread > 0.0 )
+        if ( userInput )
+        {
+            if ( wproto.spread_x_user_set || wproto.spread_y_user_set )
+            {
+                axisSpread = true;
+
+                if ( wproto.spread_x_user_set )
+                    weaponSpreadX = wproto.spread_x_user;
+
+                if ( wproto.spread_y_user_set )
+                    weaponSpreadY = wproto.spread_y_user;
+            }
+        }
+
+        if ( axisSpread )
         {
             vec3d aimDir = wobj->_fly_dir;
 
             if ( aimDir.normalise() > 0.001 )
             {
-                float maxOffset = tan(weaponSpread * C_PI_180);
-                float randRadius = sqrt((float)rand() / (float)RAND_MAX) * maxOffset;
-                float randAngle = ((float)rand() / (float)RAND_MAX) * C_2PI;
-                vec3d refAxis = fabs(aimDir.y) < 0.99 ? vec3d::OY(1.0) : vec3d::OX(1.0);
-                vec3d right = refAxis * aimDir;
+                vec3d right = _rotation.AxisX();
+                right -= aimDir * right.dot(aimDir);
+
+                if ( right.normalise() <= 0.001 )
+                {
+                    vec3d refAxis = fabs(aimDir.y) < 0.99 ? vec3d::OY(1.0) : vec3d::OX(1.0);
+                    right = refAxis * aimDir;
+                }
 
                 if ( right.normalise() > 0.001 )
                 {
                     vec3d up = aimDir * right;
-                    up.normalise();
 
-                    aimDir += right * (cos(randAngle) * randRadius) + up * (sin(randAngle) * randRadius);
+                    if ( up.normalise() > 0.001 )
+                    {
+                        float randX = 0.0;
+                        float randY = 0.0;
 
-                    if ( aimDir.normalise() > 0.001 )
-                        wobj->_fly_dir = aimDir;
+                        if ( weaponSpreadX > 0.0 )
+                            randX = (((float)rand() / (float)RAND_MAX) * 2.0 - 1.0) * tan(weaponSpreadX * C_PI_180);
+
+                        if ( weaponSpreadY > 0.0 )
+                            randY = (((float)rand() / (float)RAND_MAX) * 2.0 - 1.0) * tan(weaponSpreadY * C_PI_180);
+
+                        aimDir += right * randX + up * randY;
+
+                        if ( aimDir.normalise() > 0.001 )
+                            wobj->_fly_dir = aimDir;
+                    }
                 }
             }
         }
