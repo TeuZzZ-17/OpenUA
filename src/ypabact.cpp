@@ -689,6 +689,21 @@ void NC_STACK_ypabact::Update(update_msg *arg)
 
 void NC_STACK_ypabact::Render(baseRender_msg *arg)
 {
+    auto shouldApplyVisualScale = [this](NC_STACK_base *base)
+    {
+        if ( _visual_scale == 1.0 )
+            return false;
+
+        if ( _bact_type == BACT_TYPES_MISSLE )
+        {
+            // Weapon visual_scale is only the live projectile body scale.
+            return base == _vp_normal || base == _vp_fire || base == _vp_wait;
+        }
+
+        // Vehicle visual_scale is limited to normal live/create visuals, not death effects.
+        return base == _vp_normal || base == _vp_fire || base == _vp_wait || base == _vp_genesis;
+    };
+
     if ( _current_vp )
     {
         if ( !(_status_flg & BACT_STFLAG_NORENDER) )
@@ -698,7 +713,7 @@ void NC_STACK_ypabact::Render(baseRender_msg *arg)
                 _current_vp->Bas->TForm().Pos = _tForm.Pos;
                 _current_vp->Bas->TForm().SclRot = _tForm.SclRot;
 
-                if ( _visual_scale != 1.0 )
+                if ( shouldApplyVisualScale(_current_vp->Bas) )
                     _current_vp->Bas->TForm().SclRot *= mat3x3::Scale(vec3d(_visual_scale));
 
                 _current_vp->Bas->Render(arg, _current_vp);
@@ -721,7 +736,7 @@ void NC_STACK_ypabact::Render(baseRender_msg *arg)
                 else
                     bd->vp->Bas->TForm().SclRot = bd->rotate.Transpose();
 
-                if ( _visual_scale != 1.0 )
+                if ( shouldApplyVisualScale(bd->vp->Bas) )
                     bd->vp->Bas->TForm().SclRot *= mat3x3::Scale(vec3d(_visual_scale));
 
                 bd->vp->Bas->Render(arg, bd->vp);

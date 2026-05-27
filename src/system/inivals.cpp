@@ -37,7 +37,7 @@ Common::Ini::Key IniConf::GfxPalette("gfx.palette", Common::Ini::KT_WORD);
 Common::Ini::Key IniConf::GfxDisplay("gfx.display", Common::Ini::KT_WORD);
 Common::Ini::Key IniConf::GfxDisplay2("gfx.display2", Common::Ini::KT_WORD);
 
-Common::Ini::Key IniConf::GfxColorEffects("gfx.color_effects", Common::Ini::KT_DIGIT, (int32_t)0);
+Common::Ini::Key IniConf::GfxColorEffects("gfx.color_effects", Common::Ini::KT_DIGIT, (int32_t)1);
 Common::Ini::Key IniConf::GfxColorEffPower1("gfx.color_eff_pwr[1]", Common::Ini::KT_DIGIT, (int32_t)100);
 Common::Ini::Key IniConf::GfxColorEffPower2("gfx.color_eff_pwr[2]", Common::Ini::KT_DIGIT, (int32_t)100);
 Common::Ini::Key IniConf::GfxColorEffPower3("gfx.color_eff_pwr[3]", Common::Ini::KT_DIGIT, (int32_t)100);
