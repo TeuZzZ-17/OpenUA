@@ -13,6 +13,29 @@ namespace World
 namespace Parsers
 {
 
+static int ParseSampleVariantId(const std::string &token)
+{
+    if ( token.size() < 6 || StriCmp(token.substr(0, 6), "sample") )
+        return -1;
+
+    if ( token.size() == 6 )
+        return 0;
+
+    int variant = 0;
+    for (size_t i = 6; i < token.size(); i++)
+    {
+        if ( token[i] < '0' || token[i] > '9' )
+            return -1;
+
+        variant = variant * 10 + (token[i] - '0');
+    }
+
+    if ( variant < 2 || variant > 8 )
+        return -1;
+
+    return variant - 1;
+}
+
 
 
 bool UserParser::ReadUserNameFile(const std::string &filename)
@@ -457,8 +480,10 @@ int FxParser::ParseSndFX(ScriptParser::Parser &parser, const std::string &p1, co
     {
         case 0:
         {
-            if ( !StriCmp(val, "sample") )
-                sndfx->MainSample.Name = p2;
+            int sampleVariant = ParseSampleVariantId(val);
+
+            if ( sampleVariant >= 0 )
+                sndfx->SetMainSampleVariant(sampleVariant, p2);
             else if ( !StriCmp(val, "volume") )
                 sndfx->volume = parser.stol(p2, NULL, 0);
             else if ( !StriCmp(val, "pitch") )
@@ -1683,9 +1708,9 @@ int BuildProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1
     {
         _bld->TypeIcon = p2[0];
     }
-    else if ( !StriCmp(p1, "snd_normal_sample") )
+    else if ( p1.size() >= 11 && !StriCmp(p1.substr(0, 11), "snd_normal_") && ParseSampleVariantId(p1.substr(11)) >= 0 )
     {
-        _bld->SndFX.MainSample.Name = p2;
+        _bld->SndFX.SetMainSampleVariant(ParseSampleVariantId(p1.substr(11)), p2);
     }
     else if ( !StriCmp(p1, "snd_normal_volume") )
     {

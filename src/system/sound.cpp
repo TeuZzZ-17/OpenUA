@@ -3,6 +3,7 @@
 #include "../ini.h"
 #include "../log.h"
 #include <math.h>
+#include <cstdlib>
 #include "sound.h"
 #include "common/common.h"
 #include "inivals.h"
@@ -149,6 +150,9 @@ void SFXEngine::startSound(TSndCarrier *smpls, size_t id)
         return;
     
     TSoundSource *result = &smpls->Sounds.at(id);
+
+    if ( !result->SampleVariants.empty() )
+        result->PSample = result->SampleVariants.at(rand() % result->SampleVariants.size());
 
     result->StartTime = currentTime;
 

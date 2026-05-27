@@ -82,6 +82,7 @@ struct TVhclSound
     };
     
     TSndSample MainSample;
+    std::vector<TSndSample> MainSampleVariants;
     
     std::vector<TSndSample> ExtSamples;
     int16_t volume = 0;
@@ -90,6 +91,7 @@ struct TVhclSound
     TSndFxPosParam sndPrm_shk;
     std::vector<TSampleParams> extS;
     
+    void SetMainSampleVariant(size_t variant, const std::string &name);
     void LoadSamples();
     void ClearSounds();
 };

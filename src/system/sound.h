@@ -66,6 +66,7 @@ struct TSoundSource
     
     
     TSampleData *PSample = NULL;
+    std::vector<TSampleData *> SampleVariants;
     TSndFXParam *PPFx = NULL;
     TSndFxPosParam *PShkFx = NULL;
     std::vector<TSampleParams> *PFragments = NULL;
