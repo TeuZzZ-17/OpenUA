@@ -805,6 +805,57 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
         float mult = parser.stof(p2, 0);
         _vhcl->damage_snd_pitch_mult = mult >= 0.0 ? mult : 1.0;
     }
+    else if ( !StriCmp(p1, "spawn_units") )
+    {
+        _vhcl->spawn_units = parser.stol(p2, NULL, 0) ? 1 : 0;
+    }
+    else if ( !StriCmp(p1, "spawn_vehicle") )
+    {
+        int vehicleId = parser.stol(p2, NULL, 0);
+        _vhcl->spawn_vehicle = vehicleId > 0 ? vehicleId : 0;
+    }
+    else if ( !StriCmp(p1, "spawn_interval") )
+    {
+        int interval = parser.stol(p2, NULL, 0);
+
+        if ( interval <= 0 )
+            interval = 5000;
+        else if ( interval < 1000 )
+            interval = 1000;
+
+        _vhcl->spawn_interval = interval;
+    }
+    else if ( !StriCmp(p1, "spawn_trigger_radius") )
+    {
+        float radius = parser.stof(p2, 0);
+        _vhcl->spawn_trigger_radius = radius > 0.0 ? radius : 0.0;
+    }
+    else if ( !StriCmp(p1, "spawn_random_pos") )
+    {
+        float radius = parser.stof(p2, 0);
+        _vhcl->spawn_random_pos = radius > 0.0 ? radius : 0.0;
+    }
+    else if ( !StriCmp(p1, "spawn_max_active") )
+    {
+        int maxActive = parser.stol(p2, NULL, 0);
+        _vhcl->spawn_max_active = maxActive > 0 ? maxActive : 0;
+    }
+    else if ( !StriCmp(p1, "spawn_label") )
+    {
+        _vhcl->spawn_label = p2;
+        std::replace(_vhcl->spawn_label.begin(), _vhcl->spawn_label.end(), '_', ' ');
+    }
+    else if ( !StriCmp(p1, "spawn_count") )
+    {
+        int count = parser.stol(p2, NULL, 0);
+
+        if ( count <= 0 )
+            count = 1;
+        else if ( count > 8 )
+            count = 8;
+
+        _vhcl->spawn_count = count;
+    }
     else if ( !StriCmp(p1, "visual_scale") )
     {
         _vhcl->visual_scale = parser.stof(p2, 0);
@@ -1249,6 +1300,14 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->damage_force_mult = 1.0;
         _vhcl->damage_maxrot_mult = 1.0;
         _vhcl->damage_snd_pitch_mult = 1.0;
+        _vhcl->spawn_units = 0;
+        _vhcl->spawn_vehicle = 0;
+        _vhcl->spawn_interval = 5000;
+        _vhcl->spawn_trigger_radius = 0.0;
+        _vhcl->spawn_random_pos = 0.0;
+        _vhcl->spawn_max_active = 0;
+        _vhcl->spawn_label.clear();
+        _vhcl->spawn_count = 1;
         _vhcl->shield = 50;
         _vhcl->energy = 10000;
         _vhcl->adist_sector = 800.0;

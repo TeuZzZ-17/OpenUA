@@ -166,6 +166,14 @@ struct TVhclProto
     float damage_force_mult = 1.0;
     float damage_maxrot_mult = 1.0;
     float damage_snd_pitch_mult = 1.0;
+    int spawn_units = 0;
+    int16_t spawn_vehicle = 0;
+    int spawn_interval = 5000;
+    float spawn_trigger_radius = 0.0;
+    float spawn_random_pos = 0.0;
+    int spawn_max_active = 0;
+    std::string spawn_label;
+    int spawn_count = 1;
     std::vector<DestFX> dest_fx;      // dest_fx
     std::vector<DestFX>    ExtDestroyFX; // ext_dest_fx
     std::array<TVhclSound, SND_MAX> sndFX;
@@ -235,7 +243,7 @@ struct TWeapProto
         
         SND_MAX    = 3
     };
-    
+
     int8_t unitID = 0;
     uint8_t enable_mask = 0;
     int16_t _weaponFlags = 0;

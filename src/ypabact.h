@@ -393,6 +393,7 @@ public:
     virtual size_t SetPosition(bact_arg80 *arg);
     virtual void GetSummary(bact_arg81 *arg);
     virtual void EnergyInteract(update_msg *arg);
+    void UpdateCarrierSpawn(update_msg *arg);
     void UpdateDamageFX(update_msg *arg);
     virtual void ApplyImpulse(bact_arg83 *arg);
     virtual void ModifyEnergy(bact_arg84 *arg);
@@ -732,6 +733,17 @@ public:
     int _mgun_time;
     int _salve_counter;
     int _kill_after_shot;
+    int _spawn_units;
+    int _spawn_vehicle;
+    int _spawn_interval;
+    float _spawn_trigger_radius;
+    float _spawn_random_pos;
+    int _spawn_max_active;
+    int _spawn_count;
+    int _spawn_last_time;
+    int _carrier_spawn_root_gid;
+    int _carrier_spawn_root_vehicle;
+    std::vector<int32_t> _carrier_spawned_gids;
     float _heading_speed;
     NC_STACK_ypabact *_killer;
     int16_t _killer_owner;

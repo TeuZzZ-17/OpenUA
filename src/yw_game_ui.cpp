@@ -8321,7 +8321,7 @@ void yw_RenderInfoVehicleName(NC_STACK_ypaworld *yw, sklt_wis *wis, CmdStream *c
     }
 
     int v30 = v29 - (v31 / 2);
-    int v34 = v33 - (yw->_fontH / 2);
+    int v34 = v33 - (yw->_fontH / 2) - 1;
 
     if ( !wnd_vis || v29 <= wnd_xpos || v29 >= wnd_xpos2 || v33 <= wnd_ypos || v33 >= wnd_ypos2 )
     {
@@ -8359,6 +8359,15 @@ void yw_RenderInfoWeaponName(NC_STACK_ypaworld *yw, sklt_wis *wis, CmdStream *cu
         return;
 
     yw_RenderInfoVehicleName(yw, wis, cur, name, xpos, ypos);
+}
+
+void yw_RenderInfoSpawnLabel(NC_STACK_ypaworld *yw, sklt_wis *wis, CmdStream *cur, World::TVhclProto *vhcl, float xpos, float ypos)
+{
+    if ( !vhcl || !vhcl->spawn_units )
+        return;
+
+    std::string label = vhcl->spawn_label.empty() ? "Unit Spawner" : fmt::sprintf("Spawn: %s", vhcl->spawn_label);
+    yw_RenderInfoVehicleName(yw, wis, cur, label, xpos, ypos);
 }
 
 
@@ -8515,6 +8524,7 @@ void yw_RenderHUDInfo(NC_STACK_ypaworld *yw, sklt_wis *wis, CmdStream *cur, floa
             float v15 = wis->field_92 * 12.0 + ypos;
 
             yw_RenderInfoVehicleName(yw, wis, cur, yw->GetVehicleName(*vhcl), xpos, v15);
+            yw_RenderInfoSpawnLabel(yw, wis, cur, vhcl, xpos, v15 + wis->field_92 * 2.0);
         }
     }
 

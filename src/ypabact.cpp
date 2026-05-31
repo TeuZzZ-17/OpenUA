@@ -84,6 +84,271 @@ static void ypabact_ApplyDamageSoundPitch(NC_STACK_ypabact *bact)
     bact->_soundcarrier.Sounds[World::TVhclProto::SND_WAIT].Pitch = (int)(bact->_soundcarrier.Sounds[World::TVhclProto::SND_WAIT].Pitch * pitchMult);
 }
 
+static NC_STACK_ypabact *ypabact_FindLiveBactByGid(World::RefBactList &list, int32_t gid)
+{
+    for (NC_STACK_ypabact *unit : list)
+    {
+        if ( unit->_gid == gid )
+        {
+            if ( unit->_kidRef.IsListType(World::BLIST_CACHE) || unit->_status == BACT_STATUS_DEAD )
+                return NULL;
+
+            return unit;
+        }
+
+        NC_STACK_ypabact *kid = ypabact_FindLiveBactByGid(unit->_kidList, gid);
+        if ( kid )
+            return kid;
+    }
+
+    return NULL;
+}
+
+static bool ypabact_IsCarrierSpawnAliveUnit(NC_STACK_ypabact *unit)
+{
+    if ( !unit )
+        return false;
+
+    if ( unit->_kidRef.IsListType(World::BLIST_CACHE) )
+        return false;
+
+    if ( unit->_status == BACT_STATUS_DEAD )
+        return false;
+
+    if ( unit->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2) )
+        return false;
+
+    return true;
+}
+
+static int ypabact_CountCarrierSpawnedUnits(NC_STACK_ypabact *carrier)
+{
+    NC_STACK_ypaworld *world = carrier->getBACT_pWorld();
+
+    if ( !world )
+        return 0;
+
+    int aliveCount = 0;
+
+    for (auto it = carrier->_carrier_spawned_gids.begin(); it != carrier->_carrier_spawned_gids.end();)
+    {
+        NC_STACK_ypabact *unit = ypabact_FindLiveBactByGid(world->_unitsList, *it);
+
+        if ( ypabact_IsCarrierSpawnAliveUnit(unit) )
+        {
+            aliveCount++;
+            ++it;
+        }
+        else
+        {
+            it = carrier->_carrier_spawned_gids.erase(it);
+        }
+    }
+
+    return aliveCount;
+}
+
+static bool ypabact_CanCarrierSpawn(NC_STACK_ypabact *carrier)
+{
+    if ( !carrier || !carrier->getBACT_pWorld() )
+        return false;
+
+    if ( !carrier->_spawn_units )
+        return false;
+
+    if ( carrier->_spawn_vehicle <= 0 || (size_t)carrier->_spawn_vehicle >= carrier->getBACT_pWorld()->GetVhclProtos().size() )
+        return false;
+
+    if ( carrier->_spawn_trigger_radius <= 0.0 )
+        return false;
+
+    if ( carrier->_carrier_spawn_root_vehicle > 0 && carrier->_spawn_vehicle == carrier->_carrier_spawn_root_vehicle )
+        return false;
+
+    if ( carrier->_owner == World::OWNER_0 )
+        return false;
+
+    if ( carrier->_bact_type == BACT_TYPES_MISSLE )
+        return false;
+
+    if ( carrier->_status == BACT_STATUS_DEAD ||
+         carrier->_status == BACT_STATUS_CREATE ||
+         carrier->_status == BACT_STATUS_BEAM )
+        return false;
+
+    if ( carrier->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2 | BACT_STFLAG_NORENDER) )
+        return false;
+
+    return true;
+}
+
+static bool ypabact_IsCarrierSpawnEnemy(NC_STACK_ypabact *carrier, NC_STACK_ypabact *unit)
+{
+    if ( !ypabact_IsCarrierSpawnAliveUnit(unit) )
+        return false;
+
+    if ( unit == carrier )
+        return false;
+
+    if ( unit->_bact_type == BACT_TYPES_MISSLE )
+        return false;
+
+    if ( unit->_status == BACT_STATUS_CREATE || unit->_status == BACT_STATUS_BEAM )
+        return false;
+
+    if ( unit->_owner == World::OWNER_0 || unit->_owner == carrier->_owner )
+        return false;
+
+    return true;
+}
+
+static bool ypabact_CarrierHasEnemyNearby(NC_STACK_ypabact *carrier)
+{
+    NC_STACK_ypaworld *world = carrier->getBACT_pWorld();
+    if ( !world )
+        return false;
+
+    float radius = carrier->_spawn_trigger_radius;
+    float radiusSq = radius * radius;
+    int sectorRadius = (int)(radius / World::CVSectorLength) + 2;
+    Common::Point center = World::PositionToSectorID(carrier->_position);
+
+    for (int y = center.y - sectorRadius; y <= center.y + sectorRadius; y++)
+    {
+        for (int x = center.x - sectorRadius; x <= center.x + sectorRadius; x++)
+        {
+            Common::Point cellId(x, y);
+
+            if ( !world->IsSector(cellId) )
+                continue;
+
+            cellArea &cell = world->SectorAt(cellId);
+
+            for (NC_STACK_ypabact *unit : cell.unitsList)
+            {
+                if ( !ypabact_IsCarrierSpawnEnemy(carrier, unit) )
+                    continue;
+
+                if ( (unit->_position.XZ() - carrier->_position.XZ()).square() <= radiusSq )
+                    return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+static bool ypabact_IsCarrierSpawnPositionClear(NC_STACK_ypabact *carrier, const vec3d &pos)
+{
+    NC_STACK_ypaworld *world = carrier->getBACT_pWorld();
+    if ( !world )
+        return false;
+
+    yw_130arg sect;
+    sect.pos_x = pos.x;
+    sect.pos_z = pos.z;
+
+    if ( !world->GetSectorInfo(&sect) )
+        return false;
+
+    float spawnRadius = 20.0;
+    const std::vector<World::TVhclProto> &protos = world->GetVhclProtos();
+
+    if ( carrier->_spawn_vehicle > 0 && (size_t)carrier->_spawn_vehicle < protos.size() && protos[carrier->_spawn_vehicle].radius > 0.0 )
+        spawnRadius = protos[carrier->_spawn_vehicle].radius;
+
+    for (NC_STACK_ypabact *unit : sect.pcell->unitsList)
+    {
+        if ( unit == carrier )
+            continue;
+
+        if ( !ypabact_IsCarrierSpawnAliveUnit(unit) || unit->_bact_type == BACT_TYPES_MISSLE )
+            continue;
+
+        float otherRadius = unit->_radius > 0.0 ? unit->_radius : 20.0;
+        float minDist = spawnRadius + otherRadius + 20.0;
+
+        if ( (unit->_position.XZ() - pos.XZ()).square() < minDist * minDist )
+            return false;
+    }
+
+    return true;
+}
+
+static bool ypabact_FindCarrierSpawnPosition(NC_STACK_ypabact *carrier, vec3d *outPos)
+{
+    int attempts = carrier->_spawn_random_pos > 0.0 ? 8 : 1;
+
+    for (int i = 0; i < attempts; i++)
+    {
+        vec3d pos = carrier->_position;
+
+        if ( carrier->_spawn_random_pos > 0.0 )
+        {
+            float angle = ((float)rand() / (float)RAND_MAX) * (2.0 * C_PI);
+            float dist = ((float)rand() / (float)RAND_MAX) * carrier->_spawn_random_pos;
+            vec3d localOffset(cos(angle) * dist, 0.0, sin(angle) * dist);
+
+            pos += carrier->_rotation.Transpose().Transform(localOffset);
+        }
+
+        if ( ypabact_IsCarrierSpawnPositionClear(carrier, pos) )
+        {
+            *outPos = pos;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static NC_STACK_ypabact *ypabact_CreateCarrierSpawnedUnit(NC_STACK_ypabact *carrier, const vec3d &pos)
+{
+    NC_STACK_ypaworld *world = carrier->getBACT_pWorld();
+    if ( !world )
+        return NULL;
+
+    ypaworld_arg146 arg146;
+    arg146.vehicle_id = carrier->_spawn_vehicle;
+    arg146.pos = pos;
+
+    NC_STACK_ypabact *unit = world->ypaworld_func146(&arg146);
+    if ( !unit )
+        return NULL;
+
+    unit->_owner = carrier->_owner;
+    unit->_host_station = carrier->_host_station;
+    unit->_carrier_spawn_root_gid = carrier->_carrier_spawn_root_gid ? carrier->_carrier_spawn_root_gid : carrier->_gid;
+    unit->_carrier_spawn_root_vehicle = carrier->_carrier_spawn_root_vehicle > 0 ? carrier->_carrier_spawn_root_vehicle : carrier->_vehicleID;
+
+    if ( unit->_spawn_units )
+        unit->_spawn_last_time = unit->_clock > 0 ? unit->_clock : 1;
+
+    NC_STACK_yparobo *carrierRobo = dynamic_cast<NC_STACK_yparobo *>(carrier);
+    if ( !unit->_host_station )
+        unit->_host_station = carrierRobo;
+
+    unit->setBACT_bactCollisions(carrier->getBACT_bactCollisions());
+
+    if ( carrierRobo )
+        carrier->AddSubject(unit);
+    else if ( carrier->_parent )
+        carrier->_parent->AddSubject(unit);
+    else
+        world->ypaworld_func134(unit);
+
+    setState_msg state;
+    state.setFlags = 0;
+    state.unsetFlags = 0;
+    state.newStatus = BACT_STATUS_CREATE;
+    unit->SetState(&state);
+
+    unit->_scale_time = unit->_energy_max * 0.2;
+    world->HistoryAktCreate(unit);
+
+    return unit;
+}
+
 
 NC_STACK_ypabact::NC_STACK_ypabact()
 : _kidList(this, GetKidRefNode, World::BLIST_KIDS)
@@ -192,6 +457,17 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _mgun_time = 0;
     _salve_counter = 0;
     _kill_after_shot = 0;
+    _spawn_units = 0;
+    _spawn_vehicle = 0;
+    _spawn_interval = 5000;
+    _spawn_trigger_radius = 0.0;
+    _spawn_random_pos = 0.0;
+    _spawn_max_active = 0;
+    _spawn_count = 1;
+    _spawn_last_time = 0;
+    _carrier_spawn_root_gid = 0;
+    _carrier_spawn_root_vehicle = 0;
+    _carrier_spawned_gids.clear();
     _heading_speed = 0.0;
     _killer = NULL;
     _killer_owner = 0;
@@ -273,6 +549,17 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _height_max_user = 1600.0;
     _gun_radius = 5.0;
     _gun_power = 4000.0;
+    _spawn_units = 0;
+    _spawn_vehicle = 0;
+    _spawn_interval = 5000;
+    _spawn_trigger_radius = 0.0;
+    _spawn_random_pos = 0.0;
+    _spawn_max_active = 0;
+    _spawn_count = 1;
+    _spawn_last_time = 0;
+    _carrier_spawn_root_gid = 0;
+    _carrier_spawn_root_vehicle = 0;
+    _carrier_spawned_gids.clear();
     _adist_sector = 800.0;
     _adist_bact = 650.0;
     _sdist_sector = 200.0;
@@ -718,6 +1005,7 @@ void NC_STACK_ypabact::Update(update_msg *arg)
     _clock += arg->frameTime;
 
     UpdateDamageFX(arg);
+    UpdateCarrierSpawn(arg);
 
     AI_layer1(arg);
 
@@ -904,6 +1192,7 @@ void NC_STACK_ypabact::Render(baseRender_msg *arg)
             }
         }
     }
+
 }
 
 void NC_STACK_ypabact::SetTarget(setTarget_msg *arg)
@@ -3114,6 +3403,8 @@ void NC_STACK_ypabact::Die()
 {
     if ( _status_flg & BACT_STFLAG_DEATH1 )
         return;
+
+    _carrier_spawned_gids.clear();
     
     int maxy = _world->getYW_mapSizeY();
     int maxx = _world->getYW_mapSizeX();
@@ -3502,6 +3793,52 @@ int NC_STACK_ypabact::GetCurrentWeaponId()
     return slots[index];
 }
 
+void NC_STACK_ypabact::UpdateCarrierSpawn(update_msg *)
+{
+    if ( !ypabact_CanCarrierSpawn(this) )
+        return;
+
+    // V1 is single-player/local only; avoiding unsynchronised network spawns is safer.
+    if ( _world->_isNetGame )
+        return;
+
+    int interval = _spawn_interval > 0 ? _spawn_interval : 5000;
+    if ( interval < 1000 )
+        interval = 1000;
+
+    if ( _spawn_last_time && _clock - _spawn_last_time < interval )
+        return;
+
+    int maxActive = _spawn_max_active > 0 ? _spawn_max_active : 1;
+    int activeCount = ypabact_CountCarrierSpawnedUnits(this);
+    if ( activeCount >= maxActive )
+        return;
+
+    if ( !ypabact_CarrierHasEnemyNearby(this) )
+        return;
+
+    _spawn_last_time = _clock;
+
+    int spawnCount = _spawn_count > 0 ? _spawn_count : 1;
+    if ( spawnCount > 8 )
+        spawnCount = 8;
+
+    int remainingSlots = maxActive - activeCount;
+    if ( spawnCount > remainingSlots )
+        spawnCount = remainingSlots;
+
+    for (int i = 0; i < spawnCount; i++)
+    {
+        vec3d spawnPos;
+        if ( !ypabact_FindCarrierSpawnPosition(this, &spawnPos) )
+            continue;
+
+        NC_STACK_ypabact *unit = ypabact_CreateCarrierSpawnedUnit(this, spawnPos);
+        if ( unit )
+            _carrier_spawned_gids.push_back(unit->_gid);
+    }
+}
+
 size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
 {
     NC_STACK_ypamissile *wobj = NULL;
@@ -3520,6 +3857,7 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
     else
     {
         selectedWeapon = ypabact_SelectPrimaryWeaponSlot(this, arg->weapon);
+
         cooldownWeapon = selectedWeapon;
     }
 
@@ -5184,6 +5522,17 @@ void NC_STACK_ypabact::Renew()
     _current_weapon_id = -1;
     _num_mguns = 1;
     _mgun_fire_x = 0.0;
+    _spawn_units = 0;
+    _spawn_vehicle = 0;
+    _spawn_interval = 5000;
+    _spawn_trigger_radius = 0.0;
+    _spawn_random_pos = 0.0;
+    _spawn_max_active = 0;
+    _spawn_count = 1;
+    _spawn_last_time = 0;
+    _carrier_spawn_root_gid = 0;
+    _carrier_spawn_root_vehicle = 0;
+    _carrier_spawned_gids.clear();
     _newtarget_time = 0;
     _assess_time = 0;
     _scale_pos = 0;
