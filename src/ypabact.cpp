@@ -174,6 +174,10 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _beam_time = 0;
     _energy_time = 0;
     _weapon = 0;
+    _extra_weapons = {0, 0, 0};
+    _weapon_switch_mode = 0;
+    _weapon_slot_index = 0;
+    _current_weapon_id = -1;
     _weapon_flags = 0;
     _mgun = 0;
     _num_mguns = 1;
@@ -185,8 +189,6 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _gun_radius = 0.0;
     _gun_power = 0.0;
     _mgun_fire_x = 0.0;
-    _mgun_spread_x = 0.0;
-    _mgun_spread_y = 0.0;
     _mgun_time = 0;
     _salve_counter = 0;
     _kill_after_shot = 0;
@@ -3414,33 +3416,144 @@ void NC_STACK_ypabact::SetState(setState_msg *arg)
 
 static vec3d ypabact_ApplyDirectionalSpread(const mat3x3 &rotation, const vec3d &direction, float spreadX, float spreadY);
 
+static bool ypabact_IsValidWeaponId(NC_STACK_ypabact *bact, int weaponId)
+{
+    NC_STACK_ypaworld *world = bact->getBACT_pWorld();
+    return world && weaponId >= 0 && weaponId < (int)world->GetWeaponsProtos().size();
+}
+
+static int ypabact_GetPrimaryWeaponSlots(NC_STACK_ypabact *bact, int *outSlots)
+{
+    int count = 0;
+
+    if ( ypabact_IsValidWeaponId(bact, bact->_weapon) )
+        outSlots[count++] = bact->_weapon;
+
+    for (int weaponId : bact->_extra_weapons)
+    {
+        if ( weaponId > 0 && ypabact_IsValidWeaponId(bact, weaponId) )
+            outSlots[count++] = weaponId;
+    }
+
+    return count;
+}
+
+static int ypabact_SelectPrimaryWeaponSlot(NC_STACK_ypabact *bact, int requestedWeapon)
+{
+    if ( requestedWeapon != bact->_weapon )
+        return requestedWeapon;
+
+    int slots[4];
+    int count = ypabact_GetPrimaryWeaponSlots(bact, slots);
+
+    if ( count <= 0 )
+        return -1;
+
+    if ( count == 1 )
+        return slots[0];
+
+    if ( bact->_weapon_switch_mode == 1 )
+        return slots[rand() % count];
+
+    int index = bact->_weapon_slot_index % count;
+    if ( index < 0 )
+        index = 0;
+
+    return slots[index];
+}
+
+static void ypabact_AdvancePrimaryWeaponSlot(NC_STACK_ypabact *bact, int requestedWeapon)
+{
+    if ( requestedWeapon != bact->_weapon || bact->_weapon_switch_mode == 1 )
+        return;
+
+    int slots[4];
+    int count = ypabact_GetPrimaryWeaponSlots(bact, slots);
+
+    if ( count > 1 )
+        bact->_weapon_slot_index = (bact->_weapon_slot_index + 1) % count;
+    else
+        bact->_weapon_slot_index = 0;
+}
+
+int NC_STACK_ypabact::GetCurrentWeaponId()
+{
+    int slots[4];
+    int count = ypabact_GetPrimaryWeaponSlots(this, slots);
+
+    if ( count <= 0 )
+        return -1;
+
+    if ( count == 1 )
+        return slots[0];
+
+    if ( _weapon_switch_mode == 1 )
+    {
+        if ( ypabact_IsValidWeaponId(this, _current_weapon_id) )
+            return _current_weapon_id;
+
+        return slots[0];
+    }
+
+    int index = _weapon_slot_index % count;
+    if ( index < 0 )
+        index = 0;
+
+    return slots[index];
+}
+
 size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
 {
     NC_STACK_ypamissile *wobj = NULL;
 
-    if ( arg->weapon == -1 )
+    int slots[4];
+    int slotCount = ypabact_GetPrimaryWeaponSlots(this, slots);
+    bool useRandomSlots = arg->weapon == _weapon && _weapon_switch_mode == 1 && slotCount > 1;
+
+    int selectedWeapon = -1;
+    int cooldownWeapon = -1;
+
+    if ( useRandomSlots )
+    {
+        cooldownWeapon = ypabact_IsValidWeaponId(this, _current_weapon_id) ? _current_weapon_id : slots[0];
+    }
+    else
+    {
+        selectedWeapon = ypabact_SelectPrimaryWeaponSlot(this, arg->weapon);
+        cooldownWeapon = selectedWeapon;
+    }
+
+    if ( cooldownWeapon == -1 || !ypabact_IsValidWeaponId(this, cooldownWeapon) )
         return 0;
-    
-    World::TWeapProto &wproto = _world->GetWeaponsProtos().at(arg->weapon);
+
+    World::TWeapProto &cooldownProto = _world->GetWeaponsProtos().at(cooldownWeapon);
 
     if ( _weapon_time )
     {
         int v4;
 
         if ( _oflags & BACT_OFLAG_USERINPT )
-            v4 = wproto.shot_time_user;
+            v4 = cooldownProto.shot_time_user;
         else
-            v4 = wproto.shot_time;
+            v4 = cooldownProto.shot_time;
 
-        if ( wproto.salve_shots )
+        if ( cooldownProto.salve_shots )
         {
-            if ( wproto.salve_shots <= _salve_counter )
-                v4 = wproto.salve_delay;
+            if ( cooldownProto.salve_shots <= _salve_counter )
+                v4 = cooldownProto.salve_delay;
         }
 
         if ( arg->g_time - _weapon_time < v4 )
             return 0;
     }
+
+    if ( useRandomSlots )
+        selectedWeapon = slots[rand() % slotCount];
+
+    if ( selectedWeapon == -1 || !ypabact_IsValidWeaponId(this, selectedWeapon) )
+        return 0;
+
+    World::TWeapProto &wproto = _world->GetWeaponsProtos().at(selectedWeapon);
 
     if ( _salve_counter < wproto.salve_shots )
         _salve_counter += 1;
@@ -3481,7 +3594,7 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
         }
 
         ypaworld_arg146 arg147;
-        arg147.vehicle_id = arg->weapon;
+        arg147.vehicle_id = selectedWeapon;
         arg147.pos = _position + _rotation.Transpose().Transform( vec3d(v37, arg->start_point.y, arg->start_point.z) );
 
         wobj = _world->ypaworld_func147(&arg147);
@@ -3601,7 +3714,7 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
             wpnMsg.owner = _owner;
             wpnMsg.id = wobj->_gid;
             wpnMsg.launcher = _gid;
-            wpnMsg.type = arg->weapon;
+            wpnMsg.type = selectedWeapon;
             wpnMsg.pos = arg147.pos;
             wpnMsg.flags = 0;
             wpnMsg.dir = wobj->_fly_dir * wobj->_fly_dir_length;
@@ -3655,6 +3768,13 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
 
         ModifyEnergy(&arg84);
     }
+
+    ypabact_AdvancePrimaryWeaponSlot(this, arg->weapon);
+    _current_weapon_id = GetCurrentWeaponId();
+
+    if ( _weapon_switch_mode == 1 )
+        _current_weapon_id = selectedWeapon;
+
     return 1;
 }
 
@@ -5058,10 +5178,12 @@ void NC_STACK_ypabact::Renew()
 //    bact->field_951 = 0;
     _mgun_time = 0;
     _weapon_time = 0;
+    _extra_weapons = {0, 0, 0};
+    _weapon_switch_mode = 0;
+    _weapon_slot_index = 0;
+    _current_weapon_id = -1;
     _num_mguns = 1;
     _mgun_fire_x = 0.0;
-    _mgun_spread_x = 0.0;
-    _mgun_spread_y = 0.0;
     _newtarget_time = 0;
     _assess_time = 0;
     _scale_pos = 0;
@@ -5561,6 +5683,7 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
     if ( _mgun == -1 )
         return 0;
 
+    World::TWeapProto &mgunProto = _world->GetWeaponsProtos().at(_mgun);
     int mgunShots = _num_mguns > 0 ? _num_mguns : 1;
 
     int v107 = 0;
@@ -5586,7 +5709,7 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
 
         if ( v88 )
         {
-            int v43 = _world->GetWeaponsProtos().at(_mgun).shot_time_user;
+            int v43 = mgunProto.shot_time_user;
             float v42 = arg->field_C * 1000.0;
 
             if ( v43 <= v42 )
@@ -5596,7 +5719,7 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
         }
         else
         {
-            int v47 = _world->GetWeaponsProtos().at(_mgun).shot_time;
+            int v47 = mgunProto.shot_time;
             float v46 = arg->field_C * 1000.0;
 
             if ( v47 <= v46 )
@@ -5618,7 +5741,9 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
         vec3d sideOffset = _rotation.Transpose().Transform(vec3d(mgunOffset, 0.0, 0.0));
         vec3d shotPos = _position + sideOffset;
         vec3d shotOldPos = _old_pos + sideOffset;
-        vec3d shotDir = ypabact_ApplyDirectionalSpread(_rotation, arg->field_0, _mgun_spread_x, _mgun_spread_y);
+        float spreadX = mgunProto.spread_x_set ? mgunProto.spread_x : 0.0;
+        float spreadY = mgunProto.spread_y_set ? mgunProto.spread_y : 0.0;
+        vec3d shotDir = ypabact_ApplyDirectionalSpread(_rotation, arg->field_0, spreadX, spreadY);
 
         NC_STACK_ypabact *v108 = NULL;
         float v123 = 0.0;

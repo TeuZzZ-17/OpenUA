@@ -486,6 +486,8 @@ public:
 
     virtual NC_STACK_ypaworld *getBACT_pWorld()
     { return _world; }
+
+    int GetCurrentWeaponId();
     
     virtual TF::TForm3D *getBACT_pTransform()
     { return &_tForm; }
@@ -709,6 +711,10 @@ public:
     int _energy_time;
     vec3d _mpos;
     int _weapon;
+    std::array<int16_t, 3> _extra_weapons;
+    int _weapon_switch_mode;
+    int _weapon_slot_index;
+    int _current_weapon_id;
     uint8_t _weapon_flags;
     int _mgun;
     int _num_mguns;
@@ -723,8 +729,6 @@ public:
     float _gun_radius;
     float _gun_power;
     float _mgun_fire_x;
-    float _mgun_spread_x;
-    float _mgun_spread_y;
     int _mgun_time;
     int _salve_counter;
     int _kill_after_shot;

@@ -8489,11 +8489,15 @@ void yw_RenderHUDInfo(NC_STACK_ypaworld *yw, sklt_wis *wis, CmdStream *cur, floa
 
 
     World::TWeapProto *weap;
+    int weaponId = vhcl->weapon;
 
-    if ( vhcl->weapon == -1 )
+    if ( bact )
+        weaponId = bact->GetCurrentWeaponId();
+
+    if ( weaponId == -1 )
         weap = NULL;
     else
-        weap = &yw->_weaponProtos.at(vhcl->weapon);
+        weap = &yw->_weaponProtos.at(weaponId);
 
     if ( v25 )
         yw_RenderInfoVehicleWire(yw, wis, vhcl, xpos, ypos, a6a);

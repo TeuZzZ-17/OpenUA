@@ -1347,6 +1347,10 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_pitch_max = vhcl.max_pitch;
         bacto->_vehicleID = vhcl_id->vehicle_id;
         bacto->_weapon = vhcl.weapon;
+        bacto->_extra_weapons = vhcl.extra_weapons;
+        bacto->_weapon_switch_mode = vhcl.weapon_switch_mode;
+        bacto->_weapon_slot_index = 0;
+        bacto->_current_weapon_id = vhcl.weapon;
 
         if ( vhcl.weapon == -1 )
             bacto->_weapon_flags = 0;
@@ -1359,8 +1363,6 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_fire_pos.y = vhcl.fire_y;
         bacto->_fire_pos.z = vhcl.fire_z;
         bacto->_mgun_fire_x = vhcl.mgun_fire_x;
-        bacto->_mgun_spread_x = vhcl.mgun_spread_x;
-        bacto->_mgun_spread_y = vhcl.mgun_spread_y;
         bacto->_gun_angle = vhcl.gun_angle;
         bacto->_gun_angle_user = vhcl.gun_angle;
         bacto->_num_weapons = vhcl.num_weapons;

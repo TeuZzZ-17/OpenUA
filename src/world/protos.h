@@ -148,6 +148,8 @@ struct TVhclProto
     int model_id = 0;
     uint8_t disable_enable_bitmask = 0;
     int8_t weapon = 0;
+    std::array<int16_t, 3> extra_weapons = {0, 0, 0};
+    int weapon_switch_mode = 0; // 0 sequence, 1 random
     int field_4 = 0;
     int8_t mgun = 0;
     int16_t num_mguns = 1;
@@ -193,8 +195,6 @@ struct TVhclProto
     float fire_y = 0.0;
     float fire_z = 0.0;
     float mgun_fire_x = 0.0;
-    float mgun_spread_x = 0.0;
-    float mgun_spread_y = 0.0;
     int16_t num_weapons = 0;
     float gun_power = 0.0;
     float gun_radius = 0.0;

@@ -883,6 +883,28 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     {
         _vhcl->weapon = parser.stol(p2, NULL, 0);
     }
+    else if ( !StriCmp(p1, "weapon2") )
+    {
+        int weapon = parser.stol(p2, NULL, 0);
+        _vhcl->extra_weapons[0] = weapon > 0 ? weapon : 0;
+    }
+    else if ( !StriCmp(p1, "weapon3") )
+    {
+        int weapon = parser.stol(p2, NULL, 0);
+        _vhcl->extra_weapons[1] = weapon > 0 ? weapon : 0;
+    }
+    else if ( !StriCmp(p1, "weapon4") )
+    {
+        int weapon = parser.stol(p2, NULL, 0);
+        _vhcl->extra_weapons[2] = weapon > 0 ? weapon : 0;
+    }
+    else if ( !StriCmp(p1, "weapon_switch_mode") )
+    {
+        if ( !StriCmp(p2, "random") )
+            _vhcl->weapon_switch_mode = 1;
+        else
+            _vhcl->weapon_switch_mode = 0;
+    }
     else if ( !StriCmp(p1, "mgun") )
     {
         _vhcl->mgun = parser.stol(p2, NULL, 0);
@@ -907,14 +929,6 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     else if ( !StriCmp(p1, "mgun_fire_x") )
     {
         _vhcl->mgun_fire_x = parser.stof(p2, 0);
-    }
-    else if ( !StriCmp(p1, "mgun_spread_x") )
-    {
-        _vhcl->mgun_spread_x = parser.stof(p2, 0);
-    }
-    else if ( !StriCmp(p1, "mgun_spread_y") )
-    {
-        _vhcl->mgun_spread_y = parser.stof(p2, 0);
     }
     else if ( !StriCmp(p1, "gun_radius") )
     {
@@ -1221,6 +1235,8 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
 
         _vhcl->model_id = BACT_TYPES_TANK;
         _vhcl->weapon = -1;
+        _vhcl->extra_weapons = {0, 0, 0};
+        _vhcl->weapon_switch_mode = 0;
         _vhcl->mgun = -1;
         _vhcl->num_mguns = 1;
         _vhcl->type_icon = 65;
