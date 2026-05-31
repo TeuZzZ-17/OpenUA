@@ -30,6 +30,7 @@ struct TSampleData
     int field_8 = 0;
     int SampleRate = 0;
     int field_10 = 0;
+    ALenum Format = AL_FORMAT_MONO8;
     std::vector<uint8_t> _Buffer;
 };
 

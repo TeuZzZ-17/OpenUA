@@ -11,6 +11,33 @@
 
 SFXEngine SFXEngine::SFXe;
 
+static int SFX_SampleFrameSize(ALenum format)
+{
+    switch (format)
+    {
+        case AL_FORMAT_MONO8:
+            return 1;
+
+        case AL_FORMAT_STEREO8:
+        case AL_FORMAT_MONO16:
+            return 2;
+
+        case AL_FORMAT_STEREO16:
+            return 4;
+
+        default:
+            return 1;
+    }
+}
+
+static int SFX_SampleFrameCount(const TSampleData *sample)
+{
+    if ( !sample )
+        return 0;
+
+    return sample->bufsz / SFX_SampleFrameSize(sample->Format);
+}
+
 void wrapper_setSampleVRP(void *, walsmpl *hSample, int rate, int volume, int pan)
 {
     hSample->playback_rate(rate);
@@ -18,11 +45,11 @@ void wrapper_setSampleVRP(void *, walsmpl *hSample, int rate, int volume, int pa
     hSample->pan(pan);
 }
 
-void wrapper_playSound(waldev *driver, walsmpl *hSample, void (*funceos)(void *), void *start, int len, int rate, int vol, int mastersnd, int pan, int loop_cnt, int pos)
+void wrapper_playSound(waldev *driver, walsmpl *hSample, void (*funceos)(void *), void *start, int len, int rate, ALenum format, int vol, int mastersnd, int pan, int loop_cnt, int pos)
 {
     hSample->reset();
     hSample->EOS_callback(funceos);
-    hSample->address(start, len, rate, AL_FORMAT_MONO8);
+    hSample->address(start, len, rate, format);
     hSample->setMasterVolume(mastersnd);
     hSample->volume(vol);
     hSample->pan(pan);
@@ -397,7 +424,8 @@ int SFXEngine::sub_423B3C(TSoundSource *smpl, int a2, int *a3)
         if ( v9 <= 0 )
             v9 = 1;
 
-        int v10 = (pr.Loop * pr.rlSmplCnt / 1024) / v9;
+        int frameCount = pr.rlSmplCnt / SFX_SampleFrameSize(pr.Sample->Format);
+        int v10 = (pr.Loop * frameCount / 1024) / v9;
 
         if ( a2 < v10 )
             break;
@@ -447,7 +475,7 @@ void SFXEngine::SoundCarrierProcessSounds(TSndCarrier *smpls, float distance)
                             ok = false;
                         }
                     }
-                    else if ( (v6 * (snd.Pitch + snd.PSample->SampleRate) / 1024) > snd.PSample->bufsz )
+                    else if ( (v6 * (snd.Pitch + snd.PSample->SampleRate) / 1024) > SFX_SampleFrameCount(snd.PSample) )
                     {
                         snd.SetEnabled(false);
                         ok = false;
@@ -699,15 +727,28 @@ void SFXEngine::sb_0x424c74__sub2__sub1(TSoundSource *smpl)
 
     int v14;
 
+    int baseRate;
+
     if ( smpl->IsFragmented() )
-        v14 = smpl->PFragments->at(smpl->CurrentFrag).SampleRate + smpl->PFragments->at(smpl->CurrentFrag).Sample->SampleRate + smpl->Pitch;
+    {
+        baseRate = smpl->PFragments->at(smpl->CurrentFrag).Sample->SampleRate;
+        v14 = smpl->PFragments->at(smpl->CurrentFrag).SampleRate + baseRate + smpl->Pitch;
+    }
     else
-        v14 = smpl->Pitch + smpl->PSample->SampleRate;
+    {
+        baseRate = smpl->PSample->SampleRate;
+        v14 = smpl->Pitch + baseRate;
+    }
 
     if ( v14 < 2000 )
         v14 = 2000;
-    else if ( v14 > 44100 )
-        v14 = 44100;
+    else
+    {
+        int maxRate = baseRate > 44100 ? 192000 : 44100;
+
+        if ( v14 > maxRate )
+            v14 = maxRate;
+    }
 
     float v31 = stru_547030.AxisX().dot( v3 );
 
@@ -805,6 +846,7 @@ void SFXEngine::sound_eos_clbk(void *_smpl)
                         (char *)v10->Sample->Data + v10->rlOffset,
                         v10->rlSmplCnt,
                         v3->ResultRate,
+                        v10->Sample->Format,
                         v3->ResultVol,
                         SFXe.audio_volume,
                         v3->ResultPan,
@@ -845,7 +887,8 @@ void SFXEngine::sb_0x424c74__sub2__sub0(int id, TSoundSource *smpl)
             if ( v7 == smpl->PFragments->size() )
                 v7 = smpl->PFragments->size() - 1;
 
-            v8 = ((smpl->ResultRate * a3) / 1024) % smpl->PFragments->at(v7).rlSmplCnt;
+            TSampleParams *frag = &smpl->PFragments->at(v7);
+            v8 = (((smpl->ResultRate * a3) / 1024) * SFX_SampleFrameSize(frag->Sample->Format)) % frag->rlSmplCnt;
             smpl->CurrentFrag = v7;
         }
 
@@ -858,6 +901,7 @@ void SFXEngine::sb_0x424c74__sub2__sub0(int id, TSoundSource *smpl)
             (char *)v9->Sample->Data + v9->rlOffset,
             v9->rlSmplCnt,
             smpl->ResultRate,
+            v9->Sample->Format,
             smpl->ResultVol,
             audio_volume,
             smpl->ResultPan,
@@ -873,11 +917,12 @@ void SFXEngine::sb_0x424c74__sub2__sub0(int id, TSoundSource *smpl)
             smpl->PSample->Data,
             smpl->PSample->bufsz,
             smpl->ResultRate,
+            smpl->PSample->Format,
             smpl->ResultVol,
             audio_volume,
             smpl->ResultPan,
             (smpl->IsLoop() ? 0 : 1),
-            (int)((smpl->PSample->SampleRate + smpl->Pitch) * (currentTime - smpl->StartTime) >> 10) % smpl->PSample->bufsz);
+            (((smpl->PSample->SampleRate + smpl->Pitch) * (int)(currentTime - smpl->StartTime) >> 10) * SFX_SampleFrameSize(smpl->PSample->Format)) % smpl->PSample->bufsz);
     }
 }
 

@@ -7,6 +7,25 @@
 
 namespace World
 {
+static int SampleFrameSize(ALenum format)
+{
+    switch (format)
+    {
+        case AL_FORMAT_MONO8:
+            return 1;
+
+        case AL_FORMAT_STEREO8:
+        case AL_FORMAT_MONO16:
+            return 2;
+
+        case AL_FORMAT_STEREO16:
+            return 4;
+
+        default:
+            return 1;
+    }
+}
+
 uint8_t DestFX::ParseTypeName(const std::string &in)
 {
     if ( !StriCmp(in, "death") )
@@ -52,10 +71,11 @@ void TVhclSound::LoadSamples()
                 if ( ExtSamples.at(i).Sample )
                 {
                     TSampleData *sample = ExtSamples.at(i).Sample->GetSampleData();
+                    int frameSize = SampleFrameSize(sample->Format);
 
                     pprm.Sample = sample;
-                    pprm.rlOffset = sample->SampleRate * pprm.Offset / 11000;
-                    pprm.rlSmplCnt = sample->SampleRate * pprm.SampleCnt / 11000;
+                    pprm.rlOffset = (sample->SampleRate * pprm.Offset / 11000) * frameSize;
+                    pprm.rlSmplCnt = (sample->SampleRate * pprm.SampleCnt / 11000) * frameSize;
 
                     if ( pprm.rlOffset > sample->bufsz )
                         pprm.rlOffset = sample->bufsz;

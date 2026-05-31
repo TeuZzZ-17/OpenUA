@@ -6344,11 +6344,17 @@ void NC_STACK_ypaworld::NetSendExitMsg(uint8_t normExit)
     _GameShell->sentAQ = false;
 }
 
-void sub_451714(TileMap *, CmdStream *cur, const std::string &txt, int a2, uint8_t a4)
+void sub_451714_with_yoffset(TileMap *, CmdStream *cur, const std::string &txt, int a2, uint8_t a4, int textYOffset)
 {
     if ( a2 > 0 )
     {
+        if ( textYOffset )
+            FontUA::add_ypos(cur, textYOffset);
+
         FontUA::copy_position(cur);
+
+        if ( textYOffset )
+            FontUA::add_ypos(cur, -textYOffset);
 
         int v6 = a2;
         while (v6 > 0)
@@ -6365,6 +6371,11 @@ void sub_451714(TileMap *, CmdStream *cur, const std::string &txt, int a2, uint8
 
         FontUA::add_txt(cur, a2, 4, txt);
     }
+}
+
+void sub_451714(TileMap *tiles, CmdStream *cur, const std::string &txt, int a2, uint8_t a4)
+{
+    sub_451714_with_yoffset(tiles, cur, txt, a2, a4, 0);
 }
 
 
@@ -8321,7 +8332,7 @@ void yw_RenderInfoVehicleName(NC_STACK_ypaworld *yw, sklt_wis *wis, CmdStream *c
     }
 
     int v30 = v29 - (v31 / 2);
-    int v34 = v33 - (yw->_fontH / 2) - 1;
+    int v34 = v33 - (yw->_fontH / 2);
 
     if ( !wnd_vis || v29 <= wnd_xpos || v29 >= wnd_xpos2 || v33 <= wnd_ypos || v33 >= wnd_ypos2 )
     {
@@ -8332,7 +8343,7 @@ void yw_RenderInfoVehicleName(NC_STACK_ypaworld *yw, sklt_wis *wis, CmdStream *c
 
         FontUA::set_txtColor(cur,  yw->_iniColors[65].r,  yw->_iniColors[65].g,  yw->_iniColors[65].b);
 
-        sub_451714(yw->_guiTiles[15], cur, name, v31, 32);
+        sub_451714_with_yoffset(yw->_guiTiles[15], cur, name, v31, 32, 0);
     }
 
     if ( wis->sklts_intern[2] )
@@ -8518,15 +8529,24 @@ void yw_RenderHUDInfo(NC_STACK_ypaworld *yw, sklt_wis *wis, CmdStream *cur, floa
         yw_RenderInfoShieldbar(yw, wis, cur, bact, vhcl, xpos,   wis->field_92 * 9.0 + ypos  );
 
     if ( v25 )
+{
+    if ( vhcl->model_id != BACT_TYPES_GUN )
     {
-        if ( vhcl->model_id != BACT_TYPES_GUN )
-        {
-            float v15 = wis->field_92 * 12.0 + ypos;
+        float v15 = wis->field_92 * 12.0 + ypos;
 
-            yw_RenderInfoVehicleName(yw, wis, cur, yw->GetVehicleName(*vhcl), xpos, v15);
-            yw_RenderInfoSpawnLabel(yw, wis, cur, vhcl, xpos, v15 + wis->field_92 * 2.0);
+        float name_y = v15;
+        float spawn_y = v15 + wis->field_92 * 2.0;
+
+        if ( vhcl->spawn_units )
+        {
+            name_y -= wis->field_92 * 0.35;
+            spawn_y -= wis->field_92 * 0.35;
         }
+
+        yw_RenderInfoVehicleName(yw, wis, cur, yw->GetVehicleName(*vhcl), xpos, name_y);
+        yw_RenderInfoSpawnLabel(yw, wis, cur, vhcl, xpos, spawn_y);
     }
+}
 
     if ( weap )
     {
