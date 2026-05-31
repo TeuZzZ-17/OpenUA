@@ -1865,7 +1865,45 @@ void NC_STACK_ypaworld::SpawnTransientVP(int32_t modelId, const vec3d &pos, cons
         _transientVPs.emplace_back(base, pos, rot, lifeTime);
 }
 
-static void yw_RenderTransientVPs(std::list<NC_STACK_ypaworld::TTransientVP> *effects, baseRender_msg *arg)
+void NC_STACK_ypaworld::SpawnAttachedTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime)
+{
+    if ( !owner || modelId <= 0 || modelId >= (int32_t)_vhclModels.size() || lifeTime <= 0 )
+        return;
+
+    NC_STACK_base *base = _vhclModels.at(modelId);
+
+    if ( !base )
+        return;
+
+    _transientVPs.emplace_back(base, owner->_position, owner->_rotation, lifeTime);
+
+    TTransientVP &fx = _transientVPs.back();
+    fx.followOwner = true;
+    fx.followOwnerGid = owner->_gid;
+    fx.followLocalOffset = localOffset;
+}
+
+static NC_STACK_ypabact *yw_FindLiveBactByGidInList(World::RefBactList &list, int32_t gid)
+{
+    for (NC_STACK_ypabact *unit : list)
+    {
+        if ( unit->_gid == gid )
+        {
+            if ( unit->_kidRef.IsListType(World::BLIST_CACHE) || unit->_status == BACT_STATUS_DEAD )
+                return NULL;
+
+            return unit;
+        }
+
+        NC_STACK_ypabact *kid = yw_FindLiveBactByGidInList(unit->_kidList, gid);
+        if ( kid )
+            return kid;
+    }
+
+    return NULL;
+}
+
+static void yw_RenderTransientVPs(NC_STACK_ypaworld *world, std::list<NC_STACK_ypaworld::TTransientVP> *effects, baseRender_msg *arg)
 {
     for (auto it = effects->begin(); it != effects->end();)
     {
@@ -1875,6 +1913,27 @@ static void yw_RenderTransientVPs(std::list<NC_STACK_ypaworld::TTransientVP> *ef
         {
             it = effects->erase(it);
             continue;
+        }
+
+        if ( it->followOwner )
+        {
+            NC_STACK_ypabact *owner = yw_FindLiveBactByGidInList(world->_unitsList, it->followOwnerGid);
+
+            if ( !owner )
+            {
+                it = effects->erase(it);
+                continue;
+            }
+
+            it->pos = owner->_position + owner->_rotation.Transpose().Transform(it->followLocalOffset);
+            it->rot = owner->_rotation;
+
+            if ( owner->_pSector )
+            {
+                float groundSafeY = owner->_pSector->height - 5.0;
+                if ( it->pos.y > groundSafeY )
+                    it->pos.y = groundSafeY;
+            }
         }
 
         it->vp->Bas->TForm().Pos = it->pos;
@@ -1957,7 +2016,7 @@ void NC_STACK_ypaworld::RenderGame(base_64arg *bs64, int a2)
 
     RenderFillers(&rndrs);
 
-    yw_RenderTransientVPs(&_transientVPs, &rndrs);
+    yw_RenderTransientVPs(this, &_transientVPs, &rndrs);
 
     bs64->field_C = rndrs.adeCount;
 

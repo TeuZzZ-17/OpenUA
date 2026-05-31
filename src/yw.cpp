@@ -1326,6 +1326,8 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_energy_max = vhcl.energy;
         bacto->_shield = vhcl.shield;
         bacto->_mass = vhcl.mass;
+        bacto->_base_force = vhcl.force;
+        bacto->_base_maxrot = vhcl.maxrot;
         bacto->_force = vhcl.force;
         bacto->_maxrot = vhcl.maxrot;
         bacto->_height = vhcl.height;
@@ -1352,9 +1354,13 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
             bacto->_weapon_flags = _weaponProtos.at( vhcl.weapon )._weaponFlags;
 
         bacto->_mgun = vhcl.mgun;
+        bacto->_num_mguns = vhcl.num_mguns > 0 ? vhcl.num_mguns : 1;
         bacto->_fire_pos.x = vhcl.fire_x;
         bacto->_fire_pos.y = vhcl.fire_y;
         bacto->_fire_pos.z = vhcl.fire_z;
+        bacto->_mgun_fire_x = vhcl.mgun_fire_x;
+        bacto->_mgun_spread_x = vhcl.mgun_spread_x;
+        bacto->_mgun_spread_y = vhcl.mgun_spread_y;
         bacto->_gun_angle = vhcl.gun_angle;
         bacto->_gun_angle_user = vhcl.gun_angle;
         bacto->_num_weapons = vhcl.num_weapons;
@@ -1368,6 +1374,10 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_visual_scale = vhcl.visual_scale;
         bacto->_damage_fx = vhcl.damage_fx;
         bacto->_damage_fx_last_time.fill(0);
+        bacto->_damage_force_mult = vhcl.damage_force_mult;
+        bacto->_damage_maxrot_mult = vhcl.damage_maxrot_mult;
+        bacto->_damage_snd_pitch_mult = vhcl.damage_snd_pitch_mult;
+        bacto->_damage_fx_active = false;
 
         bacto->_destroyFX = vhcl.dest_fx;
         bacto->_extDestroyFX = vhcl.ExtDestroyFX;

@@ -150,6 +150,7 @@ struct TVhclProto
     int8_t weapon = 0;
     int field_4 = 0;
     int8_t mgun = 0;
+    int16_t num_mguns = 1;
     uint8_t type_icon = 0;
     std::string name;
     int16_t vp_normal = 0;
@@ -160,6 +161,9 @@ struct TVhclProto
     int16_t vp_genesis = 0;
     float visual_scale = 1.0;
     std::array<TDamageFXSlot, DAMAGE_FX_SLOT_COUNT> damage_fx;
+    float damage_force_mult = 1.0;
+    float damage_maxrot_mult = 1.0;
+    float damage_snd_pitch_mult = 1.0;
     std::vector<DestFX> dest_fx;      // dest_fx
     std::vector<DestFX>    ExtDestroyFX; // ext_dest_fx
     std::array<TVhclSound, SND_MAX> sndFX;
@@ -188,6 +192,9 @@ struct TVhclProto
     float fire_x = 0.0;
     float fire_y = 0.0;
     float fire_z = 0.0;
+    float mgun_fire_x = 0.0;
+    float mgun_spread_x = 0.0;
+    float mgun_spread_y = 0.0;
     int16_t num_weapons = 0;
     float gun_power = 0.0;
     float gun_radius = 0.0;

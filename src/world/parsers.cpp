@@ -790,6 +790,21 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
         float radius = parser.stof(p2, 0);
         _vhcl->damage_fx[damageFxSlot].random_pos = radius > 0.0 ? radius : 0.0;
     }
+    else if ( !StriCmp(p1, "damage_force_mult") )
+    {
+        float mult = parser.stof(p2, 0);
+        _vhcl->damage_force_mult = mult >= 0.0 ? mult : 1.0;
+    }
+    else if ( !StriCmp(p1, "damage_maxrot_mult") )
+    {
+        float mult = parser.stof(p2, 0);
+        _vhcl->damage_maxrot_mult = mult >= 0.0 ? mult : 1.0;
+    }
+    else if ( !StriCmp(p1, "damage_snd_pitch_mult") )
+    {
+        float mult = parser.stof(p2, 0);
+        _vhcl->damage_snd_pitch_mult = mult >= 0.0 ? mult : 1.0;
+    }
     else if ( !StriCmp(p1, "visual_scale") )
     {
         _vhcl->visual_scale = parser.stof(p2, 0);
@@ -872,6 +887,11 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     {
         _vhcl->mgun = parser.stol(p2, NULL, 0);
     }
+    else if ( !StriCmp(p1, "num_mguns") )
+    {
+        int numMguns = parser.stol(p2, NULL, 0);
+        _vhcl->num_mguns = numMguns > 0 ? numMguns : 1;
+    }
     else if ( !StriCmp(p1, "fire_x") )
     {
         _vhcl->fire_x = parser.stof(p2, 0);
@@ -883,6 +903,18 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     else if ( !StriCmp(p1, "fire_z") )
     {
         _vhcl->fire_z = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "mgun_fire_x") )
+    {
+        _vhcl->mgun_fire_x = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "mgun_spread_x") )
+    {
+        _vhcl->mgun_spread_x = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "mgun_spread_y") )
+    {
+        _vhcl->mgun_spread_y = parser.stof(p2, 0);
     }
     else if ( !StriCmp(p1, "gun_radius") )
     {
@@ -1190,6 +1222,7 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->model_id = BACT_TYPES_TANK;
         _vhcl->weapon = -1;
         _vhcl->mgun = -1;
+        _vhcl->num_mguns = 1;
         _vhcl->type_icon = 65;
         _vhcl->vp_normal = 0;
         _vhcl->vp_fire = 1;
@@ -1197,6 +1230,9 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->vp_wait = 3;
         _vhcl->vp_dead = 4;
         _vhcl->vp_genesis = 5;
+        _vhcl->damage_force_mult = 1.0;
+        _vhcl->damage_maxrot_mult = 1.0;
+        _vhcl->damage_snd_pitch_mult = 1.0;
         _vhcl->shield = 50;
         _vhcl->energy = 10000;
         _vhcl->adist_sector = 800.0;

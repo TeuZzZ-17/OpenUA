@@ -25,6 +25,65 @@ static void ypabact_ResetDamageFX(NC_STACK_ypabact *bact)
     bact->_damage_fx_last_time.fill(0);
 }
 
+static bool ypabact_IsDamageFXSystemDisabled(const NC_STACK_ypabact *bact)
+{
+    return bact->_damage_fx[0].threshold >= 1.0;
+}
+
+static float ypabact_GetDamageThreshold(const NC_STACK_ypabact *bact)
+{
+    float threshold = bact->_damage_fx[0].threshold;
+
+    if ( threshold < 0.0 )
+        return 0.0;
+
+    if ( threshold > 1.0 )
+        return 1.0;
+
+    return threshold;
+}
+
+static bool ypabact_IsDamageStateActive(const NC_STACK_ypabact *bact)
+{
+    if ( ypabact_IsDamageFXSystemDisabled(bact) || bact->_energy <= 0 || bact->_energy_max <= 0 )
+        return false;
+
+    float threshold = ypabact_GetDamageThreshold(bact);
+    if ( threshold <= 0.0 || threshold >= 1.0 )
+        return false;
+
+    return ((float)bact->_energy / (float)bact->_energy_max) <= threshold;
+}
+
+static float ypabact_SafeDamageMult(float mult)
+{
+    return mult >= 0.0 ? mult : 1.0;
+}
+
+static void ypabact_ApplyDamageRuntime(NC_STACK_ypabact *bact, bool active)
+{
+    bact->_damage_fx_active = active;
+
+    float forceMult = active ? ypabact_SafeDamageMult(bact->_damage_force_mult) : 1.0;
+    float maxrotMult = active ? ypabact_SafeDamageMult(bact->_damage_maxrot_mult) : 1.0;
+
+    bact->_force = bact->_base_force * forceMult;
+    bact->_maxrot = bact->_base_maxrot * maxrotMult;
+}
+
+static void ypabact_ApplyDamageSoundPitch(NC_STACK_ypabact *bact)
+{
+    if ( !bact->_damage_fx_active )
+        return;
+
+    float pitchMult = ypabact_SafeDamageMult(bact->_damage_snd_pitch_mult);
+    if ( pitchMult == 1.0 )
+        return;
+
+    bact->_soundcarrier.Sounds[World::TVhclProto::SND_NORMAL].Pitch = (int)(bact->_soundcarrier.Sounds[World::TVhclProto::SND_NORMAL].Pitch * pitchMult);
+    bact->_soundcarrier.Sounds[World::TVhclProto::SND_WAIT].Pitch = (int)(bact->_soundcarrier.Sounds[World::TVhclProto::SND_WAIT].Pitch * pitchMult);
+}
+
 
 NC_STACK_ypabact::NC_STACK_ypabact()
 : _kidList(this, GetKidRefNode, World::BLIST_KIDS)
@@ -69,6 +128,8 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _fe_cmdID = 0;
     _fe_time = 0;
     _mass = 0.0;
+    _base_force = 0.0;
+    _base_maxrot = 0.0;
     _force = 0.0;
     _airconst = 0.0;
     _airconst_static = 0.0;
@@ -84,6 +145,10 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _height_max_user = 0.0;
     _visual_scale = 1.0;
     ypabact_ResetDamageFX(this);
+    _damage_force_mult = 1.0;
+    _damage_maxrot_mult = 1.0;
+    _damage_snd_pitch_mult = 1.0;
+    _damage_fx_active = false;
 
     _vp_active = 0;
 
@@ -111,6 +176,7 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _weapon = 0;
     _weapon_flags = 0;
     _mgun = 0;
+    _num_mguns = 1;
     _num_weapons = 0;
     _weapon_time = 0;
     _gun_angle = 0.0;
@@ -118,6 +184,9 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _gun_leftright = 0.0;
     _gun_radius = 0.0;
     _gun_power = 0.0;
+    _mgun_fire_x = 0.0;
+    _mgun_spread_x = 0.0;
+    _mgun_spread_y = 0.0;
     _mgun_time = 0;
     _salve_counter = 0;
     _kill_after_shot = 0;
@@ -177,6 +246,8 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _rotation = _viewer_rotation;
 
     _mass = 400.0;
+    _base_force = 5000.0;
+    _base_maxrot = 0.5;
     _force = 5000.0;
     _airconst = 500.0;
     _maxrot = 0.5;
@@ -192,6 +263,10 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _aggr = 50;
     _energy_max = 10000;
     ypabact_ResetDamageFX(this);
+    _damage_force_mult = 1.0;
+    _damage_maxrot_mult = 1.0;
+    _damage_snd_pitch_mult = 1.0;
+    _damage_fx_active = false;
 //    ypabact.field_3CE = 0;
     _height_max_user = 1600.0;
     _gun_radius = 5.0;
@@ -697,18 +772,27 @@ void NC_STACK_ypabact::Update(update_msg *arg)
 
     _soundcarrier.Vector = _fly_dir * _fly_dir_length;
 
+    ypabact_ApplyDamageSoundPitch(this);
+
     SFXEngine::SFXe.UpdateSoundCarrier(&_soundcarrier);
 }
 
 void NC_STACK_ypabact::UpdateDamageFX(update_msg *)
 {
-    if ( !_world || _energy <= 0 || _energy_max <= 0 )
+    bool canUseDamageFX = _world && _energy > 0 && _energy_max > 0 &&
+                          _bact_type != BACT_TYPES_MISSLE &&
+                          _status != BACT_STATUS_DEAD &&
+                          _status != BACT_STATUS_CREATE &&
+                          _status != BACT_STATUS_BEAM &&
+                          !(_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2 | BACT_STFLAG_NORENDER));
+
+    bool damaged = canUseDamageFX && ypabact_IsDamageStateActive(this);
+    ypabact_ApplyDamageRuntime(this, damaged);
+
+    if ( !canUseDamageFX || !damaged )
         return;
 
-    if ( _bact_type == BACT_TYPES_MISSLE || _status == BACT_STATUS_DEAD || _status == BACT_STATUS_CREATE || _status == BACT_STATUS_BEAM )
-        return;
-
-    if ( _status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2 | BACT_STFLAG_NORENDER) )
+    if ( ypabact_IsDamageFXSystemDisabled(this) )
         return;
 
     float energyRatio = (float)_energy / (float)_energy_max;
@@ -723,10 +807,10 @@ void NC_STACK_ypabact::UpdateDamageFX(update_msg *)
         float threshold = slot.threshold;
         if ( threshold <= 0.0 )
             continue;
-        if ( threshold > 1.0 )
-            threshold = 1.0;
+        if ( threshold >= 1.0 )
+            continue;
 
-        if ( energyRatio >= threshold )
+        if ( energyRatio > threshold )
             continue;
 
         int interval = slot.interval > 0 ? slot.interval : 500;
@@ -739,15 +823,15 @@ void NC_STACK_ypabact::UpdateDamageFX(update_msg *)
         if ( radius < 0.0 )
             radius = 0.0;
 
-        vec3d fxPos = _position;
+        vec3d localOffset(0.0, 0.0, 0.0);
 
         if ( radius > 0.0 )
         {
             float angle = ((float)rand() / (float)RAND_MAX) * (2.0 * C_PI);
             float dist = ((float)rand() / (float)RAND_MAX) * radius;
 
-            fxPos.x += cos(angle) * dist;
-            fxPos.z += sin(angle) * dist;
+            localOffset.x += cos(angle) * dist;
+            localOffset.z += sin(angle) * dist;
         }
 
         float heightOffset = _overeof * 0.25;
@@ -756,16 +840,9 @@ void NC_STACK_ypabact::UpdateDamageFX(update_msg *)
         else if ( heightOffset > 60.0 )
             heightOffset = 60.0;
 
-        fxPos.y -= heightOffset;
+        localOffset.y -= heightOffset;
 
-        if ( _pSector )
-        {
-            float groundSafeY = _pSector->height - 5.0;
-            if ( fxPos.y > groundSafeY )
-                fxPos.y = groundSafeY;
-        }
-
-        _world->SpawnTransientVP(slot.vp, fxPos, _rotation, 1000);
+        _world->SpawnAttachedTransientVP(slot.vp, this, localOffset, 1000);
     }
 }
 
@@ -3335,6 +3412,8 @@ void NC_STACK_ypabact::SetState(setState_msg *arg)
     }
 }
 
+static vec3d ypabact_ApplyDirectionalSpread(const mat3x3 &rotation, const vec3d &direction, float spreadX, float spreadY);
+
 size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
 {
     NC_STACK_ypamissile *wobj = NULL;
@@ -3448,43 +3527,7 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
         }
 
         if ( axisSpread )
-        {
-            vec3d aimDir = wobj->_fly_dir;
-
-            if ( aimDir.normalise() > 0.001 )
-            {
-                vec3d right = _rotation.AxisX();
-                right -= aimDir * right.dot(aimDir);
-
-                if ( right.normalise() <= 0.001 )
-                {
-                    vec3d refAxis = fabs(aimDir.y) < 0.99 ? vec3d::OY(1.0) : vec3d::OX(1.0);
-                    right = refAxis * aimDir;
-                }
-
-                if ( right.normalise() > 0.001 )
-                {
-                    vec3d up = aimDir * right;
-
-                    if ( up.normalise() > 0.001 )
-                    {
-                        float randX = 0.0;
-                        float randY = 0.0;
-
-                        if ( weaponSpreadX > 0.0 )
-                            randX = (((float)rand() / (float)RAND_MAX) * 2.0 - 1.0) * tan(weaponSpreadX * C_PI_180);
-
-                        if ( weaponSpreadY > 0.0 )
-                            randY = (((float)rand() / (float)RAND_MAX) * 2.0 - 1.0) * tan(weaponSpreadY * C_PI_180);
-
-                        aimDir += right * randX + up * randY;
-
-                        if ( aimDir.normalise() > 0.001 )
-                            wobj->_fly_dir = aimDir;
-                    }
-                }
-            }
-        }
+            wobj->_fly_dir = ypabact_ApplyDirectionalSpread(_rotation, wobj->_fly_dir, weaponSpreadX, weaponSpreadY);
 
         wobj->_fly_dir_length = _fly_dir_length + wproto.start_speed;
 
@@ -5015,6 +5058,10 @@ void NC_STACK_ypabact::Renew()
 //    bact->field_951 = 0;
     _mgun_time = 0;
     _weapon_time = 0;
+    _num_mguns = 1;
+    _mgun_fire_x = 0.0;
+    _mgun_spread_x = 0.0;
+    _mgun_spread_y = 0.0;
     _newtarget_time = 0;
     _assess_time = 0;
     _scale_pos = 0;
@@ -5450,6 +5497,60 @@ void NC_STACK_ypabact::StuckFree(update_msg *arg)
     }
 }
 
+static vec3d ypabact_ApplyDirectionalSpread(const mat3x3 &rotation, const vec3d &direction, float spreadX, float spreadY)
+{
+    if ( spreadX <= 0.0 && spreadY <= 0.0 )
+        return direction;
+
+    vec3d aimDir = direction;
+
+    if ( aimDir.normalise() <= 0.001 )
+        return direction;
+
+    vec3d right = rotation.AxisX();
+    right -= aimDir * right.dot(aimDir);
+
+    if ( right.normalise() <= 0.001 )
+    {
+        vec3d refAxis = fabs(aimDir.y) < 0.99 ? vec3d::OY(1.0) : vec3d::OX(1.0);
+        right = refAxis * aimDir;
+    }
+
+    if ( right.normalise() <= 0.001 )
+        return aimDir;
+
+    vec3d up = aimDir * right;
+
+    if ( up.normalise() <= 0.001 )
+        return aimDir;
+
+    float randX = 0.0;
+    float randY = 0.0;
+
+    if ( spreadX > 0.0 )
+        randX = (((float)rand() / (float)RAND_MAX) * 2.0 - 1.0) * tan(spreadX * C_PI_180);
+
+    if ( spreadY > 0.0 )
+        randY = (((float)rand() / (float)RAND_MAX) * 2.0 - 1.0) * tan(spreadY * C_PI_180);
+
+    aimDir += right * randX + up * randY;
+
+    if ( aimDir.normalise() > 0.001 )
+        return aimDir;
+
+    return direction;
+}
+
+static float ypabact_GetMgunOffset(const NC_STACK_ypabact *bact, int shotId, int shotCount)
+{
+    if ( shotCount <= 1 )
+        return 0.0;
+
+    // Matches primary num_weapons/fire_x distribution: -abs(x) ... +abs(x).
+    float sideSpan = fabs(bact->_mgun_fire_x);
+    return (shotId * 2) * sideSpan / (shotCount - 1) - sideSpan;
+}
+
 size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
 {
     int a5 = 0;
@@ -5460,42 +5561,7 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
     if ( _mgun == -1 )
         return 0;
 
-    NC_STACK_ypabact *v108 = NULL;
-    float v123 = 0.0;
-    float v121 = 0.0;
-    vec3d v66;
-
-    yw_130arg arg130;
-    arg130.pos_x = _position.x;
-    arg130.pos_z = _position.z;
-
-    vec2d tmp = _position.XZ() + arg->field_0.XZ() * 1000.0;
-
-    _world->GetSectorInfo(&arg130);
-
-    cellArea *pCells[3];
-    pCells[0] = arg130.pcell;
-
-    arg130.pos_x = tmp.x;
-    arg130.pos_z = tmp.y;
-    _world->GetSectorInfo(&arg130);
-
-    pCells[2] = arg130.pcell;
-
-    if ( arg130.pcell == pCells[0] )
-    {
-        pCells[1] = pCells[0];
-    }
-    else
-    {
-        vec2d tmp2 = _position.XZ() + (tmp - _position.XZ()) * 0.5;
-        arg130.pos_x = tmp2.x;
-        arg130.pos_z = tmp2.y;
-
-        _world->GetSectorInfo(&arg130);
-
-        pCells[1] = arg130.pcell;
-    }
+    int mgunShots = _num_mguns > 0 ? _num_mguns : 1;
 
     int v107 = 0;
     if ( _bact_type == BACT_TYPES_GUN )
@@ -5511,123 +5577,8 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
         _energy -= _gun_power * arg->field_C / 300.0;
     }
 
-    for(int i = 0; i < 3; i++)
-    {
-        if ( i <= 0 || pCells[ i ] != pCells[ i - 1 ] )
-        {
-            for ( NC_STACK_ypabact* &cellUnit : pCells[ i ]->unitsList )
-            {
-                if ( cellUnit != this && cellUnit->_bact_type != BACT_TYPES_MISSLE && cellUnit->_status != BACT_STATUS_DEAD )
-                {
-                    int v89 = 0;
-                    if (cellUnit->_bact_type == BACT_TYPES_GUN)
-                    {
-                        NC_STACK_ypagun *gun = dynamic_cast<NC_STACK_ypagun *>( cellUnit );
-                        v89 = gun->IsRoboGun();
-                    }
-
-                    if ( cellUnit->_bact_type != BACT_TYPES_GUN || cellUnit->_shield > 100 || !v89 )
-                    {
-                        if ( (_oflags & BACT_OFLAG_USERINPT || cellUnit->_owner != _owner) && (!v107 || cellUnit != _host_station) )
-                        {
-
-                            World::rbcolls *v93 = cellUnit->getBACT_collNodes();
-
-                            int v109;
-                            if ( v93 )
-                                v109 = v93->roboColls.size();
-                            else
-                                v109 = 1;
-
-                            int v22 = 0;
-
-                            for (int j = v109 - 1; j >= 0; j-- )
-                            {
-                                vec3d v77;
-                                float v27;
-
-                                if ( v93 )
-                                {
-                                    v77 = cellUnit->_position + cellUnit->_rotation.Transpose().Transform( v93->roboColls[j].coll_pos );
-
-                                    v27 = v93->roboColls[j].robo_coll_radius;
-                                }
-                                else
-                                {
-                                    v77 = cellUnit->_position;
-
-                                    v27 = cellUnit->_radius;
-                                }
-
-                                if ( !v93 || v27 >= 0.01 )
-                                {
-                                    v121 = v27;
-
-                                    vec3d v63 = v77 - _old_pos;
-
-                                    if ( v63.dot( _rotation.AxisZ() ) >= 0.3 )
-                                    {
-                                        vec3d v33 = arg->field_0 * v63;
-
-                                        float v111 = v63.length();
-                                        float v110 = v33.length();
-
-                                        float v37 = v27 + _gun_radius;
-
-                                        if ( v37 > v110 )
-                                        {
-                                            if ( sqrt( POW2(v110) + 1000000.0 ) > v111 )
-                                            {
-                                                if ( !v22 )
-                                                {
-                                                    int energ;
-
-                                                    if ( cellUnit->getBACT_inputting() || cellUnit->getBACT_viewer() )
-                                                    {
-                                                        float v39 = (_gun_power * arg->field_C) * (100.0 - (float)cellUnit->_shield);
-                                                        energ = (v39 * 0.004);
-                                                    }
-                                                    else
-                                                    {
-
-                                                        float v41 = (_gun_power * arg->field_C) * (100.0 - (float)cellUnit->_shield);
-                                                        energ = v41 / 100;
-                                                    }
-
-                                                    bact_arg84 v86;
-                                                    v86.unit = this;
-                                                    v86.energy = -energ;
-
-                                                    if ( energ )
-                                                        cellUnit->ModifyEnergy(&v86);
-                                                }
-
-                                                v22 = 1;
-
-                                                if ( !v108 || v123 > v111 )
-                                                {
-                                                    v108 = cellUnit;
-                                                    v123 = v111;
-
-                                                    v66 = cellUnit->_position;
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                }
-
-                            }
-
-
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     int v88 = getBACT_inputting();
+    bool spawnVisual = false;
 
     if ( (v88 || _world->ypaworld_func145(this)) && !a5 )
     {
@@ -5657,7 +5608,177 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
         if ( arg->field_10 - _mgun_time > v45 )
         {
             _mgun_time = arg->field_10;
+            spawnVisual = true;
+        }
+    }
 
+    for (int shotId = 0; shotId < mgunShots; shotId++)
+    {
+        float mgunOffset = ypabact_GetMgunOffset(this, shotId, mgunShots);
+        vec3d sideOffset = _rotation.Transpose().Transform(vec3d(mgunOffset, 0.0, 0.0));
+        vec3d shotPos = _position + sideOffset;
+        vec3d shotOldPos = _old_pos + sideOffset;
+        vec3d shotDir = ypabact_ApplyDirectionalSpread(_rotation, arg->field_0, _mgun_spread_x, _mgun_spread_y);
+
+        NC_STACK_ypabact *v108 = NULL;
+        float v123 = 0.0;
+        float v121 = 0.0;
+        vec3d v66;
+
+        yw_130arg arg130;
+        arg130.pos_x = shotPos.x;
+        arg130.pos_z = shotPos.z;
+
+        vec2d tmp = shotPos.XZ() + shotDir.XZ() * 1000.0;
+
+        if ( !_world->GetSectorInfo(&arg130) )
+            continue;
+
+        cellArea *pCells[3];
+        pCells[0] = arg130.pcell;
+
+        arg130.pos_x = tmp.x;
+        arg130.pos_z = tmp.y;
+
+        if ( !_world->GetSectorInfo(&arg130) )
+            continue;
+
+        pCells[2] = arg130.pcell;
+
+        if ( arg130.pcell == pCells[0] )
+        {
+            pCells[1] = pCells[0];
+        }
+        else
+        {
+            vec2d tmp2 = shotPos.XZ() + (tmp - shotPos.XZ()) * 0.5;
+            arg130.pos_x = tmp2.x;
+            arg130.pos_z = tmp2.y;
+
+            if ( !_world->GetSectorInfo(&arg130) )
+                continue;
+
+            pCells[1] = arg130.pcell;
+        }
+
+        for(int i = 0; i < 3; i++)
+        {
+            if ( i <= 0 || pCells[ i ] != pCells[ i - 1 ] )
+            {
+                for ( NC_STACK_ypabact* &cellUnit : pCells[ i ]->unitsList )
+                {
+                    if ( cellUnit != this && cellUnit->_bact_type != BACT_TYPES_MISSLE && cellUnit->_status != BACT_STATUS_DEAD )
+                    {
+                        int v89 = 0;
+                        if (cellUnit->_bact_type == BACT_TYPES_GUN)
+                        {
+                            NC_STACK_ypagun *gun = dynamic_cast<NC_STACK_ypagun *>( cellUnit );
+                            v89 = gun->IsRoboGun();
+                        }
+
+                        if ( cellUnit->_bact_type != BACT_TYPES_GUN || cellUnit->_shield > 100 || !v89 )
+                        {
+                            if ( (_oflags & BACT_OFLAG_USERINPT || cellUnit->_owner != _owner) && (!v107 || cellUnit != _host_station) )
+                            {
+
+                                World::rbcolls *v93 = cellUnit->getBACT_collNodes();
+
+                                int v109;
+                                if ( v93 )
+                                    v109 = v93->roboColls.size();
+                                else
+                                    v109 = 1;
+
+                                int v22 = 0;
+
+                                for (int j = v109 - 1; j >= 0; j-- )
+                                {
+                                    vec3d v77;
+                                    float v27;
+
+                                    if ( v93 )
+                                    {
+                                        v77 = cellUnit->_position + cellUnit->_rotation.Transpose().Transform( v93->roboColls[j].coll_pos );
+
+                                        v27 = v93->roboColls[j].robo_coll_radius;
+                                    }
+                                    else
+                                    {
+                                        v77 = cellUnit->_position;
+
+                                        v27 = cellUnit->_radius;
+                                    }
+
+                                    if ( !v93 || v27 >= 0.01 )
+                                    {
+                                        v121 = v27;
+
+                                        vec3d v63 = v77 - shotOldPos;
+
+                                        if ( v63.dot( shotDir ) >= 0.3 )
+                                        {
+                                            vec3d v33 = shotDir * v63;
+
+                                            float v111 = v63.length();
+                                            float v110 = v33.length();
+
+                                            float v37 = v27 + _gun_radius;
+
+                                            if ( v37 > v110 )
+                                            {
+                                                if ( sqrt( POW2(v110) + 1000000.0 ) > v111 )
+                                                {
+                                                    if ( !v22 )
+                                                    {
+                                                        int energ;
+
+                                                        if ( cellUnit->getBACT_inputting() || cellUnit->getBACT_viewer() )
+                                                        {
+                                                            float v39 = (_gun_power * arg->field_C) * (100.0 - (float)cellUnit->_shield);
+                                                            energ = (v39 * 0.004);
+                                                        }
+                                                        else
+                                                        {
+
+                                                            float v41 = (_gun_power * arg->field_C) * (100.0 - (float)cellUnit->_shield);
+                                                            energ = v41 / 100;
+                                                        }
+
+                                                        bact_arg84 v86;
+                                                        v86.unit = this;
+                                                        v86.energy = -energ;
+
+                                                        if ( energ )
+                                                            cellUnit->ModifyEnergy(&v86);
+                                                    }
+
+                                                    v22 = 1;
+
+                                                    if ( !v108 || v123 > v111 )
+                                                    {
+                                                        v108 = cellUnit;
+                                                        v123 = v111;
+
+                                                        v66 = cellUnit->_position;
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                    }
+
+                                }
+
+
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if ( spawnVisual )
+        {
             int v55 = 0;
             int v96 = 0;
 
@@ -5671,14 +5792,14 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
                 v96 = 0;
 
                 if (isnormal(v123)) // Not NULL, NAN, INF
-                    v80 = v66 - (v66 - _position) * (v121 * 0.7) / v123;
+                    v80 = v66 - (v66 - shotPos) * (v121 * 0.7) / v123;
                 else
                     v80 = v66;
             }
             else
             {
-                v59.stPos = _position;
-                v59.vect = arg->field_0 * 1000.0;
+                v59.stPos = shotPos;
+                v59.vect = shotDir * 1000.0;
                 v59.flags = 0;
 
                 _world->ypaworld_func149(&v59);
@@ -5733,6 +5854,7 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
             }
         }
     }
+
     return 1;
 }
 
@@ -6977,6 +7099,8 @@ void NC_STACK_ypabact::NetUpdate(update_msg *upd)
         _tForm.SclRot = _rotation.Transpose() * mat3x3::Scale(_scale);
     else
         _tForm.SclRot = _rotation.Transpose();
+
+    ypabact_ApplyDamageSoundPitch(this);
 
     int units_cnt = upd->units_count;
 

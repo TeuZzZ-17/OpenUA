@@ -633,6 +633,8 @@ public:
     uint32_t _fe_cmdID; // found enemy group ID
     int _fe_time; //
     float _mass;
+    float _base_force;
+    float _base_maxrot;
     float _force;
     float _airconst;
     float _airconst_static;
@@ -668,6 +670,10 @@ public:
     NC_STACK_base *_vp_genesis;
     std::array<World::TDamageFXSlot, World::DAMAGE_FX_SLOT_COUNT> _damage_fx;
     std::array<int32_t, World::DAMAGE_FX_SLOT_COUNT> _damage_fx_last_time;
+    float _damage_force_mult;
+    float _damage_maxrot_mult;
+    float _damage_snd_pitch_mult;
+    bool _damage_fx_active;
     int _vp_active;
     extra_vproto _vp_extra[3];
     int _vp_extra_mode;
@@ -705,6 +711,7 @@ public:
     int _weapon;
     uint8_t _weapon_flags;
     int _mgun;
+    int _num_mguns;
     uint8_t _num_weapons;
 
     World::MissileList _missiles_list;
@@ -715,6 +722,9 @@ public:
     float _gun_leftright;
     float _gun_radius;
     float _gun_power;
+    float _mgun_fire_x;
+    float _mgun_spread_x;
+    float _mgun_spread_y;
     int _mgun_time;
     int _salve_counter;
     int _kill_after_shot;

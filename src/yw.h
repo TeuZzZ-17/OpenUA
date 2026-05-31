@@ -2331,6 +2331,7 @@ public:
     void FreeGameDataCursors();
 
     void SpawnTransientVP(int32_t modelId, const vec3d &pos, const mat3x3 &rot, int32_t lifeTime);
+    void SpawnAttachedTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime);
     
     void SetCmdrIdToSelect(int32_t id) { _cmdrIdToSelect = id; };
         
@@ -2404,6 +2405,9 @@ public:
         mat3x3 rot;
         int32_t age = 0;
         int32_t lifeTime = 0;
+        bool followOwner = false;
+        int32_t followOwnerGid = 0;
+        vec3d followLocalOffset;
 
         TTransientVP(NC_STACK_base *base, const vec3d &p, const mat3x3 &r, int32_t life)
         : vp(base ? base->GenRenderInstance() : NULL), pos(p), rot(r), lifeTime(life)
