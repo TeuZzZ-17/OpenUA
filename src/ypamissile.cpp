@@ -12,6 +12,37 @@
 #include <algorithm>
 #include <math.h>
 
+static float ypamissile_Clamp01(float value)
+{
+    if ( value < 0.0 )
+        return 0.0;
+
+    if ( value > 1.0 )
+        return 1.0;
+
+    return value;
+}
+
+static float ypamissile_AoeFalloffFactor(float distance, float radius, bool falloff)
+{
+    if ( radius <= 0.0 || distance > radius )
+        return 0.0;
+
+    if ( !falloff )
+        return 1.0;
+
+    // Same attenuation shape used by NC_STACK_ypacar::DoKamikaze().
+    return ypamissile_Clamp01(exp(distance * -2.8 / World::CVSectorLength));
+}
+
+static int ypamissile_ScaleAoeEnergy(int energy, float factor)
+{
+    if ( energy <= 0 || factor <= 0.0 )
+        return 0;
+
+    return (int)((float)energy * factor);
+}
+
 size_t NC_STACK_ypamissile::Init(IDVList &stak)
 {
     if ( !NC_STACK_ypabact::Init(stak) )
@@ -696,7 +727,9 @@ void NC_STACK_ypamissile::ApplyAreaDamage()
                 if ( GetAreaDamageSkipReason(bct, allowFriendly) )
                     continue;
 
-                if ( (bct->_position - _position).length() > _mislAoeUnitRadius )
+                float distance = (bct->_position - _position).length();
+
+                if ( distance > _mislAoeUnitRadius )
                     continue;
 
                 if ( IsDirectHitUnit(bct) )
@@ -707,7 +740,9 @@ void NC_STACK_ypamissile::ApplyAreaDamage()
 
                 damagedUnits.push_back(bct);
 
-                ApplyDamageToBact(bct, _mislAoeUnitEnergy);
+                int areaEnergy = ypamissile_ScaleAoeEnergy(_mislAoeUnitEnergy, ypamissile_AoeFalloffFactor(distance, _mislAoeUnitRadius, _mislAoeFalloff != 0));
+                if ( areaEnergy > 0 )
+                    ApplyDamageToBact(bct, areaEnergy);
             }
         }
     }
@@ -779,7 +814,10 @@ void NC_STACK_ypamissile::ApplyBuildingAreaDamage()
             yw_arg129 arg129;
             arg129.field_0 = 0;
             arg129.pos = bestPos;
-            arg129.field_10 = _mislAoeBuildingEnergy;
+            arg129.field_10 = ypamissile_ScaleAoeEnergy(_mislAoeBuildingEnergy, ypamissile_AoeFalloffFactor(bestDistance, _mislAoeBuildingRadius, _mislAoeFalloff != 0));
+            if ( arg129.field_10 <= 0 )
+                continue;
+
             arg129.unit = _mislEmitter;
 
             ChangeSectorEnergy(&arg129);
@@ -853,7 +891,10 @@ void NC_STACK_ypamissile::ApplySectorAreaDamage()
             yw_arg129 arg129;
             arg129.field_0 = 0;
             arg129.pos = bestPos;
-            arg129.field_10 = _mislAoeSectorEnergy;
+            arg129.field_10 = ypamissile_ScaleAoeEnergy(_mislAoeSectorEnergy, ypamissile_AoeFalloffFactor(bestDistance, _mislAoeSectorRadius, _mislAoeFalloff != 0));
+            if ( arg129.field_10 <= 0 )
+                continue;
+
             arg129.unit = _mislEmitter;
 
             // Sector AoE uses the same path as direct hits on normal sector architecture.
@@ -1150,6 +1191,7 @@ void NC_STACK_ypamissile::Renew()
 
     _mislFlags  = 0;
     _mislDelayTime = 0;
+    _mislAoeFalloff = 0;
 
     setBACT_yourLastSeconds(3000);
 }
@@ -1377,6 +1419,7 @@ NC_STACK_ypamissile::NC_STACK_ypamissile()
     _mislEnergyTank = 0.;
     _mislEnergyFlyer = 0.;
     _mislEnergyRobo = 0.;
+    _mislAoeFalloff = 0;
     _mislRadiusHeli = 0.;
     _mislRadiusTank = 0.;
     _mislRadiusFlyer = 0.;
@@ -1448,7 +1491,7 @@ void NC_STACK_ypamissile::SetPowerRobo(int po)
 }
 
 void NC_STACK_ypamissile::SetAreaDamage(float unitRadius, int unitEnergy, float buildingRadius, int buildingEnergy,
-                                        float sectorRadius, int sectorEnergy)
+                                        float sectorRadius, int sectorEnergy, int falloff)
 {
     _mislAoeUnitRadius = unitRadius;
     _mislAoeUnitEnergy = unitEnergy;
@@ -1456,6 +1499,7 @@ void NC_STACK_ypamissile::SetAreaDamage(float unitRadius, int unitEnergy, float 
     _mislAoeBuildingEnergy = buildingEnergy;
     _mislAoeSectorRadius = sectorRadius;
     _mislAoeSectorEnergy = sectorEnergy;
+    _mislAoeFalloff = falloff ? 1 : 0;
 }
 
 void NC_STACK_ypamissile::SetRadiusHeli(float rad)

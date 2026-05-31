@@ -88,7 +88,7 @@ public:
     virtual void SetPowerFlyer(int);
     virtual void SetPowerRobo(int);
     virtual void SetAreaDamage(float unitRadius, int unitEnergy, float buildingRadius, int buildingEnergy,
-                               float sectorRadius, int sectorEnergy);
+                               float sectorRadius, int sectorEnergy, int falloff);
     virtual void SetRadiusHeli(float);
     virtual void SetRadiusTank(float);
     virtual void SetRadiusFlyer(float);
@@ -162,6 +162,7 @@ protected:
     int _mislAoeBuildingEnergy   = 0;
     float _mislAoeSectorRadius   = 0.0;
     int _mislAoeSectorEnergy     = 0;
+    int _mislAoeFalloff          = 0;
     std::vector<NC_STACK_ypabact *> _mislDirectHitUnits;
     std::vector<TBuildingHitRef> _mislDirectHitBuildings;
     std::vector<TBuildingHitRef> _mislDirectHitSectors;

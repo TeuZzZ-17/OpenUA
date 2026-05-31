@@ -258,6 +258,7 @@ struct TWeapProto
     int aoe_unit_energy = 0;
     int aoe_building_energy = 0;
     int aoe_sector_energy = 0;
+    int aoe_falloff = 0;
 //    int field_87C = 0;
     int life_time = 0;
     int life_time_nt = 0;

@@ -1562,7 +1562,8 @@ NC_STACK_ypamissile * NC_STACK_ypaworld::ypaworld_func147(ypaworld_arg146 *arg)
     wobj->SetPowerRobo(wproto.energy_robo * 1000.0);
     wobj->SetAreaDamage(wproto.aoe_unit_radius, wproto.aoe_unit_energy,
                          wproto.aoe_building_radius, wproto.aoe_building_energy,
-                         wproto.aoe_sector_radius, wproto.aoe_sector_energy);
+                         wproto.aoe_sector_radius, wproto.aoe_sector_energy,
+                         wproto.aoe_falloff);
 
     /* Original bug caused by mixing vararg and float values
        that does not passed as 32-bit float value and

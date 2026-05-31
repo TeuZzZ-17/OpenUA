@@ -1317,6 +1317,7 @@ bool WeaponProtoParser::IsScope(ScriptParser::Parser &parser, const std::string 
         _wpn->aoe_unit_energy = 0;
         _wpn->aoe_building_energy = 0;
         _wpn->aoe_sector_energy = 0;
+        _wpn->aoe_falloff = 0;
         _wpn->mass = 50.0;
         _wpn->force = 5000.0;
         _wpn->airconst = 50.0;
@@ -1435,6 +1436,10 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     else if ( !StriCmp(p1, "aoe_sector_energy") )
     {
         _wpn->aoe_sector_energy = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "aoe_falloff") )
+    {
+        _wpn->aoe_falloff = parser.stol(p2, NULL, 0) ? 1 : 0;
     }
     else if ( !StriCmp(p1, "energy_heli") )
     {
