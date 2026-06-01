@@ -1057,6 +1057,42 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
         int numMguns = parser.stol(p2, NULL, 0);
         _vhcl->num_mguns = numMguns > 0 ? numMguns : 1;
     }
+    else if ( !StriCmp(p1, "weapon_spread_x") )
+    {
+        _vhcl->weapon_spread_x = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "weapon_spread_y") )
+    {
+        _vhcl->weapon_spread_y = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "mgun_spread_x") )
+    {
+        _vhcl->mgun_spread_x = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "mgun_spread_y") )
+    {
+        _vhcl->mgun_spread_y = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "weapon_spread_x_user") )
+    {
+        _vhcl->weapon_spread_x_user = parser.stof(p2, 0);
+        _vhcl->weapon_spread_x_user_set = true;
+    }
+    else if ( !StriCmp(p1, "weapon_spread_y_user") )
+    {
+        _vhcl->weapon_spread_y_user = parser.stof(p2, 0);
+        _vhcl->weapon_spread_y_user_set = true;
+    }
+    else if ( !StriCmp(p1, "mgun_spread_x_user") )
+    {
+        _vhcl->mgun_spread_x_user = parser.stof(p2, 0);
+        _vhcl->mgun_spread_x_user_set = true;
+    }
+    else if ( !StriCmp(p1, "mgun_spread_y_user") )
+    {
+        _vhcl->mgun_spread_y_user = parser.stof(p2, 0);
+        _vhcl->mgun_spread_y_user_set = true;
+    }
     else if ( !StriCmp(p1, "fire_x") )
     {
         _vhcl->fire_x = parser.stof(p2, 0);
@@ -1465,6 +1501,18 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->weapon_switch_mode = 0;
         _vhcl->mgun = -1;
         _vhcl->num_mguns = 1;
+        _vhcl->weapon_spread_x = 0.0;
+        _vhcl->weapon_spread_y = 0.0;
+        _vhcl->mgun_spread_x = 0.0;
+        _vhcl->mgun_spread_y = 0.0;
+        _vhcl->weapon_spread_x_user = 0.0;
+        _vhcl->weapon_spread_y_user = 0.0;
+        _vhcl->mgun_spread_x_user = 0.0;
+        _vhcl->mgun_spread_y_user = 0.0;
+        _vhcl->weapon_spread_x_user_set = false;
+        _vhcl->weapon_spread_y_user_set = false;
+        _vhcl->mgun_spread_x_user_set = false;
+        _vhcl->mgun_spread_y_user_set = false;
         _vhcl->type_icon = 65;
         _vhcl->vp_normal = 0;
         _vhcl->vp_fire = 1;
@@ -1591,14 +1639,6 @@ bool WeaponProtoParser::IsScope(ScriptParser::Parser &parser, const std::string 
         _wpn->radius_flyer = 0;
         _wpn->radius_robo = 0;
         _wpn->start_speed = 70.0;
-        _wpn->spread_x = 0.0;
-        _wpn->spread_y = 0.0;
-        _wpn->spread_x_user = 0.0;
-        _wpn->spread_y_user = 0.0;
-        _wpn->spread_x_set = false;
-        _wpn->spread_y_set = false;
-        _wpn->spread_x_user_set = false;
-        _wpn->spread_y_user_set = false;
         _wpn->life_time = 20000;
         _wpn->life_time_nt = 0;
         _wpn->drive_time = 7000;
@@ -1624,6 +1664,8 @@ bool WeaponProtoParser::IsScope(ScriptParser::Parser &parser, const std::string 
         _wpn->debuff.tick_snd.sndPrm_shk.pos.x = 0.2;
         _wpn->debuff.tick_snd.sndPrm_shk.pos.y = 0.2;
         _wpn->debuff.tick_snd.sndPrm_shk.pos.z = 0.2;
+        _wpn->cluster = TWeaponClusterConfig();
+        _wpn->cluster.snd.volume = 120;
 
         for (TVhclSound &fx : _wpn->sndFXes)
         {
@@ -1884,25 +1926,51 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     {
         _wpn->start_speed = parser.stof(p2, 0);
     }
-    else if ( !StriCmp(p1, "spread_x") )
+    else if ( !StriCmp(p1, "cluster_enable") )
     {
-        _wpn->spread_x = parser.stof(p2, 0);
-        _wpn->spread_x_set = true;
+        _wpn->cluster.enable = parser.stol(p2, NULL, 0) != 0;
     }
-    else if ( !StriCmp(p1, "spread_y") )
+    else if ( !StriCmp(p1, "cluster_count") )
     {
-        _wpn->spread_y = parser.stof(p2, 0);
-        _wpn->spread_y_set = true;
+        int count = parser.stol(p2, NULL, 0);
+        _wpn->cluster.count = count > 0 ? count : 0;
     }
-    else if ( !StriCmp(p1, "spread_x_user") )
+    else if ( !StriCmp(p1, "cluster_weapon_id") )
     {
-        _wpn->spread_x_user = parser.stof(p2, 0);
-        _wpn->spread_x_user_set = true;
+        int weaponId = parser.stol(p2, NULL, 0);
+        _wpn->cluster.weapon_id = weaponId > 0 ? weaponId : 0;
     }
-    else if ( !StriCmp(p1, "spread_y_user") )
+    else if ( !StriCmp(p1, "cluster_trigger_time") )
     {
-        _wpn->spread_y_user = parser.stof(p2, 0);
-        _wpn->spread_y_user_set = true;
+        int triggerTime = parser.stol(p2, NULL, 0);
+        _wpn->cluster.trigger_time = triggerTime > 0 ? triggerTime : 0;
+    }
+    else if ( !StriCmp(p1, "cluster_spread_x") )
+    {
+        float spread = parser.stof(p2, 0);
+        _wpn->cluster.spread_x = spread > 0.0 ? spread : 0.0;
+    }
+    else if ( !StriCmp(p1, "cluster_spread_y") )
+    {
+        float spread = parser.stof(p2, 0);
+        _wpn->cluster.spread_y = spread > 0.0 ? spread : 0.0;
+    }
+    else if ( !StriCmp(p1, "cluster_vp") )
+    {
+        int vp = parser.stol(p2, NULL, 0);
+        _wpn->cluster.vp = vp > 0 ? vp : 0;
+    }
+    else if ( !StriCmp(p1, "snd_cluster_sample") )
+    {
+        _wpn->cluster.snd.SetMainSampleVariant(0, p2);
+    }
+    else if ( !StriCmp(p1, "snd_cluster_pitch") )
+    {
+        _wpn->cluster.snd.pitch = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "snd_cluster_volume") )
+    {
+        _wpn->cluster.snd.volume = parser.stol(p2, NULL, 0);
     }
     else if ( !StriCmp(p1, "life_time") )
     {

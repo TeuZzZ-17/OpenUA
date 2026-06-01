@@ -94,6 +94,7 @@ public:
     virtual void SetRadiusFlyer(float);
     virtual void SetRadiusRobo(float);
     virtual void SetStartHeight(float);
+    virtual void SetClusterSpawnedChild(bool child);
 
     virtual NC_STACK_ypabact *GetLauncherBact();
     virtual int GetMissileType();
@@ -132,6 +133,7 @@ protected:
     void ApplyAreaDamage();
     void ApplyBuildingAreaDamage();
     void ApplySectorAreaDamage();
+    bool TryClusterSplit();
 
     struct TBuildingHitRef
     {
@@ -163,6 +165,10 @@ protected:
     float _mislAoeSectorRadius   = 0.0;
     int _mislAoeSectorEnergy     = 0;
     int _mislAoeFalloff          = 0;
+    int _mislClusterAge          = 0;
+    bool _mislClusterDone        = false;
+    bool _mislClusterChild       = false;
+    TSndCarrier _mislClusterSoundCarrier;
     std::vector<NC_STACK_ypabact *> _mislDirectHitUnits;
     std::vector<TBuildingHitRef> _mislDirectHitBuildings;
     std::vector<TBuildingHitRef> _mislDirectHitSectors;

@@ -127,6 +127,18 @@ struct TWeaponDebuffConfig
     TVhclSound tick_snd;
 };
 
+struct TWeaponClusterConfig
+{
+    bool enable = false;
+    int count = 0;
+    int16_t weapon_id = 0;
+    int trigger_time = 0;
+    float spread_x = 0.0;
+    float spread_y = 0.0;
+    int16_t vp = 0;
+    TVhclSound snd;
+};
+
 struct TRoboGun
 {
     vec3d pos;
@@ -210,6 +222,18 @@ struct TVhclProto
     int field_4 = 0;
     int8_t mgun = 0;
     int16_t num_mguns = 1;
+    float weapon_spread_x = 0.0;
+    float weapon_spread_y = 0.0;
+    float mgun_spread_x = 0.0;
+    float mgun_spread_y = 0.0;
+    float weapon_spread_x_user = 0.0;
+    float weapon_spread_y_user = 0.0;
+    float mgun_spread_x_user = 0.0;
+    float mgun_spread_y_user = 0.0;
+    bool weapon_spread_x_user_set = false;
+    bool weapon_spread_y_user_set = false;
+    bool mgun_spread_x_user_set = false;
+    bool mgun_spread_y_user_set = false;
     uint8_t type_icon = 0;
     std::string name;
     int16_t vp_normal = 0;
@@ -319,6 +343,7 @@ struct TWeapProto
     std::vector<DestFX> ExtDestroyFX; // ext_dest_fx
     std::array<TVhclSound, SND_MAX> sndFXes;
     TWeaponDebuffConfig debuff;
+    TWeaponClusterConfig cluster;
 //    int field_870 = 0;
 //    int field_874 = 0;
     int energy = 0;
@@ -362,14 +387,6 @@ struct TWeapProto
     float vwr_radius = 0.0;
     float vwr_overeof = 0.0;
     float start_speed = 0.0;
-    float spread_x = 0.0;
-    float spread_y = 0.0;
-    float spread_x_user = 0.0;
-    float spread_y_user = 0.0;
-    bool spread_x_set = false;
-    bool spread_y_set = false;
-    bool spread_x_user_set = false;
-    bool spread_y_user_set = false;
     NC_STACK_skeleton *wireframe = NULL;
     IDVList initParams;
     

@@ -43,6 +43,50 @@ static int ypamissile_ScaleAoeEnergy(int energy, float factor)
     return (int)((float)energy * factor);
 }
 
+static vec3d ypamissile_ApplyDirectionalSpread(const mat3x3 &rotation, const vec3d &direction, float spreadX, float spreadY)
+{
+    if ( spreadX <= 0.0 && spreadY <= 0.0 )
+        return direction;
+
+    vec3d aimDir = direction;
+
+    if ( aimDir.normalise() <= 0.001 )
+        return direction;
+
+    vec3d right = rotation.AxisX();
+    right -= aimDir * right.dot(aimDir);
+
+    if ( right.normalise() <= 0.001 )
+    {
+        vec3d refAxis = fabs(aimDir.y) < 0.99 ? vec3d::OY(1.0) : vec3d::OX(1.0);
+        right = refAxis * aimDir;
+    }
+
+    if ( right.normalise() <= 0.001 )
+        return aimDir;
+
+    vec3d up = aimDir * right;
+
+    if ( up.normalise() <= 0.001 )
+        return aimDir;
+
+    float randX = 0.0;
+    float randY = 0.0;
+
+    if ( spreadX > 0.0 )
+        randX = (((float)rand() / (float)RAND_MAX) * 2.0 - 1.0) * tan(spreadX * C_PI_180);
+
+    if ( spreadY > 0.0 )
+        randY = (((float)rand() / (float)RAND_MAX) * 2.0 - 1.0) * tan(spreadY * C_PI_180);
+
+    aimDir += right * randX + up * randY;
+
+    if ( aimDir.normalise() > 0.001 )
+        return aimDir;
+
+    return direction;
+}
+
 size_t NC_STACK_ypamissile::Init(IDVList &stak)
 {
     if ( !NC_STACK_ypabact::Init(stak) )
@@ -54,6 +98,10 @@ size_t NC_STACK_ypamissile::Init(IDVList &stak)
     _mislLifeTime = 5000;
     _mislDelayTime = 0;
     _mislType = MISL_BOMB;
+    _mislClusterAge = 0;
+    _mislClusterDone = false;
+    _mislClusterChild = false;
+    _mislClusterSoundCarrier.Clear();
 
     for( auto& it : stak )
     {
@@ -102,6 +150,9 @@ size_t NC_STACK_ypamissile::Init(IDVList &stak)
 
 size_t NC_STACK_ypamissile::Deinit()
 {
+    SFXEngine::SFXe.StopCarrier(&_mislClusterSoundCarrier);
+    _mislClusterSoundCarrier.Clear();
+
     return NC_STACK_ypabact::Deinit();
 }
 
@@ -192,6 +243,9 @@ size_t NC_STACK_ypamissile::SetParameters(IDVList &stak)
 
 void NC_STACK_ypamissile::AI_layer1(update_msg *arg)
 {
+    if ( !_mislClusterSoundCarrier.Sounds.empty() )
+        SFXEngine::SFXe.UpdateSoundCarrier(&_mislClusterSoundCarrier);
+
     if ( _status == BACT_STATUS_DEAD )
         _yls_time -= arg->frameTime;
 
@@ -210,6 +264,182 @@ void NC_STACK_ypamissile::AI_layer1(update_msg *arg)
 void NC_STACK_ypamissile::AI_layer2(update_msg *arg)
 {
     AI_layer3(arg);
+}
+
+bool NC_STACK_ypamissile::TryClusterSplit()
+{
+    if ( !_world || !_mislEmitter || _mislClusterDone || _mislClusterChild )
+        return false;
+
+    std::vector<World::TWeapProto> &weapons = _world->GetWeaponsProtos();
+
+    if ( _vehicleID >= weapons.size() )
+        return false;
+
+    World::TWeapProto &parentProto = weapons.at(_vehicleID);
+    World::TWeaponClusterConfig &cluster = parentProto.cluster;
+
+    if ( !cluster.enable || cluster.count <= 0 || cluster.weapon_id <= 0 )
+        return false;
+
+    if ( _mislClusterAge < cluster.trigger_time )
+        return false;
+
+    if ( cluster.weapon_id >= weapons.size() )
+        return false;
+
+    World::TWeapProto &childProto = weapons.at(cluster.weapon_id);
+
+    if ( !(childProto._weaponFlags & 1) )
+        return false;
+
+    _mislClusterDone = true;
+
+    if ( cluster.vp > 0 )
+        _world->SpawnTransientVP(cluster.vp, _position, _rotation, 1000);
+
+    cluster.snd.LoadSamples();
+    TSampleData *clusterSample = cluster.snd.MainSample.Sample ? cluster.snd.MainSample.Sample->GetSampleData() : NULL;
+    bool clusterSoundPlayed = false;
+
+    vec3d baseDir = _fly_dir;
+    if ( baseDir.normalise() <= 0.001 )
+        baseDir = _rotation.AxisZ();
+    if ( baseDir.normalise() <= 0.001 )
+        baseDir = vec3d::OZ(1.0);
+
+    uint8_t childTargetType = BACT_TGT_TYPE_DRCT;
+    BactTarget childTarget = {};
+    vec3d childTargetPos = _position + baseDir * 1000.0;
+
+    if ( _primTtype == BACT_TGT_TYPE_UNIT && _primT.pbact && _primT.pbact->_status != BACT_STATUS_DEAD )
+    {
+        childTargetType = BACT_TGT_TYPE_UNIT;
+        childTarget = _primT;
+        childTargetPos = _primT.pbact->_position;
+    }
+    else if ( _primTtype == BACT_TGT_TYPE_CELL )
+    {
+        childTargetType = BACT_TGT_TYPE_CELL;
+        childTarget = _primT;
+        childTargetPos = _primTpos;
+    }
+
+    int spawnCount = std::min(cluster.count, 64);
+    int spawned = 0;
+
+    for (int i = 0; i < spawnCount; i++)
+    {
+        ypaworld_arg146 arg147;
+        arg147.vehicle_id = cluster.weapon_id;
+        arg147.pos = _position;
+
+        NC_STACK_ypamissile *child = _world->ypaworld_func147(&arg147);
+
+        if ( !child )
+            continue;
+
+        vec3d childDir = ypamissile_ApplyDirectionalSpread(_rotation, baseDir, cluster.spread_x, cluster.spread_y);
+
+        child->SetLauncherBact(_mislEmitter);
+        child->SetClusterSpawnedChild(true);
+        child->SetStartHeight(arg147.pos.y);
+        child->_owner = _owner;
+        child->_host_station = _host_station;
+        child->_fly_dir = childDir;
+        child->_fly_dir_length = childProto.start_speed;
+
+        if ( !(childProto._weaponFlags & 0x12) )
+            child->_fly_dir_length *= 0.2;
+
+        child->_rotation.SetZ(child->_fly_dir);
+        child->_rotation.SetX(_rotation.AxisX());
+        child->_rotation.SetY(child->_rotation.AxisZ() * child->_rotation.AxisX());
+
+        if ( childProto.vp_launch > 0 )
+            _world->SpawnTransientVP(childProto.vp_launch, child->_position, child->_rotation, 1000);
+
+        child->_kidRef.Detach();
+        child->_parent = NULL;
+        _mislEmitter->_missiles_list.push_back(child);
+
+        if ( clusterSample && !clusterSoundPlayed )
+        {
+            child->_mislClusterSoundCarrier.Clear();
+            child->_mislClusterSoundCarrier.Resize(1);
+            child->_mislClusterSoundCarrier.Position = _position;
+            child->_mislClusterSoundCarrier.Vector = vec3d(0.0, 0.0, 0.0);
+
+            TSoundSource &snd = child->_mislClusterSoundCarrier.Sounds[0];
+            snd.PSample = clusterSample;
+            snd.SampleVariants.clear();
+            snd.SampleVariants.push_back(clusterSample);
+            snd.Volume = cluster.snd.volume ? cluster.snd.volume : 120;
+            snd.Pitch = cluster.snd.pitch;
+            snd.SetLoop(false);
+            snd.SetFragmented(false);
+            snd.SetPFx(false);
+            snd.SetShk(false);
+
+            SFXEngine::SFXe.startSound(&child->_mislClusterSoundCarrier, 0);
+            SFXEngine::SFXe.UpdateSoundCarrier(&child->_mislClusterSoundCarrier);
+            clusterSoundPlayed = true;
+        }
+
+        if ( child->GetMissileType() == MISL_TARGETED && childTargetType != BACT_TGT_TYPE_DRCT )
+        {
+            setTarget_msg arg67;
+            arg67.tgt = childTarget;
+            arg67.tgt_type = childTargetType;
+            arg67.priority = 0;
+            arg67.tgt_pos = childTargetPos;
+
+            child->SetTarget(&arg67);
+
+            if ( childTargetType == BACT_TGT_TYPE_CELL )
+                child->_primTpos.y = childTargetPos.y;
+        }
+        else
+        {
+            child->_primTtype = BACT_TGT_TYPE_DRCT;
+            child->_target_dir = child->_fly_dir;
+        }
+
+        if ( childTargetType != BACT_TGT_TYPE_UNIT )
+        {
+            int life_time_nt = childProto.life_time_nt;
+
+            if ( life_time_nt )
+                child->SetLifeTime(life_time_nt);
+        }
+
+        SFXEngine::SFXe.startSound(&child->_soundcarrier, World::TWeapProto::SND_LAUNCH);
+        spawned++;
+    }
+
+    if ( spawned <= 0 )
+    {
+        _mislClusterDone = false;
+        return false;
+    }
+
+    if ( getBACT_viewer() )
+    {
+        if ( _mislEmitter )
+            ResetViewing();
+        else
+        {
+            setBACT_viewer(false);
+            setBACT_inputting(false);
+        }
+    }
+
+    _hidden = true;
+    _fly_dir_length = 0.0;
+    _status = BACT_STATUS_DEAD;
+    setBACT_yourLastSeconds(0);
+
+    return true;
 }
 
 bool NC_STACK_ypamissile::TubeCollisionTest()
@@ -794,6 +1024,9 @@ void NC_STACK_ypamissile::ApplyBuildingAreaDamage()
                     if ( GetAreaBuildingSkipReason(cell, bldX, bldY) )
                         continue;
 
+                    if ( IsDirectHitBuilding(cellId, bldX, bldY) )
+                        continue;
+
                     vec3d bldPos = GetBuildingSlotCenter(cell, bldX, bldY);
                     float distance = (bldPos - _position).length();
 
@@ -853,6 +1086,9 @@ void NC_STACK_ypamissile::ApplySectorAreaDamage()
                     if ( GetAreaSectorSkipReason(cell, bldX, bldY) )
                         continue;
 
+                    if ( IsDirectHitSector(cellId, bldX, bldY) )
+                        continue;
+
                     vec3d sectorPos = GetBuildingSlotCenter(cell, bldX, bldY);
                     float distance = (sectorPos - _position).length();
 
@@ -905,6 +1141,11 @@ void NC_STACK_ypamissile::AI_layer3(update_msg *arg)
 
     if ( _status == BACT_STATUS_NORMAL )
     {
+        _mislClusterAge += arg->frameTime;
+
+        if ( TryClusterSplit() )
+            return;
+
         if ( _mislFlags & FLAG_MISL_COUNTDELAY)
             _mislDelayTime -= arg->frameTime;
 
@@ -1165,6 +1406,11 @@ void NC_STACK_ypamissile::Renew()
     _mislFlags  = 0;
     _mislDelayTime = 0;
     _mislAoeFalloff = 0;
+    _mislClusterAge = 0;
+    _mislClusterDone = false;
+    _mislClusterChild = false;
+    SFXEngine::SFXe.StopCarrier(&_mislClusterSoundCarrier);
+    _mislClusterSoundCarrier.Clear();
 
     setBACT_yourLastSeconds(3000);
 }
@@ -1498,6 +1744,13 @@ void NC_STACK_ypamissile::SetRadiusRobo(float rad)
 void NC_STACK_ypamissile::SetStartHeight(float posy)
 {
     _mislStartHeight = posy;
+}
+
+void NC_STACK_ypamissile::SetClusterSpawnedChild(bool child)
+{
+    _mislClusterChild = child;
+    _mislClusterDone = child;
+    _mislClusterAge = 0;
 }
 
 

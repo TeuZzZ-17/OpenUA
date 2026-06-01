@@ -769,6 +769,18 @@ public:
     uint8_t _weapon_flags;
     int _mgun;
     int _num_mguns;
+    float _weapon_spread_x;
+    float _weapon_spread_y;
+    float _mgun_spread_x;
+    float _mgun_spread_y;
+    float _weapon_spread_x_user;
+    float _weapon_spread_y_user;
+    float _mgun_spread_x_user;
+    float _mgun_spread_y_user;
+    bool _weapon_spread_x_user_set;
+    bool _weapon_spread_y_user_set;
+    bool _mgun_spread_x_user_set;
+    bool _mgun_spread_y_user_set;
     uint8_t _num_weapons;
 
     World::MissileList _missiles_list;

@@ -195,7 +195,9 @@ static void ypabact_ApplyDamageSoundPitch(NC_STACK_ypabact *bact)
     TSoundSource &normal = bact->_soundcarrier.Sounds[World::TVhclProto::SND_NORMAL];
     TSoundSource &wait = bact->_soundcarrier.Sounds[World::TVhclProto::SND_WAIT];
 
-    normal.Pitch = ypabact_ScaledPitch(normal, bact->_base_snd_normal_pitch, pitchMult);
+    if ( pitchMult != 1.0 )
+        normal.Pitch = ypabact_ScaledPitch(normal, normal.Pitch, pitchMult);
+
     wait.Pitch = ypabact_ScaledPitch(wait, bact->_base_snd_wait_pitch, pitchMult);
 }
 
@@ -580,6 +582,18 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _weapon_flags = 0;
     _mgun = 0;
     _num_mguns = 1;
+    _weapon_spread_x = 0.0;
+    _weapon_spread_y = 0.0;
+    _mgun_spread_x = 0.0;
+    _mgun_spread_y = 0.0;
+    _weapon_spread_x_user = 0.0;
+    _weapon_spread_y_user = 0.0;
+    _mgun_spread_x_user = 0.0;
+    _mgun_spread_y_user = 0.0;
+    _weapon_spread_x_user_set = false;
+    _weapon_spread_y_user_set = false;
+    _mgun_spread_x_user_set = false;
+    _mgun_spread_y_user_set = false;
     _num_weapons = 0;
     _weapon_time = 0;
     _gun_angle = 0.0;
@@ -1326,7 +1340,6 @@ void NC_STACK_ypabact::Update(update_msg *arg)
     UpdateActiveDebuff(arg);
     UpdateDamageFX(arg);
     UpdateCarrierSpawn(arg);
-
     AI_layer1(arg);
     UpdateUnitGuns(arg);
 
@@ -4405,25 +4418,19 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
         }
 
         bool userInput = (_oflags & BACT_OFLAG_USERINPT);
-        bool axisSpread = wproto.spread_x_set || wproto.spread_y_set;
-        float weaponSpreadX = wproto.spread_x_set ? wproto.spread_x : 0.0;
-        float weaponSpreadY = wproto.spread_y_set ? wproto.spread_y : 0.0;
+        float weaponSpreadX = _weapon_spread_x;
+        float weaponSpreadY = _weapon_spread_y;
 
         if ( userInput )
         {
-            if ( wproto.spread_x_user_set || wproto.spread_y_user_set )
-            {
-                axisSpread = true;
+            if ( _weapon_spread_x_user_set )
+                weaponSpreadX = _weapon_spread_x_user;
 
-                if ( wproto.spread_x_user_set )
-                    weaponSpreadX = wproto.spread_x_user;
-
-                if ( wproto.spread_y_user_set )
-                    weaponSpreadY = wproto.spread_y_user;
-            }
+            if ( _weapon_spread_y_user_set )
+                weaponSpreadY = _weapon_spread_y_user;
         }
 
-        if ( axisSpread )
+        if ( weaponSpreadX > 0.0 || weaponSpreadY > 0.0 )
             wobj->_fly_dir = ypabact_ApplyDirectionalSpread(_rotation, wobj->_fly_dir, weaponSpreadX, weaponSpreadY);
 
         wobj->_fly_dir_length = _fly_dir_length + wproto.start_speed;
@@ -6537,8 +6544,18 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
         vec3d sideOffset = _rotation.Transpose().Transform(vec3d(mgunOffset, 0.0, 0.0));
         vec3d shotPos = _position + sideOffset;
         vec3d shotOldPos = _old_pos + sideOffset;
-        float spreadX = mgunProto.spread_x_set ? mgunProto.spread_x : 0.0;
-        float spreadY = mgunProto.spread_y_set ? mgunProto.spread_y : 0.0;
+        bool userInput = (_oflags & BACT_OFLAG_USERINPT);
+        float spreadX = _mgun_spread_x;
+        float spreadY = _mgun_spread_y;
+
+        if ( userInput )
+        {
+            if ( _mgun_spread_x_user_set )
+                spreadX = _mgun_spread_x_user;
+
+            if ( _mgun_spread_y_user_set )
+                spreadY = _mgun_spread_y_user;
+        }
         vec3d shotDir = ypabact_ApplyDirectionalSpread(_rotation, arg->field_0, spreadX, spreadY);
 
         NC_STACK_ypabact *v108 = NULL;
