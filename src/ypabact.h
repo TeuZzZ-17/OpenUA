@@ -62,6 +62,44 @@ struct extra_vproto
     }
 };
 
+struct TActiveDebuffState
+{
+    bool active = false;
+    std::string name;
+    int damage = 0;
+    int tick_time = 1000;
+    int expire_time = 0;
+    int next_tick_time = 0;
+    float force_mult = 1.0;
+    float maxrot_mult = 1.0;
+    float snd_pitch_mult = 1.0;
+    int16_t fx_vp = 0;
+    float fx_random_pos = 0.0;
+    TSampleData *snd_sample = NULL;
+    int snd_volume = 120;
+    int snd_pitch = 0;
+    int32_t source_gid = 0;
+
+    void Clear()
+    {
+        active = false;
+        name.clear();
+        damage = 0;
+        tick_time = 1000;
+        expire_time = 0;
+        next_tick_time = 0;
+        force_mult = 1.0;
+        maxrot_mult = 1.0;
+        snd_pitch_mult = 1.0;
+        fx_vp = 0;
+        fx_random_pos = 0.0;
+        snd_sample = NULL;
+        snd_volume = 120;
+        snd_pitch = 0;
+        source_gid = 0;
+    }
+};
+
 enum BACT_TGT_TYPE
 {
     BACT_TGT_TYPE_NONE = 0,
@@ -395,6 +433,9 @@ public:
     virtual void EnergyInteract(update_msg *arg);
     void UpdateCarrierSpawn(update_msg *arg);
     void UpdateDamageFX(update_msg *arg);
+    void ApplyWeaponDebuff(World::TWeaponDebuffConfig &debuff, NC_STACK_ypabact *source);
+    void UpdateActiveDebuff(update_msg *arg);
+    void ClearActiveDebuff();
     virtual void ApplyImpulse(bact_arg83 *arg);
     virtual void ModifyEnergy(bact_arg84 *arg);
     virtual bool ypabact_func85(vec3d *arg);
@@ -607,6 +648,8 @@ public:
     int _volume;
     int _pitch;
     float _pitch_max;
+    int _base_snd_normal_pitch;
+    int _base_snd_wait_pitch;
     int _energy;
     int _energy_max;
     int _reload_const;
@@ -682,6 +725,8 @@ public:
     float _damage_maxrot_mult;
     float _damage_snd_pitch_mult;
     bool _damage_fx_active;
+    TActiveDebuffState _active_debuff;
+    TSndCarrier _debuff_soundcarrier;
     int _vp_active;
     extra_vproto _vp_extra[3];
     int _vp_extra_mode;

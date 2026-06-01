@@ -1535,6 +1535,16 @@ bool WeaponProtoParser::IsScope(ScriptParser::Parser &parser, const std::string 
         _wpn->vp_genesis = 5;
         _wpn->vp_launch = 0;
         _wpn->type_icon = 65;
+        _wpn->debuff = TWeaponDebuffConfig();
+        _wpn->debuff.tick_snd.volume = 120;
+        _wpn->debuff.tick_snd.sndPrm.mag0 = 1.0;
+        _wpn->debuff.tick_snd.sndPrm.time = 1000;
+        _wpn->debuff.tick_snd.sndPrm_shk.mag0 = 1.0;
+        _wpn->debuff.tick_snd.sndPrm_shk.time = 1000;
+        _wpn->debuff.tick_snd.sndPrm_shk.mute = 0.02;
+        _wpn->debuff.tick_snd.sndPrm_shk.pos.x = 0.2;
+        _wpn->debuff.tick_snd.sndPrm_shk.pos.y = 0.2;
+        _wpn->debuff.tick_snd.sndPrm_shk.pos.z = 0.2;
 
         for (TVhclSound &fx : _wpn->sndFXes)
         {
@@ -1614,6 +1624,102 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     else if ( !StriCmp(p1, "aoe_falloff") )
     {
         _wpn->aoe_falloff = parser.stol(p2, NULL, 0) ? 1 : 0;
+    }
+    else if ( !StriCmp(p1, "debuff_allow") )
+    {
+        _wpn->debuff.allow = parser.stol(p2, NULL, 0) != 0;
+    }
+    else if ( !StriCmp(p1, "debuff_name") )
+    {
+        _wpn->debuff.name = p2;
+    }
+    else if ( !StriCmp(p1, "debuff_damage") )
+    {
+        int damage = parser.stol(p2, NULL, 0);
+        _wpn->debuff.damage = damage > 0 ? damage : 0;
+    }
+    else if ( !StriCmp(p1, "debuff_tick_time") )
+    {
+        int tickTime = parser.stol(p2, NULL, 0);
+        _wpn->debuff.tick_time = tickTime > 0 ? tickTime : 1000;
+    }
+    else if ( !StriCmp(p1, "debuff_duration") )
+    {
+        int duration = parser.stol(p2, NULL, 0);
+        _wpn->debuff.duration = duration > 0 ? duration : 0;
+    }
+    else if ( !StriCmp(p1, "debuff_force_mult") )
+    {
+        float mult = parser.stof(p2, 0);
+        _wpn->debuff.force_mult = mult >= 0.0 ? mult : 1.0;
+    }
+    else if ( !StriCmp(p1, "debuff_maxrot_mult") )
+    {
+        float mult = parser.stof(p2, 0);
+        _wpn->debuff.maxrot_mult = mult >= 0.0 ? mult : 1.0;
+    }
+    else if ( !StriCmp(p1, "debuff_snd_pitch_mult") )
+    {
+        float mult = parser.stof(p2, 0);
+        _wpn->debuff.snd_pitch_mult = mult >= 0.0 ? mult : 1.0;
+    }
+    else if ( !StriCmp(p1, "debuff_fx_vp") )
+    {
+        int vp = parser.stol(p2, NULL, 0);
+        _wpn->debuff.fx_vp = vp > 0 ? vp : 0;
+    }
+    else if ( !StriCmp(p1, "debuff_fx_random_pos") )
+    {
+        float radius = parser.stof(p2, 0);
+        _wpn->debuff.fx_random_pos = radius > 0.0 ? radius : 0.0;
+    }
+    else if ( !StriCmp(p1, "snd_debuff_sample") || !StriCmp(p1, "debuff_snd_sample") )
+    {
+        _wpn->debuff.tick_snd.SetMainSampleVariant(0, p2);
+    }
+    else if ( !StriCmp(p1, "snd_debuff_pitch") )
+    {
+        _wpn->debuff.tick_snd.pitch = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "snd_debuff_volume") )
+    {
+        _wpn->debuff.tick_snd.volume = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "pal_debuff_slot") )
+    {
+        _wpn->debuff.tick_snd.sndPrm.slot = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "pal_debuff_mag0") )
+    {
+        _wpn->debuff.tick_snd.sndPrm.mag0 = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "pal_debuff_mag1") )
+    {
+        _wpn->debuff.tick_snd.sndPrm.mag1 = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "pal_debuff_time") )
+    {
+        _wpn->debuff.tick_snd.sndPrm.time = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "shk_debuff_slot") )
+    {
+        _wpn->debuff.tick_snd.sndPrm_shk.slot = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "shk_debuff_mag0") )
+    {
+        _wpn->debuff.tick_snd.sndPrm_shk.mag0 = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "shk_debuff_mag1") )
+    {
+        _wpn->debuff.tick_snd.sndPrm_shk.mag1 = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "shk_debuff_time") )
+    {
+        _wpn->debuff.tick_snd.sndPrm_shk.time = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "shk_debuff_mute") )
+    {
+        _wpn->debuff.tick_snd.sndPrm_shk.mute = parser.stof(p2, 0);
     }
     else if ( !StriCmp(p1, "energy_heli") )
     {

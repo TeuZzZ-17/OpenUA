@@ -451,6 +451,15 @@ int NC_STACK_ypamissile::ApplyDamageToBact(NC_STACK_ypabact *bct, int baseEnergy
     if ( userHost->_owner == _owner || !_world->_isNetGame )
     {
         bct->ModifyEnergy(&arg84);
+
+        if ( bct->_energy > 0 && bct->_status != BACT_STATUS_DEAD && _vehicleID >= 0 && (size_t)_vehicleID < _world->GetWeaponsProtos().size() )
+        {
+            World::TWeapProto &wproto = _world->GetWeaponsProtos().at(_vehicleID);
+
+            if ( wproto.debuff.allow )
+                bct->ApplyWeaponDebuff(wproto.debuff, _mislEmitter);
+        }
+
         return damage;
     }
 

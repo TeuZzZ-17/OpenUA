@@ -112,6 +112,21 @@ struct TDamageFXSlot
     float random_pos = 15.0;
 };
 
+struct TWeaponDebuffConfig
+{
+    bool allow = false;
+    std::string name;
+    int damage = 0;
+    int tick_time = 1000;
+    int duration = 5000;
+    float force_mult = 1.0;
+    float maxrot_mult = 1.0;
+    float snd_pitch_mult = 1.0;
+    int16_t fx_vp = 0;
+    float fx_random_pos = 0.0;
+    TVhclSound tick_snd;
+};
+
 struct TRoboGun
 {
     vec3d pos;
@@ -303,6 +318,7 @@ struct TWeapProto
     std::vector<DestFX> dfx;
     std::vector<DestFX> ExtDestroyFX; // ext_dest_fx
     std::array<TVhclSound, SND_MAX> sndFXes;
+    TWeaponDebuffConfig debuff;
 //    int field_870 = 0;
 //    int field_874 = 0;
     int energy = 0;

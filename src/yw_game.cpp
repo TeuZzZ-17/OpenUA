@@ -3594,6 +3594,8 @@ void NC_STACK_ypaworld::ProtosFreeSounds()
     {
         for (World::TVhclSound &fx : wep.sndFXes)
             fx.ClearSounds();
+
+        wep.debuff.tick_snd.ClearSounds();
     }
 
     for (World::TBuildingProto &proto : _buildProtos)

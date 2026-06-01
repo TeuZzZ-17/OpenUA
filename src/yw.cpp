@@ -1604,6 +1604,8 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
 
         bacto->_pitch = bacto->_soundcarrier.Sounds[0].Pitch;
         bacto->_volume = bacto->_soundcarrier.Sounds[0].Volume;
+        bacto->_base_snd_normal_pitch = bacto->_soundcarrier.Sounds[World::TVhclProto::SND_NORMAL].Pitch;
+        bacto->_base_snd_wait_pitch = bacto->_soundcarrier.Sounds[World::TVhclProto::SND_WAIT].Pitch;
 
         bacto->SetParameters(vhcl.initParams);
 
@@ -1721,6 +1723,9 @@ NC_STACK_ypamissile * NC_STACK_ypaworld::ypaworld_func147(ypaworld_arg146 *arg)
 
     for (World::TVhclSound &sfx : wproto.sndFXes)
         sfx.LoadSamples();
+
+    if ( wproto.debuff.allow )
+        wproto.debuff.tick_snd.LoadSamples();
 
     for (size_t i = 0; i < wproto.sndFXes.size(); i++)
     {

@@ -125,6 +125,32 @@ static float ypabact_SafeDamageMult(float mult)
     return mult >= 0.0 ? mult : 1.0;
 }
 
+static vec3d ypabact_BuildRandomAttachedFXOffset(float radius, float overeof)
+{
+    if ( radius < 0.0 )
+        radius = 0.0;
+
+    vec3d localOffset(0.0, 0.0, 0.0);
+
+    if ( radius > 0.0 )
+    {
+        float angle = ((float)rand() / (float)RAND_MAX) * (2.0 * C_PI);
+        float dist = ((float)rand() / (float)RAND_MAX) * radius;
+
+        localOffset.x += cos(angle) * dist;
+        localOffset.z += sin(angle) * dist;
+    }
+
+    float heightOffset = overeof * 0.25;
+    if ( heightOffset < 5.0 )
+        heightOffset = 5.0;
+    else if ( heightOffset > 60.0 )
+        heightOffset = 60.0;
+
+    localOffset.y -= heightOffset;
+    return localOffset;
+}
+
 static void ypabact_ApplyDamageRuntime(NC_STACK_ypabact *bact, bool active)
 {
     bact->_damage_fx_active = active;
@@ -132,21 +158,60 @@ static void ypabact_ApplyDamageRuntime(NC_STACK_ypabact *bact, bool active)
     float forceMult = active ? ypabact_SafeDamageMult(bact->_damage_force_mult) : 1.0;
     float maxrotMult = active ? ypabact_SafeDamageMult(bact->_damage_maxrot_mult) : 1.0;
 
+    if ( bact->_active_debuff.active )
+    {
+        forceMult *= ypabact_SafeDamageMult(bact->_active_debuff.force_mult);
+        maxrotMult *= ypabact_SafeDamageMult(bact->_active_debuff.maxrot_mult);
+    }
+
     bact->_force = bact->_base_force * forceMult;
     bact->_maxrot = bact->_base_maxrot * maxrotMult;
 }
 
+static int ypabact_ScaledPitch(TSoundSource &snd, int basePitch, float mult)
+{
+    if ( mult == 1.0 )
+        return basePitch;
+
+    if ( snd.PSample && snd.PSample->SampleRate > 0 )
+        return (int)((snd.PSample->SampleRate + basePitch) * mult) - snd.PSample->SampleRate;
+
+    return (int)(basePitch * mult);
+}
+
 static void ypabact_ApplyDamageSoundPitch(NC_STACK_ypabact *bact)
 {
-    if ( !bact->_damage_fx_active )
+    if ( bact->_soundcarrier.Sounds.size() <= World::TVhclProto::SND_WAIT )
         return;
 
-    float pitchMult = ypabact_SafeDamageMult(bact->_damage_snd_pitch_mult);
-    if ( pitchMult == 1.0 )
+    float pitchMult = 1.0;
+
+    if ( bact->_damage_fx_active )
+        pitchMult *= ypabact_SafeDamageMult(bact->_damage_snd_pitch_mult);
+
+    if ( bact->_active_debuff.active )
+        pitchMult *= ypabact_SafeDamageMult(bact->_active_debuff.snd_pitch_mult);
+
+    TSoundSource &normal = bact->_soundcarrier.Sounds[World::TVhclProto::SND_NORMAL];
+    TSoundSource &wait = bact->_soundcarrier.Sounds[World::TVhclProto::SND_WAIT];
+
+    normal.Pitch = ypabact_ScaledPitch(normal, bact->_base_snd_normal_pitch, pitchMult);
+    wait.Pitch = ypabact_ScaledPitch(wait, bact->_base_snd_wait_pitch, pitchMult);
+}
+
+static void ypabact_UpdateDebuffSoundCarrier(NC_STACK_ypabact *bact)
+{
+    if ( bact->_debuff_soundcarrier.Sounds.empty() )
         return;
 
-    bact->_soundcarrier.Sounds[World::TVhclProto::SND_NORMAL].Pitch = (int)(bact->_soundcarrier.Sounds[World::TVhclProto::SND_NORMAL].Pitch * pitchMult);
-    bact->_soundcarrier.Sounds[World::TVhclProto::SND_WAIT].Pitch = (int)(bact->_soundcarrier.Sounds[World::TVhclProto::SND_WAIT].Pitch * pitchMult);
+    TSoundSource &snd = bact->_debuff_soundcarrier.Sounds[0];
+    if ( !snd.IsEnabled() && !snd.IsPFxEnabled() && !snd.IsShkEnabled() )
+        return;
+
+    bact->_debuff_soundcarrier.Position = bact->_position;
+    bact->_debuff_soundcarrier.Vector = bact->_fly_dir * bact->_fly_dir_length;
+
+    SFXEngine::SFXe.UpdateSoundCarrier(&bact->_debuff_soundcarrier);
 }
 
 static NC_STACK_ypabact *ypabact_FindLiveBactByGid(World::RefBactList &list, int32_t gid)
@@ -432,6 +497,8 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _volume = 0;
     _pitch = 0;
     _pitch_max = 0.0;
+    _base_snd_normal_pitch = 0;
+    _base_snd_wait_pitch = 0;
     _energy = 0;
     _energy_max = 0;
     _reload_const = 0;
@@ -479,6 +546,8 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _damage_maxrot_mult = 1.0;
     _damage_snd_pitch_mult = 1.0;
     _damage_fx_active = false;
+    _active_debuff.Clear();
+    _debuff_soundcarrier.Clear();
 
     _vp_active = 0;
 
@@ -606,6 +675,8 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _viewer_overeof = 40.0;
     _energy = 10000;
     _shield = 0;
+    _base_snd_normal_pitch = 0;
+    _base_snd_wait_pitch = 0;
     _heading_speed = 0.7;
     _yls_time = 3000;
     _aggr = 50;
@@ -615,6 +686,8 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _damage_maxrot_mult = 1.0;
     _damage_snd_pitch_mult = 1.0;
     _damage_fx_active = false;
+    _active_debuff.Clear();
+    _debuff_soundcarrier.Clear();
 //    ypabact.field_3CE = 0;
     _height_max_user = 1600.0;
     _gun_radius = 5.0;
@@ -768,6 +841,8 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
 size_t NC_STACK_ypabact::Deinit()
 {
     SFXEngine::SFXe.StopCarrier(&_soundcarrier);
+    SFXEngine::SFXe.StopCarrier(&_debuff_soundcarrier);
+    _active_debuff.Clear();
 
     _status_flg |= BACT_STFLAG_CLEAN;
 
@@ -1248,6 +1323,7 @@ void NC_STACK_ypabact::Update(update_msg *arg)
 
     _clock += arg->frameTime;
 
+    UpdateActiveDebuff(arg);
     UpdateDamageFX(arg);
     UpdateCarrierSpawn(arg);
 
@@ -1310,6 +1386,147 @@ void NC_STACK_ypabact::Update(update_msg *arg)
     ypabact_ApplyDamageSoundPitch(this);
 
     SFXEngine::SFXe.UpdateSoundCarrier(&_soundcarrier);
+    ypabact_UpdateDebuffSoundCarrier(this);
+}
+
+void NC_STACK_ypabact::ClearActiveDebuff()
+{
+    _active_debuff.Clear();
+    SFXEngine::SFXe.StopCarrier(&_debuff_soundcarrier);
+}
+
+void NC_STACK_ypabact::ApplyWeaponDebuff(World::TWeaponDebuffConfig &debuff, NC_STACK_ypabact *source)
+{
+    if ( !debuff.allow || debuff.duration <= 0 )
+        return;
+
+    if ( !_world || _bact_type == BACT_TYPES_MISSLE || _status == BACT_STATUS_DEAD )
+        return;
+
+    if ( _status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2) )
+        return;
+
+    _active_debuff.active = true;
+    _active_debuff.name = debuff.name.empty() ? "debuff" : debuff.name;
+    _active_debuff.damage = debuff.damage > 0 ? debuff.damage : 0;
+    _active_debuff.tick_time = debuff.tick_time > 0 ? debuff.tick_time : 1000;
+    _active_debuff.expire_time = _clock + debuff.duration;
+    _active_debuff.next_tick_time = _clock + _active_debuff.tick_time;
+    _active_debuff.force_mult = ypabact_SafeDamageMult(debuff.force_mult);
+    _active_debuff.maxrot_mult = ypabact_SafeDamageMult(debuff.maxrot_mult);
+    _active_debuff.snd_pitch_mult = ypabact_SafeDamageMult(debuff.snd_pitch_mult);
+    _active_debuff.fx_vp = debuff.fx_vp > 0 ? debuff.fx_vp : 0;
+    _active_debuff.fx_random_pos = debuff.fx_random_pos > 0.0 ? debuff.fx_random_pos : 0.0;
+    _active_debuff.source_gid = source ? source->_gid : 0;
+    _active_debuff.snd_sample = NULL;
+    _active_debuff.snd_volume = debuff.tick_snd.volume ? debuff.tick_snd.volume : 120;
+    _active_debuff.snd_pitch = debuff.tick_snd.pitch;
+
+    if ( debuff.tick_snd.MainSample.Sample )
+        _active_debuff.snd_sample = debuff.tick_snd.MainSample.Sample->GetSampleData();
+
+    if ( _debuff_soundcarrier.Sounds.empty() )
+        _debuff_soundcarrier.Resize(1);
+
+    TSoundSource &snd = _debuff_soundcarrier.Sounds[0];
+    snd.PSample = _active_debuff.snd_sample;
+    snd.SampleVariants.clear();
+    if ( snd.PSample )
+        snd.SampleVariants.push_back(snd.PSample);
+    snd.Volume = _active_debuff.snd_volume;
+    snd.Pitch = _active_debuff.snd_pitch;
+    snd.SetLoop(false);
+    snd.SetFragmented(false);
+
+    if ( debuff.tick_snd.sndPrm.slot )
+    {
+        snd.PPFx = &debuff.tick_snd.sndPrm;
+        snd.SetPFx(true);
+    }
+    else
+    {
+        snd.PPFx = NULL;
+        snd.SetPFx(false);
+    }
+
+    if ( debuff.tick_snd.sndPrm_shk.slot )
+    {
+        snd.PShkFx = &debuff.tick_snd.sndPrm_shk;
+        snd.SetShk(true);
+    }
+    else
+    {
+        snd.PShkFx = NULL;
+        snd.SetShk(false);
+    }
+}
+
+void NC_STACK_ypabact::UpdateActiveDebuff(update_msg *)
+{
+    if ( !_active_debuff.active )
+        return;
+
+    bool invalid = !_world ||
+                   _energy <= 0 ||
+                   _bact_type == BACT_TYPES_MISSLE ||
+                   _status == BACT_STATUS_DEAD ||
+                   (_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2));
+
+    if ( invalid || _clock >= _active_debuff.expire_time )
+    {
+        ClearActiveDebuff();
+        return;
+    }
+
+    if ( _clock < _active_debuff.next_tick_time )
+        return;
+
+    _active_debuff.next_tick_time += _active_debuff.tick_time;
+    if ( _active_debuff.next_tick_time <= _clock )
+        _active_debuff.next_tick_time = _clock + _active_debuff.tick_time;
+
+    NC_STACK_ypabact *source = NULL;
+    if ( _active_debuff.source_gid )
+        source = ypabact_FindLiveBactByGid(_world->_unitsList, _active_debuff.source_gid);
+
+    if ( _active_debuff.damage > 0 )
+    {
+        bact_arg84 arg84;
+        arg84.energy = -_active_debuff.damage;
+        arg84.unit = source;
+        ModifyEnergy(&arg84);
+    }
+
+    if ( _active_debuff.fx_vp > 0 && _world )
+    {
+        vec3d localOffset = ypabact_BuildRandomAttachedFXOffset(_active_debuff.fx_random_pos, _overeof);
+        _world->SpawnAttachedTransientVP(_active_debuff.fx_vp, this, localOffset, 1000);
+    }
+
+    if ( !_debuff_soundcarrier.Sounds.empty() )
+    {
+        _debuff_soundcarrier.Position = _position;
+        _debuff_soundcarrier.Vector = _fly_dir * _fly_dir_length;
+
+        TSoundSource &snd = _debuff_soundcarrier.Sounds[0];
+        snd.PSample = _active_debuff.snd_sample;
+        snd.Volume = _active_debuff.snd_volume;
+        snd.Pitch = _active_debuff.snd_pitch;
+
+        SFXEngine::SFXe.StopSource(&snd);
+        snd.SetEnabled(false);
+        snd.SetPlay(false);
+        snd.SetPFxEnable(false);
+        snd.SetPFxPlay(false);
+        snd.SetShkEnable(false);
+        snd.SetShkPlay(false);
+
+        SFXEngine::SFXe.startSound(&_debuff_soundcarrier, 0);
+        SFXEngine::SFXe.UpdateSoundCarrier(&_debuff_soundcarrier);
+    }
+
+    if ( _energy <= 0 || _status == BACT_STATUS_DEAD )
+        ClearActiveDebuff();
 }
 
 void NC_STACK_ypabact::UpdateDamageFX(update_msg *)
@@ -1354,28 +1571,7 @@ void NC_STACK_ypabact::UpdateDamageFX(update_msg *)
 
         _damage_fx_last_time[i] = _clock;
 
-        float radius = slot.random_pos;
-        if ( radius < 0.0 )
-            radius = 0.0;
-
-        vec3d localOffset(0.0, 0.0, 0.0);
-
-        if ( radius > 0.0 )
-        {
-            float angle = ((float)rand() / (float)RAND_MAX) * (2.0 * C_PI);
-            float dist = ((float)rand() / (float)RAND_MAX) * radius;
-
-            localOffset.x += cos(angle) * dist;
-            localOffset.z += sin(angle) * dist;
-        }
-
-        float heightOffset = _overeof * 0.25;
-        if ( heightOffset < 5.0 )
-            heightOffset = 5.0;
-        else if ( heightOffset > 60.0 )
-            heightOffset = 60.0;
-
-        localOffset.y -= heightOffset;
+        vec3d localOffset = ypabact_BuildRandomAttachedFXOffset(slot.random_pos, _overeof);
 
         _world->SpawnAttachedTransientVP(slot.vp, this, localOffset, 1000);
     }
@@ -3652,6 +3848,7 @@ void NC_STACK_ypabact::Die()
     if ( _isUnitGunChild )
         ypabact_SafeDetachControlFrom(this, _parent);
 
+    ClearActiveDebuff();
     _carrier_spawned_gids.clear();
     CleanupUnitGuns(true, true);
     
@@ -5789,6 +5986,7 @@ void NC_STACK_ypabact::Renew()
     _beam_time = 0;
     _energy_time = 0;
     ypabact_ResetDamageFX(this);
+    ClearActiveDebuff();
     _fe_time = -45000;
     _salve_counter = 0;
     _kill_after_shot = 0;
@@ -7824,6 +8022,7 @@ void NC_STACK_ypabact::NetUpdate(update_msg *upd)
 
     _clock += upd->frameTime;
 
+    UpdateActiveDebuff(upd);
     UpdateDamageFX(upd);
 
     ypabact_func117(upd);
@@ -7861,6 +8060,7 @@ void NC_STACK_ypabact::NetUpdate(update_msg *upd)
     _soundcarrier.Vector = _fly_dir * _fly_dir_length;
 
     SFXEngine::SFXe.UpdateSoundCarrier(&_soundcarrier);
+    ypabact_UpdateDebuffSoundCarrier(this);
 }
 
 void NC_STACK_ypabact::ypabact_func117(update_msg *upd)
