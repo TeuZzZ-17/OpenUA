@@ -580,6 +580,79 @@ int FxParser::ParseSndFX(ScriptParser::Parser &parser, const std::string &p1, co
     return ScriptParser::RESULT_OK;
 }
 
+static void ResetVehicleScaleFX(TVhclProto *vhcl)
+{
+    vhcl->scale_fx_p0 = 0.0;
+    vhcl->scale_fx_p1 = 0.0;
+    vhcl->scale_fx_p2 = 0.0;
+    vhcl->scale_fx_p3 = 0;
+    vhcl->scale_fx_pXX.fill(0);
+}
+
+static int ParseVehicleChainFXBlock(ScriptParser::Parser &parser, TVhclProto *vhcl)
+{
+    float startSize = 1.0;
+    float incrementalScale = 0.0;
+    int duration = 0;
+    std::array<int16_t, 32> vpModels = {};
+    size_t vpCount = 0;
+
+    std::string p1;
+    std::string p2;
+
+    while ( parser.ReadLine(&p1) )
+    {
+        size_t line_start = p1.find(";#!");
+        if (line_start != std::string::npos)
+            p1 = p1.substr(line_start + 3);
+
+        size_t line_end = p1.find_first_of(";\n\r");
+        if (line_end != std::string::npos)
+            p1.erase(line_end);
+
+        Stok stok(p1, "= \t");
+        if ( !stok.GetNext(&p1) )
+            continue;
+
+        p2.clear();
+        stok.GetNext(&p2);
+
+        if ( !StriCmp(p1, "end") )
+        {
+            ResetVehicleScaleFX(vhcl);
+
+            if ( duration > 0 && vpCount > 0 )
+            {
+                vhcl->scale_fx_p0 = startSize;
+                vhcl->scale_fx_p1 = incrementalScale;
+                vhcl->scale_fx_p2 = incrementalScale;
+                vhcl->scale_fx_p3 = duration;
+
+                for (size_t i = 0; i < vpCount; i++)
+                    vhcl->scale_fx_pXX[i] = vpModels[i];
+            }
+
+            return ScriptParser::RESULT_OK;
+        }
+
+        if ( !StriCmp(p1, "start_size") )
+            startSize = parser.stof(p2, 0);
+        else if ( !StriCmp(p1, "incremental_scale") )
+            incrementalScale = parser.stof(p2, 0);
+        else if ( !StriCmp(p1, "duration") )
+            duration = parser.stol(p2, NULL, 0);
+        else if ( !StriCmp(p1, "vp_model") )
+        {
+            if ( vpCount + 1 < vpModels.size() )
+                vpModels[vpCount++] = parser.stol(p2, NULL, 0);
+        }
+        else
+            return ScriptParser::RESULT_UNKNOWN;
+    }
+
+    return ScriptParser::RESULT_UNEXP_EOF;
+}
+
 int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1, const std::string &p2)
 {
     TRoboProto *robo = _vhcl->RoboProto;
@@ -1131,6 +1204,8 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
 
         if ( stok.GetNext(&pp0) && stok.GetNext(&pp1) && stok.GetNext(&pp2) && stok.GetNext(&pp3) )
         {
+            ResetVehicleScaleFX(_vhcl);
+
             _vhcl->scale_fx_p0 = parser.stof(pp0, 0);
             _vhcl->scale_fx_p1 = parser.stof(pp1, 0);
             _vhcl->scale_fx_p2 = parser.stof(pp2, 0);
@@ -1143,6 +1218,10 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
                 tmp++;
             }
         }
+    }
+    else if ( !StriCmp(p1, "begin_chain_fx") )
+    {
+        return ParseVehicleChainFXBlock(parser, _vhcl);
     }
     else if ( !StriCmp(p1, "robo_data_slot") )
     {
@@ -1673,7 +1752,7 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
         float radius = parser.stof(p2, 0);
         _wpn->debuff.fx_random_pos = radius > 0.0 ? radius : 0.0;
     }
-    else if ( !StriCmp(p1, "snd_debuff_sample") || !StriCmp(p1, "debuff_snd_sample") )
+    else if ( !StriCmp(p1, "snd_debuff_sample") )
     {
         _wpn->debuff.tick_snd.SetMainSampleVariant(0, p2);
     }
