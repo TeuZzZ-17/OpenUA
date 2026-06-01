@@ -786,50 +786,32 @@ void NC_STACK_ypamissile::ApplyBuildingAreaDamage()
 
             cellArea &cell = _world->SectorAt(cellId);
             int slots = cell.SectorType == 1 ? 1 : 3;
-            bool valid = false;
-            bool directHit = false;
-            float bestDistance = 0.0;
-            int bestBldX = 0;
-            int bestBldY = 0;
-            vec3d bestPos(0.0, 0.0, 0.0);
 
             for ( int bldY = 0; bldY < slots; bldY++ )
             {
                 for ( int bldX = 0; bldX < slots; bldX++ )
                 {
-                    if ( IsDirectHitBuilding(cellId, bldX, bldY) )
-                        directHit = true;
-
                     if ( GetAreaBuildingSkipReason(cell, bldX, bldY) )
                         continue;
 
                     vec3d bldPos = GetBuildingSlotCenter(cell, bldX, bldY);
                     float distance = (bldPos - _position).length();
 
-                    if ( !valid || distance < bestDistance )
-                    {
-                        valid = true;
-                        bestDistance = distance;
-                        bestBldX = bldX;
-                        bestBldY = bldY;
-                        bestPos = bldPos;
-                    }
+                    if ( distance > _mislAoeBuildingRadius )
+                        continue;
+
+                    yw_arg129 arg129;
+                    arg129.field_0 = 0;
+                    arg129.pos = bldPos;
+                    arg129.field_10 = ypamissile_ScaleAoeEnergy(_mislAoeBuildingEnergy, ypamissile_AoeFalloffFactor(distance, _mislAoeBuildingRadius, _mislAoeFalloff != 0));
+                    if ( arg129.field_10 <= 0 )
+                        continue;
+
+                    arg129.unit = _mislEmitter;
+
+                    ChangeSectorEnergy(&arg129);
                 }
             }
-
-            if ( !valid || bestDistance > _mislAoeBuildingRadius || directHit )
-                continue;
-
-            yw_arg129 arg129;
-            arg129.field_0 = 0;
-            arg129.pos = bestPos;
-            arg129.field_10 = ypamissile_ScaleAoeEnergy(_mislAoeBuildingEnergy, ypamissile_AoeFalloffFactor(bestDistance, _mislAoeBuildingRadius, _mislAoeFalloff != 0));
-            if ( arg129.field_10 <= 0 )
-                continue;
-
-            arg129.unit = _mislEmitter;
-
-            ChangeSectorEnergy(&arg129);
         }
     }
 }
@@ -863,51 +845,33 @@ void NC_STACK_ypamissile::ApplySectorAreaDamage()
 
             cellArea &cell = _world->SectorAt(cellId);
             int slots = cell.SectorType == 1 ? 1 : 3;
-            bool valid = false;
-            bool directHit = false;
-            float bestDistance = 0.0;
-            int bestBldX = 0;
-            int bestBldY = 0;
-            vec3d bestPos(0.0, 0.0, 0.0);
 
             for ( int bldY = 0; bldY < slots; bldY++ )
             {
                 for ( int bldX = 0; bldX < slots; bldX++ )
                 {
-                    if ( IsDirectHitSector(cellId, bldX, bldY) )
-                        directHit = true;
-
                     if ( GetAreaSectorSkipReason(cell, bldX, bldY) )
                         continue;
 
                     vec3d sectorPos = GetBuildingSlotCenter(cell, bldX, bldY);
                     float distance = (sectorPos - _position).length();
 
-                    if ( !valid || distance < bestDistance )
-                    {
-                        valid = true;
-                        bestDistance = distance;
-                        bestBldX = bldX;
-                        bestBldY = bldY;
-                        bestPos = sectorPos;
-                    }
+                    if ( distance > _mislAoeSectorRadius )
+                        continue;
+
+                    yw_arg129 arg129;
+                    arg129.field_0 = 0;
+                    arg129.pos = sectorPos;
+                    arg129.field_10 = ypamissile_ScaleAoeEnergy(_mislAoeSectorEnergy, ypamissile_AoeFalloffFactor(distance, _mislAoeSectorRadius, _mislAoeFalloff != 0));
+                    if ( arg129.field_10 <= 0 )
+                        continue;
+
+                    arg129.unit = _mislEmitter;
+
+                    // Sector AoE uses the same path as direct hits on normal sector architecture.
+                    ChangeSectorEnergy(&arg129);
                 }
             }
-
-            if ( !valid || bestDistance > _mislAoeSectorRadius || directHit )
-                continue;
-
-            yw_arg129 arg129;
-            arg129.field_0 = 0;
-            arg129.pos = bestPos;
-            arg129.field_10 = ypamissile_ScaleAoeEnergy(_mislAoeSectorEnergy, ypamissile_AoeFalloffFactor(bestDistance, _mislAoeSectorRadius, _mislAoeFalloff != 0));
-            if ( arg129.field_10 <= 0 )
-                continue;
-
-            arg129.unit = _mislEmitter;
-
-            // Sector AoE uses the same path as direct hits on normal sector architecture.
-            ChangeSectorEnergy(&arg129);
         }
     }
 }
