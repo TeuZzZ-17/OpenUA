@@ -352,6 +352,9 @@ void sub_4F6980(CmdStream *cur, float a1, float a2, char a3, int a4, int a5)
 
 void sub_4F72E8(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact)
 {
+    if ( bact->ShouldHideFromStrategicUI() )
+        return;
+
     if ( bact != yw->_userRobo && bact->_host_station != bact->_parent && bact->_parent )
     {
         SDL_Color clr;
@@ -550,7 +553,7 @@ void sb_0x4f8f64__sub1(NC_STACK_ypaworld *yw)
 
                 for( NC_STACK_ypabact* &kid : comm->_kidList )
                 {
-                    if ( kid->_status != BACT_STATUS_DEAD )
+                    if ( kid->_status != BACT_STATUS_DEAD && !kid->ShouldHideFromStrategicUI() )
                         sub_4F72E8(yw, kid);
                 }
             }
@@ -1101,13 +1104,16 @@ void sub_4F7BE8(NC_STACK_ypaworld *yw, CmdStream *cur, NC_STACK_ypabact *bact, i
 {
     if ( bact )
     {
+        if ( bact->ShouldHideFromStrategicUI() )
+            return;
+
         FontUA::select_tileset(cur, a2);
 
         sub_4F6980(cur, bact->_position.x, bact->_position.z, a4, a5, a6);
 
         for( NC_STACK_ypabact* &kid : bact->_kidList )
         {
-            if ( kid->_status != BACT_STATUS_DEAD )
+            if ( kid->_status != BACT_STATUS_DEAD && !kid->ShouldHideFromStrategicUI() )
                 sub_4F6980(cur, kid->_position.x, kid->_position.z, a4, a5, a6);
         }
     }
@@ -1522,6 +1528,9 @@ void sb_0x4f8f64(NC_STACK_ypaworld *yw)
                 {
                     for ( NC_STACK_ypabact* &bct : cell.unitsList )
                     {
+                        if ( bct->ShouldHideFromStrategicUI() )
+                            continue;
+
                         if ( bct->_bact_type == BACT_TYPES_ROBO )
                         {
                             FontUA::select_tileset(&robo_map.t1_cmdbuf_3, 1);
@@ -1536,7 +1545,7 @@ void sb_0x4f8f64(NC_STACK_ypaworld *yw)
                         {
                             NC_STACK_ypagun *gn = (NC_STACK_ypagun *)bct;
 
-                            if ( !gn->IsRoboGun() || bct == yw->_userUnit )
+                            if ( !gn->IsRoboGun() )
                             {
                                 sub_4F6DFC(yw, &robo_map.t1_cmdbuf_3, height, width, bct, a6);
                                 v41++;
@@ -3080,7 +3089,7 @@ void gui_update_create_btn__sub0(NC_STACK_ypaworld *yw)
 
             int v17 = dround(yw->sub_4498F4() * 2 * proto.energy / 100.0);
 
-            const std::string v8 = yw->GetVehicleName(proto);
+            const std::string v8 = yw->ResolveGameplayVehicleName(proto);
 
             if ( v3 == gui_lstvw.selectedEntry )
                 v21 = 1;
@@ -3094,11 +3103,7 @@ void gui_update_create_btn__sub0(NC_STACK_ypaworld *yw)
 
             int v18 = dround(yw->sub_4498F4() * v10.Energy / 100.0);
             
-            std::string v13;
-            if ( yw->_isNetGame )
-                v13 = yw->GetBuildingName(v10, true);
-            else
-                v13 = yw->GetBuildingName(v10, false);
+            std::string v13 = yw->ResolveGameplayBuildingName(v10, yw->_isNetGame);
                 
             if ( v3 == gui_lstvw.selectedEntry )
                 v21 = 1;
@@ -5151,7 +5156,7 @@ void ypaworld_func64__sub7__sub3__sub0__sub0(NC_STACK_ypaworld *yw, NC_STACK_ypa
 
     for ( NC_STACK_ypabact* &kid : bact->_kidList )
     {
-        if ( kid->_status != BACT_STATUS_DEAD && kid->_status != BACT_STATUS_CREATE && kid->_status != BACT_STATUS_BEAM )
+        if ( kid->_status != BACT_STATUS_DEAD && kid->_status != BACT_STATUS_CREATE && kid->_status != BACT_STATUS_BEAM && !kid->ShouldHideFromStrategicUI() )
         {
             if ( kid == yw->_userUnit && ttt )
                 pv += '!'; //33
@@ -5382,7 +5387,7 @@ bool NC_STACK_ypaworld::ypaworld_func64__sub7__sub3__sub2()
 
     if ( bct == squadron_manager.field_2BC )
     {
-        if (bct->_status != BACT_STATUS_DEAD && bct->_status != BACT_STATUS_CREATE && bct->_status != BACT_STATUS_BEAM )
+        if (bct->_status != BACT_STATUS_DEAD && bct->_status != BACT_STATUS_CREATE && bct->_status != BACT_STATUS_BEAM && !bct->ShouldHideFromStrategicUI() )
             return true;
     }
 
@@ -5391,7 +5396,7 @@ bool NC_STACK_ypaworld::ypaworld_func64__sub7__sub3__sub2()
     {
         if ( kid == squadron_manager.field_2BC )
         {
-            if ( kid->_status != BACT_STATUS_DEAD && kid->_status != BACT_STATUS_CREATE && kid->_status != BACT_STATUS_BEAM )
+            if ( kid->_status != BACT_STATUS_DEAD && kid->_status != BACT_STATUS_CREATE && kid->_status != BACT_STATUS_BEAM && !kid->ShouldHideFromStrategicUI() )
                 return true;
         }
     }
@@ -5559,7 +5564,7 @@ NC_STACK_ypabact * NC_STACK_ypaworld::sub_4C7B0C(int sqid, int a3)
 
     for(NC_STACK_ypabact * &bact : v3->_kidList)
     {
-        if (bact->_status != BACT_STATUS_DEAD && bact->_status != BACT_STATUS_CREATE && bact->_status != BACT_STATUS_BEAM)
+        if (bact->_status != BACT_STATUS_DEAD && bact->_status != BACT_STATUS_CREATE && bact->_status != BACT_STATUS_BEAM && !bact->ShouldHideFromStrategicUI())
         {
             v6--;
             if (v6 == -1)
@@ -7060,6 +7065,7 @@ NC_STACK_ypabact * NC_STACK_ypaworld::GetLastMsgSender()
                 if ( bact->_status != BACT_STATUS_DEAD && 
                      bact->_status != BACT_STATUS_CREATE && 
                      bact->_status != BACT_STATUS_BEAM && 
+                     !bact->ShouldHideFromStrategicUI() &&
                      bact->_gid == info_log.field_255C )
                 {
                     found = bact;
@@ -8381,7 +8387,6 @@ void yw_RenderInfoSpawnLabel(NC_STACK_ypaworld *yw, sklt_wis *wis, CmdStream *cu
     yw_RenderInfoVehicleName(yw, wis, cur, label, xpos, ypos);
 }
 
-
 void yw_RenderInfoWeaponWire(NC_STACK_ypaworld *yw, sklt_wis *wis, World::TWeapProto *wpn, float xpos, float ypos)
 {
     UAskeleton::Data *wairufureimu = NULL;
@@ -8529,8 +8534,6 @@ void yw_RenderHUDInfo(NC_STACK_ypaworld *yw, sklt_wis *wis, CmdStream *cur, floa
         yw_RenderInfoShieldbar(yw, wis, cur, bact, vhcl, xpos,   wis->field_92 * 9.0 + ypos  );
 
     if ( v25 )
-{
-    if ( vhcl->model_id != BACT_TYPES_GUN )
     {
         float v15 = wis->field_92 * 12.0 + ypos;
 
@@ -8543,16 +8546,15 @@ void yw_RenderHUDInfo(NC_STACK_ypaworld *yw, sklt_wis *wis, CmdStream *cur, floa
             spawn_y -= wis->field_92 * 0.35;
         }
 
-        yw_RenderInfoVehicleName(yw, wis, cur, yw->GetVehicleName(*vhcl), xpos, name_y);
+        yw_RenderInfoVehicleName(yw, wis, cur, yw->ResolveGameplayVehicleName(bact, *vhcl), xpos, name_y);
         yw_RenderInfoSpawnLabel(yw, wis, cur, vhcl, xpos, spawn_y);
     }
-}
 
     if ( weap )
     {
         if ( v23 )
         {
-            yw_RenderInfoWeaponName(yw, wis, cur, weap->name, xpos,  ypos - wis->field_92 * 12.0);
+            yw_RenderInfoWeaponName(yw, wis, cur, yw->ResolveGameplayWeaponName(*weap), xpos,  ypos - wis->field_92 * 12.0);
 
             yw_RenderInfoWeaponWire(yw, wis, weap, xpos,   ypos - wis->field_92 * 9.0);
 
@@ -8572,11 +8574,7 @@ void sb_0x4d7c08__sub0__sub0__sub0__sub0(NC_STACK_ypaworld *yw, sklt_wis *wis, C
     {
         if ( yw->_timeStamp / 200 & 1 )
         {
-            std::string bldName;
-            if ( yw->_isNetGame )
-                bldName = yw->GetBuildingName(bldId, true);
-            else
-                bldName = yw->GetBuildingName(bldId, false);
+            std::string bldName = yw->ResolveGameplayBuildingName(bldId, yw->_isNetGame);
 
             yw_RenderInfoVehicleName(yw, wis, cur, bldName, a4, a5);
         }
@@ -9082,6 +9080,8 @@ void yw_RenderOverlayCursors(NC_STACK_ypaworld *yw, CmdStream *cur)
                 {
                     for ( NC_STACK_ypabact* &bct : v8.unitsList )
                     {
+                        if ( bct->ShouldHideFromStrategicUI() )
+                            continue;
 
                         if ( bct->_bact_type != BACT_TYPES_MISSLE && bct->_bact_type != BACT_TYPES_ROBO )
                         {
@@ -9173,11 +9173,14 @@ void sb_0x4d7c08__sub0__sub4(NC_STACK_ypaworld *yw)
 
     if ( yw->_guiActFlags & 0x20 )
     {
-        yw_RenderCursorOverUnit(yw, yw->_bactOnMouse);
-        yw_RenderUnitLifeBar(yw, &buf, yw->_bactOnMouse);
+        if ( !yw->_bactOnMouse->ShouldHideFromStrategicUI() )
+        {
+            yw_RenderCursorOverUnit(yw, yw->_bactOnMouse);
+            yw_RenderUnitLifeBar(yw, &buf, yw->_bactOnMouse);
+        }
     }
 
-    if ( yw->_guiVisor.field_18 )
+    if ( yw->_guiVisor.field_18 && !yw->_guiVisor.field_18->ShouldHideFromStrategicUI() )
         yw_RenderUnitLifeBar(yw, &buf, yw->_guiVisor.field_18);
 
     yw_RenderOverlayCursors(yw, &buf);
@@ -9552,6 +9555,9 @@ void sb_0x4d7c08__sub0__sub4__sub2__sub0(NC_STACK_ypaworld *yw)
                 {
                     for( NC_STACK_ypabact* &bact : v17.unitsList )
                     {
+                        if ( bact->ShouldHideFromStrategicUI() )
+                            continue;
+
                         int v19 = 0;
                         if ( robo_map.IsOpen() )
                         {
@@ -9581,7 +9587,7 @@ void sb_0x4d7c08__sub0__sub4__sub2__sub0(NC_STACK_ypaworld *yw)
                         {
                             NC_STACK_ypagun *gun = (NC_STACK_ypagun *)bact;
 
-                            if ( (!gun->IsRoboGun() || bact == yw->_userUnit) && !v19 )
+                            if ( !gun->IsRoboGun() && !v19 )
                             {
                                 sub_4F6DFC(yw, &buf, 7, 7, bact, 0);
 
@@ -10335,6 +10341,9 @@ void NC_STACK_ypaworld::yw_MAP_MouseSelect(TClickBoxInf *winp)
             {
                 for( NC_STACK_ypabact* &v17 : cell.unitsList )
                 {
+                    if ( v17->ShouldHideFromStrategicUI() )
+                        continue;
+
                     if ( (v16 != 1 || v17->_owner != _userRobo->_owner) && (v16 || v17->_owner == _userRobo->_owner) )
                     {
                         if ( v17->_status != BACT_STATUS_CREATE && v17->_status != BACT_STATUS_DEAD && v17->_status != BACT_STATUS_BEAM && v17->_bact_type != BACT_TYPES_MISSLE )

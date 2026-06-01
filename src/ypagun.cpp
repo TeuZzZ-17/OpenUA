@@ -564,6 +564,9 @@ void NC_STACK_ypagun::Die()
                     gun.gun_obj = NULL;
             }
         }
+
+        if ( (_gunFlags & GUN_FLAGS_ROBO) && _parent )
+            _parent->ClearUnitGunPointer(this);
     }
 }
 
@@ -815,4 +818,3 @@ bool NC_STACK_ypagun::IsRoboGun()
 {
     return (_gunFlags & GUN_FLAGS_ROBO) != 0;
 }
-

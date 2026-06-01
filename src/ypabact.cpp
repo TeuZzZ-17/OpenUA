@@ -8,6 +8,7 @@
 #include "yw.h"
 #include "ypabact.h"
 #include "yparobo.h"
+#include "ypagun.h"
 #include "ypamissile.h"
 #include "yw_net.h"
 
@@ -15,6 +16,7 @@
 
 
 int ypabact_id = 1;
+extern int dword_5B1128;
 
 
 static void ypabact_ResetDamageFX(NC_STACK_ypabact *bact)
@@ -41,6 +43,69 @@ static float ypabact_GetDamageThreshold(const NC_STACK_ypabact *bact)
         return 1.0;
 
     return threshold;
+}
+
+bool NC_STACK_ypabact::ShouldHideFromStrategicUI() const
+{
+    if ( _isUnitGunChild )
+        return true;
+
+    if ( _bact_type != BACT_TYPES_GUN )
+        return false;
+
+    const NC_STACK_ypagun *gun = dynamic_cast<const NC_STACK_ypagun *>(this);
+    return gun && (gun->_gunFlags & NC_STACK_ypagun::GUN_FLAGS_ROBO);
+}
+
+static bool ypabact_IsUsableControlFallback(NC_STACK_ypabact *bact, NC_STACK_ypabact *dying)
+{
+    return bact &&
+           bact != dying &&
+           bact->_status != BACT_STATUS_DEAD &&
+           !(bact->_status_flg & BACT_STFLAG_DEATH1);
+}
+
+static void ypabact_SafeDetachControlFrom(NC_STACK_ypabact *dying, NC_STACK_ypabact *preferredFallback)
+{
+    NC_STACK_ypaworld *world = dying->getBACT_pWorld();
+    if ( !world )
+        return;
+
+    bool controlled = world->_userUnit == dying || world->_viewerBact == dying;
+    bool hovered = world->_bactOnMouse == dying;
+
+    if ( world->_guiVisor.field_18 == dying )
+        world->_guiVisor.field_18 = NULL;
+
+    if ( hovered )
+    {
+        world->_bactOnMouse = NULL;
+        world->_guiActFlags &= ~0x20;
+    }
+
+    if ( !controlled )
+        return;
+
+    NC_STACK_ypabact *fallback = NULL;
+    if ( ypabact_IsUsableControlFallback(preferredFallback, dying) )
+        fallback = preferredFallback;
+    else if ( ypabact_IsUsableControlFallback(dying->_parent, dying) && !dying->_parent->ShouldHideFromStrategicUI() )
+        fallback = dying->_parent;
+    else if ( ypabact_IsUsableControlFallback(world->_userRobo, dying) )
+        fallback = world->_userRobo;
+
+    dying->setBACT_inputting(false);
+    dying->setBACT_viewer(false);
+
+    if ( fallback )
+    {
+        fallback->setBACT_inputting(true);
+        fallback->setBACT_viewer(true);
+        world->_viewerBact = fallback;
+        world->setYW_userVehicle(fallback);
+    }
+
+    world->_playerInHSGun = false;
 }
 
 static bool ypabact_IsDamageStateActive(const NC_STACK_ypabact *bact)
@@ -468,6 +533,11 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _carrier_spawn_root_gid = 0;
     _carrier_spawn_root_vehicle = 0;
     _carrier_spawned_gids.clear();
+    _gunDisplayName.clear();
+    _unitGunsParentRotation = mat3x3::Ident();
+    _unitGunsSpawned = false;
+    _unitGunsHaveParentRotation = false;
+    _isUnitGunChild = false;
     _heading_speed = 0.0;
     _killer = NULL;
     _killer_owner = 0;
@@ -560,6 +630,12 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _carrier_spawn_root_gid = 0;
     _carrier_spawn_root_vehicle = 0;
     _carrier_spawned_gids.clear();
+    _unitGuns.clear();
+    _gunDisplayName.clear();
+    _unitGunsParentRotation = mat3x3::Ident();
+    _unitGunsSpawned = false;
+    _unitGunsHaveParentRotation = false;
+    _isUnitGunChild = false;
     _adist_sector = 800.0;
     _adist_bact = 650.0;
     _sdist_sector = 200.0;
@@ -703,6 +779,8 @@ size_t NC_STACK_ypabact::Deinit()
 
     _kidRef.Detach();
 
+    CleanupUnitGuns(true);
+
     while (!_kidList.empty())
         _kidList.front()->Delete();
 
@@ -713,6 +791,172 @@ size_t NC_STACK_ypabact::Deinit()
     }
 
     return NC_STACK_nucleus::Deinit();
+}
+
+
+void NC_STACK_ypabact::SetUnitGuns(const std::vector<World::TRoboGun> &guns)
+{
+    CleanupUnitGuns(true);
+
+    _unitGuns = guns;
+
+    for (World::TRoboGun &gun : _unitGuns)
+        gun.gun_obj = NULL;
+
+    _unitGunsParentRotation = mat3x3::Ident();
+    _unitGunsSpawned = _unitGuns.empty();
+    _unitGunsHaveParentRotation = false;
+}
+
+void NC_STACK_ypabact::CleanupUnitGuns(bool releaseGuns, bool parentDying)
+{
+    for (World::TRoboGun &gun : _unitGuns)
+    {
+        NC_STACK_ypabact *gunObj = gun.gun_obj;
+        gun.gun_obj = NULL;
+
+        if ( !gunObj )
+            continue;
+
+        NC_STACK_ypabact *fallback = parentDying ? _world->_userRobo : this;
+        ypabact_SafeDetachControlFrom(gunObj, fallback);
+
+        if ( !gunObj->IsDestroyed() && !(gunObj->_status_flg & BACT_STFLAG_DEATH1) )
+        {
+            gunObj->_killer = _killer;
+            gunObj->Die();
+        }
+
+        if ( releaseGuns )
+            gunObj->Release();
+    }
+
+    _unitGunsSpawned = false;
+    _unitGunsHaveParentRotation = false;
+}
+
+void NC_STACK_ypabact::ClearUnitGunPointer(NC_STACK_ypabact *gunObj)
+{
+    for (World::TRoboGun &gun : _unitGuns)
+    {
+        if ( gun.gun_obj == gunObj )
+            gun.gun_obj = NULL;
+    }
+}
+
+void NC_STACK_ypabact::UpdateUnitGuns(update_msg *)
+{
+    if ( _unitGuns.empty() || _isUnitGunChild || !_world )
+        return;
+
+    if ( _status == BACT_STATUS_DEAD || (_status_flg & BACT_STFLAG_DEATH1) )
+    {
+        CleanupUnitGuns(true);
+        return;
+    }
+
+    mat3x3 parentRotation = _rotation.Transpose();
+    mat3x3 parentRotationDelta = mat3x3::Ident();
+    bool applyParentRotationDelta = false;
+
+    if ( !_unitGunsHaveParentRotation )
+    {
+        _unitGunsParentRotation = parentRotation;
+        _unitGunsHaveParentRotation = true;
+    }
+    else
+    {
+        parentRotationDelta = parentRotation * _unitGunsParentRotation.Transpose();
+        applyParentRotationDelta = true;
+        _unitGunsParentRotation = parentRotation;
+    }
+
+    if ( !_unitGunsSpawned )
+    {
+        _unitGunsSpawned = true;
+
+        for (World::TRoboGun &gun : _unitGuns)
+        {
+            if ( !gun.robo_gun_type )
+                continue;
+
+            ypaworld_arg146 gunReq;
+            gunReq.vehicle_id = gun.robo_gun_type;
+            gunReq.pos = _position + _rotation.Transpose().Transform(gun.pos);
+            gunReq.skip_unit_guns = true;
+
+            NC_STACK_ypabact *gunObj = _world->ypaworld_func146(&gunReq);
+            gun.gun_obj = gunObj;
+
+            if ( gunObj )
+            {
+                if ( NC_STACK_ypagun *attachedGun = dynamic_cast<NC_STACK_ypagun *>(gunObj) )
+                {
+                    attachedGun->ypagun_func128(_rotation.Transpose().Transform(gun.dir), false);
+                    attachedGun->setGUN_roboGun(1);
+                }
+
+                gunObj->_owner = _owner;
+                gunObj->_commandID = dword_5B1128++;
+                gunObj->_host_station = NULL;
+                gunObj->_aggr = 60;
+                gunObj->_isUnitGunChild = true;
+                gunObj->_gunDisplayName = gun.robo_gun_name;
+
+                if ( _world->_isNetGame )
+                {
+                    gunObj->_gid |= gunObj->_owner << 24;
+                    gunObj->_commandID |= gunObj->_owner << 24;
+                }
+
+                AddSubject(gunObj);
+
+                setState_msg createState;
+                createState.setFlags = 0;
+                createState.unsetFlags = 0;
+                createState.newStatus = BACT_STATUS_CREATE;
+                gunObj->SetState(&createState);
+                gunObj->_scale_time = gunObj->_energy_max * 0.2;
+            }
+            else
+            {
+                ypa_log_out("Unable to create Unit-Gun\n");
+            }
+        }
+    }
+
+    for (World::TRoboGun &gun : _unitGuns)
+    {
+        NC_STACK_ypabact *gunObj = gun.gun_obj;
+
+        if ( !gunObj )
+            continue;
+
+        if ( gunObj->IsDestroyed() || (gunObj->_status_flg & BACT_STFLAG_DEATH1) )
+        {
+            gun.gun_obj = NULL;
+            continue;
+        }
+
+        bact_arg80 posArg;
+        posArg.pos = _position + _rotation.Transpose().Transform(gun.pos);
+        posArg.field_C = 4;
+
+        gunObj->_owner = _owner;
+        gunObj->SetPosition(&posArg);
+
+        if ( applyParentRotationDelta )
+        {
+            if ( NC_STACK_ypagun *attachedGun = dynamic_cast<NC_STACK_ypagun *>(gunObj) )
+            {
+                attachedGun->_rotation.SetX(parentRotationDelta.Transform(attachedGun->_rotation.AxisX()));
+                attachedGun->_rotation.SetY(parentRotationDelta.Transform(attachedGun->_rotation.AxisY()));
+                attachedGun->_rotation.SetZ(parentRotationDelta.Transform(attachedGun->_rotation.AxisZ()));
+                attachedGun->_gunBasis = parentRotationDelta.Transform(attachedGun->_gunBasis);
+                attachedGun->_gunRott = parentRotationDelta.Transform(attachedGun->_gunRott);
+            }
+        }
+    }
 }
 
 
@@ -1008,6 +1252,7 @@ void NC_STACK_ypabact::Update(update_msg *arg)
     UpdateCarrierSpawn(arg);
 
     AI_layer1(arg);
+    UpdateUnitGuns(arg);
 
     for( NC_STACK_ypamissile *misl : Utils::IterateListCopy<NC_STACK_ypamissile *>(_missiles_list))
         misl->Update(arg);
@@ -3404,7 +3649,11 @@ void NC_STACK_ypabact::Die()
     if ( _status_flg & BACT_STFLAG_DEATH1 )
         return;
 
+    if ( _isUnitGunChild )
+        ypabact_SafeDetachControlFrom(this, _parent);
+
     _carrier_spawned_gids.clear();
+    CleanupUnitGuns(true, true);
     
     int maxy = _world->getYW_mapSizeY();
     int maxx = _world->getYW_mapSizeX();
@@ -6150,7 +6399,7 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
                             v89 = gun->IsRoboGun();
                         }
 
-                        if ( cellUnit->_bact_type != BACT_TYPES_GUN || cellUnit->_shield > 100 || !v89 )
+                        if ( cellUnit->_bact_type != BACT_TYPES_GUN || !v89 || cellUnit->_shield < 100 )
                         {
                             if ( (_oflags & BACT_OFLAG_USERINPT || cellUnit->_owner != _owner) && (!v107 || cellUnit != _host_station) )
                             {
@@ -6474,7 +6723,7 @@ size_t NC_STACK_ypabact::UserTargeting(bact_arg106 *arg)
                                 if (bct->_bact_type == BACT_TYPES_GUN)
                                 {
                                     NC_STACK_ypagun *gun = dynamic_cast<NC_STACK_ypagun *>( bct );
-                                    v53 = gun->IsRoboGun();
+                                    v53 = gun->IsRoboGun() && bct->_shield >= 100;
                                 }
 
                                 if ( !v53 )
@@ -6625,7 +6874,7 @@ NC_STACK_ypabact *sb_0x493984__sub1(NC_STACK_ypabact *bact)
 
     for ( NC_STACK_ypabact* &kid_unit : bact->_kidList )
     {
-        if ( kid_unit->_status != BACT_STATUS_DEAD )
+        if ( kid_unit->_status != BACT_STATUS_DEAD && !kid_unit->ShouldHideFromStrategicUI() )
         {
             int a4 = kid_unit->getBACT_inputting();
 
@@ -6652,7 +6901,7 @@ NC_STACK_ypabact *sb_0x493984__sub0(NC_STACK_ypabact *bact)
 
     for ( NC_STACK_ypabact* &kid_unit : bact->_kidList )
     {
-        if ( kid_unit->_status != BACT_STATUS_DEAD )
+        if ( kid_unit->_status != BACT_STATUS_DEAD && !kid_unit->ShouldHideFromStrategicUI() )
         {
             float v10;
             if ( kid_unit->_bact_type == BACT_TYPES_UFO )
@@ -6701,6 +6950,9 @@ NC_STACK_ypabact *sb_0x493984(NC_STACK_ypabact *bact, int a2)
                 NC_STACK_ypabact *kid_unit = *it;
                 it++;
 
+                if ( kid_unit->ShouldHideFromStrategicUI() )
+                    continue;
+
                 new_leader->AddSubject(kid_unit);
 
                 kid_unit->CopyTargetOf(new_leader);
@@ -6725,6 +6977,9 @@ void NC_STACK_ypabact::sub_493480(NC_STACK_ypabact *bact2, int mode)
 
         for ( NC_STACK_ypabact* &bct : bact2->_kidList )
         {
+            if ( bct->ShouldHideFromStrategicUI() )
+                continue;
+
             if ( ordMsg.num < 500 )
             {
                 ordMsg.units[ordMsg.num] = bct->_gid;
@@ -6743,6 +6998,9 @@ void NC_STACK_ypabact::sub_493480(NC_STACK_ypabact *bact2, int mode)
 
 void NC_STACK_ypabact::ReorganizeGroup(bact_arg109 *arg)
 {
+    if ( arg->field_4 && arg->field_4->ShouldHideFromStrategicUI() )
+        return;
+
     switch ( arg->field_0 )
     {
     case 1:
@@ -6759,9 +7017,13 @@ void NC_STACK_ypabact::ReorganizeGroup(bact_arg109 *arg)
 
                 arg->field_4->AddSubject(this);
 
-                while ( !_kidList.empty() )
+                for ( World::RefBactList::iterator it = _kidList.begin(); it != _kidList.end(); )
                 {
-                    NC_STACK_ypabact *kid = _kidList.front();
+                    NC_STACK_ypabact *kid = *it;
+                    it++;
+
+                    if ( kid->ShouldHideFromStrategicUI() )
+                        continue;
 
                     kid->_aggr = arg->field_4->_aggr;
                     kid->_commandID = arg->field_4->_commandID;
@@ -6798,10 +7060,14 @@ void NC_STACK_ypabact::ReorganizeGroup(bact_arg109 *arg)
 
                     AddSubject(arg->field_4);
 
-                    while ( !arg->field_4->_kidList.empty() )
+                    for ( World::RefBactList::iterator it = arg->field_4->_kidList.begin(); it != arg->field_4->_kidList.end(); )
                     {
-                        NC_STACK_ypabact *kid = arg->field_4->_kidList.front();
-                        
+                        NC_STACK_ypabact *kid = *it;
+                        it++;
+
+                        if ( kid->ShouldHideFromStrategicUI() )
+                            continue;
+
                         AddSubject(kid);
                         kid->_aggr = arg->field_4->_aggr;
 
@@ -6859,6 +7125,9 @@ void NC_STACK_ypabact::ReorganizeGroup(bact_arg109 *arg)
         break;
 
     case 4:
+        if ( arg->field_4->ShouldHideFromStrategicUI() )
+            break;
+
         if ( arg->field_4->IsParentMyRobo() )
         {
             NC_STACK_ypabact *v19 = sb_0x493984(arg->field_4, 0);
@@ -8419,6 +8688,9 @@ void NC_STACK_ypabact::SetKidsPath(int beginWp)
 {
     for (NC_STACK_ypabact* &kidunit : _kidList)
     {
+        if ( kidunit->ShouldHideFromStrategicUI() )
+            continue;
+
         kidunit->_waypoints_count = _waypoints_count;
         kidunit->_current_waypoint = beginWp;
 
@@ -8477,6 +8749,9 @@ size_t NC_STACK_ypabact::SetPath(bact_arg124 *arg)
 
     for (NC_STACK_ypabact* &kidunit : _kidList)
     {
+        if ( kidunit->ShouldHideFromStrategicUI() )
+            continue;
+
         if ( (kidunit->_bact_type == BACT_TYPES_CAR || kidunit->_bact_type == BACT_TYPES_TANK) && _pSector != kidunit->_pSector )
         {
             bact_arg124 arg125;

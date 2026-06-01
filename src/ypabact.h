@@ -441,6 +441,7 @@ public:
     
     virtual bool IsHidden() const;
     virtual bool IsHiddenFor(uint8_t owner) const;
+    bool ShouldHideFromStrategicUI() const;
 
     NC_STACK_ypabact();
     virtual ~NC_STACK_ypabact();
@@ -547,6 +548,10 @@ public:
     void FixSectorFall();
     void FixBeyondTheWorld();
     void CleanAttackersTarget();
+    void SetUnitGuns(const std::vector<World::TRoboGun> &guns);
+    void UpdateUnitGuns(update_msg *arg);
+    void CleanupUnitGuns(bool releaseGuns, bool parentDying = false);
+    void ClearUnitGunPointer(NC_STACK_ypabact *gun);
 
     void DeleteAttacker(NC_STACK_ypabact *bact, int tgtType);
     void AddAttacker(NC_STACK_ypabact *bact, int tgtType);
@@ -744,6 +749,12 @@ public:
     int _carrier_spawn_root_gid;
     int _carrier_spawn_root_vehicle;
     std::vector<int32_t> _carrier_spawned_gids;
+    std::vector<World::TRoboGun> _unitGuns;
+    std::string _gunDisplayName;
+    mat3x3 _unitGunsParentRotation;
+    bool _unitGunsSpawned;
+    bool _unitGunsHaveParentRotation;
+    bool _isUnitGunChild;
     float _heading_speed;
     NC_STACK_ypabact *_killer;
     int16_t _killer_owner;

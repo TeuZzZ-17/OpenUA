@@ -134,9 +134,20 @@ void TVhclSound::SetMainSampleVariant(size_t variant, const std::string &name)
 
 void TVhclSound::ClearSounds()
 {
-    extS.clear();
-    MainSample = TVhclSound::TSndSample();
-    MainSampleVariants.clear();
+    MainSample.ClearLoaded();
+
+    for (TSndSample &sample : MainSampleVariants)
+        sample.ClearLoaded();
+
+    for (TSndSample &sample : ExtSamples)
+        sample.ClearLoaded();
+
+    for (TSampleParams &fragment : extS)
+    {
+        fragment.Sample = NULL;
+        fragment.rlOffset = 0;
+        fragment.rlSmplCnt = 0;
+    }
 }
 
     

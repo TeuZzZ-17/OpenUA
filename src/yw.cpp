@@ -1,6 +1,7 @@
 #include <inttypes.h>
 #include <string.h>
 #include <math.h>
+#include <cctype>
 #include <string>
 #include "includes.h"
 #include "yw.h"
@@ -53,6 +54,131 @@ NC_STACK_ypaworld::NC_STACK_ypaworld()
 , _deadCacheList(this, NC_STACK_ypabact::GetKidRefNode, World::BLIST_CACHE)
 , _history(4096)
 {
+}
+
+static bool yw_IsUsableGameplayName(const std::string &name)
+{
+    if ( name == "<NO NAME>" )
+        return false;
+
+    for (unsigned char ch : name)
+    {
+        if ( !std::isspace(ch) )
+            return true;
+    }
+
+    return false;
+}
+
+std::string NC_STACK_ypaworld::GetVehicleName(uint32_t id) const
+{
+    return GetVehicleName(_vhclProtos[id]);
+}
+
+std::string NC_STACK_ypaworld::GetVehicleName(const World::TVhclProto &proto) const
+{
+    if ( yw_IsUsableGameplayName(proto.name) )
+        return proto.name;
+
+    if (proto.Index != -1)
+        return Locale::Text::VehicleName(proto.Index, proto.name);
+
+    return proto.name;
+}
+
+std::string NC_STACK_ypaworld::GetBuildingName(uint32_t id, bool net) const
+{
+    return GetBuildingName(_buildProtos[id], net);
+}
+
+std::string NC_STACK_ypaworld::GetBuildingName(const World::TBuildingProto &proto, bool net) const
+{
+    if ( yw_IsUsableGameplayName(proto.Name) )
+        return proto.Name;
+
+    if (proto.Index != -1)
+    {
+        if (net)
+            return Locale::Text::NetBuildingName(proto.Index, proto.Name);
+        else
+            return Locale::Text::BuildingName(proto.Index, proto.Name);
+    }
+
+    return proto.Name;
+}
+
+std::string NC_STACK_ypaworld::GetLevelName(uint32_t id) const
+{
+    const TMapRegionInfo &region = _globalMapRegions.MapRegions[id];
+
+    if ( yw_IsUsableGameplayName(region.MapName) )
+        return region.MapName;
+
+    return Locale::Text::LevelName(id, region.MapName);
+}
+
+std::string NC_STACK_ypaworld::GetLevelName(const TLevelInfo &lvl) const
+{
+    if ( yw_IsUsableGameplayName(lvl.MapName) )
+        return lvl.MapName;
+
+    return Locale::Text::LevelName(lvl.LevelID, lvl.MapName);
+}
+
+std::string NC_STACK_ypaworld::ResolveGameplayVehicleName(uint32_t id) const
+{
+    if ( id < _vhclProtos.size() )
+        return ResolveGameplayVehicleName(_vhclProtos[id]);
+
+    return std::string();
+}
+
+std::string NC_STACK_ypaworld::ResolveGameplayVehicleName(const World::TVhclProto &proto) const
+{
+    if ( yw_IsUsableGameplayName(proto.name) )
+        return proto.name;
+
+    return GetVehicleName(proto);
+}
+
+std::string NC_STACK_ypaworld::ResolveGameplayVehicleName(const NC_STACK_ypabact *bact, const World::TVhclProto &proto) const
+{
+    if ( bact && yw_IsUsableGameplayName(bact->_gunDisplayName) )
+        return bact->_gunDisplayName;
+
+    return ResolveGameplayVehicleName(proto);
+}
+
+std::string NC_STACK_ypaworld::ResolveGameplayWeaponName(uint32_t id) const
+{
+    if ( id < _weaponProtos.size() )
+        return ResolveGameplayWeaponName(_weaponProtos[id]);
+
+    return std::string();
+}
+
+std::string NC_STACK_ypaworld::ResolveGameplayWeaponName(const World::TWeapProto &proto) const
+{
+    if ( yw_IsUsableGameplayName(proto.name) )
+        return proto.name;
+
+    return std::string();
+}
+
+std::string NC_STACK_ypaworld::ResolveGameplayBuildingName(uint32_t id, bool net) const
+{
+    if ( id < _buildProtos.size() )
+        return ResolveGameplayBuildingName(_buildProtos[id], net);
+
+    return std::string();
+}
+
+std::string NC_STACK_ypaworld::ResolveGameplayBuildingName(const World::TBuildingProto &proto, bool net) const
+{
+    if ( yw_IsUsableGameplayName(proto.Name) )
+        return proto.Name;
+
+    return GetBuildingName(proto, net);
 }
 
 namespace World
@@ -1391,6 +1517,7 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_carrier_spawn_root_gid = 0;
         bacto->_carrier_spawn_root_vehicle = 0;
         bacto->_carrier_spawned_gids.clear();
+        bacto->SetUnitGuns(vhcl_id->skip_unit_guns ? std::vector<World::TRoboGun>() : vhcl.unit_guns);
 
         bacto->_destroyFX = vhcl.dest_fx;
         bacto->_extDestroyFX = vhcl.ExtDestroyFX;

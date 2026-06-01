@@ -62,6 +62,17 @@ static int ParseDamageFXSlotId(const std::string &key, const char *base)
     return slot - 1;
 }
 
+static bool IsUsableScriptText(const std::string &text)
+{
+    for (unsigned char ch : text)
+    {
+        if ( ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n' )
+            return true;
+    }
+
+    return false;
+}
+
 
 
 bool UserParser::ReadUserNameFile(const std::string &filename)
@@ -576,6 +587,14 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     
     if (!robo)
         robo = &_roboTmp;    
+
+    auto getUnitGun = [this]() -> TRoboGun *
+    {
+        if ( _unitGunID < 0 || (size_t)_unitGunID >= _vhcl->unit_guns.size() )
+            return NULL;
+
+        return &_vhcl->unit_guns.at(_unitGunID);
+    };
 
     if ( !StriCmp(p1, "end") )
     {
@@ -1130,7 +1149,14 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     }
     else if ( !StriCmp(p1, "robo_num_guns") )
     {
-        robo->guns.resize( parser.stol(p2, NULL, 0) );
+        int cnt = parser.stol(p2, NULL, 0);
+
+        if ( cnt < 0 )
+            cnt = 0;
+        else if ( cnt > (int)ROBO_GUN_MAX_COUNT )
+            cnt = ROBO_GUN_MAX_COUNT;
+
+        robo->guns.resize(cnt);
     }
     else if ( !StriCmp(p1, "robo_act_gun") )
     {
@@ -1167,6 +1193,73 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     else if ( !StriCmp(p1, "robo_gun_name") )
     {
         robo->guns[ _gunID ].robo_gun_name = p2;
+    }
+    else if ( !StriCmp(p1, "unit_num_guns") )
+    {
+        int cnt = parser.stol(p2, NULL, 0);
+
+        if ( cnt < 0 )
+            cnt = 0;
+        else if ( cnt > (int)ROBO_GUN_MAX_COUNT )
+            cnt = ROBO_GUN_MAX_COUNT;
+
+        _vhcl->unit_guns.resize(cnt);
+
+        if ( _unitGunID >= cnt )
+            _unitGunID = cnt - 1;
+    }
+    else if ( !StriCmp(p1, "unit_act_gun") )
+    {
+        _unitGunID = parser.stol(p2, NULL, 0);
+
+        if ( _unitGunID < 0 )
+            _unitGunID = 0;
+
+        if ( _unitGunID >= (int)ROBO_GUN_MAX_COUNT )
+            _unitGunID = ROBO_GUN_MAX_COUNT - 1;
+
+        if ( (size_t)_unitGunID >= _vhcl->unit_guns.size() )
+            _vhcl->unit_guns.resize(_unitGunID + 1);
+    }
+    else if ( !StriCmp(p1, "unit_gun_pos_x") )
+    {
+        if (TRoboGun *gun = getUnitGun())
+            gun->pos.x = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "unit_gun_pos_y") )
+    {
+        if (TRoboGun *gun = getUnitGun())
+            gun->pos.y = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "unit_gun_pos_z") )
+    {
+        if (TRoboGun *gun = getUnitGun())
+            gun->pos.z = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "unit_gun_dir_x") )
+    {
+        if (TRoboGun *gun = getUnitGun())
+            gun->dir.x = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "unit_gun_dir_y") )
+    {
+        if (TRoboGun *gun = getUnitGun())
+            gun->dir.y = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "unit_gun_dir_z") )
+    {
+        if (TRoboGun *gun = getUnitGun())
+            gun->dir.z = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "unit_gun_type") )
+    {
+        if (TRoboGun *gun = getUnitGun())
+            gun->robo_gun_type = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "unit_gun_name") )
+    {
+        if (TRoboGun *gun = getUnitGun())
+            gun->robo_gun_name = p2;
     }
     else if ( !StriCmp(p1, "robo_dock_x") )
     {
@@ -1277,6 +1370,9 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
     if ( !StriCmp(word, "new_vehicle") )
     {
         _roboTmp = TRoboProto();
+        _gunID = -1;
+        _unitGunID = -1;
+        _collID = -1;
         _vhclID = parser.stol(opt, NULL, 0);
         _vhcl = &_o._vhclProtos.at(_vhclID);
         
@@ -1353,6 +1449,9 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
     }
     else if ( !StriCmp(word, "modify_vehicle") )
     {
+        _gunID = -1;
+        _unitGunID = -1;
+        _collID = -1;
         _vhclID = parser.stol(opt, NULL, 0);
         _vhcl = &_o._vhclProtos.at(_vhclID);
         
@@ -2424,6 +2523,7 @@ bool LevelDataParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         return false;
 
     _o._levelInfo.MapName = "<NO NAME>";
+    _gotLocalizedTitle = false;
     _o._levelInfo.MovieStr.clear();
     _o._levelInfo.MovieWinStr.clear();
     _o._levelInfo.MovieLoseStr.clear();
@@ -2445,8 +2545,15 @@ int LevelDataParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     {
         std::string title_lang = std::string("title_") + Locale::Text::GetLocaleName();
 
-        if ( !StriCmp(p1, "title_default") || !StriCmp(p1, title_lang) )
+        if ( !StriCmp(p1, title_lang) && IsUsableScriptText(p2) )
+        {
                 _o._levelInfo.MapName = p2;
+                _gotLocalizedTitle = true;
+        }
+        else if ( !StriCmp(p1, "title_default") && !_gotLocalizedTitle && IsUsableScriptText(p2) )
+        {
+                _o._levelInfo.MapName = p2;
+        }
     }
     else if ( !StriCmp(p1, "set") )
     {

@@ -70,14 +70,19 @@ struct TVhclSound
     {
         std::string Name;
         NC_STACK_sample *Sample = NULL;
-        
-        ~TSndSample()
+
+        void ClearLoaded()
         {
             if (Sample)
             {
                 Sample->Delete();
                 Sample = NULL;
             }
+        }
+        
+        ~TSndSample()
+        {
+            ClearLoaded();
         }
     };
     
@@ -97,6 +102,7 @@ struct TVhclSound
 };
 
 constexpr int DAMAGE_FX_SLOT_COUNT = 8;
+constexpr size_t ROBO_GUN_MAX_COUNT = 20;
 
 struct TDamageFXSlot
 {
@@ -104,6 +110,42 @@ struct TDamageFXSlot
     float threshold = 0.25;
     int interval = 500;
     float random_pos = 15.0;
+};
+
+struct TRoboGun
+{
+    vec3d pos;
+    vec3d dir;
+    NC_STACK_ypabact *gun_obj = NULL;
+    std::string robo_gun_name;
+    uint8_t robo_gun_type = 0;
+
+    TRoboGun()
+    {}
+
+    TRoboGun(const TRoboGun &b)
+    {
+        operator =(b);
+    }
+
+    TRoboGun(TRoboGun &&b)
+    {
+        pos = b.pos;
+        dir = b.dir;
+        gun_obj = b.gun_obj;
+        robo_gun_name = std::move(b.robo_gun_name);
+        robo_gun_type = b.robo_gun_type;
+    }
+
+    TRoboGun& operator=(const TRoboGun &b)
+    {
+        pos = b.pos;
+        dir = b.dir;
+        gun_obj = b.gun_obj;
+        robo_gun_name = b.robo_gun_name;
+        robo_gun_type = b.robo_gun_type;
+        return *this;
+    }
 };
 
 struct TVhclProto
@@ -229,6 +271,7 @@ struct TVhclProto
     int8_t unhideRadar = 0;
     
     TRoboProto *RoboProto = NULL;
+    std::vector<TRoboGun> unit_guns;
 
     ~TVhclProto();
 };
@@ -338,42 +381,6 @@ struct TBuildingProto
     int Energy = 0;
     TVhclSound SndFX;
     std::vector<TGun> Guns;
-};
-
-struct TRoboGun
-{
-    vec3d pos;
-    vec3d dir;
-    NC_STACK_ypabact *gun_obj = NULL;
-    std::string robo_gun_name;
-    uint8_t robo_gun_type = 0;
-
-    TRoboGun()
-    {}
-    
-    TRoboGun(const TRoboGun &b)
-    {
-        operator =(b);
-    }
-    
-    TRoboGun(TRoboGun &&b)
-    {
-        pos = b.pos;
-        dir = b.dir;
-        gun_obj = b.gun_obj;
-        robo_gun_name = std::move(b.robo_gun_name);
-        robo_gun_type = b.robo_gun_type;
-    }
-
-    TRoboGun& operator=(const TRoboGun &b)
-    {
-        pos = b.pos;
-        dir = b.dir;
-        gun_obj = b.gun_obj;
-        robo_gun_name = b.robo_gun_name;
-        robo_gun_type = b.robo_gun_type;
-        return *this;
-    }
 };
 
 struct TRoboProto

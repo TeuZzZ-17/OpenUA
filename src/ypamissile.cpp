@@ -284,7 +284,7 @@ bool NC_STACK_ypamissile::TubeCollisionTest()
 
                     if (bct->_owner == _owner)
                     {
-                        if (gun->IsRoboGun())
+                        if (gun->IsRoboGun() && !_mislEmitter->_isUnitGunChild)
                         {
                             if (bct->_bact_type == BACT_TYPES_ROBO)
                                 continue;
@@ -293,7 +293,7 @@ bool NC_STACK_ypamissile::TubeCollisionTest()
                             {
                                 NC_STACK_ypagun *bgun = dynamic_cast<NC_STACK_ypagun *>( bct );
 
-                                if (bgun->IsRoboGun())
+                                if (bgun->IsRoboGun() && !bct->_isUnitGunChild)
                                     continue;
                             }
                         }
@@ -492,7 +492,7 @@ const char *NC_STACK_ypamissile::GetAreaDamageSkipReason(NC_STACK_ypabact *bct, 
     {
         NC_STACK_ypagun *gun = dynamic_cast<NC_STACK_ypagun *>( _mislEmitter );
 
-        if ( gun && bct->_owner == _owner && gun->IsRoboGun() )
+        if ( gun && bct->_owner == _owner && gun->IsRoboGun() && !_mislEmitter->_isUnitGunChild )
         {
             if ( bct->_bact_type == BACT_TYPES_ROBO )
                 return "own_robo_gun_robo";
@@ -501,7 +501,7 @@ const char *NC_STACK_ypamissile::GetAreaDamageSkipReason(NC_STACK_ypabact *bct, 
             {
                 NC_STACK_ypagun *bgun = dynamic_cast<NC_STACK_ypagun *>( bct );
 
-                if ( bgun && bgun->IsRoboGun() )
+                if ( bgun && bgun->IsRoboGun() && !bct->_isUnitGunChild )
                     return "own_robo_gun";
             }
         }

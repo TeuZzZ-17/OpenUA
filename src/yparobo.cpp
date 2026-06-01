@@ -5911,6 +5911,7 @@ void NC_STACK_yparobo::setROBO_proto(World::TRoboProto *proto)
             gun_obj->_owner = _owner;
             gun_obj->_commandID = dword_5B1128;
             gun_obj->_host_station = this;
+            gun_obj->_gunDisplayName = gun.robo_gun_name;
 
             dword_5B1128++;
 

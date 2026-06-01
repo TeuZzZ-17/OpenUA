@@ -1719,6 +1719,7 @@ struct ypaworld_arg146
 {
     size_t vehicle_id;
     vec3d pos;
+    bool skip_unit_guns = false;
 };
 
 struct yw_130arg
@@ -2343,49 +2344,21 @@ public:
     void ClearOverrideModels();
     void LoadOverrideModels();
     
-    std::string GetVehicleName(uint32_t id) const
-    {
-        return Locale::Text::VehicleName(id, _vhclProtos[ id ].name);
-    }
+    std::string GetVehicleName(uint32_t id) const;
+    std::string GetVehicleName(const World::TVhclProto &proto) const;
+    std::string GetBuildingName(uint32_t id, bool net = false) const;
+    std::string GetBuildingName(const World::TBuildingProto &proto, bool net = false) const;
+
+    std::string ResolveGameplayVehicleName(uint32_t id) const;
+    std::string ResolveGameplayVehicleName(const World::TVhclProto &proto) const;
+    std::string ResolveGameplayVehicleName(const NC_STACK_ypabact *bact, const World::TVhclProto &proto) const;
+    std::string ResolveGameplayWeaponName(uint32_t id) const;
+    std::string ResolveGameplayWeaponName(const World::TWeapProto &proto) const;
+    std::string ResolveGameplayBuildingName(uint32_t id, bool net = false) const;
+    std::string ResolveGameplayBuildingName(const World::TBuildingProto &proto, bool net = false) const;
     
-    std::string GetVehicleName(const World::TVhclProto &proto) const
-    {
-        if (proto.Index != -1)
-            return Locale::Text::VehicleName(proto.Index, proto.name);
-        
-        return proto.name;
-    }
-    
-    std::string GetBuildingName(uint32_t id, bool net = false) const
-    {
-        if (net)
-            return Locale::Text::NetBuildingName(id, _buildProtos[ id ].Name);
-        else
-            return Locale::Text::BuildingName(id, _buildProtos[ id ].Name);
-    }
-    
-    std::string GetBuildingName(const World::TBuildingProto &proto, bool net = false) const
-    {
-        if (proto.Index != -1)
-        {
-            if (net)
-                return Locale::Text::NetBuildingName(proto.Index, proto.Name);
-            else
-                return Locale::Text::BuildingName(proto.Index, proto.Name);
-        }
-        
-        return proto.Name;
-    }
-    
-    std::string GetLevelName(uint32_t id) const
-    {
-        return Locale::Text::LevelName(id, _globalMapRegions.MapRegions[ id ].MapName);
-    }
-    
-    std::string GetLevelName(const TLevelInfo &lvl) const
-    {
-        return Locale::Text::LevelName(lvl.LevelID, lvl.MapName);
-    }
+    std::string GetLevelName(uint32_t id) const;
+    std::string GetLevelName(const TLevelInfo &lvl) const;
     
     bool IsHidden(uint32_t owner) const
     {
