@@ -101,10 +101,10 @@ struct TVhclSound
     void ClearSounds();
 };
 
-constexpr int DAMAGE_FX_SLOT_COUNT = 8;
+constexpr int DAMAGED_FX_SLOT_COUNT = 8;
 constexpr size_t ROBO_GUN_MAX_COUNT = 20;
 
-struct TDamageFXSlot
+struct TDamagedFXSlot
 {
     int16_t vp = 0;
     float threshold = 0.25;
@@ -116,13 +116,14 @@ struct TWeaponDebuffConfig
 {
     bool allow = false;
     std::string name;
+    std::string icon;
     int damage = 0;
     int tick_time = 1000;
     int duration = 5000;
     float force_mult = 1.0;
     float maxrot_mult = 1.0;
     float snd_pitch_mult = 1.0;
-    int16_t fx_vp = 0;
+    std::vector<int16_t> fx_vps;
     float fx_random_pos = 0.0;
     TVhclSound tick_snd;
 };
@@ -243,10 +244,14 @@ struct TVhclProto
     int16_t vp_megadeth = 0;
     int16_t vp_genesis = 0;
     float visual_scale = 1.0;
-    std::array<TDamageFXSlot, DAMAGE_FX_SLOT_COUNT> damage_fx;
-    float damage_force_mult = 1.0;
-    float damage_maxrot_mult = 1.0;
-    float damage_snd_pitch_mult = 1.0;
+    std::vector<TDamagedFXSlot> damaged_fx = {TDamagedFXSlot()};
+    std::string damaged_icon;
+    std::string regen_icon;
+    std::string drain_icon;
+    TVhclSound damaged_snd;
+    float damaged_force_mult = 1.0;
+    float damaged_maxrot_mult = 1.0;
+    float damaged_snd_pitch_mult = 1.0;
     int spawn_units = 0;
     int16_t spawn_vehicle = 0;
     int spawn_interval = 5000;

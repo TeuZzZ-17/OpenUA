@@ -66,6 +66,7 @@ struct TActiveDebuffState
 {
     bool active = false;
     std::string name;
+    std::string icon;
     int damage = 0;
     int tick_time = 1000;
     int expire_time = 0;
@@ -73,7 +74,7 @@ struct TActiveDebuffState
     float force_mult = 1.0;
     float maxrot_mult = 1.0;
     float snd_pitch_mult = 1.0;
-    int16_t fx_vp = 0;
+    std::vector<int16_t> fx_vps;
     float fx_random_pos = 0.0;
     TSampleData *snd_sample = NULL;
     int snd_volume = 120;
@@ -84,6 +85,7 @@ struct TActiveDebuffState
     {
         active = false;
         name.clear();
+        icon.clear();
         damage = 0;
         tick_time = 1000;
         expire_time = 0;
@@ -91,7 +93,7 @@ struct TActiveDebuffState
         force_mult = 1.0;
         maxrot_mult = 1.0;
         snd_pitch_mult = 1.0;
-        fx_vp = 0;
+        fx_vps.clear();
         fx_random_pos = 0.0;
         snd_sample = NULL;
         snd_volume = 120;
@@ -719,14 +721,18 @@ public:
     NC_STACK_base *_vp_dead;
     NC_STACK_base *_vp_megadeth;
     NC_STACK_base *_vp_genesis;
-    std::array<World::TDamageFXSlot, World::DAMAGE_FX_SLOT_COUNT> _damage_fx;
-    std::array<int32_t, World::DAMAGE_FX_SLOT_COUNT> _damage_fx_last_time;
-    float _damage_force_mult;
-    float _damage_maxrot_mult;
-    float _damage_snd_pitch_mult;
-    bool _damage_fx_active;
+    std::vector<World::TDamagedFXSlot> _damaged_fx;
+    int32_t _damaged_fx_next_time;
+    float _damaged_force_mult;
+    float _damaged_maxrot_mult;
+    float _damaged_snd_pitch_mult;
+    bool _damaged_fx_active;
     TActiveDebuffState _active_debuff;
     TSndCarrier _debuff_soundcarrier;
+    TSndCarrier _damaged_soundcarrier;
+    TSampleData *_damaged_snd_sample = NULL;
+    int _damaged_snd_volume = 180;
+    int _damaged_snd_pitch = 0;
     int _vp_active;
     extra_vproto _vp_extra[3];
     int _vp_extra_mode;

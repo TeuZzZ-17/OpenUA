@@ -36,7 +36,7 @@ static int ParseSampleVariantId(const std::string &token)
     return variant - 1;
 }
 
-static int ParseDamageFXSlotId(const std::string &key, const char *base)
+static int ParseNumberedSlotId(const std::string &key, const char *base, int maxSlots)
 {
     std::string baseStr(base);
 
@@ -56,10 +56,41 @@ static int ParseDamageFXSlotId(const std::string &key, const char *base)
         slot = slot * 10 + (ch - '0');
     }
 
-    if ( slot < 2 || slot > World::DAMAGE_FX_SLOT_COUNT )
+    if ( slot < 2 || slot > maxSlots )
         return -1;
 
     return slot - 1;
+}
+
+static void EnsureDamagedFXSlot(std::vector<World::TDamagedFXSlot> &slots, int slot)
+{
+    if ( slot < 0 )
+        return;
+
+    if ( slots.size() <= (size_t)slot )
+        slots.resize(slot + 1);
+}
+
+static void EnsureDebuffFXSlot(std::vector<int16_t> &slots, int slot)
+{
+    if ( slot < 0 )
+        return;
+
+    if ( slots.size() <= (size_t)slot )
+        slots.resize(slot + 1, 0);
+}
+
+static void InitStatusSoundFXDefaults(World::TVhclSound &snd, int defaultVolume)
+{
+    snd.volume = defaultVolume;
+    snd.sndPrm.mag0 = 1.0;
+    snd.sndPrm.time = 1000;
+    snd.sndPrm_shk.mag0 = 1.0;
+    snd.sndPrm_shk.time = 1000;
+    snd.sndPrm_shk.mute = 0.02;
+    snd.sndPrm_shk.pos.x = 0.2;
+    snd.sndPrm_shk.pos.y = 0.2;
+    snd.sndPrm_shk.pos.z = 0.2;
 }
 
 static bool IsUsableScriptText(const std::string &text)
@@ -656,7 +687,7 @@ static int ParseVehicleChainFXBlock(ScriptParser::Parser &parser, TVhclProto *vh
 int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1, const std::string &p2)
 {
     TRoboProto *robo = _vhcl->RoboProto;
-    int damageFxSlot = -1;
+    int damagedFxSlot = -1;
     
     if (!robo)
         robo = &_roboTmp;    
@@ -856,12 +887,13 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     {
         _vhcl->vp_genesis = parser.stol(p2, NULL, 0);
     }
-    else if ( (damageFxSlot = ParseDamageFXSlotId(p1, "damage_fx_vp")) >= 0 )
+    else if ( (damagedFxSlot = ParseNumberedSlotId(p1, "damaged_fx_vp", World::DAMAGED_FX_SLOT_COUNT)) >= 0 )
     {
         int vp = parser.stol(p2, NULL, 0);
-        _vhcl->damage_fx[damageFxSlot].vp = vp > 0 ? vp : 0;
+        EnsureDamagedFXSlot(_vhcl->damaged_fx, damagedFxSlot);
+        _vhcl->damaged_fx[damagedFxSlot].vp = vp > 0 ? vp : 0;
     }
-    else if ( (damageFxSlot = ParseDamageFXSlotId(p1, "damage_fx_threshold")) >= 0 )
+    else if ( (damagedFxSlot = ParseNumberedSlotId(p1, "damaged_fx_threshold", World::DAMAGED_FX_SLOT_COUNT)) >= 0 )
     {
         float threshold = parser.stof(p2, 0);
 
@@ -870,32 +902,95 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
         else if ( threshold > 1.0 )
             threshold = 1.0;
 
-        _vhcl->damage_fx[damageFxSlot].threshold = threshold;
+        EnsureDamagedFXSlot(_vhcl->damaged_fx, damagedFxSlot);
+        _vhcl->damaged_fx[damagedFxSlot].threshold = threshold;
     }
-    else if ( (damageFxSlot = ParseDamageFXSlotId(p1, "damage_fx_interval")) >= 0 )
+    else if ( (damagedFxSlot = ParseNumberedSlotId(p1, "damaged_fx_interval", World::DAMAGED_FX_SLOT_COUNT)) >= 0 )
     {
         int interval = parser.stol(p2, NULL, 0);
-        _vhcl->damage_fx[damageFxSlot].interval = interval > 0 ? interval : 500;
+        EnsureDamagedFXSlot(_vhcl->damaged_fx, damagedFxSlot);
+        _vhcl->damaged_fx[damagedFxSlot].interval = interval > 0 ? interval : 500;
     }
-    else if ( (damageFxSlot = ParseDamageFXSlotId(p1, "damage_fx_random_pos")) >= 0 )
+    else if ( (damagedFxSlot = ParseNumberedSlotId(p1, "damaged_fx_random_pos", World::DAMAGED_FX_SLOT_COUNT)) >= 0 )
     {
         float radius = parser.stof(p2, 0);
-        _vhcl->damage_fx[damageFxSlot].random_pos = radius > 0.0 ? radius : 0.0;
+        EnsureDamagedFXSlot(_vhcl->damaged_fx, damagedFxSlot);
+        _vhcl->damaged_fx[damagedFxSlot].random_pos = radius > 0.0 ? radius : 0.0;
     }
-    else if ( !StriCmp(p1, "damage_force_mult") )
+    else if ( !StriCmp(p1, "damaged_icon") )
+    {
+        _vhcl->damaged_icon = p2;
+    }
+    else if ( !StriCmp(p1, "regen_icon") )
+    {
+        _vhcl->regen_icon = p2;
+    }
+    else if ( !StriCmp(p1, "drain_icon") )
+    {
+        _vhcl->drain_icon = p2;
+    }
+    else if ( !StriCmp(p1, "snd_damaged_sample") )
+    {
+        _vhcl->damaged_snd.SetMainSampleVariant(0, p2);
+    }
+    else if ( !StriCmp(p1, "snd_damaged_pitch") )
+    {
+        _vhcl->damaged_snd.pitch = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "snd_damaged_volume") )
+    {
+        _vhcl->damaged_snd.volume = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "pal_damaged_slot") )
+    {
+        _vhcl->damaged_snd.sndPrm.slot = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "pal_damaged_mag0") )
+    {
+        _vhcl->damaged_snd.sndPrm.mag0 = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "pal_damaged_mag1") )
+    {
+        _vhcl->damaged_snd.sndPrm.mag1 = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "pal_damaged_time") )
+    {
+        _vhcl->damaged_snd.sndPrm.time = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "shk_damaged_slot") )
+    {
+        _vhcl->damaged_snd.sndPrm_shk.slot = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "shk_damaged_mag0") )
+    {
+        _vhcl->damaged_snd.sndPrm_shk.mag0 = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "shk_damaged_mag1") )
+    {
+        _vhcl->damaged_snd.sndPrm_shk.mag1 = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "shk_damaged_time") )
+    {
+        _vhcl->damaged_snd.sndPrm_shk.time = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "shk_damaged_mute") )
+    {
+        _vhcl->damaged_snd.sndPrm_shk.mute = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "damaged_force_mult") )
     {
         float mult = parser.stof(p2, 0);
-        _vhcl->damage_force_mult = mult >= 0.0 ? mult : 1.0;
+        _vhcl->damaged_force_mult = mult >= 0.0 ? mult : 1.0;
     }
-    else if ( !StriCmp(p1, "damage_maxrot_mult") )
+    else if ( !StriCmp(p1, "damaged_maxrot_mult") )
     {
         float mult = parser.stof(p2, 0);
-        _vhcl->damage_maxrot_mult = mult >= 0.0 ? mult : 1.0;
+        _vhcl->damaged_maxrot_mult = mult >= 0.0 ? mult : 1.0;
     }
-    else if ( !StriCmp(p1, "damage_snd_pitch_mult") )
+    else if ( !StriCmp(p1, "damaged_snd_pitch_mult") )
     {
         float mult = parser.stof(p2, 0);
-        _vhcl->damage_snd_pitch_mult = mult >= 0.0 ? mult : 1.0;
+        _vhcl->damaged_snd_pitch_mult = mult >= 0.0 ? mult : 1.0;
     }
     else if ( !StriCmp(p1, "spawn_units") )
     {
@@ -1520,9 +1615,13 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->vp_wait = 3;
         _vhcl->vp_dead = 4;
         _vhcl->vp_genesis = 5;
-        _vhcl->damage_force_mult = 1.0;
-        _vhcl->damage_maxrot_mult = 1.0;
-        _vhcl->damage_snd_pitch_mult = 1.0;
+        _vhcl->damaged_fx = {TDamagedFXSlot()};
+        _vhcl->damaged_icon.clear();
+        _vhcl->damaged_snd = TVhclSound();
+        InitStatusSoundFXDefaults(_vhcl->damaged_snd, 180);
+        _vhcl->damaged_force_mult = 1.0;
+        _vhcl->damaged_maxrot_mult = 1.0;
+        _vhcl->damaged_snd_pitch_mult = 1.0;
         _vhcl->spawn_units = 0;
         _vhcl->spawn_vehicle = 0;
         _vhcl->spawn_interval = 5000;
@@ -1700,6 +1799,8 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     if ( !StriCmp(p1, "end") )
         return ScriptParser::RESULT_SCOPE_END;
 
+    int debuffFxSlot = -1;
+
     if ( !StriCmp(p1, "model") )
     {
         if ( !StriCmp(p2, "grenade") )
@@ -1784,15 +1885,20 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
         float mult = parser.stof(p2, 0);
         _wpn->debuff.snd_pitch_mult = mult >= 0.0 ? mult : 1.0;
     }
-    else if ( !StriCmp(p1, "debuff_fx_vp") )
+    else if ( (debuffFxSlot = ParseNumberedSlotId(p1, "debuff_fx_vp", World::DAMAGED_FX_SLOT_COUNT)) >= 0 )
     {
         int vp = parser.stol(p2, NULL, 0);
-        _wpn->debuff.fx_vp = vp > 0 ? vp : 0;
+        EnsureDebuffFXSlot(_wpn->debuff.fx_vps, debuffFxSlot);
+        _wpn->debuff.fx_vps[debuffFxSlot] = vp > 0 ? vp : 0;
     }
     else if ( !StriCmp(p1, "debuff_fx_random_pos") )
     {
         float radius = parser.stof(p2, 0);
         _wpn->debuff.fx_random_pos = radius > 0.0 ? radius : 0.0;
+    }
+    else if ( !StriCmp(p1, "debuff_icon") )
+    {
+        _wpn->debuff.icon = p2;
     }
     else if ( !StriCmp(p1, "snd_debuff_sample") )
     {

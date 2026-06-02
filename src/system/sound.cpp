@@ -494,7 +494,10 @@ void SFXEngine::SoundCarrierProcessSounds(TSndCarrier *smpls, float distance)
 
                     if ( snd.ResultVol > 4 )
                     {
-                        snd.Priority = snd.ResultVol;
+                        snd.Priority = snd.ResultVol + snd.PriorityBias;
+                        if ( snd.Priority < 1 )
+                            snd.Priority = 1;
+
                         audio_InsertSoundSource(&snd);
                     }
                 }

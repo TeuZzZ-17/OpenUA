@@ -5,7 +5,7 @@
 #include "gfx.h"
 #include "../wrapal.h"
 
-#define AUDIO_CHANNELS   16
+#define AUDIO_CHANNELS   32
 
 struct TSndCarrier;
 
@@ -76,6 +76,7 @@ struct TSoundSource
     int Pitch = 0;
     TSndCarrier *PCarrier = NULL;
     int16_t Priority = 0;
+    int16_t PriorityBias = 0;
     size_t CurrentFrag = 0;
     size_t StartTime = 0;
     float PFxMag = 0.0;

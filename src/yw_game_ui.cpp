@@ -2,11 +2,14 @@
 #include <string.h>
 #include <math.h>
 #include <iterator>
+#include <array>
+#include <map>
 #include "env.h"
 #include "includes.h"
 #include "yw_internal.h"
 #include "yw.h"
 #include "yw_net.h"
+#include "loaders.h"
 
 #include "font.h"
 
@@ -27,6 +30,233 @@ std::string dword_5BAF98;
 ////////////////////////////////////////
 
 int dword_5BAF9C;
+
+namespace
+{
+
+constexpr int STATUS_ICON_MAX_COUNT = 4;
+constexpr int STATUS_ICON_SIZE = 12;
+constexpr int STATUS_ICON_SPACING = 2;
+
+struct StatusIconCacheEntry
+{
+    NC_STACK_bitmap *bitmap = NULL;
+};
+
+using StatusIconList = std::array<std::string, STATUS_ICON_MAX_COUNT>;
+
+std::map<std::string, StatusIconCacheEntry> g_statusIconCache;
+
+enum StatusIconPowerState
+{
+    STATUS_ICON_POWER_NONE = 0,
+    STATUS_ICON_POWER_REGEN,
+    STATUS_ICON_POWER_DRAIN
+};
+
+bool StatusIconAdd(StatusIconList &icons, int &count, const std::string &path)
+{
+    if ( path.empty() )
+        return false;
+
+    for (int i = 0; i < count; i++)
+    {
+        if ( !StriCmp(icons[i], path) )
+            return false;
+    }
+
+    if ( count >= STATUS_ICON_MAX_COUNT )
+        return false;
+
+    icons[count++] = path;
+    return true;
+}
+
+NC_STACK_bitmap *StatusIconLoad(const std::string &path)
+{
+    auto it = g_statusIconCache.find(path);
+    if ( it != g_statusIconCache.end() )
+        return it->second.bitmap;
+
+    StatusIconCacheEntry entry;
+    entry.bitmap = Utils::ProxyLoadImage({
+        {NC_STACK_rsrc::RSRC_ATT_NAME, path},
+        {NC_STACK_bitmap::BMD_ATT_CONVCOLOR, (int32_t)1}});
+
+    if ( !entry.bitmap || !entry.bitmap->GetBitmap() )
+        ypa_log_out("WARNING: Could not load status icon %s\n", path.c_str());
+
+    auto inserted = g_statusIconCache.emplace(path, entry);
+    return inserted.first->second.bitmap;
+}
+
+void StatusIconRenderBitmap(NC_STACK_ypaworld *yw, NC_STACK_bitmap *bitmap, int left, int top, int size)
+{
+    if ( !bitmap || !bitmap->GetBitmap() )
+        return;
+
+    const float halfW = (float)yw->_screenSize.x * 0.5;
+    const float halfH = (float)yw->_screenSize.y * 0.5;
+
+    GFX::rstr_arg204 arg;
+    arg.pbitm = bitmap->GetBitmap();
+    arg.float4 = Common::FRect(-1.0, -1.0, 1.0, 1.0);
+    arg.float14 = Common::FRect(
+        ((float)left / halfW) - 1.0,
+        ((float)top / halfH) - 1.0,
+        ((float)(left + size) / halfW) - 1.0,
+        ((float)(top + size) / halfH) - 1.0);
+
+    GFX::Engine.raster_func204(&arg);
+}
+
+StatusIconPowerState StatusIconGetPowerStationState(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact)
+{
+    if ( !yw || !bact || !bact->_pSector )
+        return STATUS_ICON_POWER_NONE;
+
+    if ( bact->_owner == World::OWNER_0 || bact->_status == BACT_STATUS_DEAD )
+        return STATUS_ICON_POWER_NONE;
+
+    cellArea *cell = bact->_pSector;
+    if ( !cell->owner || cell->energy_power <= 0 )
+        return STATUS_ICON_POWER_NONE;
+
+    bool hasPowerStationInRange = false;
+    for (const auto &psNode : yw->_powerStations)
+    {
+        const TPowerStationInfo &ps = psNode.second;
+        if ( !ps.pCell || ps.EffectivePower <= 0 || ps.pCell->owner != cell->owner )
+            continue;
+
+        if ( Common::ABS(ps.CellId.x - bact->_cellId.x) <= 1 &&
+             Common::ABS(ps.CellId.y - bact->_cellId.y) <= 1 )
+        {
+            hasPowerStationInRange = true;
+            break;
+        }
+    }
+
+    if ( !hasPowerStationInRange )
+        return STATUS_ICON_POWER_NONE;
+
+    if ( bact->_owner == cell->owner )
+    {
+        if ( bact->_energy >= bact->_energy_max )
+            return STATUS_ICON_POWER_NONE;
+
+        return STATUS_ICON_POWER_REGEN;
+    }
+
+    return STATUS_ICON_POWER_DRAIN;
+}
+
+int StatusIconCollect(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact, World::TVhclProto *vhcl, StatusIconList &icons)
+{
+    if ( !bact || !vhcl )
+        return 0;
+
+    int iconCount = 0;
+
+    if ( bact->_active_debuff.active )
+        StatusIconAdd(icons, iconCount, bact->_active_debuff.icon);
+
+    if ( bact->_damaged_fx_active )
+        StatusIconAdd(icons, iconCount, vhcl->damaged_icon);
+
+    StatusIconPowerState powerState = StatusIconGetPowerStationState(yw, bact);
+    if ( powerState == STATUS_ICON_POWER_DRAIN )
+        StatusIconAdd(icons, iconCount, vhcl->drain_icon);
+    else if ( powerState == STATUS_ICON_POWER_REGEN )
+        StatusIconAdd(icons, iconCount, vhcl->regen_icon);
+
+    return iconCount;
+}
+
+void StatusIconRenderList(NC_STACK_ypaworld *yw, const StatusIconList &icons, int iconCount, int left, int top, int size)
+{
+    for (int i = 0; i < iconCount; i++)
+    {
+        NC_STACK_bitmap *bitmap = StatusIconLoad(icons[i]);
+        if ( bitmap )
+            StatusIconRenderBitmap(yw, bitmap, left, top, size);
+
+        left += size + STATUS_ICON_SPACING;
+    }
+}
+
+void StatusIconRenderWorld(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact, World::TVhclProto *vhcl, int barLeft, int barTop, int barWidth, int barHeight)
+{
+    StatusIconList icons;
+    int iconCount = StatusIconCollect(yw, bact, vhcl, icons);
+
+    if ( iconCount <= 0 )
+        return;
+
+    int iconBlockWidth = iconCount * STATUS_ICON_SIZE + (iconCount - 1) * STATUS_ICON_SPACING;
+    int left = barLeft + (barWidth - iconBlockWidth) / 2;
+    int top = barTop - STATUS_ICON_SIZE - STATUS_ICON_SPACING;
+
+    if ( left < 4 )
+        left = 4;
+    if ( left > yw->_screenSize.x - iconBlockWidth - 4 )
+        left = yw->_screenSize.x - iconBlockWidth - 4;
+    if ( top < 4 )
+        top = 4;
+
+    StatusIconRenderList(yw, icons, iconCount, left, top, STATUS_ICON_SIZE);
+}
+
+bool StatusIconCanRenderCockpitUnit(NC_STACK_ypabact *bact)
+{
+    return bact &&
+           bact->_owner != World::OWNER_0 &&
+           bact->_energy_max > 0 &&
+           bact->_vehicleID >= 0 &&
+           bact->_bact_type != BACT_TYPES_MISSLE &&
+           bact->_bact_type != BACT_TYPES_ROBO &&
+           bact->_bact_type != BACT_TYPES_GUN &&
+           bact->_status != BACT_STATUS_DEAD &&
+           bact->_status != BACT_STATUS_CREATE &&
+           bact->_status != BACT_STATUS_BEAM &&
+           !(bact->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2 | BACT_STFLAG_NORENDER));
+}
+
+void StatusIconRenderCockpit(NC_STACK_ypaworld *yw, sklt_wis *wis, NC_STACK_ypabact *bact, World::TVhclProto *vhcl, float hudX, float hudY)
+{
+    if ( !yw || !wis || !StatusIconCanRenderCockpitUnit(bact) || !vhcl )
+        return;
+
+    StatusIconList icons;
+    int iconCount = StatusIconCollect(yw, bact, vhcl, icons);
+    if ( iconCount <= 0 )
+        return;
+
+    int iconBlockWidth = iconCount * STATUS_ICON_SIZE + (iconCount - 1) * STATUS_ICON_SPACING;
+
+    float nameY = hudY + wis->field_92 * 12.0;
+    if ( vhcl->spawn_units )
+        nameY -= wis->field_92 * 0.35;
+
+    int nameCenterX = (yw->_screenSize.x / 2) + (yw->_screenSize.x / 2) * hudX;
+    int nameCenterY = (yw->_screenSize.y / 2) + (yw->_screenSize.y / 2) * nameY;
+    int left = nameCenterX - (iconBlockWidth / 2);
+    int top = nameCenterY + yw->_fontH + 4;
+
+    int maxLeft = yw->_screenSize.x - iconBlockWidth - 4;
+    if ( left > maxLeft )
+        left = maxLeft;
+    if ( left < 4 )
+        left = 4;
+    if ( top < 4 )
+        top = 4;
+    if ( top > yw->_screenSize.y - STATUS_ICON_SIZE - 4 )
+        top = yw->_screenSize.y - STATUS_ICON_SIZE - 4;
+
+    StatusIconRenderList(yw, icons, iconCount, left, top, STATUS_ICON_SIZE);
+}
+
+}
 
 
 
@@ -8904,6 +9134,9 @@ void yw_RenderHUDVectorGFX(NC_STACK_ypaworld *yw, CmdStream *cur)
 
     if ( robo_map.IsOpen() )
         GFX::Engine.raster_func221(Common::Rect());
+
+    if ( yw->_userUnit && yw->_userUnit->_vehicleID >= 0 && (size_t)yw->_userUnit->_vehicleID < yw->_vhclProtos.size() )
+        StatusIconRenderCockpit(yw, wis, yw->_userUnit, &yw->_vhclProtos[yw->_userUnit->_vehicleID], -0.7, 0.3);
 }
 
 void sb_0x4d7c08__sub0__sub4__sub0__sub0(NC_STACK_ypaworld *yw, CmdStream *cur, NC_STACK_ypabact *bact)
@@ -9040,6 +9273,9 @@ void yw_RenderUnitLifeBar(NC_STACK_ypaworld *yw, CmdStream *cur, NC_STACK_ypabac
 
                                 v27 += v38;
                             }
+
+                            if ( bact->_vehicleID >= 0 && (size_t)bact->_vehicleID < yw->_vhclProtos.size() )
+                                StatusIconRenderWorld(yw, bact, &yw->_vhclProtos[bact->_vehicleID], v42, v41, v43, yw->_guiTiles[50]->h);
                         }
                     }
                 }
