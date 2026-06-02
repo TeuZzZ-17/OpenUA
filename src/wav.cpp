@@ -21,6 +21,10 @@ extern "C" {
 #define OLDCHANNEL
 #endif
 
+#define WAVE_FORMAT_PCM 1
+#define WAVE_FORMAT_IEEE_FLOAT 3
+#define WAVE_FORMAT_EXTENSIBLE 0xFFFE
+
 struct __attribute__((packed)) RIFF_HDR
 {
     uint32_t ChunkID;
@@ -115,9 +119,136 @@ static ALenum wav_pcm_openal_format(uint16_t channels, uint16_t bits)
     return 0;
 }
 
+static uint32_t wav_read_u32le(const uint8_t *data)
+{
+    return (uint32_t)data[0] | ((uint32_t)data[1] << 8) | ((uint32_t)data[2] << 16) | ((uint32_t)data[3] << 24);
+}
+
+static bool wav_pcm_convert_to_openal(const PCM_fmt &fmt, const std::vector<uint8_t> &src, std::vector<uint8_t> *dst, ALenum *alFormat, std::string *reason)
+{
+    if ( fmt.NumChannels < 1 || fmt.NumChannels > 2 )
+    {
+        if ( reason )
+            *reason = fmt::sprintf("unsupported channel count %d", fmt.NumChannels);
+
+        return false;
+    }
+
+    ALenum directFormat = 0;
+
+    if ( fmt.AudioFormat == WAVE_FORMAT_PCM )
+        directFormat = wav_pcm_openal_format(fmt.NumChannels, fmt.BitsPerSample);
+
+    if ( directFormat )
+    {
+        *dst = src;
+        *alFormat = directFormat;
+        return true;
+    }
+
+    if ( fmt.AudioFormat == WAVE_FORMAT_PCM && (fmt.BitsPerSample == 24 || fmt.BitsPerSample == 32) )
+    {
+        int bytesPerSample = fmt.BitsPerSample / 8;
+        int frameSize = bytesPerSample * fmt.NumChannels;
+
+        if ( frameSize <= 0 || src.size() < (size_t)frameSize )
+        {
+            if ( reason )
+                *reason = "PCM data is too small";
+
+            return false;
+        }
+
+        size_t frameCount = src.size() / frameSize;
+        dst->resize(frameCount * fmt.NumChannels * 2);
+
+        const uint8_t *in = src.data();
+        uint8_t *out = dst->data();
+
+        for (size_t sampleId = 0; sampleId < frameCount * fmt.NumChannels; sampleId++)
+        {
+            int32_t sample = 0;
+
+            if ( fmt.BitsPerSample == 24 )
+            {
+                uint32_t raw = (uint32_t)in[0] | ((uint32_t)in[1] << 8) | ((uint32_t)in[2] << 16);
+                sample = (int32_t)raw;
+                if ( sample & 0x800000 )
+                    sample |= ~0xFFFFFF;
+
+                sample >>= 8;
+                in += 3;
+            }
+            else
+            {
+                uint32_t raw = wav_read_u32le(in);
+                sample = (int32_t)raw;
+                sample >>= 16;
+                in += 4;
+            }
+
+            int16_t outSample = (int16_t)sample;
+            out[0] = (uint8_t)(outSample & 0xFF);
+            out[1] = (uint8_t)((outSample >> 8) & 0xFF);
+            out += 2;
+        }
+
+        *alFormat = fmt.NumChannels > 1 ? AL_FORMAT_STEREO16 : AL_FORMAT_MONO16;
+        return true;
+    }
+
+    if ( fmt.AudioFormat == WAVE_FORMAT_IEEE_FLOAT && fmt.BitsPerSample == 32 )
+    {
+        int frameSize = 4 * fmt.NumChannels;
+
+        if ( frameSize <= 0 || src.size() < (size_t)frameSize )
+        {
+            if ( reason )
+                *reason = "float PCM data is too small";
+
+            return false;
+        }
+
+        size_t frameCount = src.size() / frameSize;
+        dst->resize(frameCount * fmt.NumChannels * 2);
+
+        const uint8_t *in = src.data();
+        uint8_t *out = dst->data();
+
+        for (size_t sampleId = 0; sampleId < frameCount * fmt.NumChannels; sampleId++)
+        {
+            float value;
+            memcpy(&value, in, sizeof(float));
+            in += 4;
+
+            if ( value > 1.0f )
+                value = 1.0f;
+            else if ( value < -1.0f )
+                value = -1.0f;
+
+            int16_t outSample = (int16_t)(value * 32767.0f);
+            out[0] = (uint8_t)(outSample & 0xFF);
+            out[1] = (uint8_t)((outSample >> 8) & 0xFF);
+            out += 2;
+        }
+
+        *alFormat = fmt.NumChannels > 1 ? AL_FORMAT_STEREO16 : AL_FORMAT_MONO16;
+        return true;
+    }
+
+    if ( reason )
+        *reason = fmt::sprintf("unsupported PCM WAV shape: encoding=%d channels=%d rate=%d bits=%d",
+                               fmt.AudioFormat,
+                               fmt.NumChannels,
+                               fmt.SampleRate,
+                               fmt.BitsPerSample);
+
+    return false;
+}
+
 static bool wav_is_legacy_pcm8_mono(const PCM_fmt &fmt)
 {
-    return fmt.AudioFormat == 1 && fmt.NumChannels == 1 && fmt.BitsPerSample == 8;
+    return fmt.AudioFormat == WAVE_FORMAT_PCM && fmt.NumChannels == 1 && fmt.BitsPerSample == 8;
 }
 
 static rsrc * wav_load_pcm_wav(NC_STACK_wav *obj, IDVList &stak, const std::string &filname, std::string *reason)
@@ -175,7 +306,24 @@ static rsrc * wav_load_pcm_wav(NC_STACK_wav *obj, IDVList &stak, const std::stri
                 haveFmt = true;
 
                 if ( sbchunk.SubchunkSize > sizeof(PCM_fmt) )
-                    wav_skip_chunk(fil, sbchunk.SubchunkSize - sizeof(PCM_fmt));
+                {
+                    uint32_t extraSize = sbchunk.SubchunkSize - sizeof(PCM_fmt);
+                    std::vector<uint8_t> extra(extraSize);
+
+                    if ( !extra.empty() )
+                        fil->read(extra.data(), extra.size());
+
+                    if ( fmt.AudioFormat == WAVE_FORMAT_EXTENSIBLE && extra.size() >= 24 )
+                    {
+                        uint32_t subFormat = wav_read_u32le(extra.data() + 8);
+
+                        if ( subFormat == WAVE_FORMAT_PCM || subFormat == WAVE_FORMAT_IEEE_FLOAT )
+                            fmt.AudioFormat = (uint16_t)subFormat;
+                    }
+
+                    if ( extraSize & 1 )
+                        fil->seek(1, SEEK_CUR);
+                }
             }
             else
             {
@@ -186,15 +334,24 @@ static rsrc * wav_load_pcm_wav(NC_STACK_wav *obj, IDVList &stak, const std::stri
         {
             ALenum alFormat = 0;
 
-            if ( haveFmt && fmt.AudioFormat == 1 )
-                alFormat = wav_pcm_openal_format(fmt.NumChannels, fmt.BitsPerSample);
-
-            if ( haveFmt && fmt.AudioFormat == 1 && alFormat )
+            if ( haveFmt && (fmt.AudioFormat == WAVE_FORMAT_PCM || fmt.AudioFormat == WAVE_FORMAT_IEEE_FLOAT) )
             {
-                std::vector<uint8_t> pcm(sbchunk.SubchunkSize);
+                std::vector<uint8_t> rawPcm(sbchunk.SubchunkSize);
 
-                if ( !pcm.empty() && fil->read(pcm.data(), pcm.size()) == pcm.size() )
+                if ( !rawPcm.empty() && fil->read(rawPcm.data(), rawPcm.size()) == rawPcm.size() )
                 {
+                    std::vector<uint8_t> pcm;
+                    std::string convertReason;
+
+                    if ( !wav_pcm_convert_to_openal(fmt, rawPcm, &pcm, &alFormat, &convertReason) )
+                    {
+                        if ( reason )
+                            *reason = convertReason;
+
+                        delete fil;
+                        return NULL;
+                    }
+
                     delete fil;
                     rsrc *res = wav_alloc_sample(obj, stak, pcm, fmt.SampleRate, alFormat);
 
@@ -230,14 +387,15 @@ static rsrc * wav_load_pcm_wav(NC_STACK_wav *obj, IDVList &stak, const std::stri
             {
                 if ( !haveFmt )
                     *reason = "data chunk found before fmt chunk";
-                else if ( fmt.AudioFormat != 1 )
+                else if ( fmt.AudioFormat != WAVE_FORMAT_PCM && fmt.AudioFormat != WAVE_FORMAT_IEEE_FLOAT )
                     *reason = fmt::sprintf("unsupported WAV encoding %d: channels=%d rate=%d bits=%d",
                                            fmt.AudioFormat,
                                            fmt.NumChannels,
                                            fmt.SampleRate,
                                            fmt.BitsPerSample);
                 else
-                    *reason = fmt::sprintf("unsupported PCM WAV shape: channels=%d rate=%d bits=%d",
+                    *reason = fmt::sprintf("unsupported PCM WAV shape: encoding=%d channels=%d rate=%d bits=%d",
+                                           fmt.AudioFormat,
                                            fmt.NumChannels,
                                            fmt.SampleRate,
                                            fmt.BitsPerSample);
