@@ -1,5 +1,6 @@
 #include <inttypes.h>
 #include <string.h>
+#include <algorithm>
 
 #include "includes.h"
 #include "yw.h"
@@ -31,6 +32,21 @@ extern int buttonsSpace;
 
 extern int dword_5A50B6;
 extern int dword_5A50B6_h;
+
+static constexpr int SETTINGS_CHANGE_PALETTE_THEME = 0x2000;
+
+static std::string PaletteThemeDisplayName(const std::string &fileName)
+{
+    if (fileName.empty())
+        return "Original";
+
+    std::string name = fileName;
+    if (name.size() >= 4 && !StriCmp(name.substr(name.size() - 4), ".pal"))
+        name.resize(name.size() - 4);
+
+    std::replace(name.begin(), name.end(), '_', ' ');
+    return name;
+}
 
 void sb_0x4eb94c__sub0(NC_STACK_ypaworld *yw, bool clockwise, int a3, vec3d *pos, baseRender_msg *arg)
 {
@@ -1087,6 +1103,15 @@ void UserData::sb_0x46aa8c()
         forceChange = true;
     }
 
+    if ( _settingsChangeOptions & SETTINGS_CHANGE_PALETTE_THEME )
+    {
+        paletteTheme = confPaletteTheme;
+        System::IniConf::GfxPaletteTheme.Value = paletteTheme;
+
+        if ( !SavePaletteThemeToNucleusIni() )
+            ypa_log_out("WARNING: Could not save gfx.palette_theme to nucleus.ini\n");
+    }
+
     if ( forceChange )
     {
         yw->SetGameShellVideoMode( IsWindowedFlag() );
@@ -1489,6 +1514,10 @@ void UserData::ShowOptionsMenu()
 {
     titel_button->HideScreen();
 
+    RefreshPaletteThemes();
+    confPaletteTheme = paletteTheme;
+    UpdatePaletteThemeText();
+
     video_button->ShowScreen();
 
     EnvMode = ENVMODE_SETTINGS;
@@ -1825,6 +1854,7 @@ void UserData::sub_46A3C0()
 {
     _settingsChangeOptions = 0;
     EnvMode = ENVMODE_TITLE;
+    confPaletteTheme = paletteTheme;
 
     int gfxId = GFX::GFXEngine::Instance.GetGfxModeIndex(p_YW->_gfxMode);
     
@@ -1836,6 +1866,7 @@ void UserData::sub_46A3C0()
     _gfxMode = p_YW->_gfxMode;
 
     video_button->SetText(1156, _gfxMode.name);
+    UpdatePaletteThemeText();
 
     video_button->SetText(1172, win3d_name);
 
@@ -1927,6 +1958,110 @@ void  UserData::UpdateSelected3DDevFromList()
     conf3DGuid = guid;
 
     video_button->SetText(1172, name);
+}
+
+void UserData::RefreshPaletteThemes()
+{
+    paletteThemes.clear();
+    paletteThemes.push_back(std::string());
+
+    FSMgr::DirIter dir = uaOpenDir("data:palette");
+    FSMgr::iNode *node = NULL;
+
+    while (dir.getNext(&node))
+    {
+        if (!node || node->getType() != FSMgr::iNode::NTYPE_FILE)
+            continue;
+
+        std::string name = node->getName();
+        if (name.size() < 4 || StriCmp(name.substr(name.size() - 4), ".pal"))
+            continue;
+
+        paletteThemes.push_back(name);
+    }
+
+    std::sort(paletteThemes.begin() + 1, paletteThemes.end(),
+        [](const std::string &a, const std::string &b) { return StriCmp(a, b) < 0; });
+
+    paletteTheme = System::IniConf::GfxPaletteTheme.Get<std::string>();
+    confPaletteTheme = paletteTheme;
+}
+
+void UserData::UpdatePaletteThemeText()
+{
+    video_button->SetText(1173, PaletteThemeDisplayName(confPaletteTheme));
+}
+
+void UserData::CyclePaletteTheme()
+{
+    if (paletteThemes.empty())
+        RefreshPaletteThemes();
+
+    size_t next = 0;
+    for (size_t i = 0; i < paletteThemes.size(); i++)
+    {
+        if (!StriCmp(paletteThemes[i], confPaletteTheme))
+        {
+            next = (i + 1) % paletteThemes.size();
+            break;
+        }
+    }
+
+    confPaletteTheme = paletteThemes[next];
+    _settingsChangeOptions |= SETTINGS_CHANGE_PALETTE_THEME;
+    UpdatePaletteThemeText();
+}
+
+bool UserData::SavePaletteThemeToNucleusIni()
+{
+    const std::string key = "gfx.palette_theme";
+    const std::string newLine = key + " = " + paletteTheme;
+
+    std::vector<std::string> lines;
+    bool replaced = false;
+
+    FSMgr::FileHandle *in = uaOpenFileAlloc("nucleus.ini", "r");
+    if (in)
+    {
+        std::string line;
+        while (in->ReadLine(&line))
+        {
+            while (!line.empty() && (line.back() == '\n' || line.back() == '\r'))
+                line.pop_back();
+
+            std::string test = line;
+            size_t comment = test.find_first_of(";");
+            if (comment != std::string::npos)
+                test.erase(comment);
+
+            Stok tokens(test, "= \t");
+            std::string token;
+            if (tokens.GetNext(&token) && !StriCmp(token, key))
+            {
+                lines.push_back(newLine);
+                replaced = true;
+            }
+            else
+            {
+                lines.push_back(line);
+            }
+        }
+
+        delete in;
+    }
+
+    if (!replaced)
+        lines.push_back(newLine);
+
+    FSMgr::FileHandle *out = uaOpenFileAlloc("nucleus.ini", "w");
+    if (!out)
+        return false;
+
+    for (const std::string &line : lines)
+        out->puts(line + "\n");
+
+    delete out;
+    return true;
 }
 
 void UserData::sub_46C914()
@@ -2946,6 +3081,10 @@ void UserData::GameShellUiHandleInput()
         else if ( r.code == 1135 )
         {
             p_YW->GuiWinClose( &d3d_listvw );
+        }
+        else if ( r.code == 1136 )
+        {
+            CyclePaletteTheme();
         }
         else if ( r.code == 1250 )
             p_YW->_helpURL = Locale::Text::Help(Locale::HELP_SETTINGS);
@@ -4822,4 +4961,3 @@ bool UserData::IsHasRestartForLevel(const std::string &username, int id)
 {
     return uaFileExist( fmt::sprintf("save:%s/%d.rst", username, id) );
 }
-

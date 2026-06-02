@@ -6,6 +6,7 @@
 #include <list>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "types.h"
 #include "memstream.h"
@@ -568,6 +569,10 @@ public:
     
     bool enemyIndicator;
     bool confEnemyIndicator;
+
+    std::vector<std::string> paletteThemes;
+    std::string paletteTheme;
+    std::string confPaletteTheme;
     
     int _settingsChangeOptions;
     
@@ -797,6 +802,10 @@ public:
     void InputConfigRestoreDefault();
     void sub_46C5F0();
     void  UpdateSelected3DDevFromList();
+    void RefreshPaletteThemes();
+    void CyclePaletteTheme();
+    void UpdatePaletteThemeText();
+    bool SavePaletteThemeToNucleusIni();
     void sub_46A7F8();
     void ShowAbout();
     

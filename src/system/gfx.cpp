@@ -10,6 +10,7 @@
 
 #include "gfx.h"
 #include "../utils.h"
+#include "../env.h"
 #include "common/common.h"
 #include "../ini.h"
 #include "../gui/root.h"
@@ -3093,9 +3094,29 @@ void GFXEngine::SetTileset(TileMap *tileset, int id)
 
 bool GFXEngine::LoadPalette(const std::string &palette_ilbm)
 {
+    std::string loadPath = GetPaletteThemeOverridePath(palette_ilbm);
+    std::string oldRsrc;
+    if (loadPath != palette_ilbm)
+        oldRsrc = Common::Env.SetPrefix("rsrc", "data:");
+
     NC_STACK_bitmap *ilbm = Nucleus::CInit<NC_STACK_ilbm>( {
-        {NC_STACK_rsrc::RSRC_ATT_NAME, std::string(palette_ilbm)},
+        {NC_STACK_rsrc::RSRC_ATT_NAME, loadPath},
         {NC_STACK_bitmap::BMD_ATT_HAS_COLORMAP, (int32_t)1}} );
+
+    if (loadPath != palette_ilbm)
+        Common::Env.SetPrefix("rsrc", oldRsrc);
+
+    if (!ilbm && loadPath != palette_ilbm)
+    {
+        ypa_log_out("WARNING: Could not load palette theme [%s] from [%s], falling back to [%s].\n",
+                    System::IniConf::GfxPaletteTheme.Get<std::string>().c_str(),
+                    loadPath.c_str(),
+                    palette_ilbm.c_str());
+
+        ilbm = Nucleus::CInit<NC_STACK_ilbm>( {
+            {NC_STACK_rsrc::RSRC_ATT_NAME, std::string(palette_ilbm)},
+            {NC_STACK_bitmap::BMD_ATT_HAS_COLORMAP, (int32_t)1}} );
+    }
 
     if (!ilbm)
         return false;
@@ -3105,6 +3126,32 @@ bool GFXEngine::LoadPalette(const std::string &palette_ilbm)
     ilbm->Delete();
 
     return true;
+}
+
+std::string GFXEngine::GetPaletteThemeOverridePath(const std::string &palette_ilbm)
+{
+    std::string palettePath = palette_ilbm;
+    for (char &c : palettePath)
+    {
+        if (c == '\\')
+            c = '/';
+    }
+
+    const std::string standardPal = "palette/standard.pal";
+    if (palettePath.size() < standardPal.size() ||
+        StriCmp(palettePath.substr(palettePath.size() - standardPal.size()), standardPal))
+    {
+        return palette_ilbm;
+    }
+
+    std::string theme = System::IniConf::GfxPaletteTheme.Get<std::string>();
+    if (theme.empty())
+        return palette_ilbm;
+
+    if (theme.size() < 4 || StriCmp(theme.substr(theme.size() - 4), ".pal"))
+        theme += ".pal";
+
+    return "palette/" + theme;
 }
     
 uint8_t *GFXEngine::MakeScreenCopy(int *ow, int *oh)

@@ -2258,6 +2258,7 @@ bool NC_STACK_ypaworld::InitGameShell(UserData *usr)
     usr->EnvMode = ENVMODE_TITLE;
 
     System::IniConf::ReadFromNucleusIni();
+    usr->RefreshPaletteThemes();
 
     _netExclusiveGem = System::IniConf::NetGameExclusiveGem.Get<bool>();
 
@@ -4063,6 +4064,55 @@ bool NC_STACK_ypaworld::CreateVideoControls()
         ypa_log_out("Unable to add video-button\n");
         return false;
     }
+
+    btn_64arg.tileset_down = 16;
+    btn_64arg.tileset_up = 16;
+    btn_64arg.field_3A = 16;
+    btn_64arg.button_type = NC_STACK_button::TYPE_CAPTION;
+    btn_64arg.xpos = 0;
+    btn_64arg.ypos = 4 * (_fontH + vertMenuSpace);
+    btn_64arg.width = v98;
+    btn_64arg.caption = "Atmosphere";
+    btn_64arg.caption2.clear();
+    btn_64arg.downCode = 0;
+    btn_64arg.upCode = 0;
+    btn_64arg.pressedCode = 0;
+    btn_64arg.flags = NC_STACK_button::FLAG_BORDER | NC_STACK_button::FLAG_TEXT;
+    btn_64arg.button_id = 2;
+    btn_64arg.txt_r = _iniColors[60].r;
+    btn_64arg.txt_g = _iniColors[60].g;
+    btn_64arg.txt_b = _iniColors[60].b;
+
+    if ( !_GameShell->video_button->Add(&btn_64arg) )
+    {
+        ypa_log_out("Unable to add palette theme label\n");
+        return false;
+    }
+
+    btn_64arg.tileset_down = 19;
+    btn_64arg.tileset_up = 18;
+    btn_64arg.field_3A = 30;
+    btn_64arg.button_type = NC_STACK_button::TYPE_BUTTON;
+    btn_64arg.xpos = buttonsSpace + v294 * 0.4;
+    btn_64arg.width = v294 * 0.6;
+    btn_64arg.caption = "Original";
+    btn_64arg.caption2.clear();
+    btn_64arg.downCode = 0;
+    btn_64arg.upCode = 1136;
+    btn_64arg.pressedCode = 0;
+    btn_64arg.flags = NC_STACK_button::FLAG_BORDER | NC_STACK_button::FLAG_CENTER | NC_STACK_button::FLAG_TEXT;
+    btn_64arg.button_id = 1173;
+    btn_64arg.txt_r = _iniColors[68].r;
+    btn_64arg.txt_g = _iniColors[68].g;
+    btn_64arg.txt_b = _iniColors[68].b;
+
+    if ( !_GameShell->video_button->Add(&btn_64arg) )
+    {
+        ypa_log_out("Unable to add palette theme button\n");
+        return false;
+    }
+
+    _GameShell->UpdatePaletteThemeText();
 
     NC_STACK_button::button_66arg v229;
     v229.butID = 1151;
@@ -6079,6 +6129,7 @@ void NC_STACK_ypaworld::UpdateGameShell()
     _GameShell->video_button->SetState(&v16);
 
     _GameShell->video_button->SetText(1156, _GameShell->p_YW->_gfxMode.name);
+    _GameShell->UpdatePaletteThemeText();
 
     tmp = _GameShell->video_button->GetSliderData(1159);
     tmp->value = _GameShell->fxnumber;

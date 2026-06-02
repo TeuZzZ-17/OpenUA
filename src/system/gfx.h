@@ -555,6 +555,7 @@ public:
     TileMap * GetTileset(int id);
 
     bool LoadPalette(const std::string &palette_ilbm);
+    std::string GetPaletteThemeOverridePath(const std::string &palette_ilbm);
     SDL_Cursor *LoadCursor(const std::string &name);
     
     

@@ -131,9 +131,29 @@ void sb_0x44ca90__sub2(NC_STACK_ypaworld *yw, TLevelDescription *mapp)
     {
         if (!mapp->Palettes[0].empty())
         {
+            std::string palettePath = GFX::Engine.GetPaletteThemeOverridePath(mapp->Palettes[0]);
+            std::string oldRsrc;
+            if (palettePath != mapp->Palettes[0])
+                oldRsrc = Common::Env.SetPrefix("rsrc", "data:");
+
             NC_STACK_bitmap *ilbm = Utils::ProxyLoadImage({
-                {NC_STACK_rsrc::RSRC_ATT_NAME, mapp->Palettes[0]},
+                {NC_STACK_rsrc::RSRC_ATT_NAME, palettePath},
                 {NC_STACK_bitmap::BMD_ATT_HAS_COLORMAP, (int32_t)1}});
+
+            if (palettePath != mapp->Palettes[0])
+                Common::Env.SetPrefix("rsrc", oldRsrc);
+
+            if (!ilbm && palettePath != mapp->Palettes[0])
+            {
+                ypa_log_out("WARNING: Could not load palette theme [%s] from [%s], falling back to [%s].\n",
+                            System::IniConf::GfxPaletteTheme.Get<std::string>().c_str(),
+                            palettePath.c_str(),
+                            mapp->Palettes[0].c_str());
+
+                ilbm = Utils::ProxyLoadImage({
+                    {NC_STACK_rsrc::RSRC_ATT_NAME, mapp->Palettes[0]},
+                    {NC_STACK_bitmap::BMD_ATT_HAS_COLORMAP, (int32_t)1}});
+            }
 
             if (ilbm)
             {

@@ -42,6 +42,7 @@ public:
     static Common::Ini::Key GfxXRes;
     static Common::Ini::Key GfxYRes;
     static Common::Ini::Key GfxPalette;
+    static Common::Ini::Key GfxPaletteTheme;
     static Common::Ini::Key GfxDisplay;
     static Common::Ini::Key GfxDisplay2;
     

@@ -34,6 +34,7 @@ Common::Ini::Key IniConf::GfxMode("gfx.mode", Common::Ini::KT_DIGIT);
 Common::Ini::Key IniConf::GfxXRes("gfx.xres", Common::Ini::KT_DIGIT);
 Common::Ini::Key IniConf::GfxYRes("gfx.yres", Common::Ini::KT_DIGIT);
 Common::Ini::Key IniConf::GfxPalette("gfx.palette", Common::Ini::KT_WORD);
+Common::Ini::Key IniConf::GfxPaletteTheme("gfx.palette_theme", Common::Ini::KT_WORD);
 Common::Ini::Key IniConf::GfxDisplay("gfx.display", Common::Ini::KT_WORD);
 Common::Ini::Key IniConf::GfxDisplay2("gfx.display2", Common::Ini::KT_WORD);
 
@@ -231,6 +232,7 @@ void IniConf::Init()
         , &GfxXRes
         , &GfxYRes
         , &GfxPalette
+        , &GfxPaletteTheme
         , &GfxDisplay
         , &GfxDisplay2
 
