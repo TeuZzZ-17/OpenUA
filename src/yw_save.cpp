@@ -217,6 +217,7 @@ int yw_write_video(FSMgr::FileHandle *fil, UserData *usr)
         fil->printf("    enemyindicator = no\n");
 
     fil->printf("    fxnumber = %d\n", usr->fxnumber);
+    fil->printf("    palette_theme = %s\n", usr->paletteTheme.c_str());
     
     if (usr->IsWindowedFlag())
         fil->printf("    ;#!gfxmode = %d_%d_1\n", usr->p_YW->_gfxMode.w, usr->p_YW->_gfxMode.h);

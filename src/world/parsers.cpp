@@ -7,6 +7,7 @@
 #include "../ypacar.h"
 #include "../log.h"
 #include "../utils.h"
+#include "../system/inivals.h"
 
 namespace World
 {
@@ -4111,6 +4112,12 @@ int VideoParser::Handle(ScriptParser::Parser &parser, const std::string &p1, con
     {
         _o._fxLimit = parser.stoi(p2);
         _o._GameShell->fxnumber = _o._fxLimit;
+    }
+    else if ( !StriCmp(p1, "palette_theme") )
+    {
+        _o._GameShell->paletteTheme = p2;
+        _o._GameShell->confPaletteTheme = p2;
+        System::IniConf::GfxPaletteTheme.Value = p2;
     }
     else if ( !StriCmp(p1, "enemyindicator") )
     {

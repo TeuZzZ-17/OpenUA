@@ -1945,8 +1945,17 @@ static void yw_RenderTransientVPs(NC_STACK_ypaworld *world, std::list<NC_STACK_y
                 continue;
             }
 
-            it->pos = owner->_position + owner->_rotation.Transpose().Transform(it->followLocalOffset);
-            it->rot = owner->_rotation;
+            // Status FX (damaged/debuff smoke, sparks, electric effects) should follow
+            // the unit position, but they must NOT inherit terrain pitch/roll for their
+            // attachment offset.
+            //
+            // The previous code transformed followLocalOffset through the full owner
+            // rotation. On ground units climbing slopes, the unit pitch/roll rotated the
+            // vertical/random offset and made the FX float far above the hull. Keep the
+            // offset world-aligned so the effect stays at the same height relative to
+            // the unit regardless of terrain inclination.
+            it->pos = owner->_position + it->followLocalOffset;
+            it->rot = mat3x3::Ident();
 
             if ( owner->_pSector )
             {

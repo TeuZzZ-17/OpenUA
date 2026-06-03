@@ -1131,6 +1131,11 @@ void UserData::sb_0x46aa8c()
         }
     }
 
+    bool settingsChanged = _settingsChangeOptions != 0;
+
+    if ( settingsChanged && !UserName.empty() )
+        SaveSettings();
+
     _settingsChangeOptions = 0;
     EnvMode = ENVMODE_TITLE;
 
