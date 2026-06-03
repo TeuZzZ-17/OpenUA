@@ -7740,6 +7740,7 @@ void NC_STACK_ypaworld::VoiceMessagePlayFile(const std::string &flname, NC_STACK
     {        
         _voiceMessage.Carrier.Sounds[0].Pitch = 0;
         _voiceMessage.Carrier.Sounds[0].Volume = priority + 500;
+        _voiceMessage.Carrier.Sounds[0].PriorityBias = 512;
 
         if ( v23 )
             _voiceMessage.Carrier.Sounds[0].PSample = v23->GetSampleData();

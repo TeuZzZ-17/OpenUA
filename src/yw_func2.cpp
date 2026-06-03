@@ -1988,7 +1988,26 @@ void UserData::RefreshPaletteThemes()
     std::sort(paletteThemes.begin() + 1, paletteThemes.end(),
         [](const std::string &a, const std::string &b) { return StriCmp(a, b) < 0; });
 
-    paletteTheme = System::IniConf::GfxPaletteTheme.Get<std::string>();
+    // Keep the currently loaded user-profile palette when available.
+    // The old code always copied System::IniConf::GfxPaletteTheme here. That made
+    // the Options menu silently reset the saved per-user palette back to nucleus.ini
+    // (often Original), especially in custom/test launches where nucleus.ini is not
+    // the same file that the profile save is using.
+    std::string currentTheme = paletteTheme;
+    if ( currentTheme.empty() )
+        currentTheme = System::IniConf::GfxPaletteTheme.Get<std::string>();
+
+    bool found = currentTheme.empty();
+    for (const std::string &theme : paletteThemes)
+    {
+        if ( !StriCmp(theme, currentTheme) )
+        {
+            found = true;
+            break;
+        }
+    }
+
+    paletteTheme = found ? currentTheme : std::string();
     confPaletteTheme = paletteTheme;
 }
 

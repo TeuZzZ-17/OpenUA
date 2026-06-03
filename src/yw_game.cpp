@@ -1946,23 +1946,15 @@ static void yw_RenderTransientVPs(NC_STACK_ypaworld *world, std::list<NC_STACK_y
             }
 
             // Status FX (damaged/debuff smoke, sparks, electric effects) should follow
-            // the unit position, but they must NOT inherit terrain pitch/roll for their
-            // attachment offset.
+            // the unit position, but must not inherit terrain pitch/roll.
             //
-            // The previous code transformed followLocalOffset through the full owner
-            // rotation. On ground units climbing slopes, the unit pitch/roll rotated the
-            // vertical/random offset and made the FX float far above the hull. Keep the
-            // offset world-aligned so the effect stays at the same height relative to
-            // the unit regardless of terrain inclination.
+            // Important: do NOT clamp attached status FX against owner->_pSector->height.
+            // On sloped sectors that value is only a coarse sector height/average, not
+            // the exact ground height under the vehicle. Clamping against it randomly
+            // yanks smoke/fire far above the hull when a tank climbs/descends terrain,
+            // which is the intermittent "floating FX" bug seen in-game.
             it->pos = owner->_position + it->followLocalOffset;
             it->rot = mat3x3::Ident();
-
-            if ( owner->_pSector )
-            {
-                float groundSafeY = owner->_pSector->height - 5.0;
-                if ( it->pos.y > groundSafeY )
-                    it->pos.y = groundSafeY;
-            }
         }
 
         it->vp->Bas->TForm().Pos = it->pos;

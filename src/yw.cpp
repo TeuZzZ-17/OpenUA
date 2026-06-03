@@ -1581,7 +1581,7 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
                 snd.SampleVariants.push_back(snd.PSample);
             snd.Volume = bacto->_damaged_snd_volume;
             snd.Pitch = bacto->_damaged_snd_pitch;
-            snd.PriorityBias = -80;
+            snd.PriorityBias = 0;
             snd.SetLoop(false);
             snd.SetFragmented(false);
 
@@ -1614,6 +1614,7 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
 
             smpl_inf->Volume = vhcl.sndFX[i].volume;
             smpl_inf->Pitch = vhcl.sndFX[i].pitch;
+            smpl_inf->PriorityBias = (i == World::TVhclProto::SND_COCKPIT) ? 160 : 0;
 
             if ( World::TVhclProto::IsLoopingSnd(i) )
                 smpl_inf->SetLoop(true);
