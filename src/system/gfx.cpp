@@ -3145,7 +3145,7 @@ std::string GFXEngine::GetPaletteThemeOverridePath(const std::string &palette_il
     }
 
     std::string theme = System::IniConf::GfxPaletteTheme.Get<std::string>();
-    if (theme.empty())
+    if (theme.empty() || !StriCmp(theme, "Original"))
         return palette_ilbm;
 
     if (theme.size() < 4 || StriCmp(theme.substr(theme.size() - 4), ".pal"))

@@ -35,6 +35,56 @@ extern int dword_5A50B6_h;
 
 static constexpr int SETTINGS_CHANGE_PALETTE_THEME = 0x2000;
 
+static std::string NormalizePaletteThemeName(std::string theme)
+{
+    size_t first = theme.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos)
+        return std::string();
+
+    size_t last = theme.find_last_not_of(" \t\r\n");
+    theme = theme.substr(first, last - first + 1);
+
+    if (!StriCmp(theme, "Original"))
+        return std::string();
+
+    return theme;
+}
+
+static std::string PaletteThemeStorageValue(const std::string &theme)
+{
+    return theme.empty() ? std::string("Original") : theme;
+}
+
+static bool LoadPaletteThemeCache(std::string *theme)
+{
+    FSMgr::FileHandle *fil = uaOpenFileAlloc("env:palette_theme.txt", "r");
+    if (!fil)
+        return false;
+
+    std::string line;
+    bool ok = fil->ReadLine(&line);
+    delete fil;
+
+    if (!ok)
+    {
+        *theme = std::string();
+        return true;
+    }
+
+    *theme = NormalizePaletteThemeName(line);
+    return true;
+}
+
+static void SavePaletteThemeCache(const std::string &theme)
+{
+    FSMgr::FileHandle *fil = uaOpenFileAlloc("env:palette_theme.txt", "w");
+    if (!fil)
+        return;
+
+    fil->puts(PaletteThemeStorageValue(theme) + "\n");
+    delete fil;
+}
+
 static std::string PaletteThemeDisplayName(const std::string &fileName)
 {
     if (fileName.empty())
@@ -1106,7 +1156,8 @@ void UserData::sb_0x46aa8c()
     if ( _settingsChangeOptions & SETTINGS_CHANGE_PALETTE_THEME )
     {
         paletteTheme = confPaletteTheme;
-        System::IniConf::GfxPaletteTheme.Value = paletteTheme;
+        System::IniConf::GfxPaletteTheme.Value = PaletteThemeStorageValue(paletteTheme);
+        SavePaletteThemeCache(paletteTheme);
 
         if ( !SavePaletteThemeToNucleusIni() )
             ypa_log_out("WARNING: Could not save gfx.palette_theme to nucleus.ini\n");
@@ -1989,13 +2040,24 @@ void UserData::RefreshPaletteThemes()
         [](const std::string &a, const std::string &b) { return StriCmp(a, b) < 0; });
 
     // Keep the currently loaded user-profile palette when available.
-    // The old code always copied System::IniConf::GfxPaletteTheme here. That made
-    // the Options menu silently reset the saved per-user palette back to nucleus.ini
-    // (often Original), especially in custom/test launches where nucleus.ini is not
-    // the same file that the profile save is using.
+    // If the profile has not been loaded yet, use a tiny env cache written immediately
+    // when pressing OK in Options. This avoids relying on savegame/shutdown timing and
+    // prevents nucleus.ini from silently resetting the menu back to Original.
     std::string currentTheme = paletteTheme;
-    if ( currentTheme.empty() )
-        currentTheme = System::IniConf::GfxPaletteTheme.Get<std::string>();
+    bool hasThemeSource = !currentTheme.empty();
+
+    if (!hasThemeSource)
+    {
+        std::string cachedTheme;
+        if (LoadPaletteThemeCache(&cachedTheme))
+        {
+            currentTheme = cachedTheme;
+            hasThemeSource = true;
+        }
+    }
+
+    if (!hasThemeSource)
+        currentTheme = NormalizePaletteThemeName(System::IniConf::GfxPaletteTheme.Get<std::string>());
 
     bool found = currentTheme.empty();
     for (const std::string &theme : paletteThemes)
@@ -2039,7 +2101,7 @@ void UserData::CyclePaletteTheme()
 bool UserData::SavePaletteThemeToNucleusIni()
 {
     const std::string key = "gfx.palette_theme";
-    const std::string newLine = key + " = " + paletteTheme;
+    const std::string newLine = key + " = " + PaletteThemeStorageValue(paletteTheme);
 
     std::vector<std::string> lines;
     bool replaced = false;

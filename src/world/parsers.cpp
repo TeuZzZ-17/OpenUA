@@ -4115,9 +4115,13 @@ int VideoParser::Handle(ScriptParser::Parser &parser, const std::string &p1, con
     }
     else if ( !StriCmp(p1, "palette_theme") )
     {
-        _o._GameShell->paletteTheme = p2;
-        _o._GameShell->confPaletteTheme = p2;
-        System::IniConf::GfxPaletteTheme.Value = p2;
+        std::string theme = p2;
+        if (!StriCmp(theme, "Original"))
+            theme.clear();
+
+        _o._GameShell->paletteTheme = theme;
+        _o._GameShell->confPaletteTheme = theme;
+        System::IniConf::GfxPaletteTheme.Value = theme.empty() ? std::string("Original") : theme;
     }
     else if ( !StriCmp(p1, "enemyindicator") )
     {
