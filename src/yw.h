@@ -1100,7 +1100,6 @@ struct MapRobo
     int ConDelay;
     int RecDelay;
     int RobDelay;
-
     MapRobo()
     {
         Owner = 0;

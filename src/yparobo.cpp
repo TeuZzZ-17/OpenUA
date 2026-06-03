@@ -1289,6 +1289,285 @@ int NC_STACK_yparobo::sb_0x4a45cc__sub0(NC_STACK_ypabact *bact)
     return 1;
 }
 
+bool NC_STACK_yparobo::TryStartPlayerMobileMove(update_msg *arg)
+{
+    if ( !_playerRoboMobile || !IsPlayerRobo() )
+        return false;
+
+    if ( !_world || this != _world->getYW_userHostStation() )
+        return false;
+
+    if ( _status != BACT_STATUS_NORMAL || (_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2)) )
+        return false;
+
+    if ( !arg || !arg->target_Sect )
+        return false;
+
+    if ( !_world->IsGamePlaySector(arg->target_Sect->CellId) )
+        return false;
+
+    // Recalculate the vanilla telebeam cost here instead of trusting
+    // update_msg::energy blindly. The strategic UI uses this value for the
+    // teleport preview bar, but other UI paths may reset/update the message
+    // before DOACTION_10 reaches the Robo. Mobile relocation must still consume
+    // the same resource that vanilla teleport would have consumed.
+    int mobileEnergyCost = CalcPlayerMobileMoveEnergyCost(arg);
+
+    // The UI should already reject unaffordable Host relocation commands, but
+    // keep a runtime guard here so mobile mode cannot silently fall through to
+    // vanilla beam relocation when the player lacks movement/beam energy.
+    if ( mobileEnergyCost > _roboEnergyMove )
+        return true;
+
+    setTarget_msg arg67;
+    arg67.tgt_type = BACT_TGT_TYPE_CELL_IND;
+    arg67.priority = 0;
+    arg67.tgt_pos = arg->target_point;
+
+    SetTarget(&arg67);
+
+    if ( _primTtype != BACT_TGT_TYPE_CELL || !_primT.pcell )
+        return false;
+
+    _playerRoboMobileMoveActive = true;
+    _playerRoboMobileTargetCell = _primT.pcell;
+    _playerRoboMobileTargetCellID = _primT.pcell->Id;
+
+    _target_vec = _primTpos - _position;
+
+    _playerRoboMobileEnergyTotal = mobileEnergyCost;
+    _playerRoboMobileEnergyRemaining = (float)mobileEnergyCost;
+    _playerRoboMobileEnergyRemainder = 0.0;
+
+    int resourceCount = 1; // teleport / beam budget is always part of mobile relocation.
+    if ( _roboFillMode & 1 )
+        resourceCount++;
+    if ( _roboFillMode & 4 )
+        resourceCount++;
+
+    int splitCost = mobileEnergyCost / resourceCount;
+    int splitRemainder = mobileEnergyCost - splitCost * resourceCount;
+
+    _playerRoboMobileMainEnergyTotal = (_roboFillMode & 1) ? splitCost : 0;
+    _playerRoboMobileBuildEnergyTotal = (_roboFillMode & 4) ? splitCost : 0;
+    _playerRoboMobileMoveEnergyTotal = splitCost + splitRemainder;
+
+    _playerRoboMobileMainEnergyRemaining = (float)_playerRoboMobileMainEnergyTotal;
+    _playerRoboMobileBuildEnergyRemaining = (float)_playerRoboMobileBuildEnergyTotal;
+    _playerRoboMobileMoveEnergyRemaining = (float)_playerRoboMobileMoveEnergyTotal;
+    _playerRoboMobileMainEnergyRemainder = 0.0;
+    _playerRoboMobileBuildEnergyRemainder = 0.0;
+    _playerRoboMobileMoveEnergyRemainder = 0.0;
+
+    _playerRoboMobileTotalDistance = _target_vec.XZ().length();
+    if ( _playerRoboMobileTotalDistance < 1.0 )
+        _playerRoboMobileTotalDistance = 1.0;
+    _playerRoboMobileLastDistance = _playerRoboMobileTotalDistance;
+
+    return true;
+}
+
+bool NC_STACK_yparobo::ShouldUsePlayerMobileMove() const
+{
+    return _playerRoboMobile &&
+           _playerRoboMobileMoveActive &&
+           IsPlayerRobo() &&
+           _world &&
+           this == _world->getYW_userHostStation() &&
+           _status == BACT_STATUS_NORMAL &&
+           !(_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2));
+}
+
+int NC_STACK_yparobo::CalcPlayerMobileMoveEnergyCost(update_msg *arg) const
+{
+    if ( !arg || !arg->target_Sect )
+        return 0;
+
+    // Player mobile relocation deliberately does NOT inherit the vanilla free
+    // teleport exception for opened beamgates / own Power Stations. This mode is
+    // physical Host Station movement, so every explicit destination has a cost
+    // proportional to distance and is limited by the teleport/beam budget.
+    vec3d delta = arg->target_point - _position;
+    float distanceSq = POW2(delta.x) + POW2(delta.y) + POW2(delta.z);
+    if ( distanceSq <= 0.0 )
+        return 0;
+
+    int cost = (int)(distanceSq / 230.4f);
+    if ( cost < 0 )
+        cost = 0;
+
+    return cost;
+}
+
+bool NC_STACK_yparobo::UpdatePlayerMobileMove(update_msg *arg)
+{
+    if ( !ShouldUsePlayerMobileMove() )
+        return false;
+
+    AI_doMove(arg);
+
+    bool finished = true;
+    float currentDistance = 0.0;
+
+    if ( _primTtype == BACT_TGT_TYPE_CELL && _playerRoboMobileTargetCell )
+    {
+        currentDistance = (_primTpos.XZ() - _position.XZ()).length();
+        finished = currentDistance < 120.0;
+    }
+
+    UpdatePlayerMobileMoveEnergy(currentDistance, finished);
+
+    if ( _playerRoboMobileMoveEnergyRemaining > 0.0 && _roboEnergyMove <= 0 )
+    {
+        setTarget_msg arg67;
+        arg67.tgt_type = BACT_TGT_TYPE_NONE;
+        arg67.priority = 0;
+        SetTarget(&arg67);
+        ResetPlayerMobileMove();
+        return true;
+    }
+
+    if ( finished )
+        ResetPlayerMobileMove();
+
+    return true;
+}
+
+void NC_STACK_yparobo::ResetPlayerMobileMove()
+{
+    _playerRoboMobileMoveActive = false;
+    _playerRoboMobileTargetCell = NULL;
+    _playerRoboMobileTargetCellID = 0;
+    _playerRoboMobileEnergyTotal = 0;
+    _playerRoboMobileEnergyRemaining = 0.0;
+    _playerRoboMobileEnergyRemainder = 0.0;
+    _playerRoboMobileMainEnergyTotal = 0;
+    _playerRoboMobileMainEnergyRemaining = 0.0;
+    _playerRoboMobileMainEnergyRemainder = 0.0;
+    _playerRoboMobileBuildEnergyTotal = 0;
+    _playerRoboMobileBuildEnergyRemaining = 0.0;
+    _playerRoboMobileBuildEnergyRemainder = 0.0;
+    _playerRoboMobileMoveEnergyTotal = 0;
+    _playerRoboMobileMoveEnergyRemaining = 0.0;
+    _playerRoboMobileMoveEnergyRemainder = 0.0;
+    _playerRoboMobileTotalDistance = 0.0;
+    _playerRoboMobileLastDistance = 0.0;
+}
+
+void NC_STACK_yparobo::UpdatePlayerMobileMoveEnergy(float currentTargetDistance, bool forceFinish)
+{
+    if ( _playerRoboMobileEnergyRemaining <= 0.0 || _playerRoboMobileEnergyTotal <= 0 )
+        return;
+
+    float progressDistance = 0.0;
+
+    if ( forceFinish )
+    {
+        progressDistance = _playerRoboMobileTotalDistance;
+    }
+    else if ( currentTargetDistance < _playerRoboMobileLastDistance )
+    {
+        progressDistance = _playerRoboMobileLastDistance - currentTargetDistance;
+    }
+
+    if ( progressDistance <= 0.0 )
+        return;
+
+    float totalToDrain = ((float)_playerRoboMobileEnergyTotal * progressDistance / _playerRoboMobileTotalDistance) + _playerRoboMobileEnergyRemainder;
+    int totalDrain = forceFinish ? (int)ceil(totalToDrain) : (int)floor(totalToDrain);
+
+    if ( totalDrain <= 0 )
+    {
+        _playerRoboMobileEnergyRemainder = totalToDrain;
+        if ( currentTargetDistance < _playerRoboMobileLastDistance )
+            _playerRoboMobileLastDistance = currentTargetDistance;
+        return;
+    }
+
+    if ( totalDrain > (int)ceil(_playerRoboMobileEnergyRemaining) )
+        totalDrain = (int)ceil(_playerRoboMobileEnergyRemaining);
+
+    DrainPlayerMobileMoveResource(_playerRoboMobileMainEnergyTotal,
+                                  _playerRoboMobileMainEnergyRemaining,
+                                  _playerRoboMobileMainEnergyRemainder,
+                                  _energy,
+                                  1,
+                                  progressDistance,
+                                  forceFinish);
+
+    DrainPlayerMobileMoveResource(_playerRoboMobileBuildEnergyTotal,
+                                  _playerRoboMobileBuildEnergyRemaining,
+                                  _playerRoboMobileBuildEnergyRemainder,
+                                  _roboEnergyLife,
+                                  4,
+                                  progressDistance,
+                                  forceFinish);
+
+    DrainPlayerMobileMoveResource(_playerRoboMobileMoveEnergyTotal,
+                                  _playerRoboMobileMoveEnergyRemaining,
+                                  _playerRoboMobileMoveEnergyRemainder,
+                                  _roboEnergyMove,
+                                  8,
+                                  progressDistance,
+                                  forceFinish);
+
+    _playerRoboMobileEnergyRemaining -= (float)totalDrain;
+    if ( _playerRoboMobileEnergyRemaining < 0.0 )
+        _playerRoboMobileEnergyRemaining = 0.0;
+
+    _playerRoboMobileEnergyRemainder = forceFinish ? 0.0 : (totalToDrain - (float)totalDrain);
+
+    if ( currentTargetDistance < _playerRoboMobileLastDistance )
+        _playerRoboMobileLastDistance = currentTargetDistance;
+}
+
+void NC_STACK_yparobo::DrainPlayerMobileMoveResource(int resourceTotal, float &resourceRemaining, float &resourceRemainder, int &resourceValue, uint8_t lossFlag, float progressDistance, bool forceFinish)
+{
+    if ( resourceTotal <= 0 || resourceRemaining <= 0.0 )
+        return;
+
+    float energyToDrain = 0.0;
+
+    if ( forceFinish )
+        energyToDrain = resourceRemaining + resourceRemainder;
+    else
+        energyToDrain = ((float)resourceTotal * progressDistance / _playerRoboMobileTotalDistance) + resourceRemainder;
+
+    if ( energyToDrain <= 0.0 )
+        return;
+
+    int drain = forceFinish ? (int)ceil(energyToDrain) : (int)floor(energyToDrain);
+
+    if ( drain <= 0 )
+    {
+        resourceRemainder = energyToDrain;
+        return;
+    }
+
+    if ( drain > resourceValue )
+        drain = resourceValue;
+
+    if ( drain > (int)ceil(resourceRemaining) )
+        drain = (int)ceil(resourceRemaining);
+
+    if ( drain <= 0 )
+    {
+        resourceRemainder = energyToDrain;
+        return;
+    }
+
+    resourceValue -= drain;
+    if ( resourceValue < 0 )
+        resourceValue = 0;
+
+    resourceRemaining -= (float)drain;
+    if ( resourceRemaining < 0.0 )
+        resourceRemaining = 0.0;
+
+    resourceRemainder = forceFinish ? 0.0 : (energyToDrain - (float)drain);
+    _roboEnergyLossFlags |= lossFlag;
+}
+
 void NC_STACK_yparobo::doUserCommands(update_msg *arg)
 {
     setTarget_msg arg67;
@@ -1535,6 +1814,9 @@ void NC_STACK_yparobo::doUserCommands(update_msg *arg)
         break;
 
     case World::DOACTION_10:
+        if ( TryStartPlayerMobileMove(arg) )
+            break;
+
         if ( !(_roboState & ROBOSTATE_MOVE) )
         {
             SFXEngine::SFXe.startSound(&_soundcarrier, 9);
@@ -4581,9 +4863,14 @@ void NC_STACK_yparobo::AI_layer3(update_msg *arg)
             checkCollisions(arg->frameTime * 0.001);
 
             if ( IsPlayerRobo() )
-                wallow(arg);
+            {
+                if ( !UpdatePlayerMobileMove(arg) )
+                    wallow(arg);
+            }
             else
+            {
                 AI_doMove(arg);
+            }
 
             if ( IsPlayerRobo() )
             {
@@ -4687,6 +4974,8 @@ void NC_STACK_yparobo::User_layer(update_msg *arg)
 
         if ( !a4 || !CollisionWithBact(arg->frameTime) )
         {
+            checkCollisions(arg->frameTime * 0.001);
+
             checkCommander();
             checkDanger();
             searchEnemyRobo();
@@ -4697,7 +4986,8 @@ void NC_STACK_yparobo::User_layer(update_msg *arg)
 
             //doUserCommands(arg);
             yparobo_func71__sub0(arg);
-            wallow(arg);
+            if ( !UpdatePlayerMobileMove(arg) )
+                wallow(arg);
 
             _viewer_rotation = _rotation;
 
@@ -5213,6 +5503,8 @@ void NC_STACK_yparobo::Renew()
     _roboDockTargetBact = NULL;
     _roboTestEnemyTime = 0;
     _roboBeamTimePre = 0;
+    _playerRoboMobile = false;
+    ResetPlayerMobileMove();
     _roboAttackersClearTime = 0;
     _roboAttackersTime = 0;
     _roboState = 0;
@@ -5866,6 +6158,7 @@ void NC_STACK_yparobo::setBACT_inputting(bool inpt)
         _world->setYW_userHostStation(this);
 
         _roboState |= ROBOSTATE_PLAYERROBO;
+        _playerRoboMobile = System::IniConf::GamePlayerRoboMobile.Get<bool>();
     }
 }
 
@@ -6181,12 +6474,34 @@ int NC_STACK_yparobo::getROBO_recDelay()
 
 int NC_STACK_yparobo::getROBO_loadFlags()
 {
-    return _roboEnergyLoadFlags;
+    int flags = _roboEnergyLoadFlags;
+
+    if ( _playerRoboMobile && _playerRoboMobileMoveActive )
+    {
+        flags &= ~8;
+        if ( _playerRoboMobileMainEnergyTotal > 0 )
+            flags &= ~1;
+        if ( _playerRoboMobileBuildEnergyTotal > 0 )
+            flags &= ~4;
+    }
+
+    return flags;
 }
 
 int NC_STACK_yparobo::getROBO_lossFlags()
 {
-    return _roboEnergyLossFlags;
+    int flags = _roboEnergyLossFlags;
+
+    if ( _playerRoboMobile && _playerRoboMobileMoveActive )
+    {
+        flags |= 8;
+        if ( _playerRoboMobileMainEnergyTotal > 0 )
+            flags |= 1;
+        if ( _playerRoboMobileBuildEnergyTotal > 0 )
+            flags |= 4;
+    }
+
+    return flags;
 }
 
 int NC_STACK_yparobo::getROBO_absReload()
@@ -6197,6 +6512,11 @@ int NC_STACK_yparobo::getROBO_absReload()
 bool NC_STACK_yparobo::IsPlayerRobo() const
 {
     return (_roboState & ROBOSTATE_PLAYERROBO) != 0;
+}
+
+bool NC_STACK_yparobo::IsPlayerRoboMobile() const
+{
+    return _playerRoboMobile;
 }
 
 
@@ -6315,6 +6635,9 @@ NC_STACK_yparobo::NC_STACK_yparobo()
     _roboBeamTimePre = 0;
     _roboBeamPos = vec3d();
     _roboBeamFXTime = 0;
+
+    _playerRoboMobile = false;
+    ResetPlayerMobileMove();
 
     for (auto &t : _roboAttackers)
     {

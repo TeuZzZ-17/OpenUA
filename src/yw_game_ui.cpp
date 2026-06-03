@@ -10378,12 +10378,15 @@ int NC_STACK_ypaworld::ypaworld_func64__sub21__sub3()
 
     int v18 = 0;
 
-    if ( _cellOnMouse->PurposeType != cellArea::PT_GATEOPENED && (_cellOnMouse->PurposeType != cellArea::PT_POWERSTATION || _cellOnMouse->owner != _userRobo->_owner) )
+    NC_STACK_yparobo *robo = dynamic_cast<NC_STACK_yparobo *>(_userRobo);
+
+    bool mobilePlayerRobo = robo && robo->IsPlayerRoboMobile();
+
+    if ( mobilePlayerRobo ||
+         (_cellOnMouse->PurposeType != cellArea::PT_GATEOPENED && (_cellOnMouse->PurposeType != cellArea::PT_POWERSTATION || _cellOnMouse->owner != _userRobo->_owner)) )
     {
         v18 = (POW2(v15) / 230.4);
     }
-
-    NC_STACK_yparobo *robo = dynamic_cast<NC_STACK_yparobo *>(_userRobo);
 
     int a4 = robo->getROBO_battBeam();
 

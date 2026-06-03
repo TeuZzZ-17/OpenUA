@@ -222,6 +222,7 @@ public:
     void ypabact_func65__sub0();
     
     bool IsPlayerRobo() const;
+    bool IsPlayerRoboMobile() const;
     
 public:
     void HandleUserCommands(update_msg *arg);
@@ -254,6 +255,13 @@ protected:
 
     void doBeamUpdate(int a2);
     void doUserCommands(update_msg *arg);
+    bool TryStartPlayerMobileMove(update_msg *arg);
+    bool ShouldUsePlayerMobileMove() const;
+    bool UpdatePlayerMobileMove(update_msg *arg);
+    int CalcPlayerMobileMoveEnergyCost(update_msg *arg) const;
+    void ResetPlayerMobileMove();
+    void UpdatePlayerMobileMoveEnergy(float currentTargetDistance, bool forceFinish);
+    void DrainPlayerMobileMoveResource(int resourceTotal, float &resourceRemaining, float &resourceRemainder, int &resourceValue, uint8_t lossFlag, float progressDistance, bool forceFinish);
     void wallow(update_msg *arg);
     void searchEnemyRobo();
     void usersRoboEnergyCheck();
@@ -428,6 +436,25 @@ public:
     int _roboBeamTimePre;
     vec3d _roboBeamPos;
     int _roboBeamFXTime;
+
+    bool _playerRoboMobile;
+    bool _playerRoboMobileMoveActive;
+    int _playerRoboMobileTargetCellID;
+    cellArea *_playerRoboMobileTargetCell;
+    int _playerRoboMobileEnergyTotal;
+    float _playerRoboMobileEnergyRemaining;
+    float _playerRoboMobileEnergyRemainder;
+    int _playerRoboMobileMainEnergyTotal;
+    float _playerRoboMobileMainEnergyRemaining;
+    float _playerRoboMobileMainEnergyRemainder;
+    int _playerRoboMobileBuildEnergyTotal;
+    float _playerRoboMobileBuildEnergyRemaining;
+    float _playerRoboMobileBuildEnergyRemainder;
+    int _playerRoboMobileMoveEnergyTotal;
+    float _playerRoboMobileMoveEnergyRemaining;
+    float _playerRoboMobileMoveEnergyRemainder;
+    float _playerRoboMobileTotalDistance;
+    float _playerRoboMobileLastDistance;
     
     std::array<robo_t1, 16> _roboAttackers;
     int _roboAttackersTime;

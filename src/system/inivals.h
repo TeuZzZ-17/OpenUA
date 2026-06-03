@@ -189,6 +189,7 @@ public:
     
     static Common::Ini::Key GameNewAI;
     static Common::Ini::Key GameTimeLine;
+    static Common::Ini::Key GamePlayerRoboMobile;
     
     static Common::Ini::Key NetGameExclusiveGem;
     static Common::Ini::Key NetWaitStart;
