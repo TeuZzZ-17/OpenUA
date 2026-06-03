@@ -257,11 +257,16 @@ protected:
     void doUserCommands(update_msg *arg);
     bool TryStartPlayerMobileMove(update_msg *arg);
     bool ShouldUsePlayerMobileMove() const;
+    bool ShouldUsePlayerRoboIdleMotion() const;
     bool UpdatePlayerMobileMove(update_msg *arg);
+    bool UpdatePlayerRoboIdleMotion(update_msg *arg);
     int CalcPlayerMobileMoveEnergyCost(update_msg *arg) const;
     void ResetPlayerMobileMove();
     void UpdatePlayerMobileMoveEnergy(float currentTargetDistance, bool forceFinish);
     void DrainPlayerMobileMoveResource(int resourceTotal, float &resourceRemaining, float &resourceRemainder, int &resourceValue, uint8_t lossFlag, float progressDistance, bool forceFinish);
+    void CapturePlayerMobileCockpitPitchBase();
+    void ResetPlayerMobileCockpitPitch();
+    void ApplyPlayerMobileCockpitMovePitch(float speedPitchScale);
     void wallow(update_msg *arg);
     void searchEnemyRobo();
     void usersRoboEnergyCheck();
@@ -455,6 +460,8 @@ public:
     float _playerRoboMobileMoveEnergyRemainder;
     float _playerRoboMobileTotalDistance;
     float _playerRoboMobileLastDistance;
+    int _playerRoboMobileCockpitPitchBase;
+    bool _playerRoboMobileCockpitPitchBaseValid;
     
     std::array<robo_t1, 16> _roboAttackers;
     int _roboAttackersTime;

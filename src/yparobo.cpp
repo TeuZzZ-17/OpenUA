@@ -291,6 +291,8 @@ void NC_STACK_yparobo::AI_layer1(update_msg *arg)
 
     _soundcarrier.Sounds[0].Pitch = _pitch;
     _soundcarrier.Sounds[0].Volume = _volume;
+    if ( _playerRoboMobile )
+        ResetPlayerMobileCockpitPitch();
 
     for (World::TRoboGun &gun : _roboGuns)
     {
@@ -1052,11 +1054,11 @@ bool NC_STACK_yparobo::yparobo_func70__sub2__sub1()
     NC_STACK_ypabact *yw_1b7c = _world->getYW_userVehicle();
 
     if ( yw_1b7c == this )
-        return false;
+        return ShouldUsePlayerRoboIdleMotion();
 
     for (World::TRoboGun &gun : _roboGuns)
         if (gun.gun_obj && gun.gun_obj == yw_1b7c)
-            return false;
+            return ShouldUsePlayerRoboIdleMotion();
 
     return true;
 }
@@ -1378,6 +1380,23 @@ bool NC_STACK_yparobo::ShouldUsePlayerMobileMove() const
            !(_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2));
 }
 
+bool NC_STACK_yparobo::ShouldUsePlayerRoboIdleMotion() const
+{
+    // Vanilla disables robo_does_twist / robo_does_flux while the player is
+    // inside the Host Station or one of its guns, because the player Robo uses
+    // the simple wallow() idle path. In player_robo_mobile mode we deliberately
+    // allow the real Robo idle motion too, so the player Host Station behaves
+    // like AI Host Stations when standing still.
+    return _playerRoboMobile &&
+           !_playerRoboMobileMoveActive &&
+           IsPlayerRobo() &&
+           _world &&
+           this == _world->getYW_userHostStation() &&
+           _status == BACT_STATUS_NORMAL &&
+           (_roboWFlags & 3) &&
+           !(_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2));
+}
+
 int NC_STACK_yparobo::CalcPlayerMobileMoveEnergyCost(update_msg *arg) const
 {
     if ( !arg || !arg->target_Sect )
@@ -1430,6 +1449,15 @@ bool NC_STACK_yparobo::UpdatePlayerMobileMove(update_msg *arg)
     if ( finished )
         ResetPlayerMobileMove();
 
+    return true;
+}
+
+bool NC_STACK_yparobo::UpdatePlayerRoboIdleMotion(update_msg *arg)
+{
+    if ( !ShouldUsePlayerRoboIdleMotion() )
+        return false;
+
+    AI_doMove(arg);
     return true;
 }
 
@@ -1566,6 +1594,56 @@ void NC_STACK_yparobo::DrainPlayerMobileMoveResource(int resourceTotal, float &r
 
     resourceRemainder = forceFinish ? 0.0 : (energyToDrain - (float)drain);
     _roboEnergyLossFlags |= lossFlag;
+}
+
+void NC_STACK_yparobo::CapturePlayerMobileCockpitPitchBase()
+{
+    _playerRoboMobileCockpitPitchBase = 0;
+    _playerRoboMobileCockpitPitchBaseValid = false;
+
+    if ( _soundcarrier.Sounds.size() <= World::TVhclProto::SND_COCKPIT )
+        return;
+
+    _playerRoboMobileCockpitPitchBase = _soundcarrier.Sounds[World::TVhclProto::SND_COCKPIT].Pitch;
+    _playerRoboMobileCockpitPitchBaseValid = true;
+}
+
+void NC_STACK_yparobo::ResetPlayerMobileCockpitPitch()
+{
+    if ( !_playerRoboMobileCockpitPitchBaseValid )
+        CapturePlayerMobileCockpitPitchBase();
+
+    if ( !_playerRoboMobileCockpitPitchBaseValid )
+        return;
+
+    if ( _soundcarrier.Sounds.size() <= World::TVhclProto::SND_COCKPIT )
+        return;
+
+    _soundcarrier.Sounds[World::TVhclProto::SND_COCKPIT].Pitch = _playerRoboMobileCockpitPitchBase;
+}
+
+void NC_STACK_yparobo::ApplyPlayerMobileCockpitMovePitch(float speedPitchScale)
+{
+    if ( !_playerRoboMobile || !_playerRoboMobileMoveActive )
+        return;
+
+    if ( !_playerRoboMobileCockpitPitchBaseValid )
+        CapturePlayerMobileCockpitPitchBase();
+
+    if ( !_playerRoboMobileCockpitPitchBaseValid )
+        return;
+
+    if ( _soundcarrier.Sounds.size() <= World::TVhclProto::SND_COCKPIT )
+        return;
+
+    TSoundSource &cockpit = _soundcarrier.Sounds[World::TVhclProto::SND_COCKPIT];
+    if ( cockpit.PSample )
+    {
+        // Robo movement pitch is normally applied to SND_NORMAL.
+        // When the player is inside the Host Station, the audible loop is SND_COCKPIT,
+        // so mirror the same speed-based pitch scale there during mobile movement.
+        cockpit.Pitch = (int)((cockpit.PSample->SampleRate + _playerRoboMobileCockpitPitchBase) * speedPitchScale);
+    }
 }
 
 void NC_STACK_yparobo::doUserCommands(update_msg *arg)
@@ -4864,7 +4942,7 @@ void NC_STACK_yparobo::AI_layer3(update_msg *arg)
 
             if ( IsPlayerRobo() )
             {
-                if ( !UpdatePlayerMobileMove(arg) )
+                if ( !UpdatePlayerMobileMove(arg) && !UpdatePlayerRoboIdleMotion(arg) )
                     wallow(arg);
             }
             else
@@ -4986,7 +5064,7 @@ void NC_STACK_yparobo::User_layer(update_msg *arg)
 
             //doUserCommands(arg);
             yparobo_func71__sub0(arg);
-            if ( !UpdatePlayerMobileMove(arg) )
+            if ( !UpdatePlayerMobileMove(arg) && !UpdatePlayerRoboIdleMotion(arg) )
                 wallow(arg);
 
             _viewer_rotation = _rotation;
@@ -5065,6 +5143,9 @@ void NC_STACK_yparobo::Move(move_msg *arg)
 
     if ( _soundcarrier.Sounds[0].PSample )
         _soundcarrier.Sounds[0].Pitch = (_soundcarrier.Sounds[0].PSample->SampleRate + _soundcarrier.Sounds[0].Pitch) * v60;
+
+    if ( ShouldUsePlayerMobileMove() )
+        ApplyPlayerMobileCockpitMovePitch(v60);
 }
 
 void NC_STACK_yparobo::Die()
@@ -5505,6 +5586,8 @@ void NC_STACK_yparobo::Renew()
     _roboBeamTimePre = 0;
     _playerRoboMobile = false;
     ResetPlayerMobileMove();
+    _playerRoboMobileCockpitPitchBase = 0;
+    _playerRoboMobileCockpitPitchBaseValid = false;
     _roboAttackersClearTime = 0;
     _roboAttackersTime = 0;
     _roboState = 0;
@@ -6159,6 +6242,8 @@ void NC_STACK_yparobo::setBACT_inputting(bool inpt)
 
         _roboState |= ROBOSTATE_PLAYERROBO;
         _playerRoboMobile = System::IniConf::GamePlayerRoboMobile.Get<bool>();
+        if ( _playerRoboMobile )
+            CapturePlayerMobileCockpitPitchBase();
     }
 }
 
@@ -6638,6 +6723,8 @@ NC_STACK_yparobo::NC_STACK_yparobo()
 
     _playerRoboMobile = false;
     ResetPlayerMobileMove();
+    _playerRoboMobileCockpitPitchBase = 0;
+    _playerRoboMobileCockpitPitchBaseValid = false;
 
     for (auto &t : _roboAttackers)
     {

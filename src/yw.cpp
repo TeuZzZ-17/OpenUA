@@ -656,6 +656,7 @@ size_t NC_STACK_ypaworld::Process(base_64arg *arg)
                 if ( _GameShell )
                 {
                     _GameShell->samples1_info.Position = _userUnit->_position;
+                    _GameShell->samples1_info.Vector = _userUnit->_fly_dir * _userUnit->_fly_dir_length;
                     SFXEngine::SFXe.UpdateSoundCarrier(&_GameShell->samples1_info);
                 }
             }
