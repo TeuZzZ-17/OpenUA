@@ -190,6 +190,7 @@ Common::Ini::Key IniConf::GameDebug("game.debug", Common::Ini::KT_BOOL);
 Common::Ini::Key IniConf::GameNewAI("game.newai",    Common::Ini::KT_BOOL, true);
 Common::Ini::Key IniConf::GameTimeLine("game.timeline", Common::Ini::KT_DIGIT, (int32_t)600000);
 Common::Ini::Key IniConf::GamePlayerRoboAIBehavior("game.player_robo_ai_behavior", Common::Ini::KT_BOOL, false);
+Common::Ini::Key IniConf::GameRoboBuildingCollisionDamagePercent("game.robo_building_collision_damage_percent", Common::Ini::KT_DIGIT, (int32_t)8);
 
 // Ypaworld keys
 Common::Ini::Key IniConf::NetGameExclusiveGem("netgame.exclusivegem", Common::Ini::KT_BOOL, true);
@@ -372,6 +373,7 @@ void IniConf::Init()
         , &GameNewAI
         , &GameTimeLine
         , &GamePlayerRoboAIBehavior
+        , &GameRoboBuildingCollisionDamagePercent
 
         , &NetGameExclusiveGem
         , &NetWaitStart

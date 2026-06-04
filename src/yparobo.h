@@ -279,6 +279,7 @@ protected:
 
     void checkDanger();
     size_t checkCollisions(float a2);
+    void ChangeSectorEnergyFromRoboCollision(yw_arg129 *arg);
     
     bool yparobo_func70__sub2__sub1();
     void yparobo_func70__sub2__sub0();

@@ -23,6 +23,25 @@ static const int PLAYER_ROBO_RESOURCE_TREND_WINDOW_TIME = 500;
 static const int PLAYER_ROBO_RESOURCE_TREND_HOLD_TIME = 600;
 static const int PLAYER_ROBO_RESOURCE_TREND_THRESHOLD = 2;
 
+// Player Host Station physical relocation still pays the full vanilla beam
+// relocation cost, but the extra physical-move penalty on normal energy and
+// creation/life should be lighter. Enemy Host Stations do not use the same
+// player resource bars, so these are player-only gameplay balance multipliers.
+static const float PLAYER_ROBO_MOBILE_MAIN_ENERGY_COST_MULT = 0.33f;
+static const float PLAYER_ROBO_MOBILE_BUILD_ENERGY_COST_MULT = 0.33f;
+
+static int ScalePlayerMobileMoveSecondaryCost(int cost, float mult)
+{
+    if ( cost <= 0 || mult <= 0.0f )
+        return 0;
+
+    int scaledCost = (int)ceil((float)cost * mult);
+    if ( scaledCost < 1 )
+        scaledCost = 1;
+
+    return scaledCost;
+}
+
 
 const std::array<Common::Point, 8> NearDxy 
 {{
@@ -823,6 +842,62 @@ void NC_STACK_yparobo::sub_4A10E8(float angle)
     _roboColls.field_0 = angle;
 }
 
+void NC_STACK_yparobo::ChangeSectorEnergyFromRoboCollision(yw_arg129 *arg)
+{
+    yw_130arg sectorInfo;
+    sectorInfo.pos_x = arg->pos.x;
+    sectorInfo.pos_z = arg->pos.z;
+
+    int buildingsBefore = 0;
+    if ( _world->GetSectorInfo(&sectorInfo) )
+    {
+        for (int health : sectorInfo.pcell->buildings_health)
+        {
+            if ( health > 0 )
+                buildingsBefore++;
+        }
+    }
+
+    ChangeSectorEnergy(arg);
+
+    if ( buildingsBefore <= 0 || !_world->GetSectorInfo(&sectorInfo) )
+        return;
+
+    int buildingsAfter = 0;
+    for (int health : sectorInfo.pcell->buildings_health)
+    {
+        if ( health > 0 )
+            buildingsAfter++;
+    }
+
+    int destroyedBuildings = buildingsBefore - buildingsAfter;
+    if ( destroyedBuildings <= 0 || _energy_max <= 0 )
+        return;
+
+    int damagePercent = System::IniConf::GameRoboBuildingCollisionDamagePercent.Get<int>();
+    if ( damagePercent < 0 )
+        damagePercent = 0;
+    else if ( damagePercent > 100 )
+        damagePercent = 100;
+
+    if ( damagePercent == 0 )
+        return;
+
+    int selfDamage = (int)((int64_t)_energy_max * damagePercent / 100);
+    if ( selfDamage < 1 )
+        selfDamage = 1;
+
+    while ( destroyedBuildings > 0 && _energy > 0 )
+    {
+        if ( selfDamage >= _energy )
+            _energy = 0;
+        else
+            _energy -= selfDamage;
+
+        destroyedBuildings--;
+    }
+}
+
 size_t NC_STACK_yparobo::checkCollisions(float a2)
 {
     bool isViewer = getBACT_viewer();
@@ -895,7 +970,7 @@ size_t NC_STACK_yparobo::checkCollisions(float a2)
                         v60.OwnerID = World::OWNER_RECALC;
                         v60.field_10 = v82 * 15000.0 / a2;
 
-                        ChangeSectorEnergy(&v60);
+                        ChangeSectorEnergyFromRoboCollision(&v60);
                     }
 
                     _fly_dir_length *= 0.4;
@@ -968,7 +1043,7 @@ size_t NC_STACK_yparobo::checkCollisions(float a2)
                         v60.OwnerID = World::OWNER_RECALC;
                         v60.field_10 = v89 / a2;
 
-                        ChangeSectorEnergy(&v60);
+                        ChangeSectorEnergyFromRoboCollision(&v60);
                     }
                 }
 
@@ -1312,11 +1387,10 @@ bool NC_STACK_yparobo::TryStartPlayerMobileMove(update_msg *arg)
     if ( !_world->IsGamePlaySector(arg->target_Sect->CellId) )
         return false;
 
-    // Recalculate the vanilla telebeam cost here instead of trusting
-    // update_msg::energy blindly. The strategic UI uses this value for the
-    // teleport preview bar, but other UI paths may reset/update the message
-    // before DOACTION_10 reaches the Robo. Mobile relocation must still consume
-    // the same resource that vanilla teleport would have consumed.
+    // Use the exact same cost carried by the vanilla teleport command. The
+    // strategic UI computes this value in ypaworld_func64__sub21__sub3(), and
+    // vanilla DOACTION_10 subtracts arg->energy from _roboEnergyMove. Mobile
+    // relocation must differ only in timing, not in charged resource or cost.
     int mobileEnergyCost = CalcPlayerMobileMoveEnergyCost(arg);
 
     // The UI should already reject unaffordable Host relocation commands, but
@@ -1345,18 +1419,24 @@ bool NC_STACK_yparobo::TryStartPlayerMobileMove(update_msg *arg)
     _playerRoboAIBehaviorEnergyRemaining = (float)mobileEnergyCost;
     _playerRoboAIBehaviorEnergyRemainder = 0.0;
 
-    int resourceCount = 1; // teleport / beam budget is always part of mobile relocation.
-    if ( _roboFillMode & 1 )
-        resourceCount++;
-    if ( _roboFillMode & 4 )
-        resourceCount++;
-
-    int splitCost = mobileEnergyCost / resourceCount;
-    int splitRemainder = mobileEnergyCost - splitCost * resourceCount;
-
-    _playerRoboAIBehaviorMainEnergyTotal = (_roboFillMode & 1) ? splitCost : 0;
-    _playerRoboAIBehaviorBuildEnergyTotal = (_roboFillMode & 4) ? splitCost : 0;
-    _playerRoboAIBehaviorMoveEnergyTotal = splitCost + splitRemainder;
+    // The vanilla teleport command spends only the beam / movement battery,
+    // and that beam cost is still the authoritative relocation price.
+    //
+    // However, with player_robo_ai_behavior enabled the trip takes time.  If
+    // only _roboEnergyMove is drained while the Host Station travels, the
+    // vanilla player fill-mode balancer will later pull energy/creation down
+    // in one visible lump when the movement finishes and beam rebalancing is
+    // restored.
+    //
+    // To make the physical relocation feel continuous and punitive instead of
+    // "free until arrival", also drain a lighter distance-scaled penalty from
+    // the main energy and creation/life batteries.  The beam battery remains
+    // the canonical vanilla relocation price and stays at 100% of the teleport
+    // cost; the two extra player-only costs are intentionally lower so moving
+    // the Host Station is strategic, not economic suicide.
+    _playerRoboAIBehaviorMainEnergyTotal = ScalePlayerMobileMoveSecondaryCost(mobileEnergyCost, PLAYER_ROBO_MOBILE_MAIN_ENERGY_COST_MULT);
+    _playerRoboAIBehaviorBuildEnergyTotal = ScalePlayerMobileMoveSecondaryCost(mobileEnergyCost, PLAYER_ROBO_MOBILE_BUILD_ENERGY_COST_MULT);
+    _playerRoboAIBehaviorMoveEnergyTotal = mobileEnergyCost;
 
     _playerRoboAIBehaviorMainEnergyRemaining = (float)_playerRoboAIBehaviorMainEnergyTotal;
     _playerRoboAIBehaviorBuildEnergyRemaining = (float)_playerRoboAIBehaviorBuildEnergyTotal;
@@ -1406,10 +1486,15 @@ int NC_STACK_yparobo::CalcPlayerMobileMoveEnergyCost(update_msg *arg) const
     if ( !arg || !arg->target_Sect )
         return 0;
 
-    // Player mobile relocation deliberately does NOT inherit the vanilla free
-    // teleport exception for opened beamgates / own Power Stations. This mode is
-    // physical Host Station movement, so every explicit destination has a cost
-    // proportional to distance and is limited by the teleport/beam budget.
+    // This is the exact value that vanilla DOACTION_10 would subtract from
+    // _roboEnergyMove. Prefer it over recalculating from target_point, because
+    // the UI can adjust the final target height after computing the preview
+    // cost, and vanilla charges the already-computed message value.
+    if ( arg->energy > 0 )
+        return arg->energy;
+
+    // Fallback only: keep the movement robust if some non-UI path ever sends a
+    // relocation message without the preview energy filled in.
     vec3d delta = arg->target_point - _position;
     float distanceSq = POW2(delta.x) + POW2(delta.y) + POW2(delta.z);
     if ( distanceSq <= 0.0 )
@@ -5457,13 +5542,30 @@ void NC_STACK_yparobo::EnergyInteract(update_msg *arg)
                 v68 = 0.0;
             }
 
-            if ( _roboFillMode & 1 || v68 < 0.0 )
+            uint8_t playerFillMode = _roboFillMode;
+
+            // Player Host Station physical relocation charges the same resource
+            // as vanilla teleport: _roboEnergyMove / beam energy.  The vanilla
+            // player resource logic below can slowly rebalance selected resource
+            // bars toward their average according to _roboFillMode.  During a
+            // long physical relocation that rebalancing was refilling the beam
+            // bar from the other two bars, so the final beam cost no longer
+            // matched the instant vanilla teleport cost.
+            //
+            // While the explicit player mobile move is active, keep normal
+            // main/build resource behaviour, but do not let the fill-mode
+            // balancer regenerate or average the beam/move battery.  The mobile
+            // move drain itself is applied separately in UpdatePlayerMobileMoveEnergy().
+            if ( _playerRoboAIBehaviorMoveActive && IsPlayerRobo() && _world && this == _world->getYW_userHostStation() )
+                playerFillMode &= ~8;
+
+            if ( playerFillMode & 1 || v68 < 0.0 )
                 v67++;
 
-            if ( _roboFillMode & 4 )
+            if ( playerFillMode & 4 )
                 v67++;
 
-            if ( _roboFillMode & 8 )
+            if ( playerFillMode & 8 )
                 v67++;
 
             _roboEnergyReloadPS = v65 * v64 / 6000.0;
@@ -5476,29 +5578,29 @@ void NC_STACK_yparobo::EnergyInteract(update_msg *arg)
 
                 v68 = v68 / (float)v67;
 
-                if ( _roboFillMode & 1 || v68 < 0.0 )
+                if ( playerFillMode & 1 || v68 < 0.0 )
                     _energy += v68;
 
-                if ( _roboFillMode & 4 )
+                if ( playerFillMode & 4 )
                     _roboEnergyLife += v68;
 
-                if ( _roboFillMode & 8 )
+                if ( playerFillMode & 8 )
                     _roboEnergyMove += v68;
 
                 float v60 = v63 * v65 / 30.0;
 
-                if ( _roboFillMode & 1 )
+                if ( playerFillMode & 1 )
                     v25 = _energy;
 
-                if ( _roboFillMode & 4 )
+                if ( playerFillMode & 4 )
                     v25 += _roboEnergyLife;
 
-                if ( _roboFillMode & 8 )
+                if ( playerFillMode & 8 )
                     v25 += _roboEnergyMove;
 
                 int v34 = v25 / v67;
 
-                if ( _roboFillMode & 1 )
+                if ( playerFillMode & 1 )
                 {
                     if ( v34 > _energy )
                         v26++;
@@ -5506,7 +5608,7 @@ void NC_STACK_yparobo::EnergyInteract(update_msg *arg)
                         v66++;
                 }
 
-                if ( _roboFillMode & 4 )
+                if ( playerFillMode & 4 )
                 {
                     if ( v34 > _roboEnergyLife )
                         v26++;
@@ -5514,7 +5616,7 @@ void NC_STACK_yparobo::EnergyInteract(update_msg *arg)
                         v66++;
                 }
 
-                if ( _roboFillMode & 8 )
+                if ( playerFillMode & 8 )
                 {
                     if ( v34 > _roboEnergyMove )
                         v26++;
@@ -5528,7 +5630,7 @@ void NC_STACK_yparobo::EnergyInteract(update_msg *arg)
                 if ( v66 )
                     v66 = (int)v60 / v66;
 
-                if ( _roboFillMode & 1 )
+                if ( playerFillMode & 1 )
                 {
                     if ( _energy <= v34 )
                     {
@@ -5545,7 +5647,7 @@ void NC_STACK_yparobo::EnergyInteract(update_msg *arg)
                     }
                 }
 
-                if ( _roboFillMode & 4 )
+                if ( playerFillMode & 4 )
                 {
                     if ( _roboEnergyLife <= v34 )
                     {
@@ -5561,7 +5663,7 @@ void NC_STACK_yparobo::EnergyInteract(update_msg *arg)
                     }
                 }
 
-                if ( _roboFillMode & 8 )
+                if ( playerFillMode & 8 )
                 {
                     if ( v34 >= _roboEnergyMove )
                     {
