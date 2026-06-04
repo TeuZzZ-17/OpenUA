@@ -169,7 +169,7 @@ Common::Ini::Key IniConf::InputHotkey46("input.hotkey[46]", Common::Ini::KT_WORD
 Common::Ini::Key IniConf::InputHotkey47("input.hotkey[47]", Common::Ini::KT_WORD);
 
 // Audio Engine
-Common::Ini::Key IniConf::AudioChannels("audio.channels", Common::Ini::KT_DIGIT, (int32_t)32);
+Common::Ini::Key IniConf::AudioChannels("audio.channels", Common::Ini::KT_DIGIT, (int32_t)64);
 Common::Ini::Key IniConf::AudioVolume("audio.volume",   Common::Ini::KT_DIGIT, (int32_t)127);
 Common::Ini::Key IniConf::AudioNumPalfx("audio.num_palfx", Common::Ini::KT_DIGIT, (int32_t)4);
 Common::Ini::Key IniConf::AudioRevStereo("audio.rev_stereo", Common::Ini::KT_BOOL);

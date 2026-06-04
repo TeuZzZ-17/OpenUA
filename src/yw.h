@@ -939,6 +939,8 @@ struct cellArea
     int32_t energy_power = 0; // Cell electric power
     Common::PlaneArray<int16_t, 3, 3> buildings_health = Common::PlaneArray<int16_t, 3, 3>::ArrayInit(0);
     Common::PlaneArray<NC_STACK_base::Instance *, 3, 3> BldVPOpts = Common::PlaneArray<NC_STACK_base::Instance *, 3, 3>::ArrayInit(NULL);
+    World::TDecorationFXConfig DecorationFX;
+    int32_t DecorationFXNextTime = 0;
     uint8_t view_mask = 0; // Who can view this sector (mask)
     uint8_t UnhideMask = 0; // Who can unhide other fractions (mask)
     
@@ -2175,6 +2177,7 @@ public:
     void DestroyAllGunsInSector(cellArea *cell);
     bool BuildingConstructBegin(cellArea *cell, uint8_t buildingID, int owner, int cTime);
     void BuildingConstructUpdate(int dtime);
+    void BuildingDecorationFXUpdate();
     bool IsAnyBuildingProcess(int owner) const;
     
     void debug_info_draw(TInputState *inpt);
@@ -2343,6 +2346,9 @@ public:
 
     void SpawnTransientVP(int32_t modelId, const vec3d &pos, const mat3x3 &rot, int32_t lifeTime);
     void SpawnAttachedTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime);
+    bool UpdateRandomFXTimer(int intervalMin, int intervalMax, int32_t &nextTime);
+    void SpawnRandomizedTransientVP(int32_t modelId, const vec3d &ownerPos, float randomPos);
+    void UpdateDecorationFX(const World::TDecorationFXConfig &config, int32_t &nextTime, const vec3d &ownerPos);
     
     void SetCmdrIdToSelect(int32_t id) { _cmdrIdToSelect = id; };
         

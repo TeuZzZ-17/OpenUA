@@ -5,6 +5,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <stack>
+#include <algorithm>
 #include "yw.h"
 #include "ypabact.h"
 #include "yparobo.h"
@@ -20,21 +21,18 @@ extern int dword_5B1128;
 
 static void ypabact_ResetDamagedFX(NC_STACK_ypabact *bact)
 {
-    bact->_damaged_fx = {World::TDamagedFXSlot()};
+    bact->_damaged_fx = World::TDamagedFXConfig();
     bact->_damaged_fx_next_time = 0;
 }
 
 static bool ypabact_IsDamagedFXSystemDisabled(const NC_STACK_ypabact *bact)
 {
-    return bact->_damaged_fx.empty() || bact->_damaged_fx[0].threshold >= 1.0;
+    return bact->_damaged_fx.threshold <= 0.0 || bact->_damaged_fx.threshold >= 1.0;
 }
 
 static float ypabact_GetDamagedThreshold(const NC_STACK_ypabact *bact)
 {
-    if ( bact->_damaged_fx.empty() )
-        return 1.0;
-
-    float threshold = bact->_damaged_fx[0].threshold;
+    float threshold = bact->_damaged_fx.threshold;
 
     if ( threshold < 0.0 )
         return 0.0;
@@ -43,15 +41,6 @@ static float ypabact_GetDamagedThreshold(const NC_STACK_ypabact *bact)
         return 1.0;
 
     return threshold;
-}
-
-static int ypabact_GetDamagedFXInterval(const NC_STACK_ypabact *bact)
-{
-    if ( bact->_damaged_fx.empty() )
-        return 500;
-
-    int interval = bact->_damaged_fx[0].interval;
-    return interval > 0 ? interval : 500;
 }
 
 bool NC_STACK_ypabact::ShouldHideFromStrategicUI() const
@@ -78,6 +67,17 @@ static bool ypabact_CanUseGameplayStatusMechanics(NC_STACK_ypabact *bact)
            bact->_energy > 0 &&
            bact->_energy_max > 0 &&
            bact->_bact_type != BACT_TYPES_MISSLE &&
+           bact->_status != BACT_STATUS_DEAD &&
+           bact->_status != BACT_STATUS_CREATE &&
+           bact->_status != BACT_STATUS_BEAM &&
+           !(bact->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2 | BACT_STFLAG_NORENDER));
+}
+
+static bool ypabact_CanSpawnDecorationFX(NC_STACK_ypabact *bact)
+{
+    return bact &&
+           bact->getBACT_pWorld() &&
+           bact->_energy > 0 &&
            bact->_status != BACT_STATUS_DEAD &&
            bact->_status != BACT_STATUS_CREATE &&
            bact->_status != BACT_STATUS_BEAM &&
@@ -226,7 +226,7 @@ static void ypabact_ApplyDamagedSoundPitch(NC_STACK_ypabact *bact)
     wait.Pitch = ypabact_ScaledPitch(wait, bact->_base_snd_wait_pitch, pitchMult);
 }
 
-static bool ypabact_EnsureDamagedEventCarrier(NC_STACK_ypabact *bact)
+static bool ypabact_EnsureDamagedShakeCarrier(NC_STACK_ypabact *bact)
 {
     if ( !bact || !bact->getBACT_pWorld() )
         return false;
@@ -236,57 +236,25 @@ static bool ypabact_EnsureDamagedEventCarrier(NC_STACK_ypabact *bact)
     if ( bact->_vehicleID >= protos.size() )
         return false;
 
-    World::TVhclProto &proto = protos[bact->_vehicleID];
-    proto.damaged_snd.LoadSamples();
-
-    if ( proto.damaged_snd.MainSample.Sample )
-        bact->_damaged_snd_sample = proto.damaged_snd.MainSample.Sample->GetSampleData();
-
-    bact->_damaged_snd_volume = proto.damaged_snd.volume ? proto.damaged_snd.volume : 180;
-    bact->_damaged_snd_pitch = proto.damaged_snd.pitch;
-
-    bool hasSample = bact->_damaged_snd_sample != NULL;
-    bool hasPaletteFx = proto.damaged_snd.sndPrm.slot != 0;
-    bool hasShakeFx = proto.damaged_snd.sndPrm_shk.slot != 0;
-
-    if ( !hasSample && !hasPaletteFx && !hasShakeFx )
+    World::TDamagedFXConfig &damagedFX = protos[bact->_vehicleID].damaged_fx;
+    if ( damagedFX.shake.slot == 0 )
         return false;
 
-    if ( bact->_damaged_soundcarrier.Sounds.empty() )
-        bact->_damaged_soundcarrier.Resize(1);
+    if ( bact->_damaged_shake_carrier.Sounds.empty() )
+        bact->_damaged_shake_carrier.Resize(1);
 
-    TSoundSource &snd = bact->_damaged_soundcarrier.Sounds[0];
-    snd.PSample = bact->_damaged_snd_sample;
+    TSoundSource &snd = bact->_damaged_shake_carrier.Sounds[0];
+    snd.PSample = NULL;
     snd.SampleVariants.clear();
-    if ( snd.PSample )
-        snd.SampleVariants.push_back(snd.PSample);
-    snd.Volume = bact->_damaged_snd_volume;
-    snd.Pitch = bact->_damaged_snd_pitch;
+    snd.Volume = 0;
+    snd.Pitch = 0;
     snd.PriorityBias = 0;
     snd.SetLoop(false);
     snd.SetFragmented(false);
-
-    if ( hasPaletteFx )
-    {
-        snd.PPFx = &proto.damaged_snd.sndPrm;
-        snd.SetPFx(true);
-    }
-    else
-    {
-        snd.PPFx = NULL;
-        snd.SetPFx(false);
-    }
-
-    if ( hasShakeFx )
-    {
-        snd.PShkFx = &proto.damaged_snd.sndPrm_shk;
-        snd.SetShk(true);
-    }
-    else
-    {
-        snd.PShkFx = NULL;
-        snd.SetShk(false);
-    }
+    snd.PPFx = NULL;
+    snd.SetPFx(false);
+    snd.PShkFx = &damagedFX.shake;
+    snd.SetShk(true);
 
     return true;
 }
@@ -654,16 +622,15 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _height_max_user = 0.0;
     _visual_scale = 1.0;
     ypabact_ResetDamagedFX(this);
+    _decoration_fx = World::TDecorationFXConfig();
+    _decoration_fx_next_time = 0;
     _damaged_force_mult = 1.0;
     _damaged_maxrot_mult = 1.0;
     _damaged_snd_pitch_mult = 1.0;
     _damaged_fx_active = false;
-    _damaged_snd_sample = NULL;
-    _damaged_snd_volume = 180;
-    _damaged_snd_pitch = 0;
     _active_debuff.Clear();
     _debuff_soundcarrier.Clear();
-    _damaged_soundcarrier.Clear();
+    _damaged_shake_carrier.Clear();
 
     _vp_active = 0;
 
@@ -810,16 +777,15 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _aggr = 50;
     _energy_max = 10000;
     ypabact_ResetDamagedFX(this);
+    _decoration_fx = World::TDecorationFXConfig();
+    _decoration_fx_next_time = 0;
     _damaged_force_mult = 1.0;
     _damaged_maxrot_mult = 1.0;
     _damaged_snd_pitch_mult = 1.0;
     _damaged_fx_active = false;
-    _damaged_snd_sample = NULL;
-    _damaged_snd_volume = 180;
-    _damaged_snd_pitch = 0;
     _active_debuff.Clear();
     _debuff_soundcarrier.Clear();
-    _damaged_soundcarrier.Clear();
+    _damaged_shake_carrier.Clear();
 //    ypabact.field_3CE = 0;
     _height_max_user = 1600.0;
     _gun_radius = 5.0;
@@ -974,7 +940,7 @@ size_t NC_STACK_ypabact::Deinit()
 {
     SFXEngine::SFXe.StopCarrier(&_soundcarrier);
     SFXEngine::SFXe.StopCarrier(&_debuff_soundcarrier);
-    SFXEngine::SFXe.StopCarrier(&_damaged_soundcarrier);
+    SFXEngine::SFXe.StopCarrier(&_damaged_shake_carrier);
     _active_debuff.Clear();
 
     _status_flg |= BACT_STFLAG_CLEAN;
@@ -1458,6 +1424,7 @@ void NC_STACK_ypabact::Update(update_msg *arg)
 
     UpdateActiveDebuff(arg);
     UpdateDamageFX(arg);
+    UpdateDecorationFX(arg);
     UpdateCarrierSpawn(arg);
     AI_layer1(arg);
     UpdateUnitGuns(arg);
@@ -1519,7 +1486,7 @@ void NC_STACK_ypabact::Update(update_msg *arg)
 
     SFXEngine::SFXe.UpdateSoundCarrier(&_soundcarrier);
     ypabact_UpdateStatusSoundCarrier(this, &_debuff_soundcarrier);
-    ypabact_UpdateStatusSoundCarrier(this, &_damaged_soundcarrier);
+    ypabact_UpdateStatusSoundCarrier(this, &_damaged_shake_carrier);
 }
 
 void NC_STACK_ypabact::ClearActiveDebuff()
@@ -1662,30 +1629,101 @@ static void ypabact_SpawnDamagedFXEvent(NC_STACK_ypabact *bact)
     if ( !world )
         return;
 
-    float randomPos = bact->_damaged_fx.empty() ? 0.0 : bact->_damaged_fx[0].random_pos;
-
-    for (const World::TDamagedFXSlot &slot : bact->_damaged_fx)
+    for (int16_t vp : bact->_damaged_fx.vps)
     {
-        if ( slot.vp <= 0 )
+        if ( vp <= 0 )
             continue;
 
-        vec3d localOffset = ypabact_BuildRandomAttachedFXOffset(randomPos, bact->_overeof);
-        world->SpawnAttachedTransientVP(slot.vp, bact, localOffset, 1000);
+        // Damaged FX are status effects that visually belong to the damaged unit.
+        // They must follow the owner while they live; otherwise moving units leave
+        // smoke/fire stuck in world-space behind them.
+        //
+        // Use the same attached transient VP path already used by debuff FX. That
+        // render path intentionally does not clamp to coarse sector height, which
+        // avoids the old slope bug where FX popped/floated above the unit on hills.
+        vec3d localOffset = ypabact_BuildRandomAttachedFXOffset(bact->_damaged_fx.random_pos, bact->_overeof);
+        world->SpawnAttachedTransientVP(vp, bact, localOffset, 1000);
     }
 }
 
-static void ypabact_PlayDamagedEventSound(NC_STACK_ypabact *bact)
+static int ypabact_RandomInRange(int minValue, int maxValue)
 {
-    if ( !ypabact_EnsureDamagedEventCarrier(bact) )
+    if ( maxValue < minValue )
+        std::swap(minValue, maxValue);
+
+    if ( minValue == maxValue )
+        return minValue;
+
+    double randomPart = (double)rand() / ((double)RAND_MAX + 1.0);
+    int64_t range = (int64_t)maxValue - minValue;
+    return minValue + (int)((range + 1) * randomPart);
+}
+
+static vec3d ypabact_BuildRandomLocalDecorationFXOffset(float radius)
+{
+    if ( radius <= 0.0 )
+        return vec3d(0.0, 0.0, 0.0);
+
+    vec3d localOffset;
+    localOffset.x = (((float)rand() / (float)RAND_MAX) * 2.0 - 1.0) * radius;
+    localOffset.y = (((float)rand() / (float)RAND_MAX) * 2.0 - 1.0) * radius;
+    localOffset.z = (((float)rand() / (float)RAND_MAX) * 2.0 - 1.0) * radius;
+    return localOffset;
+}
+
+static bool ypabact_GetDecorationFXSpawnCount(const World::TDecorationFXConfig &config, int &spawnCount)
+{
+    int countMin = std::max(0, std::min(config.count_min, 32));
+    int countMax = std::max(0, std::min(config.count_max, 32));
+
+    if ( countMin <= 0 || countMax <= 0 )
+        return false;
+
+    if ( countMax < countMin )
+        std::swap(countMin, countMax);
+
+    spawnCount = ypabact_RandomInRange(countMin, countMax);
+    return spawnCount > 0;
+}
+
+static void ypabact_SpawnDecorationFXEvent(NC_STACK_ypabact *bact)
+{
+    if ( !bact || bact->_decoration_fx.vp <= 0 )
         return;
 
-    ypabact_StartStatusSoundIfIdle(bact, &bact->_damaged_soundcarrier, bact->_damaged_snd_volume, bact->_damaged_snd_pitch);
+    NC_STACK_ypaworld *world = bact->getBACT_pWorld();
+    if ( !world )
+        return;
+
+    int spawnCount = 0;
+    if ( !ypabact_GetDecorationFXSpawnCount(bact->_decoration_fx, spawnCount) )
+        return;
+
+    for (int i = 0; i < spawnCount; i++)
+    {
+        // Vehicle decoration FX visually belong to the moving owner.
+        // Spawn them through the attached transient VP path so smoke/spores/glitches
+        // follow mobile vehicles instead of being left behind in world-space.
+        //
+        // This render path also avoids clamping to the coarse sector height, so it
+        // preserves the old slope fix used by damaged/debuff FX and prevents random
+        // decoration VPs from popping above the unit on hills.
+        vec3d localOffset = ypabact_BuildRandomLocalDecorationFXOffset(bact->_decoration_fx.random_pos);
+        world->SpawnAttachedTransientVP(bact->_decoration_fx.vp, bact, localOffset, 1000);
+    }
+}
+
+static void ypabact_PlayDamagedEventShake(NC_STACK_ypabact *bact)
+{
+    if ( !ypabact_EnsureDamagedShakeCarrier(bact) )
+        return;
+
+    ypabact_StartStatusSoundIfIdle(bact, &bact->_damaged_shake_carrier, 0, 0);
 }
 
 void NC_STACK_ypabact::UpdateDamageFX(update_msg *)
 {
     bool canUseDamaged = ypabact_CanUseGameplayStatusMechanics(this);
-    bool wasDamaged = _damaged_fx_active;
     bool damaged = canUseDamaged && ypabact_IsDamagedStateActive(this);
 
     ypabact_ApplyDamagedRuntime(this, damaged);
@@ -1696,23 +1734,25 @@ void NC_STACK_ypabact::UpdateDamageFX(update_msg *)
         return;
     }
 
-    int interval = ypabact_GetDamagedFXInterval(this);
+    if ( !_world->UpdateRandomFXTimer(_damaged_fx.interval_min, _damaged_fx.interval_max, _damaged_fx_next_time) )
+        return;
 
-    if ( !wasDamaged || _damaged_fx_next_time <= 0 )
+    ypabact_SpawnDamagedFXEvent(this);
+    ypabact_PlayDamagedEventShake(this);
+}
+
+void NC_STACK_ypabact::UpdateDecorationFX(update_msg *)
+{
+    if ( !ypabact_CanSpawnDecorationFX(this) || _decoration_fx.vp <= 0 )
     {
-        _damaged_fx_next_time = _clock + interval;
+        _decoration_fx_next_time = 0;
         return;
     }
 
-    if ( _clock < _damaged_fx_next_time )
+    if ( !_world->UpdateRandomFXTimer(_decoration_fx.interval_min, _decoration_fx.interval_max, _decoration_fx_next_time) )
         return;
 
-    _damaged_fx_next_time += interval;
-    if ( _damaged_fx_next_time <= _clock )
-        _damaged_fx_next_time = _clock + interval;
-
-    ypabact_SpawnDamagedFXEvent(this);
-    ypabact_PlayDamagedEventSound(this);
+    ypabact_SpawnDecorationFXEvent(this);
 }
 
 void NC_STACK_ypabact::Render(baseRender_msg *arg)
@@ -8166,6 +8206,7 @@ void NC_STACK_ypabact::NetUpdate(update_msg *upd)
 
     UpdateActiveDebuff(upd);
     UpdateDamageFX(upd);
+    UpdateDecorationFX(upd);
 
     ypabact_func117(upd);
 
@@ -8203,7 +8244,7 @@ void NC_STACK_ypabact::NetUpdate(update_msg *upd)
 
     SFXEngine::SFXe.UpdateSoundCarrier(&_soundcarrier);
     ypabact_UpdateStatusSoundCarrier(this, &_debuff_soundcarrier);
-    ypabact_UpdateStatusSoundCarrier(this, &_damaged_soundcarrier);
+    ypabact_UpdateStatusSoundCarrier(this, &_damaged_shake_carrier);
 }
 
 void NC_STACK_ypabact::ypabact_func117(update_msg *upd)

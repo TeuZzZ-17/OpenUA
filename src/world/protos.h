@@ -12,6 +12,16 @@ namespace World
 {
 struct TRoboProto;
 
+struct TDecorationFXConfig
+{
+    int16_t vp = 0;
+    int interval_min = 0;
+    int interval_max = 0;
+    int count_min = 0;
+    int count_max = 0;
+    float random_pos = 0.0;
+};
+
 struct DestFX
 {
     enum FXTYPES {
@@ -104,12 +114,24 @@ struct TVhclSound
 constexpr int DAMAGED_FX_SLOT_COUNT = 8;
 constexpr size_t ROBO_GUN_MAX_COUNT = 20;
 
-struct TDamagedFXSlot
+struct TDamagedFXConfig
 {
-    int16_t vp = 0;
-    float threshold = 0.25;
-    int interval = 500;
-    float random_pos = 15.0;
+    std::vector<int16_t> vps = {0};
+    float threshold = 0.0;
+    int interval_min = 0;
+    int interval_max = 0;
+    float random_pos = 0.0;
+    TSndFxPosParam shake;
+
+    TDamagedFXConfig()
+    {
+        shake.mag0 = 1.0;
+        shake.time = 1000;
+        shake.mute = 0.02;
+        shake.pos.x = 0.2;
+        shake.pos.y = 0.2;
+        shake.pos.z = 0.2;
+    }
 };
 
 struct TWeaponDebuffConfig
@@ -244,11 +266,11 @@ struct TVhclProto
     int16_t vp_megadeth = 0;
     int16_t vp_genesis = 0;
     float visual_scale = 1.0;
-    std::vector<TDamagedFXSlot> damaged_fx = {TDamagedFXSlot()};
+    TDamagedFXConfig damaged_fx;
+    TDecorationFXConfig decoration_fx;
     std::string damaged_icon;
     std::string regen_icon;
     std::string drain_icon;
-    TVhclSound damaged_snd;
     float damaged_force_mult = 1.0;
     float damaged_maxrot_mult = 1.0;
     float damaged_snd_pitch_mult = 1.0;
@@ -417,6 +439,7 @@ struct TBuildingProto
     uint8_t TypeIcon = 0;
     std::string Name;
     int Energy = 0;
+    TDecorationFXConfig DecorationFX;
     TVhclSound SndFX;
     std::vector<TGun> Guns;
 };

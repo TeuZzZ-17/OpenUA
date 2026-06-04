@@ -568,6 +568,7 @@ size_t NC_STACK_ypaworld::Process(base_64arg *arg)
             ypaworld_func64__sub9(this);
             ypaworld_func64__sub19();
             BuildingConstructUpdate(arg->DTime);
+            BuildingDecorationFXUpdate();
 
             if ( !_doNotRender )
             {
@@ -1515,14 +1516,13 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_visual_scale = vhcl.visual_scale;
         bacto->_damaged_fx = vhcl.damaged_fx;
         bacto->_damaged_fx_next_time = 0;
+        bacto->_decoration_fx = vhcl.decoration_fx;
+        bacto->_decoration_fx_next_time = 0;
         bacto->_damaged_force_mult = vhcl.damaged_force_mult;
         bacto->_damaged_maxrot_mult = vhcl.damaged_maxrot_mult;
         bacto->_damaged_snd_pitch_mult = vhcl.damaged_snd_pitch_mult;
         bacto->_damaged_fx_active = false;
-        bacto->_damaged_snd_sample = NULL;
-        bacto->_damaged_snd_volume = vhcl.damaged_snd.volume ? vhcl.damaged_snd.volume : 180;
-        bacto->_damaged_snd_pitch = vhcl.damaged_snd.pitch;
-        bacto->_damaged_soundcarrier.Clear();
+        bacto->_damaged_shake_carrier.Clear();
         bacto->_spawn_units = vhcl.spawn_units;
         bacto->_spawn_vehicle = vhcl.spawn_vehicle;
         bacto->_spawn_interval = vhcl.spawn_interval > 0 ? vhcl.spawn_interval : 5000;
@@ -1563,59 +1563,13 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         for (World::TVhclSound &sfx : vhcl.sndFX)
             sfx.LoadSamples();
 
-        vhcl.damaged_snd.LoadSamples();
-        if ( vhcl.damaged_snd.MainSample.Sample )
-            bacto->_damaged_snd_sample = vhcl.damaged_snd.MainSample.Sample->GetSampleData();
-
-        bool hasDamagedSample = bacto->_damaged_snd_sample != NULL;
-        bool hasDamagedPaletteFx = vhcl.damaged_snd.sndPrm.slot != 0;
-        bool hasDamagedShakeFx = vhcl.damaged_snd.sndPrm_shk.slot != 0;
-
-        if ( hasDamagedSample || hasDamagedPaletteFx || hasDamagedShakeFx )
-        {
-            bacto->_damaged_soundcarrier.Resize(1);
-
-            TSoundSource &snd = bacto->_damaged_soundcarrier.Sounds[0];
-            snd.PSample = bacto->_damaged_snd_sample;
-            snd.SampleVariants.clear();
-            if ( snd.PSample )
-                snd.SampleVariants.push_back(snd.PSample);
-            snd.Volume = bacto->_damaged_snd_volume;
-            snd.Pitch = bacto->_damaged_snd_pitch;
-            snd.PriorityBias = 0;
-            snd.SetLoop(false);
-            snd.SetFragmented(false);
-
-            if ( hasDamagedPaletteFx )
-            {
-                snd.PPFx = &vhcl.damaged_snd.sndPrm;
-                snd.SetPFx(true);
-            }
-            else
-            {
-                snd.PPFx = NULL;
-                snd.SetPFx(false);
-            }
-
-            if ( hasDamagedShakeFx )
-            {
-                snd.PShkFx = &vhcl.damaged_snd.sndPrm_shk;
-                snd.SetShk(true);
-            }
-            else
-            {
-                snd.PShkFx = NULL;
-                snd.SetShk(false);
-            }
-        }
-
         for (size_t i = 0; i < vhcl.sndFX.size(); i++)
         {
             TSoundSource *smpl_inf = &bacto->_soundcarrier.Sounds[ i ];
 
             smpl_inf->Volume = vhcl.sndFX[i].volume;
             smpl_inf->Pitch = vhcl.sndFX[i].pitch;
-            smpl_inf->PriorityBias = (i == World::TVhclProto::SND_COCKPIT) ? 160 : 0;
+            smpl_inf->PriorityBias = (i == World::TVhclProto::SND_COCKPIT) ? 4096 : 0;
 
             if ( World::TVhclProto::IsLoopingSnd(i) )
                 smpl_inf->SetLoop(true);

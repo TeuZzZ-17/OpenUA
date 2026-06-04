@@ -1888,6 +1888,81 @@ void NC_STACK_ypaworld::SpawnTransientVP(int32_t modelId, const vec3d &pos, cons
         _transientVPs.emplace_back(base, pos, rot, lifeTime);
 }
 
+static int yw_RandomInRange(int minValue, int maxValue)
+{
+    if ( maxValue < minValue )
+        std::swap(minValue, maxValue);
+
+    if ( minValue == maxValue )
+        return minValue;
+
+    double randomPart = (double)rand() / ((double)RAND_MAX + 1.0);
+    int64_t range = (int64_t)maxValue - minValue;
+    return minValue + (int)((range + 1) * randomPart);
+}
+
+bool NC_STACK_ypaworld::UpdateRandomFXTimer(int intervalMin, int intervalMax, int32_t &nextTime)
+{
+    if ( intervalMin <= 0 || intervalMax <= 0 )
+    {
+        nextTime = 0;
+        return false;
+    }
+
+    if ( intervalMax < intervalMin )
+        std::swap(intervalMin, intervalMax);
+
+    if ( nextTime <= 0 )
+    {
+        nextTime = _timeStamp + yw_RandomInRange(intervalMin, intervalMax);
+        return false;
+    }
+
+    if ( _timeStamp < nextTime )
+        return false;
+
+    nextTime = _timeStamp + yw_RandomInRange(intervalMin, intervalMax);
+    return true;
+}
+
+void NC_STACK_ypaworld::SpawnRandomizedTransientVP(int32_t modelId, const vec3d &ownerPos, float randomPos)
+{
+    if ( modelId <= 0 )
+        return;
+
+    vec3d pos = ownerPos;
+    if ( randomPos > 0.0 )
+    {
+        pos.x += (((float)rand() / (float)RAND_MAX) * 2.0 - 1.0) * randomPos;
+        pos.y += (((float)rand() / (float)RAND_MAX) * 2.0 - 1.0) * randomPos;
+        pos.z += (((float)rand() / (float)RAND_MAX) * 2.0 - 1.0) * randomPos;
+    }
+
+    SpawnTransientVP(modelId, pos, mat3x3::Ident(), 1000);
+}
+
+void NC_STACK_ypaworld::UpdateDecorationFX(const World::TDecorationFXConfig &config, int32_t &nextTime, const vec3d &ownerPos)
+{
+    int countMin = std::max(0, std::min(config.count_min, 32));
+    int countMax = std::max(0, std::min(config.count_max, 32));
+
+    if ( config.vp <= 0 || countMin <= 0 || countMax <= 0 )
+    {
+        nextTime = 0;
+        return;
+    }
+
+    if ( countMax < countMin )
+        std::swap(countMin, countMax);
+
+    if ( !UpdateRandomFXTimer(config.interval_min, config.interval_max, nextTime) )
+        return;
+
+    int spawnCount = yw_RandomInRange(countMin, countMax);
+    for (int i = 0; i < spawnCount; i++)
+        SpawnRandomizedTransientVP(config.vp, ownerPos, config.random_pos);
+}
+
 void NC_STACK_ypaworld::SpawnAttachedTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime)
 {
     if ( !owner || modelId <= 0 || modelId >= (int32_t)_vhclModels.size() || lifeTime <= 0 )
@@ -2133,6 +2208,8 @@ void NC_STACK_ypaworld::sb_0x456384(const Common::Point &cellId, int ownerid2, i
         cell.PurposeType = cellArea::PT_BUILDINGS;
         cell.SectorType = sectp->SectorType;
         cell.PurposeIndex = blg_id;
+        cell.DecorationFX = bld->DecorationFX;
+        cell.DecorationFXNextTime = 0;
 
         int v49;
 
@@ -2495,6 +2572,24 @@ void NC_STACK_ypaworld::BuildingConstructUpdate(int dtime)
         }
         else
             ++it;
+    }
+}
+
+void NC_STACK_ypaworld::BuildingDecorationFXUpdate()
+{
+    for (cellArea &cell : _cells)
+    {
+        bool activeBuilding = (cell.PurposeType == cellArea::PT_BUILDINGS ||
+                               cell.PurposeType == cellArea::PT_POWERSTATION) &&
+                              cell.GetEnergy() > 0;
+
+        if ( !activeBuilding )
+        {
+            cell.DecorationFXNextTime = 0;
+            continue;
+        }
+
+        UpdateDecorationFX(cell.DecorationFX, cell.DecorationFXNextTime, cell.CenterPos);
     }
 }
 

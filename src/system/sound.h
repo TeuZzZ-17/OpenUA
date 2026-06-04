@@ -5,7 +5,7 @@
 #include "gfx.h"
 #include "../wrapal.h"
 
-#define AUDIO_CHANNELS   32
+#define AUDIO_CHANNELS   64
 
 struct TSndCarrier;
 
