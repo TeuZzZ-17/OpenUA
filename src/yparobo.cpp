@@ -19,6 +19,10 @@ int dword_5B1128 = 1;
 robo_t2 stru_5B0628[100];
 int dword_515138[8];
 
+static const int PLAYER_ROBO_RESOURCE_TREND_WINDOW_TIME = 500;
+static const int PLAYER_ROBO_RESOURCE_TREND_HOLD_TIME = 600;
+static const int PLAYER_ROBO_RESOURCE_TREND_THRESHOLD = 2;
+
 
 const std::array<Common::Point, 8> NearDxy 
 {{
@@ -1480,6 +1484,101 @@ void NC_STACK_yparobo::ResetPlayerMobileMove()
     _playerRoboAIBehaviorMoveEnergyRemainder = 0.0;
     _playerRoboAIBehaviorTotalDistance = 0.0;
     _playerRoboAIBehaviorLastDistance = 0.0;
+}
+
+bool NC_STACK_yparobo::ShouldUsePlayerRoboResourceTrend() const
+{
+    return _playerRoboAIBehavior &&
+           IsPlayerRobo() &&
+           _world &&
+           this == _world->getYW_userHostStation();
+}
+
+void NC_STACK_yparobo::ResetPlayerRoboResourceTrend()
+{
+    for (PlayerRoboResourceTrend &trend : _playerRoboResourceTrends)
+    {
+        trend.sampleValue = 0;
+        trend.windowTime = 0;
+        trend.holdTime = 0;
+        trend.direction = 0;
+        trend.initialized = false;
+    }
+
+    _playerRoboResourceTrendLoadFlags = 0;
+    _playerRoboResourceTrendLossFlags = 0;
+}
+
+void NC_STACK_yparobo::UpdatePlayerRoboResourceTrendSlot(int slot, int value, uint8_t flag, int frameTime)
+{
+    PlayerRoboResourceTrend &trend = _playerRoboResourceTrends[slot];
+
+    if ( !trend.initialized )
+    {
+        trend.sampleValue = value;
+        trend.windowTime = 0;
+        trend.holdTime = 0;
+        trend.direction = 0;
+        trend.initialized = true;
+    }
+
+    if ( frameTime < 0 )
+        frameTime = 0;
+
+    if ( trend.holdTime > 0 )
+    {
+        trend.holdTime -= frameTime;
+        if ( trend.holdTime < 0 )
+            trend.holdTime = 0;
+    }
+
+    trend.windowTime += frameTime;
+
+    if ( trend.windowTime >= PLAYER_ROBO_RESOURCE_TREND_WINDOW_TIME )
+    {
+        int delta = value - trend.sampleValue;
+        int newDirection = 0;
+
+        if ( delta > PLAYER_ROBO_RESOURCE_TREND_THRESHOLD )
+            newDirection = 1;
+        else if ( delta < -PLAYER_ROBO_RESOURCE_TREND_THRESHOLD )
+            newDirection = -1;
+
+        trend.sampleValue = value;
+        trend.windowTime = 0;
+
+        if ( newDirection == 0 )
+        {
+            if ( trend.holdTime <= 0 )
+                trend.direction = 0;
+        }
+        else if ( trend.direction == 0 || trend.direction == newDirection || trend.holdTime <= 0 )
+        {
+            trend.direction = newDirection;
+            trend.holdTime = PLAYER_ROBO_RESOURCE_TREND_HOLD_TIME;
+        }
+    }
+
+    if ( trend.direction > 0 )
+        _playerRoboResourceTrendLoadFlags |= flag;
+    else if ( trend.direction < 0 )
+        _playerRoboResourceTrendLossFlags |= flag;
+}
+
+void NC_STACK_yparobo::UpdatePlayerRoboResourceTrend(int frameTime)
+{
+    _playerRoboResourceTrendLoadFlags = 0;
+    _playerRoboResourceTrendLossFlags = 0;
+
+    if ( !ShouldUsePlayerRoboResourceTrend() )
+    {
+        ResetPlayerRoboResourceTrend();
+        return;
+    }
+
+    UpdatePlayerRoboResourceTrendSlot(0, _energy, 1, frameTime);
+    UpdatePlayerRoboResourceTrendSlot(1, _roboEnergyLife, 4, frameTime);
+    UpdatePlayerRoboResourceTrendSlot(2, _roboEnergyMove, 8, frameTime);
 }
 
 void NC_STACK_yparobo::UpdatePlayerMobileMoveEnergy(float currentTargetDistance, bool forceFinish)
@@ -5543,6 +5642,8 @@ void NC_STACK_yparobo::EnergyInteract(update_msg *arg)
             _roboEnergyLoadFlags |= 8;
         else if ( v59 > _roboEnergyMove )
             _roboEnergyLossFlags |= 8;
+
+        UpdatePlayerRoboResourceTrend((int)(v63 * 1000.0));
     }
 }
 
@@ -5586,6 +5687,7 @@ void NC_STACK_yparobo::Renew()
     _roboBeamTimePre = 0;
     _playerRoboAIBehavior = false;
     ResetPlayerMobileMove();
+    ResetPlayerRoboResourceTrend();
     _playerRoboAIBehaviorCockpitPitchBase = 0;
     _playerRoboAIBehaviorCockpitPitchBaseValid = false;
     _roboAttackersClearTime = 0;
@@ -6559,34 +6661,18 @@ int NC_STACK_yparobo::getROBO_recDelay()
 
 int NC_STACK_yparobo::getROBO_loadFlags()
 {
-    int flags = _roboEnergyLoadFlags;
+    if ( ShouldUsePlayerRoboResourceTrend() )
+        return _playerRoboResourceTrendLoadFlags;
 
-    if ( _playerRoboAIBehavior && _playerRoboAIBehaviorMoveActive )
-    {
-        flags &= ~8;
-        if ( _playerRoboAIBehaviorMainEnergyTotal > 0 )
-            flags &= ~1;
-        if ( _playerRoboAIBehaviorBuildEnergyTotal > 0 )
-            flags &= ~4;
-    }
-
-    return flags;
+    return _roboEnergyLoadFlags;
 }
 
 int NC_STACK_yparobo::getROBO_lossFlags()
 {
-    int flags = _roboEnergyLossFlags;
+    if ( ShouldUsePlayerRoboResourceTrend() )
+        return _playerRoboResourceTrendLossFlags;
 
-    if ( _playerRoboAIBehavior && _playerRoboAIBehaviorMoveActive )
-    {
-        flags |= 8;
-        if ( _playerRoboAIBehaviorMainEnergyTotal > 0 )
-            flags |= 1;
-        if ( _playerRoboAIBehaviorBuildEnergyTotal > 0 )
-            flags |= 4;
-    }
-
-    return flags;
+    return _roboEnergyLossFlags;
 }
 
 int NC_STACK_yparobo::getROBO_absReload()
@@ -6728,6 +6814,7 @@ NC_STACK_yparobo::NC_STACK_yparobo()
     _roboFillMode = 0;
     _roboEnergyLoadFlags = 0;
     _roboEnergyLossFlags = 0;
+    ResetPlayerRoboResourceTrend();
 
     _roboEnergyReloadPS = 0;
     _roboBuildSpare = 0;

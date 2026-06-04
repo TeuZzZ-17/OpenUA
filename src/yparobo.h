@@ -266,6 +266,10 @@ protected:
     void ResetPlayerMobileMove();
     void UpdatePlayerMobileMoveEnergy(float currentTargetDistance, bool forceFinish);
     void DrainPlayerMobileMoveResource(int resourceTotal, float &resourceRemaining, float &resourceRemainder, int &resourceValue, uint8_t lossFlag, float progressDistance, bool forceFinish);
+    void ResetPlayerRoboResourceTrend();
+    void UpdatePlayerRoboResourceTrend(int frameTime);
+    void UpdatePlayerRoboResourceTrendSlot(int slot, int value, uint8_t flag, int frameTime);
+    bool ShouldUsePlayerRoboResourceTrend() const;
     void CapturePlayerMobileCockpitPitchBase();
     void ResetPlayerMobileCockpitPitch();
     void ApplyPlayerMobileCockpitMovePitch(float speedPitchScale);
@@ -434,6 +438,19 @@ public:
     uint8_t _roboFillMode;
     uint8_t _roboEnergyLoadFlags;
     uint8_t _roboEnergyLossFlags;
+
+    struct PlayerRoboResourceTrend
+    {
+        int sampleValue = 0;
+        int windowTime = 0;
+        int holdTime = 0;
+        int direction = 0;
+        bool initialized = false;
+    };
+
+    std::array<PlayerRoboResourceTrend, 3> _playerRoboResourceTrends;
+    uint8_t _playerRoboResourceTrendLoadFlags;
+    uint8_t _playerRoboResourceTrendLossFlags;
 
     int _roboEnergyReloadPS; // Reload per second
     
