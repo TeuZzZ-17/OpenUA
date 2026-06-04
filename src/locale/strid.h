@@ -167,6 +167,7 @@ enum DIALOGS
     DLG_S_TXT2      = 28,
     DLG_S_TXT3      = 29,
     DLG_S_TXT4      = 30,
+    DLG_S_HOSTSTATIONAI = 31,
     DLG_S_RES       = 40,
     DLG_S_RESCHANGE = 41,
     DLG_S_RESWARN   = 42,
@@ -435,6 +436,7 @@ enum TIP
     TIP_MENU_NETBACKPLAYER  = 148,
     TIP_MENU_NETBACKSESS    = 149,
 
+    TIP_CONF_HOSTSTATIONAI  = 150,
     TIP_MENU_151            = 151,
     TIP_MENU_152            = 152,
     TIP_MENU_153            = 153,

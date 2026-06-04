@@ -3839,6 +3839,48 @@ bool NC_STACK_ypaworld::CreateVideoControls()
 
                                                                                         if ( _GameShell->video_button->Add(&btn_64arg) )
                                                                                         {
+                                                                                            btn_64arg.width = checkBoxWidth;
+                                                                                            btn_64arg.tileset_down = 19;
+                                                                                            btn_64arg.tileset_up = 18;
+                                                                                            btn_64arg.field_3A = 30;
+                                                                                            btn_64arg.xpos = 0;
+                                                                                            btn_64arg.ypos = 11 * (_fontH + vertMenuSpace);
+                                                                                            btn_64arg.button_type = NC_STACK_button::TYPE_CHECKBX;
+                                                                                            btn_64arg.pressedCode = 0;
+                                                                                            btn_64arg.flags = 0;
+                                                                                            btn_64arg.caption = "g";
+                                                                                            btn_64arg.caption2 = "g";
+                                                                                            btn_64arg.downCode = 1137;
+                                                                                            btn_64arg.upCode = 1138;
+                                                                                            btn_64arg.button_id = 1174;
+
+                                                                                            if ( !_GameShell->video_button->Add(&btn_64arg) )
+                                                                                            {
+                                                                                                ypa_log_out("Unable to add player Host Station AI behavior checkbox\n");
+                                                                                                return false;
+                                                                                            }
+
+                                                                                            btn_64arg.tileset_down = 16;
+                                                                                            btn_64arg.tileset_up = 16;
+                                                                                            btn_64arg.field_3A = 16;
+                                                                                            btn_64arg.button_type = NC_STACK_button::TYPE_CAPTION;
+                                                                                            btn_64arg.xpos = checkBoxWidth + buttonsSpace;
+                                                                                            btn_64arg.width = v120 + checkBoxWidth;
+                                                                                            btn_64arg.caption = Locale::Text::Dialogs(Locale::DLG_S_HOSTSTATIONAI);
+                                                                                            btn_64arg.caption2.clear();
+                                                                                            btn_64arg.downCode = 0;
+                                                                                            btn_64arg.upCode = 0;
+                                                                                            btn_64arg.pressedCode = 0;
+                                                                                            btn_64arg.button_id = 0;
+                                                                                            btn_64arg.flags = NC_STACK_button::FLAG_TEXT;
+
+                                                                                            if ( !_GameShell->video_button->Add(&btn_64arg) )
+                                                                                            {
+                                                                                                ypa_log_out("Unable to add player Host Station AI behavior label\n");
+                                                                                                return false;
+                                                                                            }
+
+                                                                                            btn_64arg.ypos = 10 * (_fontH + vertMenuSpace);
                                                                                             btn_64arg.tileset_down = 16;
                                                                                             btn_64arg.tileset_up = 16;
                                                                                             btn_64arg.field_3A = 16;
@@ -3876,7 +3918,7 @@ bool NC_STACK_ypaworld::CreateVideoControls()
                                                                                                     btn_64arg.field_3A = 16;
                                                                                                     btn_64arg.button_type = NC_STACK_button::TYPE_CAPTION;
                                                                                                     btn_64arg.xpos = 0;
-                                                                                                    btn_64arg.ypos = 11 * (_fontH + vertMenuSpace);
+                                                                                                    btn_64arg.ypos = 12 * (_fontH + vertMenuSpace);
                                                                                                     btn_64arg.width = (dword_5A50B2 - 5 * buttonsSpace) * 0.3;
                                                                                                     btn_64arg.caption = Locale::Text::Dialogs(Locale::DLG_S_DESTRFX);
                                                                                                     btn_64arg.caption2.clear();
@@ -3929,7 +3971,7 @@ bool NC_STACK_ypaworld::CreateVideoControls()
                                                                                                             {
                                                                                                                 btn_64arg.button_type = NC_STACK_button::TYPE_CAPTION;
                                                                                                                 btn_64arg.xpos = 0;
-                                                                                                                btn_64arg.ypos = 12 * (vertMenuSpace + _fontH);
+                                                                                                                btn_64arg.ypos = 13 * (vertMenuSpace + _fontH);
                                                                                                                 btn_64arg.width = (dword_5A50B2 - 5 * buttonsSpace) * 0.3;
                                                                                                                 btn_64arg.caption = Locale::Text::Dialogs(Locale::DLG_S_FXVOL);
                                                                                                                 btn_64arg.caption2.clear();
@@ -3982,7 +4024,7 @@ bool NC_STACK_ypaworld::CreateVideoControls()
                                                                                                                             btn_64arg.button_type = NC_STACK_button::TYPE_CAPTION;
                                                                                                                             btn_64arg.xpos = 0;
                                                                                                                             btn_64arg.width = (dword_5A50B2 - 5 * buttonsSpace) * 0.3;
-                                                                                                                            btn_64arg.ypos = 13 * (vertMenuSpace + _fontH);
+                                                                                                                            btn_64arg.ypos = 14 * (vertMenuSpace + _fontH);
                                                                                                                             btn_64arg.caption = Locale::Text::Dialogs(Locale::DLG_S_CDVOL);
                                                                                                                             btn_64arg.caption2.clear();
                                                                                                                             btn_64arg.downCode = 0;
@@ -6162,6 +6204,10 @@ void NC_STACK_ypaworld::UpdateGameShell()
 
     v16.butID = 1163;
     v16.field_4 = (_GameShell->enemyIndicator == 0) + 1;
+    _GameShell->video_button->SetState(&v16);
+
+    v16.butID = 1174;
+    v16.field_4 = (!System::IniConf::GamePlayerRoboAIBehavior.Get<bool>()) + 1;
     _GameShell->video_button->SetState(&v16);
 
     v16.butID = 1157;

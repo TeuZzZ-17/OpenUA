@@ -34,6 +34,7 @@ extern int dword_5A50B6;
 extern int dword_5A50B6_h;
 
 static constexpr int SETTINGS_CHANGE_PALETTE_THEME = 0x2000;
+static constexpr int SETTINGS_CHANGE_PLAYER_ROBO_AI_BEHAVIOR = 0x4000;
 
 static std::string NormalizePaletteThemeName(std::string theme)
 {
@@ -1163,6 +1164,14 @@ void UserData::sb_0x46aa8c()
             ypa_log_out("WARNING: Could not save gfx.palette_theme to nucleus.ini\n");
     }
 
+    if ( _settingsChangeOptions & SETTINGS_CHANGE_PLAYER_ROBO_AI_BEHAVIOR )
+    {
+        System::IniConf::GamePlayerRoboAIBehavior.Value = confPlayerRoboAIBehavior;
+
+        if ( !SavePlayerRoboAIBehaviorToNucleusIni() )
+            ypa_log_out("WARNING: Could not save game.player_robo_ai_behavior to nucleus.ini\n");
+    }
+
     if ( forceChange )
     {
         yw->SetGameShellVideoMode( IsWindowedFlag() );
@@ -1464,6 +1473,10 @@ void UserData::ShowToolTip(int id)
         p_YW->SetShowingTooltip(Locale::TIP_MENU_WINDOWED); // windowed
         break;
 
+    case 1174:
+        p_YW->SetShowingTooltip(Locale::TIP_CONF_HOSTSTATIONAI);
+        break;
+
     case 1172:
         p_YW->SetShowingTooltip(Locale::TIP_MENU_SEL3DDEV);
         break;
@@ -1572,7 +1585,13 @@ void UserData::ShowOptionsMenu()
 
     RefreshPaletteThemes();
     confPaletteTheme = paletteTheme;
+    confPlayerRoboAIBehavior = System::IniConf::GamePlayerRoboAIBehavior.Get<bool>();
     UpdatePaletteThemeText();
+
+    NC_STACK_button::button_66arg state;
+    state.butID = 1174;
+    state.field_4 = (!confPlayerRoboAIBehavior) + 1;
+    video_button->SetState(&state);
 
     video_button->ShowScreen();
 
@@ -1911,6 +1930,7 @@ void UserData::sub_46A3C0()
     _settingsChangeOptions = 0;
     EnvMode = ENVMODE_TITLE;
     confPaletteTheme = paletteTheme;
+    confPlayerRoboAIBehavior = System::IniConf::GamePlayerRoboAIBehavior.Get<bool>();
 
     int gfxId = GFX::GFXEngine::Instance.GetGfxModeIndex(p_YW->_gfxMode);
     
@@ -1960,6 +1980,10 @@ void UserData::sub_46A3C0()
 
     v10.field_4 = (enemyIndicator == 0) + 1;
     v10.butID = 1163;
+    video_button->SetState(&v10);
+
+    v10.field_4 = (!confPlayerRoboAIBehavior) + 1;
+    v10.butID = 1174;
     video_button->SetState(&v10);
 
     NC_STACK_button::Slider *tmp = video_button->GetSliderData(1159);
@@ -2102,6 +2126,58 @@ bool UserData::SavePaletteThemeToNucleusIni()
 {
     const std::string key = "gfx.palette_theme";
     const std::string newLine = key + " = " + PaletteThemeStorageValue(paletteTheme);
+
+    std::vector<std::string> lines;
+    bool replaced = false;
+
+    FSMgr::FileHandle *in = uaOpenFileAlloc("nucleus.ini", "r");
+    if (in)
+    {
+        std::string line;
+        while (in->ReadLine(&line))
+        {
+            while (!line.empty() && (line.back() == '\n' || line.back() == '\r'))
+                line.pop_back();
+
+            std::string test = line;
+            size_t comment = test.find_first_of(";");
+            if (comment != std::string::npos)
+                test.erase(comment);
+
+            Stok tokens(test, "= \t");
+            std::string token;
+            if (tokens.GetNext(&token) && !StriCmp(token, key))
+            {
+                lines.push_back(newLine);
+                replaced = true;
+            }
+            else
+            {
+                lines.push_back(line);
+            }
+        }
+
+        delete in;
+    }
+
+    if (!replaced)
+        lines.push_back(newLine);
+
+    FSMgr::FileHandle *out = uaOpenFileAlloc("nucleus.ini", "w");
+    if (!out)
+        return false;
+
+    for (const std::string &line : lines)
+        out->puts(line + "\n");
+
+    delete out;
+    return true;
+}
+
+bool UserData::SavePlayerRoboAIBehaviorToNucleusIni()
+{
+    const std::string key = "game.player_robo_ai_behavior";
+    const std::string newLine = key + std::string(" = ") + (System::IniConf::GamePlayerRoboAIBehavior.Get<bool>() ? "yes" : "no");
 
     std::vector<std::string> lines;
     bool replaced = false;
@@ -3171,6 +3247,16 @@ void UserData::GameShellUiHandleInput()
         else if ( r.code == 1136 )
         {
             CyclePaletteTheme();
+        }
+        else if ( r.code == 1137 )
+        {
+            confPlayerRoboAIBehavior = true;
+            _settingsChangeOptions |= SETTINGS_CHANGE_PLAYER_ROBO_AI_BEHAVIOR;
+        }
+        else if ( r.code == 1138 )
+        {
+            confPlayerRoboAIBehavior = false;
+            _settingsChangeOptions |= SETTINGS_CHANGE_PLAYER_ROBO_AI_BEHAVIOR;
         }
         else if ( r.code == 1250 )
             p_YW->_helpURL = Locale::Text::Help(Locale::HELP_SETTINGS);

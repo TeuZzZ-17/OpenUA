@@ -573,6 +573,7 @@ public:
     std::vector<std::string> paletteThemes;
     std::string paletteTheme;
     std::string confPaletteTheme;
+    bool confPlayerRoboAIBehavior;
     
     int _settingsChangeOptions;
     
@@ -806,6 +807,7 @@ public:
     void CyclePaletteTheme();
     void UpdatePaletteThemeText();
     bool SavePaletteThemeToNucleusIni();
+    bool SavePlayerRoboAIBehaviorToNucleusIni();
     void sub_46A7F8();
     void ShowAbout();
     
