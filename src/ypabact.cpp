@@ -1356,6 +1356,10 @@ void sub_481F94(NC_STACK_ypabact *bact)
 }
 
 
+void NC_STACK_ypabact::BeforeSoundCarrierUpdate()
+{
+}
+
 void NC_STACK_ypabact::Update(update_msg *arg)
 {
     if ( _kidRef.IsListType(World::BLIST_CACHE) ) // Do not update units in dead list
@@ -1483,6 +1487,7 @@ void NC_STACK_ypabact::Update(update_msg *arg)
     _soundcarrier.Vector = _fly_dir * _fly_dir_length;
 
     ypabact_ApplyDamagedSoundPitch(this);
+    BeforeSoundCarrierUpdate();
 
     SFXEngine::SFXe.UpdateSoundCarrier(&_soundcarrier);
     ypabact_UpdateStatusSoundCarrier(this, &_debuff_soundcarrier);
@@ -8241,6 +8246,7 @@ void NC_STACK_ypabact::NetUpdate(update_msg *upd)
 
     _soundcarrier.Position = _position;
     _soundcarrier.Vector = _fly_dir * _fly_dir_length;
+    BeforeSoundCarrierUpdate();
 
     SFXEngine::SFXe.UpdateSoundCarrier(&_soundcarrier);
     ypabact_UpdateStatusSoundCarrier(this, &_debuff_soundcarrier);

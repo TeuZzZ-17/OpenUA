@@ -77,6 +77,7 @@ public:
     virtual void Die();
     virtual size_t SetPosition(bact_arg80 *arg);
     virtual void EnergyInteract(update_msg *arg);
+    virtual void BeforeSoundCarrierUpdate() override;
     virtual void Renew();
     virtual void HandBrake(update_msg *);
     virtual void CorrectPositionOnLand();
@@ -272,7 +273,7 @@ protected:
     bool ShouldUsePlayerRoboResourceTrend() const;
     void CapturePlayerMobileCockpitPitchBase();
     void ResetPlayerMobileCockpitPitch();
-    void ApplyPlayerMobileCockpitMovePitch(float speedPitchScale);
+    void ApplyPlayerMobileMovePitch(float speedPitchScale);
     void wallow(update_msg *arg);
     void searchEnemyRobo();
     void usersRoboEnergyCheck();

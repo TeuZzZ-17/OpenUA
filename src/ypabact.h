@@ -433,6 +433,7 @@ public:
     virtual size_t SetPosition(bact_arg80 *arg);
     virtual void GetSummary(bact_arg81 *arg);
     virtual void EnergyInteract(update_msg *arg);
+    virtual void BeforeSoundCarrierUpdate();
     void UpdateCarrierSpawn(update_msg *arg);
     void UpdateDamageFX(update_msg *arg);
     void UpdateDecorationFX(update_msg *arg);

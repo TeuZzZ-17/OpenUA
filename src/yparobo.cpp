@@ -42,6 +42,43 @@ static int ScalePlayerMobileMoveSecondaryCost(int cost, float mult)
     return scaledCost;
 }
 
+static float ScalePlayerMobileMovePitchEffect(float speedPitchScale)
+{
+    if ( speedPitchScale != speedPitchScale || speedPitchScale < 0.0f )
+        speedPitchScale = 0.0f;
+
+    // Player Host Station relocation is slower than normal AI Robo movement,
+    // so the raw legacy speed scale can be too subtle to hear from cockpit view.
+    // Give any real movement a small audible floor, then cap it to avoid silly
+    // cartoon-engine pitch spikes. This is player-mobile only; enemy Robos keep
+    // the original Move() pitch behavior.
+    if ( speedPitchScale > 0.0f && speedPitchScale < 0.08f )
+        speedPitchScale = 0.08f;
+
+    speedPitchScale *= 1.6f;
+
+    if ( speedPitchScale > 0.70f )
+        speedPitchScale = 0.70f;
+
+    return speedPitchScale;
+}
+
+static int PlayerMobileMoveScaledPitch(TSoundSource &snd, int basePitch, float speedPitchScale)
+{
+    float effect = ScalePlayerMobileMovePitchEffect(speedPitchScale);
+    if ( effect <= 0.0f )
+        return basePitch;
+
+    int baseRate = 3000;
+    if ( snd.PSample )
+        baseRate = snd.PSample->SampleRate + basePitch;
+
+    if ( baseRate < 1000 )
+        baseRate = 1000;
+
+    return basePitch + (int)((float)baseRate * effect);
+}
+
 
 const std::array<Common::Point, 8> NearDxy 
 {{
@@ -1806,28 +1843,57 @@ void NC_STACK_yparobo::ResetPlayerMobileCockpitPitch()
     _soundcarrier.Sounds[World::TVhclProto::SND_COCKPIT].Pitch = _playerRoboAIBehaviorCockpitPitchBase;
 }
 
-void NC_STACK_yparobo::ApplyPlayerMobileCockpitMovePitch(float speedPitchScale)
+void NC_STACK_yparobo::ApplyPlayerMobileMovePitch(float speedPitchScale)
 {
     if ( !_playerRoboAIBehavior || !_playerRoboAIBehaviorMoveActive )
+        return;
+
+    if ( _soundcarrier.Sounds.size() > World::TVhclProto::SND_NORMAL )
+    {
+        TSoundSource &normal = _soundcarrier.Sounds[World::TVhclProto::SND_NORMAL];
+        normal.Pitch = PlayerMobileMoveScaledPitch(normal, _pitch, speedPitchScale);
+    }
+
+    if ( _soundcarrier.Sounds.size() <= World::TVhclProto::SND_COCKPIT )
         return;
 
     if ( !_playerRoboAIBehaviorCockpitPitchBaseValid )
         CapturePlayerMobileCockpitPitchBase();
 
-    if ( !_playerRoboAIBehaviorCockpitPitchBaseValid )
-        return;
-
-    if ( _soundcarrier.Sounds.size() <= World::TVhclProto::SND_COCKPIT )
-        return;
+    int cockpitBasePitch = _playerRoboAIBehaviorCockpitPitchBaseValid ?
+                           _playerRoboAIBehaviorCockpitPitchBase :
+                           _soundcarrier.Sounds[World::TVhclProto::SND_COCKPIT].Pitch;
 
     TSoundSource &cockpit = _soundcarrier.Sounds[World::TVhclProto::SND_COCKPIT];
-    if ( cockpit.PSample )
-    {
-        // Robo movement pitch is normally applied to SND_NORMAL.
-        // When the player is inside the Host Station, the audible loop is SND_COCKPIT,
-        // so mirror the same speed-based pitch scale there during mobile movement.
-        cockpit.Pitch = (int)((cockpit.PSample->SampleRate + _playerRoboAIBehaviorCockpitPitchBase) * speedPitchScale);
-    }
+
+    // Enemy Robos get movement pitch on SND_NORMAL through Move(). The player can
+    // hear either the normal loop or the cockpit loop depending on control/audio path,
+    // so update both while physical relocation is active.
+    cockpit.Pitch = PlayerMobileMoveScaledPitch(cockpit, cockpitBasePitch, speedPitchScale);
+}
+
+void NC_STACK_yparobo::BeforeSoundCarrierUpdate()
+{
+    if ( !ShouldUsePlayerMobileMove() )
+        return;
+
+    float speedPitchScale = 0.0f;
+
+    // The normal Robo Move() path computes pitch from current speed, but generic
+    // damaged/debuff sound processing can reset SND_NORMAL immediately before
+    // the sound carrier is submitted to the audio engine. Apply the player
+    // mobile pitch here as the final per-frame audio step, after those resets
+    // and before UpdateSoundCarrier().
+    if ( _force > 0.0f && _airconst_static > 0.0f )
+        speedPitchScale = fabs(_fly_dir_length) / (_force / _airconst_static) * 1.4f;
+
+    // If the Host Station is physically travelling but its current speed is too
+    // low to produce an audible raw legacy pitch delta, keep a small movement
+    // floor. This only runs for the player mobile Host Station, not for AI HS.
+    if ( speedPitchScale <= 0.0f && _primTtype == BACT_TGT_TYPE_CELL )
+        speedPitchScale = 0.08f;
+
+    ApplyPlayerMobileMovePitch(speedPitchScale);
 }
 
 void NC_STACK_yparobo::doUserCommands(update_msg *arg)
@@ -5329,7 +5395,7 @@ void NC_STACK_yparobo::Move(move_msg *arg)
         _soundcarrier.Sounds[0].Pitch = (_soundcarrier.Sounds[0].PSample->SampleRate + _soundcarrier.Sounds[0].Pitch) * v60;
 
     if ( ShouldUsePlayerMobileMove() )
-        ApplyPlayerMobileCockpitMovePitch(v60);
+        ApplyPlayerMobileMovePitch(v60);
 }
 
 void NC_STACK_yparobo::Die()
