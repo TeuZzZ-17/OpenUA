@@ -222,7 +222,9 @@ public:
     void ypabact_func65__sub0();
     
     bool IsPlayerRobo() const;
-    bool IsPlayerRoboMobile() const;
+    bool IsPlayerRoboAIBehavior() const;
+    bool IsPlayerRoboAIBehaviorMoveActive() const;
+    bool GetPlayerRoboAIBehaviorMoveTarget(vec3d *target) const;
     
 public:
     void HandleUserCommands(update_msg *arg);
@@ -442,26 +444,26 @@ public:
     vec3d _roboBeamPos;
     int _roboBeamFXTime;
 
-    bool _playerRoboMobile;
-    bool _playerRoboMobileMoveActive;
-    int _playerRoboMobileTargetCellID;
-    cellArea *_playerRoboMobileTargetCell;
-    int _playerRoboMobileEnergyTotal;
-    float _playerRoboMobileEnergyRemaining;
-    float _playerRoboMobileEnergyRemainder;
-    int _playerRoboMobileMainEnergyTotal;
-    float _playerRoboMobileMainEnergyRemaining;
-    float _playerRoboMobileMainEnergyRemainder;
-    int _playerRoboMobileBuildEnergyTotal;
-    float _playerRoboMobileBuildEnergyRemaining;
-    float _playerRoboMobileBuildEnergyRemainder;
-    int _playerRoboMobileMoveEnergyTotal;
-    float _playerRoboMobileMoveEnergyRemaining;
-    float _playerRoboMobileMoveEnergyRemainder;
-    float _playerRoboMobileTotalDistance;
-    float _playerRoboMobileLastDistance;
-    int _playerRoboMobileCockpitPitchBase;
-    bool _playerRoboMobileCockpitPitchBaseValid;
+    bool _playerRoboAIBehavior;
+    bool _playerRoboAIBehaviorMoveActive;
+    int _playerRoboAIBehaviorTargetCellID;
+    cellArea *_playerRoboAIBehaviorTargetCell;
+    int _playerRoboAIBehaviorEnergyTotal;
+    float _playerRoboAIBehaviorEnergyRemaining;
+    float _playerRoboAIBehaviorEnergyRemainder;
+    int _playerRoboAIBehaviorMainEnergyTotal;
+    float _playerRoboAIBehaviorMainEnergyRemaining;
+    float _playerRoboAIBehaviorMainEnergyRemainder;
+    int _playerRoboAIBehaviorBuildEnergyTotal;
+    float _playerRoboAIBehaviorBuildEnergyRemaining;
+    float _playerRoboAIBehaviorBuildEnergyRemainder;
+    int _playerRoboAIBehaviorMoveEnergyTotal;
+    float _playerRoboAIBehaviorMoveEnergyRemaining;
+    float _playerRoboAIBehaviorMoveEnergyRemainder;
+    float _playerRoboAIBehaviorTotalDistance;
+    float _playerRoboAIBehaviorLastDistance;
+    int _playerRoboAIBehaviorCockpitPitchBase;
+    bool _playerRoboAIBehaviorCockpitPitchBaseValid;
     
     std::array<robo_t1, 16> _roboAttackers;
     int _roboAttackersTime;

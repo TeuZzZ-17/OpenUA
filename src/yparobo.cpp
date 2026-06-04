@@ -291,7 +291,7 @@ void NC_STACK_yparobo::AI_layer1(update_msg *arg)
 
     _soundcarrier.Sounds[0].Pitch = _pitch;
     _soundcarrier.Sounds[0].Volume = _volume;
-    if ( _playerRoboMobile )
+    if ( _playerRoboAIBehavior )
         ResetPlayerMobileCockpitPitch();
 
     for (World::TRoboGun &gun : _roboGuns)
@@ -1293,7 +1293,7 @@ int NC_STACK_yparobo::sb_0x4a45cc__sub0(NC_STACK_ypabact *bact)
 
 bool NC_STACK_yparobo::TryStartPlayerMobileMove(update_msg *arg)
 {
-    if ( !_playerRoboMobile || !IsPlayerRobo() )
+    if ( !_playerRoboAIBehavior || !IsPlayerRobo() )
         return false;
 
     if ( !_world || this != _world->getYW_userHostStation() )
@@ -1331,15 +1331,15 @@ bool NC_STACK_yparobo::TryStartPlayerMobileMove(update_msg *arg)
     if ( _primTtype != BACT_TGT_TYPE_CELL || !_primT.pcell )
         return false;
 
-    _playerRoboMobileMoveActive = true;
-    _playerRoboMobileTargetCell = _primT.pcell;
-    _playerRoboMobileTargetCellID = _primT.pcell->Id;
+    _playerRoboAIBehaviorMoveActive = true;
+    _playerRoboAIBehaviorTargetCell = _primT.pcell;
+    _playerRoboAIBehaviorTargetCellID = _primT.pcell->Id;
 
     _target_vec = _primTpos - _position;
 
-    _playerRoboMobileEnergyTotal = mobileEnergyCost;
-    _playerRoboMobileEnergyRemaining = (float)mobileEnergyCost;
-    _playerRoboMobileEnergyRemainder = 0.0;
+    _playerRoboAIBehaviorEnergyTotal = mobileEnergyCost;
+    _playerRoboAIBehaviorEnergyRemaining = (float)mobileEnergyCost;
+    _playerRoboAIBehaviorEnergyRemainder = 0.0;
 
     int resourceCount = 1; // teleport / beam budget is always part of mobile relocation.
     if ( _roboFillMode & 1 )
@@ -1350,29 +1350,29 @@ bool NC_STACK_yparobo::TryStartPlayerMobileMove(update_msg *arg)
     int splitCost = mobileEnergyCost / resourceCount;
     int splitRemainder = mobileEnergyCost - splitCost * resourceCount;
 
-    _playerRoboMobileMainEnergyTotal = (_roboFillMode & 1) ? splitCost : 0;
-    _playerRoboMobileBuildEnergyTotal = (_roboFillMode & 4) ? splitCost : 0;
-    _playerRoboMobileMoveEnergyTotal = splitCost + splitRemainder;
+    _playerRoboAIBehaviorMainEnergyTotal = (_roboFillMode & 1) ? splitCost : 0;
+    _playerRoboAIBehaviorBuildEnergyTotal = (_roboFillMode & 4) ? splitCost : 0;
+    _playerRoboAIBehaviorMoveEnergyTotal = splitCost + splitRemainder;
 
-    _playerRoboMobileMainEnergyRemaining = (float)_playerRoboMobileMainEnergyTotal;
-    _playerRoboMobileBuildEnergyRemaining = (float)_playerRoboMobileBuildEnergyTotal;
-    _playerRoboMobileMoveEnergyRemaining = (float)_playerRoboMobileMoveEnergyTotal;
-    _playerRoboMobileMainEnergyRemainder = 0.0;
-    _playerRoboMobileBuildEnergyRemainder = 0.0;
-    _playerRoboMobileMoveEnergyRemainder = 0.0;
+    _playerRoboAIBehaviorMainEnergyRemaining = (float)_playerRoboAIBehaviorMainEnergyTotal;
+    _playerRoboAIBehaviorBuildEnergyRemaining = (float)_playerRoboAIBehaviorBuildEnergyTotal;
+    _playerRoboAIBehaviorMoveEnergyRemaining = (float)_playerRoboAIBehaviorMoveEnergyTotal;
+    _playerRoboAIBehaviorMainEnergyRemainder = 0.0;
+    _playerRoboAIBehaviorBuildEnergyRemainder = 0.0;
+    _playerRoboAIBehaviorMoveEnergyRemainder = 0.0;
 
-    _playerRoboMobileTotalDistance = _target_vec.XZ().length();
-    if ( _playerRoboMobileTotalDistance < 1.0 )
-        _playerRoboMobileTotalDistance = 1.0;
-    _playerRoboMobileLastDistance = _playerRoboMobileTotalDistance;
+    _playerRoboAIBehaviorTotalDistance = _target_vec.XZ().length();
+    if ( _playerRoboAIBehaviorTotalDistance < 1.0 )
+        _playerRoboAIBehaviorTotalDistance = 1.0;
+    _playerRoboAIBehaviorLastDistance = _playerRoboAIBehaviorTotalDistance;
 
     return true;
 }
 
 bool NC_STACK_yparobo::ShouldUsePlayerMobileMove() const
 {
-    return _playerRoboMobile &&
-           _playerRoboMobileMoveActive &&
+    return _playerRoboAIBehavior &&
+           _playerRoboAIBehaviorMoveActive &&
            IsPlayerRobo() &&
            _world &&
            this == _world->getYW_userHostStation() &&
@@ -1384,11 +1384,11 @@ bool NC_STACK_yparobo::ShouldUsePlayerRoboIdleMotion() const
 {
     // Vanilla disables robo_does_twist / robo_does_flux while the player is
     // inside the Host Station or one of its guns, because the player Robo uses
-    // the simple wallow() idle path. In player_robo_mobile mode we deliberately
+    // the simple wallow() idle path. In player_robo_ai_behavior mode we deliberately
     // allow the real Robo idle motion too, so the player Host Station behaves
     // like AI Host Stations when standing still.
-    return _playerRoboMobile &&
-           !_playerRoboMobileMoveActive &&
+    return _playerRoboAIBehavior &&
+           !_playerRoboAIBehaviorMoveActive &&
            IsPlayerRobo() &&
            _world &&
            this == _world->getYW_userHostStation() &&
@@ -1428,7 +1428,7 @@ bool NC_STACK_yparobo::UpdatePlayerMobileMove(update_msg *arg)
     bool finished = true;
     float currentDistance = 0.0;
 
-    if ( _primTtype == BACT_TGT_TYPE_CELL && _playerRoboMobileTargetCell )
+    if ( _primTtype == BACT_TGT_TYPE_CELL && _playerRoboAIBehaviorTargetCell )
     {
         currentDistance = (_primTpos.XZ() - _position.XZ()).length();
         finished = currentDistance < 120.0;
@@ -1436,7 +1436,7 @@ bool NC_STACK_yparobo::UpdatePlayerMobileMove(update_msg *arg)
 
     UpdatePlayerMobileMoveEnergy(currentDistance, finished);
 
-    if ( _playerRoboMobileMoveEnergyRemaining > 0.0 && _roboEnergyMove <= 0 )
+    if ( _playerRoboAIBehaviorMoveEnergyRemaining > 0.0 && _roboEnergyMove <= 0 )
     {
         setTarget_msg arg67;
         arg67.tgt_type = BACT_TGT_TYPE_NONE;
@@ -1463,90 +1463,90 @@ bool NC_STACK_yparobo::UpdatePlayerRoboIdleMotion(update_msg *arg)
 
 void NC_STACK_yparobo::ResetPlayerMobileMove()
 {
-    _playerRoboMobileMoveActive = false;
-    _playerRoboMobileTargetCell = NULL;
-    _playerRoboMobileTargetCellID = 0;
-    _playerRoboMobileEnergyTotal = 0;
-    _playerRoboMobileEnergyRemaining = 0.0;
-    _playerRoboMobileEnergyRemainder = 0.0;
-    _playerRoboMobileMainEnergyTotal = 0;
-    _playerRoboMobileMainEnergyRemaining = 0.0;
-    _playerRoboMobileMainEnergyRemainder = 0.0;
-    _playerRoboMobileBuildEnergyTotal = 0;
-    _playerRoboMobileBuildEnergyRemaining = 0.0;
-    _playerRoboMobileBuildEnergyRemainder = 0.0;
-    _playerRoboMobileMoveEnergyTotal = 0;
-    _playerRoboMobileMoveEnergyRemaining = 0.0;
-    _playerRoboMobileMoveEnergyRemainder = 0.0;
-    _playerRoboMobileTotalDistance = 0.0;
-    _playerRoboMobileLastDistance = 0.0;
+    _playerRoboAIBehaviorMoveActive = false;
+    _playerRoboAIBehaviorTargetCell = NULL;
+    _playerRoboAIBehaviorTargetCellID = 0;
+    _playerRoboAIBehaviorEnergyTotal = 0;
+    _playerRoboAIBehaviorEnergyRemaining = 0.0;
+    _playerRoboAIBehaviorEnergyRemainder = 0.0;
+    _playerRoboAIBehaviorMainEnergyTotal = 0;
+    _playerRoboAIBehaviorMainEnergyRemaining = 0.0;
+    _playerRoboAIBehaviorMainEnergyRemainder = 0.0;
+    _playerRoboAIBehaviorBuildEnergyTotal = 0;
+    _playerRoboAIBehaviorBuildEnergyRemaining = 0.0;
+    _playerRoboAIBehaviorBuildEnergyRemainder = 0.0;
+    _playerRoboAIBehaviorMoveEnergyTotal = 0;
+    _playerRoboAIBehaviorMoveEnergyRemaining = 0.0;
+    _playerRoboAIBehaviorMoveEnergyRemainder = 0.0;
+    _playerRoboAIBehaviorTotalDistance = 0.0;
+    _playerRoboAIBehaviorLastDistance = 0.0;
 }
 
 void NC_STACK_yparobo::UpdatePlayerMobileMoveEnergy(float currentTargetDistance, bool forceFinish)
 {
-    if ( _playerRoboMobileEnergyRemaining <= 0.0 || _playerRoboMobileEnergyTotal <= 0 )
+    if ( _playerRoboAIBehaviorEnergyRemaining <= 0.0 || _playerRoboAIBehaviorEnergyTotal <= 0 )
         return;
 
     float progressDistance = 0.0;
 
     if ( forceFinish )
     {
-        progressDistance = _playerRoboMobileTotalDistance;
+        progressDistance = _playerRoboAIBehaviorTotalDistance;
     }
-    else if ( currentTargetDistance < _playerRoboMobileLastDistance )
+    else if ( currentTargetDistance < _playerRoboAIBehaviorLastDistance )
     {
-        progressDistance = _playerRoboMobileLastDistance - currentTargetDistance;
+        progressDistance = _playerRoboAIBehaviorLastDistance - currentTargetDistance;
     }
 
     if ( progressDistance <= 0.0 )
         return;
 
-    float totalToDrain = ((float)_playerRoboMobileEnergyTotal * progressDistance / _playerRoboMobileTotalDistance) + _playerRoboMobileEnergyRemainder;
+    float totalToDrain = ((float)_playerRoboAIBehaviorEnergyTotal * progressDistance / _playerRoboAIBehaviorTotalDistance) + _playerRoboAIBehaviorEnergyRemainder;
     int totalDrain = forceFinish ? (int)ceil(totalToDrain) : (int)floor(totalToDrain);
 
     if ( totalDrain <= 0 )
     {
-        _playerRoboMobileEnergyRemainder = totalToDrain;
-        if ( currentTargetDistance < _playerRoboMobileLastDistance )
-            _playerRoboMobileLastDistance = currentTargetDistance;
+        _playerRoboAIBehaviorEnergyRemainder = totalToDrain;
+        if ( currentTargetDistance < _playerRoboAIBehaviorLastDistance )
+            _playerRoboAIBehaviorLastDistance = currentTargetDistance;
         return;
     }
 
-    if ( totalDrain > (int)ceil(_playerRoboMobileEnergyRemaining) )
-        totalDrain = (int)ceil(_playerRoboMobileEnergyRemaining);
+    if ( totalDrain > (int)ceil(_playerRoboAIBehaviorEnergyRemaining) )
+        totalDrain = (int)ceil(_playerRoboAIBehaviorEnergyRemaining);
 
-    DrainPlayerMobileMoveResource(_playerRoboMobileMainEnergyTotal,
-                                  _playerRoboMobileMainEnergyRemaining,
-                                  _playerRoboMobileMainEnergyRemainder,
+    DrainPlayerMobileMoveResource(_playerRoboAIBehaviorMainEnergyTotal,
+                                  _playerRoboAIBehaviorMainEnergyRemaining,
+                                  _playerRoboAIBehaviorMainEnergyRemainder,
                                   _energy,
                                   1,
                                   progressDistance,
                                   forceFinish);
 
-    DrainPlayerMobileMoveResource(_playerRoboMobileBuildEnergyTotal,
-                                  _playerRoboMobileBuildEnergyRemaining,
-                                  _playerRoboMobileBuildEnergyRemainder,
+    DrainPlayerMobileMoveResource(_playerRoboAIBehaviorBuildEnergyTotal,
+                                  _playerRoboAIBehaviorBuildEnergyRemaining,
+                                  _playerRoboAIBehaviorBuildEnergyRemainder,
                                   _roboEnergyLife,
                                   4,
                                   progressDistance,
                                   forceFinish);
 
-    DrainPlayerMobileMoveResource(_playerRoboMobileMoveEnergyTotal,
-                                  _playerRoboMobileMoveEnergyRemaining,
-                                  _playerRoboMobileMoveEnergyRemainder,
+    DrainPlayerMobileMoveResource(_playerRoboAIBehaviorMoveEnergyTotal,
+                                  _playerRoboAIBehaviorMoveEnergyRemaining,
+                                  _playerRoboAIBehaviorMoveEnergyRemainder,
                                   _roboEnergyMove,
                                   8,
                                   progressDistance,
                                   forceFinish);
 
-    _playerRoboMobileEnergyRemaining -= (float)totalDrain;
-    if ( _playerRoboMobileEnergyRemaining < 0.0 )
-        _playerRoboMobileEnergyRemaining = 0.0;
+    _playerRoboAIBehaviorEnergyRemaining -= (float)totalDrain;
+    if ( _playerRoboAIBehaviorEnergyRemaining < 0.0 )
+        _playerRoboAIBehaviorEnergyRemaining = 0.0;
 
-    _playerRoboMobileEnergyRemainder = forceFinish ? 0.0 : (totalToDrain - (float)totalDrain);
+    _playerRoboAIBehaviorEnergyRemainder = forceFinish ? 0.0 : (totalToDrain - (float)totalDrain);
 
-    if ( currentTargetDistance < _playerRoboMobileLastDistance )
-        _playerRoboMobileLastDistance = currentTargetDistance;
+    if ( currentTargetDistance < _playerRoboAIBehaviorLastDistance )
+        _playerRoboAIBehaviorLastDistance = currentTargetDistance;
 }
 
 void NC_STACK_yparobo::DrainPlayerMobileMoveResource(int resourceTotal, float &resourceRemaining, float &resourceRemainder, int &resourceValue, uint8_t lossFlag, float progressDistance, bool forceFinish)
@@ -1559,7 +1559,7 @@ void NC_STACK_yparobo::DrainPlayerMobileMoveResource(int resourceTotal, float &r
     if ( forceFinish )
         energyToDrain = resourceRemaining + resourceRemainder;
     else
-        energyToDrain = ((float)resourceTotal * progressDistance / _playerRoboMobileTotalDistance) + resourceRemainder;
+        energyToDrain = ((float)resourceTotal * progressDistance / _playerRoboAIBehaviorTotalDistance) + resourceRemainder;
 
     if ( energyToDrain <= 0.0 )
         return;
@@ -1598,39 +1598,39 @@ void NC_STACK_yparobo::DrainPlayerMobileMoveResource(int resourceTotal, float &r
 
 void NC_STACK_yparobo::CapturePlayerMobileCockpitPitchBase()
 {
-    _playerRoboMobileCockpitPitchBase = 0;
-    _playerRoboMobileCockpitPitchBaseValid = false;
+    _playerRoboAIBehaviorCockpitPitchBase = 0;
+    _playerRoboAIBehaviorCockpitPitchBaseValid = false;
 
     if ( _soundcarrier.Sounds.size() <= World::TVhclProto::SND_COCKPIT )
         return;
 
-    _playerRoboMobileCockpitPitchBase = _soundcarrier.Sounds[World::TVhclProto::SND_COCKPIT].Pitch;
-    _playerRoboMobileCockpitPitchBaseValid = true;
+    _playerRoboAIBehaviorCockpitPitchBase = _soundcarrier.Sounds[World::TVhclProto::SND_COCKPIT].Pitch;
+    _playerRoboAIBehaviorCockpitPitchBaseValid = true;
 }
 
 void NC_STACK_yparobo::ResetPlayerMobileCockpitPitch()
 {
-    if ( !_playerRoboMobileCockpitPitchBaseValid )
+    if ( !_playerRoboAIBehaviorCockpitPitchBaseValid )
         CapturePlayerMobileCockpitPitchBase();
 
-    if ( !_playerRoboMobileCockpitPitchBaseValid )
+    if ( !_playerRoboAIBehaviorCockpitPitchBaseValid )
         return;
 
     if ( _soundcarrier.Sounds.size() <= World::TVhclProto::SND_COCKPIT )
         return;
 
-    _soundcarrier.Sounds[World::TVhclProto::SND_COCKPIT].Pitch = _playerRoboMobileCockpitPitchBase;
+    _soundcarrier.Sounds[World::TVhclProto::SND_COCKPIT].Pitch = _playerRoboAIBehaviorCockpitPitchBase;
 }
 
 void NC_STACK_yparobo::ApplyPlayerMobileCockpitMovePitch(float speedPitchScale)
 {
-    if ( !_playerRoboMobile || !_playerRoboMobileMoveActive )
+    if ( !_playerRoboAIBehavior || !_playerRoboAIBehaviorMoveActive )
         return;
 
-    if ( !_playerRoboMobileCockpitPitchBaseValid )
+    if ( !_playerRoboAIBehaviorCockpitPitchBaseValid )
         CapturePlayerMobileCockpitPitchBase();
 
-    if ( !_playerRoboMobileCockpitPitchBaseValid )
+    if ( !_playerRoboAIBehaviorCockpitPitchBaseValid )
         return;
 
     if ( _soundcarrier.Sounds.size() <= World::TVhclProto::SND_COCKPIT )
@@ -1642,7 +1642,7 @@ void NC_STACK_yparobo::ApplyPlayerMobileCockpitMovePitch(float speedPitchScale)
         // Robo movement pitch is normally applied to SND_NORMAL.
         // When the player is inside the Host Station, the audible loop is SND_COCKPIT,
         // so mirror the same speed-based pitch scale there during mobile movement.
-        cockpit.Pitch = (int)((cockpit.PSample->SampleRate + _playerRoboMobileCockpitPitchBase) * speedPitchScale);
+        cockpit.Pitch = (int)((cockpit.PSample->SampleRate + _playerRoboAIBehaviorCockpitPitchBase) * speedPitchScale);
     }
 }
 
@@ -5584,10 +5584,10 @@ void NC_STACK_yparobo::Renew()
     _roboDockTargetBact = NULL;
     _roboTestEnemyTime = 0;
     _roboBeamTimePre = 0;
-    _playerRoboMobile = false;
+    _playerRoboAIBehavior = false;
     ResetPlayerMobileMove();
-    _playerRoboMobileCockpitPitchBase = 0;
-    _playerRoboMobileCockpitPitchBaseValid = false;
+    _playerRoboAIBehaviorCockpitPitchBase = 0;
+    _playerRoboAIBehaviorCockpitPitchBaseValid = false;
     _roboAttackersClearTime = 0;
     _roboAttackersTime = 0;
     _roboState = 0;
@@ -6241,8 +6241,8 @@ void NC_STACK_yparobo::setBACT_inputting(bool inpt)
         _world->setYW_userHostStation(this);
 
         _roboState |= ROBOSTATE_PLAYERROBO;
-        _playerRoboMobile = System::IniConf::GamePlayerRoboMobile.Get<bool>();
-        if ( _playerRoboMobile )
+        _playerRoboAIBehavior = System::IniConf::GamePlayerRoboAIBehavior.Get<bool>();
+        if ( _playerRoboAIBehavior )
             CapturePlayerMobileCockpitPitchBase();
     }
 }
@@ -6561,12 +6561,12 @@ int NC_STACK_yparobo::getROBO_loadFlags()
 {
     int flags = _roboEnergyLoadFlags;
 
-    if ( _playerRoboMobile && _playerRoboMobileMoveActive )
+    if ( _playerRoboAIBehavior && _playerRoboAIBehaviorMoveActive )
     {
         flags &= ~8;
-        if ( _playerRoboMobileMainEnergyTotal > 0 )
+        if ( _playerRoboAIBehaviorMainEnergyTotal > 0 )
             flags &= ~1;
-        if ( _playerRoboMobileBuildEnergyTotal > 0 )
+        if ( _playerRoboAIBehaviorBuildEnergyTotal > 0 )
             flags &= ~4;
     }
 
@@ -6577,12 +6577,12 @@ int NC_STACK_yparobo::getROBO_lossFlags()
 {
     int flags = _roboEnergyLossFlags;
 
-    if ( _playerRoboMobile && _playerRoboMobileMoveActive )
+    if ( _playerRoboAIBehavior && _playerRoboAIBehaviorMoveActive )
     {
         flags |= 8;
-        if ( _playerRoboMobileMainEnergyTotal > 0 )
+        if ( _playerRoboAIBehaviorMainEnergyTotal > 0 )
             flags |= 1;
-        if ( _playerRoboMobileBuildEnergyTotal > 0 )
+        if ( _playerRoboAIBehaviorBuildEnergyTotal > 0 )
             flags |= 4;
     }
 
@@ -6599,11 +6599,26 @@ bool NC_STACK_yparobo::IsPlayerRobo() const
     return (_roboState & ROBOSTATE_PLAYERROBO) != 0;
 }
 
-bool NC_STACK_yparobo::IsPlayerRoboMobile() const
+bool NC_STACK_yparobo::IsPlayerRoboAIBehavior() const
 {
-    return _playerRoboMobile;
+    return _playerRoboAIBehavior;
 }
 
+bool NC_STACK_yparobo::IsPlayerRoboAIBehaviorMoveActive() const
+{
+    return _playerRoboAIBehavior &&
+           _playerRoboAIBehaviorMoveActive &&
+           _primTtype == BACT_TGT_TYPE_CELL;
+}
+
+bool NC_STACK_yparobo::GetPlayerRoboAIBehaviorMoveTarget(vec3d *target) const
+{
+    if ( !target || !IsPlayerRoboAIBehaviorMoveActive() )
+        return false;
+
+    *target = _primTpos;
+    return true;
+}
 
 
 NC_STACK_yparobo::NC_STACK_yparobo()
@@ -6721,10 +6736,10 @@ NC_STACK_yparobo::NC_STACK_yparobo()
     _roboBeamPos = vec3d();
     _roboBeamFXTime = 0;
 
-    _playerRoboMobile = false;
+    _playerRoboAIBehavior = false;
     ResetPlayerMobileMove();
-    _playerRoboMobileCockpitPitchBase = 0;
-    _playerRoboMobileCockpitPitchBaseValid = false;
+    _playerRoboAIBehaviorCockpitPitchBase = 0;
+    _playerRoboAIBehaviorCockpitPitchBaseValid = false;
 
     for (auto &t : _roboAttackers)
     {

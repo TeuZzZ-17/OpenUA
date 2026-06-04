@@ -505,6 +505,18 @@ void sub_4F68FC(float a3, float a4, float a5, float a6, SDL_Color a7)
     GFX::Engine.raster_func201( Common::Line( sub_4F681C({a3, a4}), sub_4F681C({a5, a6}) )  );
 }
 
+bool GetPlayerRoboAIBehaviorMapTarget(NC_STACK_ypaworld *yw, vec3d *target)
+{
+    if ( !yw || !yw->_userRobo || !target )
+        return false;
+
+    NC_STACK_yparobo *robo = dynamic_cast<NC_STACK_yparobo *>(yw->_userRobo);
+    if ( !robo )
+        return false;
+
+    return robo->GetPlayerRoboAIBehaviorMoveTarget(target);
+}
+
 
 void sub_4F6980(CmdStream *cur, float a1, float a2, char a3, int a4, int a5)
 {
@@ -803,6 +815,18 @@ void sb_0x4f8f64__sub1(NC_STACK_ypaworld *yw)
         {
             sub_4F68FC(yw->_userUnit->_position.x, 0.0, yw->_userUnit->_position.x, -yw->_mapLength.y, yw->GetColor(13));
             sub_4F68FC(0.0, yw->_userUnit->_position.z, yw->_mapLength.x, yw->_userUnit->_position.z, yw->GetColor(13));
+        }
+
+        {
+            vec3d playerRoboTarget;
+            if ( GetPlayerRoboAIBehaviorMapTarget(yw, &playerRoboTarget) )
+            {
+                sub_4F68FC(yw->_userRobo->_position.x,
+                           yw->_userRobo->_position.z,
+                           playerRoboTarget.x,
+                           playerRoboTarget.z,
+                           yw->GetColor(9));
+            }
         }
 
         if ( robo_map.field_1E8 & 0x200 )
@@ -1525,6 +1549,15 @@ void sb_0x4f8f64__sub3(NC_STACK_ypaworld *yw, CmdStream *cur)
 
     default:
         break;
+    }
+
+    {
+        vec3d playerRoboTarget;
+        if ( GetPlayerRoboAIBehaviorMapTarget(yw, &playerRoboTarget) )
+        {
+            FontUA::select_tileset(cur, v114);
+            sub_4F6980(cur, playerRoboTarget.x, playerRoboTarget.z, 0x88, a4, a5);
+        }
     }
 
     if ( bzda.field_1D0 & 0x20 )
@@ -10380,9 +10413,9 @@ int NC_STACK_ypaworld::ypaworld_func64__sub21__sub3()
 
     NC_STACK_yparobo *robo = dynamic_cast<NC_STACK_yparobo *>(_userRobo);
 
-    bool mobilePlayerRobo = robo && robo->IsPlayerRoboMobile();
+    bool playerRoboAIBehavior = robo && robo->IsPlayerRoboAIBehavior();
 
-    if ( mobilePlayerRobo ||
+    if ( playerRoboAIBehavior ||
          (_cellOnMouse->PurposeType != cellArea::PT_GATEOPENED && (_cellOnMouse->PurposeType != cellArea::PT_POWERSTATION || _cellOnMouse->owner != _userRobo->_owner)) )
     {
         v18 = (POW2(v15) / 230.4);

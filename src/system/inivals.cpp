@@ -189,7 +189,7 @@ Common::Ini::Key IniConf::GameDebug("game.debug", Common::Ini::KT_BOOL);
 // Yparobo keys
 Common::Ini::Key IniConf::GameNewAI("game.newai",    Common::Ini::KT_BOOL, true);
 Common::Ini::Key IniConf::GameTimeLine("game.timeline", Common::Ini::KT_DIGIT, (int32_t)600000);
-Common::Ini::Key IniConf::GamePlayerRoboMobile("game.player_robo_mobile", Common::Ini::KT_BOOL, false);
+Common::Ini::Key IniConf::GamePlayerRoboAIBehavior("game.player_robo_ai_behavior", Common::Ini::KT_BOOL, false);
 
 // Ypaworld keys
 Common::Ini::Key IniConf::NetGameExclusiveGem("netgame.exclusivegem", Common::Ini::KT_BOOL, true);
@@ -371,7 +371,7 @@ void IniConf::Init()
 
         , &GameNewAI
         , &GameTimeLine
-        , &GamePlayerRoboMobile
+        , &GamePlayerRoboAIBehavior
 
         , &NetGameExclusiveGem
         , &NetWaitStart
