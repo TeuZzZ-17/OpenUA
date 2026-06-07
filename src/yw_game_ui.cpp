@@ -54,8 +54,6 @@ enum StatusIconPowerState
     STATUS_ICON_POWER_DRAIN
 };
 
-const std::string STATUS_ICON_DEFAULT_REGEN = "StatusIcons/regen.png";
-
 bool StatusIconIsNonRoboGun(NC_STACK_ypabact *bact)
 {
     if ( !bact || bact->_bact_type != BACT_TYPES_GUN )
@@ -177,13 +175,14 @@ int StatusIconCollect(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact, World::TVhc
 
     StatusIconPowerState powerState = StatusIconGetPowerStationState(yw, bact);
     if ( powerState == STATUS_ICON_POWER_DRAIN )
-        StatusIconAdd(icons, iconCount, vhcl->drain_icon);
+    {
+        if ( !vhcl->drain_icon.empty() )
+            StatusIconAdd(icons, iconCount, vhcl->drain_icon);
+    }
     else if ( powerState == STATUS_ICON_POWER_REGEN )
     {
         if ( !vhcl->regen_icon.empty() )
             StatusIconAdd(icons, iconCount, vhcl->regen_icon);
-        else
-            StatusIconAdd(icons, iconCount, STATUS_ICON_DEFAULT_REGEN);
     }
 
     return iconCount;
