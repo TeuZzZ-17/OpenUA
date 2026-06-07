@@ -68,6 +68,7 @@ struct TActiveDebuffState
     std::string name;
     std::string icon;
     int damage = 0;
+    float damage_percent = 0.0;
     int tick_time = 1000;
     int expire_time = 0;
     int next_tick_time = 0;
@@ -87,6 +88,7 @@ struct TActiveDebuffState
         name.clear();
         icon.clear();
         damage = 0;
+        damage_percent = 0.0;
         tick_time = 1000;
         expire_time = 0;
         next_tick_time = 0;

@@ -1859,6 +1859,15 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
         int damage = parser.stol(p2, NULL, 0);
         _wpn->debuff.damage = damage > 0 ? damage : 0;
     }
+    else if ( !StriCmp(p1, "debuff_damage_percent") )
+    {
+        float damagePercent = parser.stof(p2, 0);
+        _wpn->debuff.damage_percent = damagePercent > 0.0 ? damagePercent : 0.0;
+    }
+    else if ( !StriCmp(p1, "debuff_mindcontrol") )
+    {
+        _wpn->debuff.mindcontrol = parser.stol(p2, NULL, 0) != 0;
+    }
     else if ( !StriCmp(p1, "debuff_tick_time") )
     {
         int tickTime = parser.stol(p2, NULL, 0);

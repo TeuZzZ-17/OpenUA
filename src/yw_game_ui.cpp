@@ -54,6 +54,17 @@ enum StatusIconPowerState
     STATUS_ICON_POWER_DRAIN
 };
 
+const std::string STATUS_ICON_DEFAULT_REGEN = "StatusIcons/regen.png";
+
+bool StatusIconIsNonRoboGun(NC_STACK_ypabact *bact)
+{
+    if ( !bact || bact->_bact_type != BACT_TYPES_GUN )
+        return false;
+
+    NC_STACK_ypagun *gun = (NC_STACK_ypagun *)bact;
+    return !gun->IsRoboGun();
+}
+
 bool StatusIconAdd(StatusIconList &icons, int &count, const std::string &path)
 {
     if ( path.empty() )
@@ -168,7 +179,12 @@ int StatusIconCollect(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact, World::TVhc
     if ( powerState == STATUS_ICON_POWER_DRAIN )
         StatusIconAdd(icons, iconCount, vhcl->drain_icon);
     else if ( powerState == STATUS_ICON_POWER_REGEN )
-        StatusIconAdd(icons, iconCount, vhcl->regen_icon);
+    {
+        if ( !vhcl->regen_icon.empty() )
+            StatusIconAdd(icons, iconCount, vhcl->regen_icon);
+        else
+            StatusIconAdd(icons, iconCount, STATUS_ICON_DEFAULT_REGEN);
+    }
 
     return iconCount;
 }
@@ -209,17 +225,22 @@ void StatusIconRenderWorld(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact, World:
 
 bool StatusIconCanRenderCockpitUnit(NC_STACK_ypabact *bact)
 {
-    return bact &&
-           bact->_owner != World::OWNER_0 &&
-           bact->_energy_max > 0 &&
-           bact->_vehicleID >= 0 &&
-           bact->_bact_type != BACT_TYPES_MISSLE &&
-           bact->_bact_type != BACT_TYPES_ROBO &&
-           bact->_bact_type != BACT_TYPES_GUN &&
-           bact->_status != BACT_STATUS_DEAD &&
-           bact->_status != BACT_STATUS_CREATE &&
-           bact->_status != BACT_STATUS_BEAM &&
-           !(bact->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2 | BACT_STFLAG_NORENDER));
+    if ( !bact ||
+         bact->_owner == World::OWNER_0 ||
+         bact->_energy_max <= 0 ||
+         bact->_vehicleID < 0 ||
+         bact->_bact_type == BACT_TYPES_MISSLE ||
+         bact->_bact_type == BACT_TYPES_ROBO ||
+         bact->_status == BACT_STATUS_DEAD ||
+         bact->_status == BACT_STATUS_CREATE ||
+         bact->_status == BACT_STATUS_BEAM ||
+         (bact->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2 | BACT_STFLAG_NORENDER)) )
+        return false;
+
+    if ( bact->_bact_type == BACT_TYPES_GUN )
+        return StatusIconIsNonRoboGun(bact);
+
+    return true;
 }
 
 void StatusIconRenderCockpit(NC_STACK_ypaworld *yw, sklt_wis *wis, NC_STACK_ypabact *bact, World::TVhclProto *vhcl, float hudX, float hudY)

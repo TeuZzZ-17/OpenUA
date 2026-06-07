@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <stack>
 #include <algorithm>
+#include <limits>
 #include "yw.h"
 #include "ypabact.h"
 #include "yparobo.h"
@@ -90,6 +91,115 @@ static bool ypabact_IsUsableControlFallback(NC_STACK_ypabact *bact, NC_STACK_ypa
            bact != dying &&
            bact->_status != BACT_STATUS_DEAD &&
            !(bact->_status_flg & BACT_STFLAG_DEATH1);
+}
+
+static void ypabact_SafeDetachControlFrom(NC_STACK_ypabact *dying, NC_STACK_ypabact *preferredFallback);
+
+static bool ypabact_IsMindcontrolUnitType(NC_STACK_ypabact *bact)
+{
+    if ( !bact )
+        return false;
+
+    if ( bact->_bact_type == BACT_TYPES_GUN )
+    {
+        NC_STACK_ypagun *gun = dynamic_cast<NC_STACK_ypagun *>(bact);
+        if ( !gun || gun->IsRoboGun() )
+            return false;
+    }
+
+    switch ( bact->_bact_type )
+    {
+    case BACT_TYPES_BACT:
+    case BACT_TYPES_TANK:
+    case BACT_TYPES_FLYER:
+    case BACT_TYPES_UFO:
+    case BACT_TYPES_CAR:
+    case BACT_TYPES_GUN:
+    case BACT_TYPES_HOVER:
+        return true;
+
+    default:
+        return false;
+    }
+}
+
+static bool ypabact_CanBeMindcontrolled(NC_STACK_ypabact *target, NC_STACK_ypabact *source)
+{
+    return target &&
+           source &&
+           target != source &&
+           target->getBACT_pWorld() &&
+           target->_bact_type != BACT_TYPES_ROBO &&
+           target->_bact_type != BACT_TYPES_MISSLE &&
+           target->_owner != source->_owner &&
+           source->_owner != World::OWNER_0 &&
+           target->_energy > 0 &&
+           target->_energy_max > 0 &&
+           ypabact_IsMindcontrolUnitType(target) &&
+           target->_status != BACT_STATUS_DEAD &&
+           target->_status != BACT_STATUS_CREATE &&
+           target->_status != BACT_STATUS_BEAM &&
+           !(target->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2));
+}
+
+static NC_STACK_yparobo *ypabact_GetMindcontrolHost(NC_STACK_ypabact *source)
+{
+    if ( !source )
+        return NULL;
+
+    if ( source->_host_station &&
+         source->_host_station->_status != BACT_STATUS_DEAD &&
+         !(source->_host_station->_status_flg & BACT_STFLAG_DEATH1) )
+        return source->_host_station;
+
+    if ( source->_bact_type == BACT_TYPES_ROBO &&
+         source->_status != BACT_STATUS_DEAD &&
+         !(source->_status_flg & BACT_STFLAG_DEATH1) )
+        return dynamic_cast<NC_STACK_yparobo *>(source);
+
+    return NULL;
+}
+
+static void ypabact_ApplyMindcontrol(NC_STACK_ypabact *target, NC_STACK_ypabact *source)
+{
+    if ( !ypabact_CanBeMindcontrolled(target, source) )
+        return;
+
+    NC_STACK_ypaworld *world = target->getBACT_pWorld();
+    NC_STACK_yparobo *newHost = ypabact_GetMindcontrolHost(source);
+    uint8_t oldOwner = target->_owner;
+    uint8_t newOwner = source->_owner;
+
+    if ( world->_userUnit == target || world->_viewerBact == target )
+        ypabact_SafeDetachControlFrom(target, world->_userRobo);
+
+    target->_owner = newOwner;
+    target->_m_owner = 0;
+    target->_killer = NULL;
+    target->_killer_owner = 0;
+
+    if ( oldOwner < world->_countUnitsPerOwner.size() && world->_countUnitsPerOwner[oldOwner] > 0 )
+        world->_countUnitsPerOwner[oldOwner]--;
+
+    if ( newOwner < world->_countUnitsPerOwner.size() )
+        world->_countUnitsPerOwner[newOwner]++;
+
+    if ( newHost )
+    {
+        target->_host_station = newHost;
+        int commandId = newHost->getROBO_commCount();
+        target->_commandID = commandId;
+        if ( world->_isNetGame )
+            target->_commandID |= newOwner << 24;
+        newHost->setROBO_commCount(commandId + 1);
+
+        if ( target->_parent != newHost )
+            newHost->AddSubject(target);
+    }
+
+    target->_primTtype = BACT_TGT_TYPE_NONE;
+    target->_secndTtype = BACT_TGT_TYPE_NONE;
+    target->_assess_time = 0;
 }
 
 static void ypabact_SafeDetachControlFrom(NC_STACK_ypabact *dying, NC_STACK_ypabact *preferredFallback)
@@ -178,6 +288,37 @@ static vec3d ypabact_BuildRandomAttachedFXOffset(float radius, float overeof)
     return localOffset;
 }
 
+static int ypabact_GetDebuffFXLifetime(const TActiveDebuffState &debuff)
+{
+    int lifetime = debuff.tick_time + 100;
+
+    if ( lifetime < 1000 )
+        lifetime = 1000;
+    else if ( lifetime > 5000 )
+        lifetime = 5000;
+
+    return lifetime;
+}
+
+static void ypabact_SpawnDebuffFXEvent(NC_STACK_ypabact *bact, int lifetime)
+{
+    if ( !bact || !bact->_active_debuff.active )
+        return;
+
+    NC_STACK_ypaworld *world = bact->getBACT_pWorld();
+    if ( !world )
+        return;
+
+    for (int16_t fxVp : bact->_active_debuff.fx_vps)
+    {
+        if ( fxVp <= 0 )
+            continue;
+
+        vec3d localOffset = ypabact_BuildRandomAttachedFXOffset(bact->_active_debuff.fx_random_pos, bact->_overeof);
+        world->SpawnAttachedTransientVP(fxVp, bact, localOffset, lifetime);
+    }
+}
+
 static void ypabact_ApplyDamagedRuntime(NC_STACK_ypabact *bact, bool active)
 {
     bact->_damaged_fx_active = active;
@@ -222,8 +363,11 @@ static void ypabact_ApplyDamagedSoundPitch(NC_STACK_ypabact *bact)
     TSoundSource &normal = bact->_soundcarrier.Sounds[World::TVhclProto::SND_NORMAL];
     TSoundSource &wait = bact->_soundcarrier.Sounds[World::TVhclProto::SND_WAIT];
 
-    normal.Pitch = ypabact_ScaledPitch(normal, bact->_base_snd_normal_pitch, pitchMult);
-    wait.Pitch = ypabact_ScaledPitch(wait, bact->_base_snd_wait_pitch, pitchMult);
+    if ( pitchMult != 1.0 )
+    {
+        normal.Pitch = ypabact_ScaledPitch(normal, normal.Pitch, pitchMult);
+        wait.Pitch = ypabact_ScaledPitch(wait, wait.Pitch, pitchMult);
+    }
 }
 
 static bool ypabact_EnsureDamagedShakeCarrier(NC_STACK_ypabact *bact)
@@ -1508,10 +1652,16 @@ void NC_STACK_ypabact::ApplyWeaponDebuff(World::TWeaponDebuffConfig &debuff, NC_
     if ( !ypabact_CanUseGameplayStatusMechanics(this) )
         return;
 
+    if ( debuff.mindcontrol && !ypabact_CanBeMindcontrolled(this, source) )
+        return;
+
+    bool canMindcontrol = debuff.mindcontrol;
+
     _active_debuff.active = true;
     _active_debuff.name = debuff.name.empty() ? "debuff" : debuff.name;
     _active_debuff.icon = debuff.icon;
     _active_debuff.damage = debuff.damage > 0 ? debuff.damage : 0;
+    _active_debuff.damage_percent = debuff.damage_percent > 0.0 ? debuff.damage_percent : 0.0;
     _active_debuff.tick_time = debuff.tick_time > 0 ? debuff.tick_time : 1000;
     _active_debuff.expire_time = _clock + debuff.duration;
     _active_debuff.next_tick_time = _clock + _active_debuff.tick_time;
@@ -1563,6 +1713,11 @@ void NC_STACK_ypabact::ApplyWeaponDebuff(World::TWeaponDebuffConfig &debuff, NC_
         snd.PShkFx = NULL;
         snd.SetShk(false);
     }
+
+    if ( canMindcontrol )
+        ypabact_ApplyMindcontrol(this, source);
+
+    ypabact_SpawnDebuffFXEvent(this, ypabact_GetDebuffFXLifetime(_active_debuff));
 }
 
 void NC_STACK_ypabact::UpdateActiveDebuff(update_msg *)
@@ -1593,25 +1748,29 @@ void NC_STACK_ypabact::UpdateActiveDebuff(update_msg *)
     if ( _active_debuff.source_gid )
         source = ypabact_FindLiveBactByGid(_world->_unitsList, _active_debuff.source_gid);
 
-    if ( _active_debuff.damage > 0 )
+    int tickDamage = _active_debuff.damage;
+    if ( _active_debuff.damage_percent > 0.0 && _energy_max > 0 )
+    {
+        double percentDamage = (double)_energy_max * ((double)_active_debuff.damage_percent / 100.0);
+        if ( percentDamage > 0.0 )
+        {
+            double maxExtra = (double)std::numeric_limits<int>::max() - (double)tickDamage;
+            if ( percentDamage >= maxExtra )
+                tickDamage = std::numeric_limits<int>::max();
+            else
+                tickDamage += (int)(percentDamage + 0.5);
+        }
+    }
+
+    if ( tickDamage > 0 )
     {
         bact_arg84 arg84;
-        arg84.energy = -_active_debuff.damage;
+        arg84.energy = -tickDamage;
         arg84.unit = source;
         ModifyEnergy(&arg84);
     }
 
-    if ( _world )
-    {
-        for (int16_t fxVp : _active_debuff.fx_vps)
-        {
-            if ( fxVp <= 0 )
-                continue;
-
-            vec3d localOffset = ypabact_BuildRandomAttachedFXOffset(_active_debuff.fx_random_pos, _overeof);
-            _world->SpawnAttachedTransientVP(fxVp, this, localOffset, 1000);
-        }
-    }
+    ypabact_SpawnDebuffFXEvent(this, ypabact_GetDebuffFXLifetime(_active_debuff));
 
     if ( !_debuff_soundcarrier.Sounds.empty() )
     {

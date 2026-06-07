@@ -140,6 +140,8 @@ struct TWeaponDebuffConfig
     std::string name;
     std::string icon;
     int damage = 0;
+    float damage_percent = 0.0;
+    bool mindcontrol = false;
     int tick_time = 1000;
     int duration = 5000;
     float force_mult = 1.0;
