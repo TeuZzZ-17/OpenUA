@@ -1538,6 +1538,7 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
 
         bacto->_destroyFX = vhcl.dest_fx;
         bacto->_extDestroyFX = vhcl.ExtDestroyFX;
+        bacto->_chainFX = vhcl.chain_fx;
 
         for (NC_STACK_base *& vp_fx : bacto->_vp_fx_models)
             vp_fx = NULL;
@@ -1686,6 +1687,7 @@ NC_STACK_ypamissile * NC_STACK_ypaworld::ypaworld_func147(ypaworld_arg146 *arg)
 
     wobj->_destroyFX = wproto.dfx;
     wobj->_extDestroyFX = wproto.ExtDestroyFX;
+    wobj->_chainFX = wproto.chain_fx;
 
     int missileType;
 

@@ -43,6 +43,26 @@ static int ypamissile_ScaleAoeEnergy(int energy, float factor)
     return (int)((float)energy * factor);
 }
 
+static NC_STACK_ypabact *ypamissile_FindLiveBactByGid(World::RefBactList &list, int32_t gid)
+{
+    for (NC_STACK_ypabact *unit : list)
+    {
+        if ( unit->_gid == gid )
+        {
+            if ( unit->_kidRef.IsListType(World::BLIST_CACHE) || unit->_status == BACT_STATUS_DEAD )
+                return NULL;
+
+            return unit;
+        }
+
+        NC_STACK_ypabact *kid = ypamissile_FindLiveBactByGid(unit->_kidList, gid);
+        if ( kid )
+            return kid;
+    }
+
+    return NULL;
+}
+
 static vec3d ypamissile_ApplyDirectionalSpread(const mat3x3 &rotation, const vec3d &direction, float spreadX, float spreadY)
 {
     if ( spreadX <= 0.0 && spreadY <= 0.0 )
@@ -101,6 +121,10 @@ size_t NC_STACK_ypamissile::Init(IDVList &stak)
     _mislClusterAge = 0;
     _mislClusterDone = false;
     _mislClusterChild = false;
+    _mislAttachedToTarget = false;
+    _mislAttachTargetGid = 0;
+    _mislAttachOffset = vec3d(0.0, 0.0, 0.0);
+    _mislLastAttachedPosition = vec3d(0.0, 0.0, 0.0);
     _mislClusterSoundCarrier.Clear();
 
     for( auto& it : stak )
@@ -442,9 +466,11 @@ bool NC_STACK_ypamissile::TryClusterSplit()
     return true;
 }
 
-bool NC_STACK_ypamissile::TubeCollisionTest()
+bool NC_STACK_ypamissile::TubeCollisionTest(bool applyDirectDamage, NC_STACK_ypabact **hitTarget)
 {
     _mislDirectHitUnits.clear();
+    if ( hitTarget )
+        *hitTarget = NULL;
 
     vec3d collisionSumPosition(0.0, 0.0, 0.0);
     int collisionCount = 0;
@@ -587,12 +613,13 @@ bool NC_STACK_ypamissile::TubeCollisionTest()
                                     collisionCount++;
                                     collisionSumPosition += bct->_position;
 
-                                    bct->_status_flg &= ~BACT_STFLAG_LAND;
+                                    if ( hitTarget && !*hitTarget )
+                                        *hitTarget = bct;
 
-                                    
-
-                                    RememberDirectHitUnit(bct);
-                                    ApplyDamageToBact(bct, _energy);
+                                    if ( applyDirectDamage )
+                                    {
+                                        ApplyDirectHitToBact(bct);
+                                    }
 
                                     break;
                                 }
@@ -694,6 +721,16 @@ int NC_STACK_ypamissile::ApplyDamageToBact(NC_STACK_ypabact *bct, int baseEnergy
     }
 
     return 0;
+}
+
+void NC_STACK_ypamissile::ApplyDirectHitToBact(NC_STACK_ypabact *bct)
+{
+    if ( !bct )
+        return;
+
+    bct->_status_flg &= ~BACT_STFLAG_LAND;
+    RememberDirectHitUnit(bct);
+    ApplyDamageToBact(bct, _energy);
 }
 
 const char *NC_STACK_ypamissile::GetAreaDamageSkipReason(NC_STACK_ypabact *bct, bool allowFriendly) const
@@ -1112,6 +1149,51 @@ void NC_STACK_ypamissile::ApplySectorAreaDamage()
     }
 }
 
+void NC_STACK_ypamissile::AttachDelayedDetonationToTarget(NC_STACK_ypabact *target)
+{
+    if ( !target )
+        return;
+
+    _mislAttachedToTarget = true;
+    _mislAttachTargetGid = target->_gid;
+    _mislAttachOffset = _position - target->_position;
+    _mislLastAttachedPosition = _position;
+    _mislType = MISL_INTERNAL;
+    _mislFlags |= FLAG_MISL_COUNTDELAY;
+    _fly_dir_length = 0.0;
+}
+
+NC_STACK_ypabact *NC_STACK_ypamissile::FindAttachedTarget()
+{
+    if ( !_world || !_mislAttachedToTarget || !_mislAttachTargetGid )
+        return NULL;
+
+    return ypamissile_FindLiveBactByGid(_world->_unitsList, _mislAttachTargetGid);
+}
+
+void NC_STACK_ypamissile::UpdateAttachedDetonationPosition()
+{
+    NC_STACK_ypabact *target = FindAttachedTarget();
+
+    if ( target )
+    {
+        _position = target->_position + _mislAttachOffset;
+        _mislLastAttachedPosition = _position;
+    }
+    else if ( _mislAttachedToTarget )
+    {
+        _position = _mislLastAttachedPosition;
+    }
+}
+
+void NC_STACK_ypamissile::ApplyAttachedDirectHitDamage()
+{
+    NC_STACK_ypabact *target = FindAttachedTarget();
+
+    if ( target )
+        ApplyDirectHitToBact(target);
+}
+
 vec3d NC_STACK_ypamissile::CalcForceVector()
 {
     _thraction = _force;
@@ -1149,6 +1231,12 @@ void NC_STACK_ypamissile::AI_layer3(update_msg *arg)
         if ( _mislFlags & FLAG_MISL_COUNTDELAY)
             _mislDelayTime -= arg->frameTime;
 
+        if ( _mislAttachedToTarget )
+        {
+            UpdateAttachedDetonationPosition();
+            _world->ypaworld_func145(this);
+        }
+
         if ( (_mislFlags & FLAG_MISL_COUNTDELAY)  &&  _mislDelayTime <= 0 )
         {
             bool applySectorDamage = (!(_mislFlags & FLAG_MISL_IGNOREBUILDS) || _pSector->PurposeType == cellArea::PT_NONE) &&
@@ -1159,6 +1247,13 @@ void NC_STACK_ypamissile::AI_layer3(update_msg *arg)
             {
                 RememberDirectHitBuildingAt(directDamagePos);
                 RememberDirectHitSectorAt(directDamagePos);
+            }
+
+            if ( _mislAttachedToTarget )
+            {
+                ApplyAttachedDirectHitDamage();
+                _mislAttachedToTarget = false;
+                _mislAttachTargetGid = 0;
             }
 
             Impact();
@@ -1222,23 +1317,31 @@ void NC_STACK_ypamissile::AI_layer3(update_msg *arg)
                 break;
             }
 
-            if ( TubeCollisionTest() )
+            if ( _mislType == MISL_INTERNAL )
+                return;
+
+            NC_STACK_ypabact *hitTarget = NULL;
+            if ( TubeCollisionTest(_mislDelayTime <= 0, &hitTarget) )
             {
+                ResetViewing();
+
+                if ( _mislDelayTime > 0 )
+                {
+                    AttachDelayedDetonationToTarget(hitTarget);
+                    _mislDirectHitUnits.clear();
+                    return;
+                }
+
                 setState_msg arg78;
                 Impact();
-
                 arg78.newStatus = BACT_STATUS_DEAD;
                 arg78.unsetFlags = 0;
                 arg78.setFlags = 0;
 
                 SetState(&arg78);
 
-                ResetViewing();
                 return;
             }
-            
-            if ( _mislType == MISL_INTERNAL )
-                return;
             
             ypaworld_arg136 arg136;
             arg136.stPos = _old_pos;
@@ -1409,6 +1512,10 @@ void NC_STACK_ypamissile::Renew()
     _mislClusterAge = 0;
     _mislClusterDone = false;
     _mislClusterChild = false;
+    _mislAttachedToTarget = false;
+    _mislAttachTargetGid = 0;
+    _mislAttachOffset = vec3d(0.0, 0.0, 0.0);
+    _mislLastAttachedPosition = vec3d(0.0, 0.0, 0.0);
     SFXEngine::SFXe.StopCarrier(&_mislClusterSoundCarrier);
     _mislClusterSoundCarrier.Clear();
 
@@ -1436,7 +1543,8 @@ size_t NC_STACK_ypamissile::SetStateInternal(setState_msg *arg)
 
         SFXEngine::SFXe.startSound(&_soundcarrier, 2);
 
-        StartDestFXByType(World::DestFX::FX_DEATH);
+        if ( !StartChainFXByTrigger(World::TChainFXConfig::TRIGGER_IMPACT) )
+            StartDestFXByType(World::DestFX::FX_DEATH);
 
         _fly_dir_length = 0;
     }
@@ -1463,7 +1571,8 @@ size_t NC_STACK_ypamissile::SetStateInternal(setState_msg *arg)
 
         SFXEngine::SFXe.startSound(&_soundcarrier, 2);
 
-        StartDestFXByType(World::DestFX::FX_MEGADETH);
+        if ( !StartChainFXByTrigger(World::TChainFXConfig::TRIGGER_IMPACT) )
+            StartDestFXByType(World::DestFX::FX_MEGADETH);
 
         _fly_dir_length = 0;
     }

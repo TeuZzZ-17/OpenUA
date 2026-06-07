@@ -590,6 +590,7 @@ public:
     void sub_4843BC(NC_STACK_ypabact *bact2, int a3);
     void sub_493480(NC_STACK_ypabact *bact2, int mode);
     void StartDestFX(const World::DestFX &fx);
+    bool StartChainFXByTrigger(uint8_t trigger);
 
     void DoTargetWaypoint();
     void FixSectorFall();
@@ -741,6 +742,7 @@ public:
     int _vp_extra_mode;
     std::vector<World::DestFX> _destroyFX;    // dest_fx
     std::vector<World::DestFX> _extDestroyFX; // ext_dest_fx
+    std::vector<World::TChainFXConfig> _chainFX;
     float _radius;
     float _viewer_radius;
     float _overeof;

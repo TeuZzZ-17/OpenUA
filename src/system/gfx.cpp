@@ -34,7 +34,7 @@ SDL_PixelFormat *GFXEngine::_pixfmt = NULL;
 GLint GFXEngine::_glPixfmt, GFXEngine::_glPixtype;
 bool GFXEngine::_staticInited = false;
 
-const std::array<vec3d, 8> GFXEngine::_clrEff 
+const std::array<vec3d, 17> GFXEngine::_clrEff
 {   vec3d(1.0,  1.0,  1.0)
 ,   vec3d(1.21, 0.0,  0.29)
 ,   vec3d(0.13, 0.43, 2.17)
@@ -42,7 +42,16 @@ const std::array<vec3d, 8> GFXEngine::_clrEff
 ,   vec3d(1.0,  1.0,  1.0)
 ,   vec3d(0.57, 0.59, 0.59)
 ,   vec3d(1.4,  1.08,  1.12)
-,   vec3d(0.3,  0.60, 0.7)};
+,   vec3d(0.3,  0.60, 0.7)
+,   vec3d(1.60, 1.45, 0.05)
+,   vec3d(1.80, 0.72, 0.05)
+,   vec3d(1.05, 0.25, 1.50)
+,   vec3d(0.10, 1.55, 1.55)
+,   vec3d(1.55, 0.10, 1.55)
+,   vec3d(1.70, 1.70, 1.70)
+,   vec3d(0.08, 0.08, 0.08)
+,   vec3d(0.70, 0.70, 0.70)
+,   vec3d(0.80, 0.42, 0.16)};
 
 std::vector<TGFXDeviceInfo> GFXEngine::_devices
 {
@@ -1855,6 +1864,9 @@ void GFXEngine::SetColorEffectsPowers(const std::vector<ColorFx> &arg)
 
         for (ColorFx fx : arg)
         {
+            if ( fx.Id < 0 || fx.Id >= (int)_clrEff.size() )
+                continue;
+
             switch(fx.Id)
             {
                 case 4:
@@ -4161,6 +4173,42 @@ float GFXEngine::GetColorEffectPower(int id)
             
         case 7:
             pwr = System::IniConf::GfxColorEffPower7.Get<int32_t>();
+            break;
+
+        case 8:
+            pwr = System::IniConf::GfxColorEffPower8.Get<int32_t>();
+            break;
+
+        case 9:
+            pwr = System::IniConf::GfxColorEffPower9.Get<int32_t>();
+            break;
+
+        case 10:
+            pwr = System::IniConf::GfxColorEffPower10.Get<int32_t>();
+            break;
+
+        case 11:
+            pwr = System::IniConf::GfxColorEffPower11.Get<int32_t>();
+            break;
+
+        case 12:
+            pwr = System::IniConf::GfxColorEffPower12.Get<int32_t>();
+            break;
+
+        case 13:
+            pwr = System::IniConf::GfxColorEffPower13.Get<int32_t>();
+            break;
+
+        case 14:
+            pwr = System::IniConf::GfxColorEffPower14.Get<int32_t>();
+            break;
+
+        case 15:
+            pwr = System::IniConf::GfxColorEffPower15.Get<int32_t>();
+            break;
+
+        case 16:
+            pwr = System::IniConf::GfxColorEffPower16.Get<int32_t>();
             break;
     }
     

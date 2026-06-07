@@ -6341,6 +6341,7 @@ void NC_STACK_ypabact::Renew()
         x = World::DestFX();
     
     _extDestroyFX.clear();
+    _chainFX.clear();
 
     for (extra_vproto &vp : _vp_extra)
         vp = extra_vproto();
@@ -8131,6 +8132,24 @@ void NC_STACK_ypabact::StartDestFXByType(uint8_t type)
     }
 }
 
+bool NC_STACK_ypabact::StartChainFXByTrigger(uint8_t trigger)
+{
+    if ( !_world || !_world->ypaworld_func145(this) || _chainFX.empty() )
+        return false;
+
+    bool spawned = false;
+    for (const World::TChainFXConfig &fx : _chainFX)
+    {
+        if ( fx.trigger != trigger )
+            continue;
+
+        _world->SpawnChainFX(fx, _position, _rotation);
+        spawned = true;
+    }
+
+    return spawned;
+}
+
 void NC_STACK_ypabact::CorrectPositionOnLand()
 {
     float radius;
@@ -8503,7 +8522,8 @@ size_t NC_STACK_ypabact::SetStateInternal(setState_msg *arg)
 
         _soundFlags |= 0x80;
 
-        StartDestFXByType(World::DestFX::FX_DEATH);
+        if ( !StartChainFXByTrigger(World::TChainFXConfig::TRIGGER_DESTROYED) )
+            StartDestFXByType(World::DestFX::FX_DEATH);
 
         result = 1;
     }
@@ -8753,7 +8773,8 @@ size_t NC_STACK_ypabact::SetStateInternal(setState_msg *arg)
 
             SFXEngine::SFXe.startSound(&_soundcarrier, 4);
 
-            StartDestFXByType(World::DestFX::FX_MEGADETH);
+            if ( !StartChainFXByTrigger(World::TChainFXConfig::TRIGGER_DESTROYED) )
+                StartDestFXByType(World::DestFX::FX_MEGADETH);
 
             _fly_dir_length = 0;
 

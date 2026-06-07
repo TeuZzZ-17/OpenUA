@@ -2345,6 +2345,7 @@ public:
     void FreeGameDataCursors();
 
     void SpawnTransientVP(int32_t modelId, const vec3d &pos, const mat3x3 &rot, int32_t lifeTime);
+    void SpawnChainFX(const World::TChainFXConfig &config, const vec3d &pos, const mat3x3 &rot);
     void SpawnAttachedTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime);
     bool UpdateRandomFXTimer(int intervalMin, int intervalMax, int32_t &nextTime);
     void SpawnRandomizedTransientVP(int32_t modelId, const vec3d &ownerPos, float randomPos);
@@ -2397,6 +2398,11 @@ public:
         bool followOwner = false;
         int32_t followOwnerGid = 0;
         vec3d followLocalOffset;
+        bool chainFX = false;
+        std::vector<NC_STACK_base *> chainBases;
+        int32_t chainIndex = -1;
+        float startScale = 1.0;
+        float endScale = 1.0;
 
         TTransientVP(NC_STACK_base *base, const vec3d &p, const mat3x3 &r, int32_t life)
         : vp(base ? base->GenRenderInstance() : NULL), pos(p), rot(r), lifeTime(life)

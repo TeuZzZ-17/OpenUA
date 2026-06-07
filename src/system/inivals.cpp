@@ -46,6 +46,15 @@ Common::Ini::Key IniConf::GfxColorEffPower4("gfx.color_eff_pwr[4]", Common::Ini:
 Common::Ini::Key IniConf::GfxColorEffPower5("gfx.color_eff_pwr[5]", Common::Ini::KT_DIGIT, (int32_t)100);
 Common::Ini::Key IniConf::GfxColorEffPower6("gfx.color_eff_pwr[6]", Common::Ini::KT_DIGIT, (int32_t)100);
 Common::Ini::Key IniConf::GfxColorEffPower7("gfx.color_eff_pwr[7]", Common::Ini::KT_DIGIT, (int32_t)100);
+Common::Ini::Key IniConf::GfxColorEffPower8("gfx.color_eff_pwr[8]", Common::Ini::KT_DIGIT, (int32_t)100);
+Common::Ini::Key IniConf::GfxColorEffPower9("gfx.color_eff_pwr[9]", Common::Ini::KT_DIGIT, (int32_t)100);
+Common::Ini::Key IniConf::GfxColorEffPower10("gfx.color_eff_pwr[10]", Common::Ini::KT_DIGIT, (int32_t)100);
+Common::Ini::Key IniConf::GfxColorEffPower11("gfx.color_eff_pwr[11]", Common::Ini::KT_DIGIT, (int32_t)100);
+Common::Ini::Key IniConf::GfxColorEffPower12("gfx.color_eff_pwr[12]", Common::Ini::KT_DIGIT, (int32_t)100);
+Common::Ini::Key IniConf::GfxColorEffPower13("gfx.color_eff_pwr[13]", Common::Ini::KT_DIGIT, (int32_t)100);
+Common::Ini::Key IniConf::GfxColorEffPower14("gfx.color_eff_pwr[14]", Common::Ini::KT_DIGIT, (int32_t)100);
+Common::Ini::Key IniConf::GfxColorEffPower15("gfx.color_eff_pwr[15]", Common::Ini::KT_DIGIT, (int32_t)100);
+Common::Ini::Key IniConf::GfxColorEffPower16("gfx.color_eff_pwr[16]", Common::Ini::KT_DIGIT, (int32_t)100);
 
 Common::Ini::Key IniConf::GfxVBO("gfx.vbo", Common::Ini::KT_BOOL, true);
 
@@ -387,6 +396,15 @@ void IniConf::Init()
         , &GfxColorEffPower5
         , &GfxColorEffPower6
         , &GfxColorEffPower7
+        , &GfxColorEffPower8
+        , &GfxColorEffPower9
+        , &GfxColorEffPower10
+        , &GfxColorEffPower11
+        , &GfxColorEffPower12
+        , &GfxColorEffPower13
+        , &GfxColorEffPower14
+        , &GfxColorEffPower15
+        , &GfxColorEffPower16
         
         , &ParticlesLimit
                   

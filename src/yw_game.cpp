@@ -1888,6 +1888,37 @@ void NC_STACK_ypaworld::SpawnTransientVP(int32_t modelId, const vec3d &pos, cons
         _transientVPs.emplace_back(base, pos, rot, lifeTime);
 }
 
+void NC_STACK_ypaworld::SpawnChainFX(const World::TChainFXConfig &config, const vec3d &pos, const mat3x3 &rot)
+{
+    if ( config.duration <= 0 || config.vp_models.empty() )
+        return;
+
+    std::vector<NC_STACK_base *> bases;
+    bases.reserve(config.vp_models.size());
+
+    for (int16_t modelId : config.vp_models)
+    {
+        if ( modelId <= 0 || modelId >= (int32_t)_vhclModels.size() )
+            continue;
+
+        NC_STACK_base *base = _vhclModels.at(modelId);
+        if ( base )
+            bases.push_back(base);
+    }
+
+    if ( bases.empty() )
+        return;
+
+    _transientVPs.emplace_back(bases.front(), pos, rot, config.duration);
+
+    TTransientVP &fx = _transientVPs.back();
+    fx.chainFX = true;
+    fx.chainBases = std::move(bases);
+    fx.chainIndex = 0;
+    fx.startScale = config.start_size >= 0.0 ? config.start_size : 0.0;
+    fx.endScale = config.end_size >= 0.0 ? config.end_size : 0.0;
+}
+
 static int yw_RandomInRange(int minValue, int maxValue)
 {
     if ( maxValue < minValue )
@@ -2035,8 +2066,36 @@ static void yw_RenderTransientVPs(NC_STACK_ypaworld *world, std::list<NC_STACK_y
             it->rot = mat3x3::Ident();
         }
 
+        float scale = 1.0;
+        if ( it->chainFX )
+        {
+            float t = 1.0;
+            if ( it->lifeTime > 0 )
+                t = (float)it->age / (float)it->lifeTime;
+
+            if ( t < 0.0 )
+                t = 0.0;
+            else if ( t > 1.0 )
+                t = 1.0;
+
+            scale = it->startScale + (it->endScale - it->startScale) * t;
+
+            if ( !it->chainBases.empty() )
+            {
+                int32_t index = (int32_t)(t * (float)it->chainBases.size());
+                if ( index >= (int32_t)it->chainBases.size() )
+                    index = (int32_t)it->chainBases.size() - 1;
+
+                if ( index != it->chainIndex && it->chainBases[index] )
+                {
+                    it->vp.reset(it->chainBases[index]->GenRenderInstance());
+                    it->chainIndex = index;
+                }
+            }
+        }
+
         it->vp->Bas->TForm().Pos = it->pos;
-        it->vp->Bas->TForm().SclRot = it->rot.Transpose();
+        it->vp->Bas->TForm().SclRot = it->rot.Transpose() * mat3x3::Scale(vec3d(scale));
         it->vp->Bas->Render(arg, it->vp.get());
 
         ++it;

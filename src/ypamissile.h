@@ -113,11 +113,12 @@ public:
     virtual float GetStartHeight();
     
     vec3d CalcForceVector();
-    bool TubeCollisionTest();
+    bool TubeCollisionTest(bool applyDirectDamage = true, NC_STACK_ypabact **hitTarget = NULL);
 
 protected:
     int CalcDamageForBact(NC_STACK_ypabact *bct, int baseEnergy);
     int ApplyDamageToBact(NC_STACK_ypabact *bct, int baseEnergy);
+    void ApplyDirectHitToBact(NC_STACK_ypabact *bct);
     const char *GetAreaDamageSkipReason(NC_STACK_ypabact *bct, bool allowFriendly) const;
     bool IsDirectHitUnit(NC_STACK_ypabact *bct) const;
     void RememberDirectHitUnit(NC_STACK_ypabact *bct);
@@ -133,6 +134,10 @@ protected:
     void ApplyAreaDamage();
     void ApplyBuildingAreaDamage();
     void ApplySectorAreaDamage();
+    void AttachDelayedDetonationToTarget(NC_STACK_ypabact *target);
+    NC_STACK_ypabact *FindAttachedTarget();
+    void UpdateAttachedDetonationPosition();
+    void ApplyAttachedDirectHitDamage();
     bool TryClusterSplit();
 
     struct TBuildingHitRef
@@ -168,6 +173,10 @@ protected:
     int _mislClusterAge          = 0;
     bool _mislClusterDone        = false;
     bool _mislClusterChild       = false;
+    bool _mislAttachedToTarget   = false;
+    int32_t _mislAttachTargetGid = 0;
+    vec3d _mislAttachOffset;
+    vec3d _mislLastAttachedPosition;
     TSndCarrier _mislClusterSoundCarrier;
     std::vector<NC_STACK_ypabact *> _mislDirectHitUnits;
     std::vector<TBuildingHitRef> _mislDirectHitBuildings;

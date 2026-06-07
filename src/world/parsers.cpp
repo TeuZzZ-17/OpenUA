@@ -621,13 +621,30 @@ static void ResetVehicleScaleFX(TVhclProto *vhcl)
     vhcl->scale_fx_pXX.fill(0);
 }
 
-static int ParseVehicleChainFXBlock(ScriptParser::Parser &parser, TVhclProto *vhcl)
+static World::TChainFXConfig::Trigger ParseChainFXTrigger(const std::string &name)
+{
+    if ( !StriCmp(name, "destroyed") )
+        return World::TChainFXConfig::TRIGGER_DESTROYED;
+
+    if ( !StriCmp(name, "impact") )
+        return World::TChainFXConfig::TRIGGER_IMPACT;
+
+    return World::TChainFXConfig::TRIGGER_NONE;
+}
+
+static int ParseChainFXBlock(ScriptParser::Parser &parser,
+                             std::vector<World::TChainFXConfig> *out,
+                             World::TChainFXConfig::Trigger defaultTrigger,
+                             bool requireExplicitTrigger)
 {
     float startSize = 1.0;
-    float incrementalScale = 0.0;
+    float endSize = 0.0;
+    bool hasEndSize = false;
     int duration = 0;
-    std::array<int16_t, 32> vpModels = {};
-    size_t vpCount = 0;
+    std::vector<int16_t> vpModels;
+    World::TChainFXConfig::Trigger trigger = World::TChainFXConfig::TRIGGER_NONE;
+    bool hasTrigger = false;
+    bool badTrigger = false;
 
     std::string p1;
     std::string p2;
@@ -651,38 +668,80 @@ static int ParseVehicleChainFXBlock(ScriptParser::Parser &parser, TVhclProto *vh
 
         if ( !StriCmp(p1, "end") )
         {
-            ResetVehicleScaleFX(vhcl);
+            if ( badTrigger )
+                return ScriptParser::RESULT_OK;
 
-            if ( duration > 0 && vpCount > 0 )
+            if ( !hasTrigger )
             {
-                vhcl->scale_fx_p0 = startSize;
-                vhcl->scale_fx_p1 = incrementalScale;
-                vhcl->scale_fx_p2 = incrementalScale;
-                vhcl->scale_fx_p3 = duration;
+                if ( requireExplicitTrigger )
+                {
+                    ypa_log_out("WARNING: begin_chain_fx without trigger ignored for weapon prototype\n");
+                    return ScriptParser::RESULT_OK;
+                }
 
-                for (size_t i = 0; i < vpCount; i++)
-                    vhcl->scale_fx_pXX[i] = vpModels[i];
+                trigger = defaultTrigger;
+            }
+
+            if ( !hasEndSize )
+                endSize = 0.0;
+
+            if ( duration > 0 && !vpModels.empty() )
+            {
+                World::TChainFXConfig chain;
+                chain.trigger = trigger;
+                chain.start_size = startSize;
+                chain.end_size = endSize;
+                chain.duration = duration;
+                chain.vp_models = vpModels;
+                out->push_back(chain);
             }
 
             return ScriptParser::RESULT_OK;
         }
 
-        if ( !StriCmp(p1, "start_size") )
+        if ( !StriCmp(p1, "trigger") )
+        {
+            trigger = ParseChainFXTrigger(p2);
+            hasTrigger = true;
+            if ( trigger == World::TChainFXConfig::TRIGGER_NONE ||
+                 (requireExplicitTrigger && trigger != World::TChainFXConfig::TRIGGER_IMPACT) )
+            {
+                ypa_log_out("WARNING: Unknown or unsupported begin_chain_fx trigger '%s' ignored\n", p2.c_str());
+                badTrigger = true;
+            }
+        }
+        else if ( !StriCmp(p1, "start_size") )
             startSize = parser.stof(p2, 0);
-        else if ( !StriCmp(p1, "incremental_scale") )
-            incrementalScale = parser.stof(p2, 0);
+        else if ( !StriCmp(p1, "end_size") )
+        {
+            endSize = parser.stof(p2, 0);
+            hasEndSize = true;
+        }
         else if ( !StriCmp(p1, "duration") )
             duration = parser.stol(p2, NULL, 0);
         else if ( !StriCmp(p1, "vp_model") )
-        {
-            if ( vpCount + 1 < vpModels.size() )
-                vpModels[vpCount++] = parser.stol(p2, NULL, 0);
-        }
+            vpModels.push_back(parser.stol(p2, NULL, 0));
         else
             return ScriptParser::RESULT_UNKNOWN;
     }
 
     return ScriptParser::RESULT_UNEXP_EOF;
+}
+
+static int ParseVehicleChainFXBlock(ScriptParser::Parser &parser, TVhclProto *vhcl)
+{
+    return ParseChainFXBlock(parser,
+                             &vhcl->chain_fx,
+                             World::TChainFXConfig::TRIGGER_DESTROYED,
+                             false);
+}
+
+static int ParseWeaponChainFXBlock(ScriptParser::Parser &parser, TWeapProto *wpn)
+{
+    return ParseChainFXBlock(parser,
+                             &wpn->chain_fx,
+                             World::TChainFXConfig::TRIGGER_NONE,
+                             true);
 }
 
 int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1, const std::string &p2)
@@ -2252,6 +2311,10 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
         }
         else
             return ScriptParser::RESULT_BAD_DATA;
+    }
+    else if ( !StriCmp(p1, "begin_chain_fx") )
+    {
+        return ParseWeaponChainFXBlock(parser, _wpn);
     }
     else
         return ParseSndFX(parser, p1, p2);

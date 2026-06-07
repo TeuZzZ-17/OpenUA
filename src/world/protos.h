@@ -40,6 +40,21 @@ struct DestFX
     static uint8_t ParseTypeName(const std::string &in);
 };
 
+struct TChainFXConfig
+{
+    enum Trigger
+    {
+        TRIGGER_NONE = 0,
+        TRIGGER_DESTROYED,
+        TRIGGER_IMPACT
+    };
+
+    uint8_t trigger = TRIGGER_NONE;
+    float start_size = 1.0;
+    float end_size = 0.0;
+    int duration = 0;
+    std::vector<int16_t> vp_models;
+};
 
 struct TRoboColl
 {
@@ -317,6 +332,7 @@ struct TVhclProto
     float gun_power = 0.0;
     float gun_radius = 0.0;
     int kill_after_shot = 0;
+    std::vector<TChainFXConfig> chain_fx;
     float scale_fx_p0 = 0.0;
     float scale_fx_p1 = 0.0;
     float scale_fx_p2 = 0.0;
@@ -418,6 +434,7 @@ struct TWeapProto
     float start_speed = 0.0;
     NC_STACK_skeleton *wireframe = NULL;
     IDVList initParams;
+    std::vector<TChainFXConfig> chain_fx;
     
     ~TWeapProto();
 };

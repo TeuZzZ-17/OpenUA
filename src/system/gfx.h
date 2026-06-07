@@ -502,7 +502,7 @@ enum RASTER
 class GFXEngine
 {
 public:
-    static const std::array<vec3d, 8> _clrEff;
+    static const std::array<vec3d, 17> _clrEff;
     
     static int can_srcblend;
     static int can_destblend;
