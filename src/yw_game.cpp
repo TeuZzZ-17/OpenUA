@@ -2063,6 +2063,440 @@ static NC_STACK_ypabact *yw_FindLiveBactByGidInList(World::RefBactList &list, in
     return NULL;
 }
 
+static bool yw_IsAliveBuildingSpawnedUnit(NC_STACK_ypabact *unit)
+{
+    if ( !unit )
+        return false;
+
+    if ( unit->_kidRef.IsListType(World::BLIST_CACHE) )
+        return false;
+
+    if ( unit->_status == BACT_STATUS_DEAD )
+        return false;
+
+    if ( unit->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2) )
+        return false;
+
+    return true;
+}
+
+static int yw_CountBuildingSpawnedUnits(NC_STACK_ypaworld *world, cellArea &cell)
+{
+    int aliveCount = 0;
+
+    for (auto it = cell.BuildingSpawnedGids.begin(); it != cell.BuildingSpawnedGids.end();)
+    {
+        NC_STACK_ypabact *unit = yw_FindLiveBactByGidInList(world->_unitsList, *it);
+
+        if ( yw_IsAliveBuildingSpawnedUnit(unit) )
+        {
+            aliveCount++;
+            ++it;
+        }
+        else
+        {
+            it = cell.BuildingSpawnedGids.erase(it);
+        }
+    }
+
+    return aliveCount;
+}
+
+static bool yw_IsBuildingSpawnEnemy(uint8_t owner, NC_STACK_ypabact *unit)
+{
+    if ( !yw_IsAliveBuildingSpawnedUnit(unit) )
+        return false;
+
+    if ( unit->_bact_type == BACT_TYPES_MISSLE )
+        return false;
+
+    if ( unit->_status == BACT_STATUS_CREATE || unit->_status == BACT_STATUS_BEAM )
+        return false;
+
+    if ( unit->_owner == World::OWNER_0 || unit->_owner == owner )
+        return false;
+
+    return true;
+}
+
+static bool yw_IsActiveBuildingSpawnerCell(cellArea &cell)
+{
+    if ( cell.PurposeType != cellArea::PT_BUILDINGS &&
+         cell.PurposeType != cellArea::PT_POWERSTATION )
+        return false;
+
+    return cell.GetEnergy() > 0;
+}
+
+static bool yw_BuildingHasEnemyNearbyInUnitTree(uint8_t owner, const vec3d &centerPos, float radiusSq, NC_STACK_ypabact *unit)
+{
+    if ( yw_IsBuildingSpawnEnemy(owner, unit) &&
+         (unit->_position.XZ() - centerPos.XZ()).square() <= radiusSq )
+        return true;
+
+    if ( unit )
+    {
+        for (NC_STACK_ypabact *kid : unit->_kidList)
+        {
+            if ( yw_BuildingHasEnemyNearbyInUnitTree(owner, centerPos, radiusSq, kid) )
+                return true;
+        }
+    }
+
+    return false;
+}
+
+static bool yw_BuildingHasEnemyNearby(NC_STACK_ypaworld *world, cellArea &cell, const World::TBuildingProto &proto)
+{
+    float radius = proto.spawn_trigger_radius;
+    float radiusSq = radius * radius;
+
+    for (NC_STACK_ypabact *unit : world->_unitsList)
+        if ( yw_BuildingHasEnemyNearbyInUnitTree(cell.owner, cell.CenterPos, radiusSq, unit) )
+            return true;
+
+    return false;
+}
+
+static bool yw_IsBuildingSpawnCandidateCell(cellArea &buildingCell, cellArea *spawnCell, const char **failReason)
+{
+    if ( !spawnCell )
+    {
+        if ( failReason )
+            *failReason = "no sector";
+        return false;
+    }
+
+    if ( spawnCell == &buildingCell )
+    {
+        if ( failReason )
+            *failReason = "building center sector";
+        return false;
+    }
+
+    if ( !spawnCell->IsGamePlaySector() )
+    {
+        if ( failReason )
+            *failReason = "border sector";
+        return false;
+    }
+
+    if ( spawnCell->PurposeType != cellArea::PT_NONE )
+    {
+        if ( failReason )
+            *failReason = "occupied purpose sector";
+        return false;
+    }
+
+    return true;
+}
+
+static bool yw_AdjustBuildingSpawnHeight(NC_STACK_ypaworld *world, const World::TBuildingProto &proto, vec3d *pos, const char **failReason)
+{
+    const std::vector<World::TVhclProto> &protos = world->GetVhclProtos();
+    if ( proto.spawn_vehicle <= 0 || (size_t)proto.spawn_vehicle >= protos.size() )
+    {
+        if ( failReason )
+            *failReason = "bad vehicle id";
+        return false;
+    }
+
+    ypaworld_arg136 ground;
+    ground.stPos = pos->X0Z() - vec3d::OY(30000.0);
+    ground.vect = vec3d::OY(50000.0);
+    ground.flags = 0;
+
+    world->ypaworld_func136(&ground);
+    if ( !ground.isect )
+    {
+        if ( failReason )
+            *failReason = "no ground hit";
+        return false;
+    }
+
+    pos->y = ground.isectPos.y - protos[proto.spawn_vehicle].overeof;
+    return true;
+}
+
+static bool yw_IsBuildingSpawnPositionClear(NC_STACK_ypaworld *world, cellArea &buildingCell, const World::TBuildingProto &proto, vec3d *pos, const char **failReason)
+{
+    yw_130arg sect;
+    sect.pos_x = pos->x;
+    sect.pos_z = pos->z;
+
+    if ( !world->GetSectorInfo(&sect) )
+    {
+        if ( failReason )
+            *failReason = "outside map";
+        return false;
+    }
+
+    if ( !yw_IsBuildingSpawnCandidateCell(buildingCell, sect.pcell, failReason) )
+        return false;
+
+    float localX = pos->x - sect.pcell->CenterPos.x;
+    float localZ = pos->z - sect.pcell->CenterPos.z;
+    float edgeLimit = World::CVSectorHalfLength - 180.0;
+    if ( fabs(localX) > edgeLimit || fabs(localZ) > edgeLimit )
+    {
+        if ( failReason )
+            *failReason = "too close to sector edge";
+        return false;
+    }
+
+    if ( !yw_AdjustBuildingSpawnHeight(world, proto, pos, failReason) )
+        return false;
+
+    float spawnRadius = 20.0;
+    const std::vector<World::TVhclProto> &protos = world->GetVhclProtos();
+
+    if ( proto.spawn_vehicle > 0 && (size_t)proto.spawn_vehicle < protos.size() && protos[proto.spawn_vehicle].radius > 0.0 )
+        spawnRadius = protos[proto.spawn_vehicle].radius;
+
+    for (NC_STACK_ypabact *unit : sect.pcell->unitsList)
+    {
+        if ( !yw_IsAliveBuildingSpawnedUnit(unit) || unit->_bact_type == BACT_TYPES_MISSLE )
+            continue;
+
+        float otherRadius = unit->_radius > 0.0 ? unit->_radius : 20.0;
+        float minDist = spawnRadius + otherRadius + 20.0;
+
+        if ( (unit->_position.XZ() - pos->XZ()).square() < minDist * minDist )
+        {
+            if ( failReason )
+                *failReason = "unit collision";
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static void yw_LogBuildingSpawnPositionFailure(NC_STACK_ypaworld *world, cellArea &cell, const World::TBuildingProto &proto, const char *reason)
+{
+    static int32_t lastLogTime = 0;
+
+    if ( !world )
+        return;
+
+    if ( lastLogTime && world->_timeStamp - lastLogTime < 3000 )
+        return;
+
+    lastLogTime = world->_timeStamp;
+    ypa_log_out("Building spawner: no safe spawn position building=%d vehicle=%d cell=%d,%d reason=%s\n",
+                proto.Index,
+                proto.spawn_vehicle,
+                cell.CellId.x,
+                cell.CellId.y,
+                reason ? reason : "unknown");
+}
+
+static NC_STACK_yparobo *yw_FindBuildingSpawnOwnerRobo(NC_STACK_ypaworld *world, uint8_t owner)
+{
+    if ( !world || owner == World::OWNER_0 )
+        return NULL;
+
+    for (NC_STACK_ypabact *unit : world->_unitsList)
+    {
+        if ( unit->_bact_type != BACT_TYPES_ROBO ||
+             unit->_owner != owner ||
+             unit->_status == BACT_STATUS_DEAD ||
+             unit->_kidRef.IsListType(World::BLIST_CACHE) ||
+             (unit->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2)) )
+            continue;
+
+        return dynamic_cast<NC_STACK_yparobo *>(unit);
+    }
+
+    return NULL;
+}
+
+static void yw_LogBuildingSpawnOwnerFailure(NC_STACK_ypaworld *world, cellArea &cell, const World::TBuildingProto &proto)
+{
+    static int32_t lastLogTime = 0;
+
+    if ( !world )
+        return;
+
+    if ( lastLogTime && world->_timeStamp - lastLogTime < 3000 )
+        return;
+
+    lastLogTime = world->_timeStamp;
+    ypa_log_out("Building spawner: no live owner robo building=%d owner=%d vehicle=%d cell=%d,%d\n",
+                proto.Index,
+                cell.owner,
+                proto.spawn_vehicle,
+                cell.CellId.x,
+                cell.CellId.y);
+}
+
+static bool yw_FindBuildingSpawnPosition(NC_STACK_ypaworld *world, cellArea &cell, const World::TBuildingProto &proto, vec3d *outPos)
+{
+    struct BuildingSpawnOffset
+    {
+        float x;
+        float z;
+    };
+
+    const float sector = World::CVSectorLength;
+    const BuildingSpawnOffset safeOffsets[] =
+    {
+        { 0.0, -sector },
+        { sector, 0.0 },
+        { 0.0, sector },
+        { -sector, 0.0 },
+        { sector, -sector },
+        { -sector, -sector },
+        { sector, sector },
+        { -sector, sector }
+    };
+
+    const BuildingSpawnOffset jitterOffsets[] =
+    {
+        { 0.0, 0.0 },
+        { 0.45, 0.20 },
+        { -0.35, 0.40 },
+        { 0.25, -0.45 },
+        { -0.45, -0.25 }
+    };
+
+    float jitter = proto.spawn_random_pos > 0.0 ? proto.spawn_random_pos : 0.0;
+    if ( jitter > 180.0 )
+        jitter = 180.0;
+
+    int jitterCount = jitter > 0.0 ? 5 : 1;
+    const char *lastFailReason = "no candidate";
+
+    for (const BuildingSpawnOffset &offset : safeOffsets)
+    {
+        for (int i = 0; i < jitterCount; i++)
+        {
+            vec3d pos = cell.CenterPos;
+
+            pos.x += offset.x + 37.0;
+            pos.z += offset.z - 41.0;
+
+            if ( jitter > 0.0 )
+            {
+                pos.x += jitterOffsets[i].x * jitter;
+                pos.z += jitterOffsets[i].z * jitter;
+            }
+
+            if ( yw_IsBuildingSpawnPositionClear(world, cell, proto, &pos, &lastFailReason) )
+            {
+                *outPos = pos;
+                return true;
+            }
+        }
+    }
+
+    yw_LogBuildingSpawnPositionFailure(world, cell, proto, lastFailReason);
+    return false;
+}
+
+static NC_STACK_ypabact *yw_CreateBuildingSpawnedUnit(NC_STACK_ypaworld *world, cellArea &cell, const World::TBuildingProto &proto, const vec3d &pos)
+{
+    NC_STACK_yparobo *ownerRobo = yw_FindBuildingSpawnOwnerRobo(world, cell.owner);
+    if ( !ownerRobo )
+    {
+        yw_LogBuildingSpawnOwnerFailure(world, cell, proto);
+        return NULL;
+    }
+
+    ypaworld_arg146 arg146;
+    arg146.vehicle_id = proto.spawn_vehicle;
+    arg146.pos = pos;
+
+    NC_STACK_ypabact *unit = world->ypaworld_func146(&arg146);
+    if ( !unit )
+        return NULL;
+
+    unit->_owner = cell.owner;
+    unit->_host_station = ownerRobo;
+    unit->_carrier_spawn_root_gid = 0;
+    unit->_carrier_spawn_root_vehicle = 0;
+
+    if ( unit->_spawn_units )
+        unit->_spawn_last_time = unit->_clock > 0 ? unit->_clock : 1;
+
+    unit->setBACT_bactCollisions(ownerRobo->getBACT_bactCollisions());
+    ownerRobo->AddSubject(unit);
+
+    setTarget_msg target;
+    target.tgt_type = BACT_TGT_TYPE_CELL;
+    target.priority = 0;
+    target.tgt_pos = pos;
+    unit->SetTarget(&target);
+
+    setState_msg state;
+    state.setFlags = 0;
+    state.unsetFlags = 0;
+    state.newStatus = BACT_STATUS_CREATE;
+    unit->SetState(&state);
+
+    unit->_scale_time = unit->_energy_max * 0.2;
+    world->HistoryAktCreate(unit);
+
+    return unit;
+}
+
+static void yw_UpdateBuildingSpawner(NC_STACK_ypaworld *world, cellArea &cell, const World::TBuildingProto &proto)
+{
+    if ( !world || world->_isNetGame )
+        return;
+
+    if ( !proto.spawn_units )
+        return;
+
+    if ( cell.owner == World::OWNER_0 || cell.owner == World::OWNER_7 )
+        return;
+
+    if ( proto.spawn_vehicle <= 0 || (size_t)proto.spawn_vehicle >= world->GetVhclProtos().size() )
+        return;
+
+    if ( !yw_IsActiveBuildingSpawnerCell(cell) )
+        return;
+
+    if ( proto.spawn_trigger_radius <= 0.0 )
+        return;
+
+    int interval = proto.spawn_interval > 0 ? proto.spawn_interval : 5000;
+    if ( interval < 1000 )
+        interval = 1000;
+
+    if ( cell.BuildingSpawnLastTime && world->_timeStamp - cell.BuildingSpawnLastTime < interval )
+        return;
+
+    int maxActive = proto.spawn_max_active > 0 ? proto.spawn_max_active : 1;
+    int activeCount = yw_CountBuildingSpawnedUnits(world, cell);
+    if ( activeCount >= maxActive )
+        return;
+
+    if ( !yw_BuildingHasEnemyNearby(world, cell, proto) )
+        return;
+
+    cell.BuildingSpawnLastTime = world->_timeStamp;
+
+    int spawnCount = proto.spawn_count > 0 ? proto.spawn_count : 1;
+    if ( spawnCount > 8 )
+        spawnCount = 8;
+
+    int remainingSlots = maxActive - activeCount;
+    if ( spawnCount > remainingSlots )
+        spawnCount = remainingSlots;
+
+    for (int i = 0; i < spawnCount; i++)
+    {
+        vec3d spawnPos;
+        if ( !yw_FindBuildingSpawnPosition(world, cell, proto, &spawnPos) )
+            continue;
+
+        NC_STACK_ypabact *unit = yw_CreateBuildingSpawnedUnit(world, cell, proto, spawnPos);
+        if ( unit )
+            cell.BuildingSpawnedGids.push_back(unit->_gid);
+    }
+}
+
 static void yw_RenderTransientVPs(NC_STACK_ypaworld *world, std::list<NC_STACK_ypaworld::TTransientVP> *effects, baseRender_msg *arg)
 {
     for (auto it = effects->begin(); it != effects->end();)
@@ -2258,7 +2692,7 @@ void NC_STACK_ypaworld::ResetAccumMap()
     _nextPSForUpdate = 0;
 }
 
-void NC_STACK_ypaworld::SetupPowerStationInfo(cellArea *cell, int power)
+void NC_STACK_ypaworld::SetupPowerStationInfo(cellArea *cell, int power, int buildingId)
 {
     if (!cell) return;
     
@@ -2270,7 +2704,7 @@ void NC_STACK_ypaworld::SetupPowerStationInfo(cellArea *cell, int power)
     ps.pCell = cell;
     
     cell->PurposeType = cellArea::PT_POWERSTATION;
-    cell->PurposeIndex = 0;
+    cell->PurposeIndex = buildingId;
     
     ResetAccumMap();
 }
@@ -2321,7 +2755,7 @@ void NC_STACK_ypaworld::sb_0x456384(const Common::Point &cellId, int ownerid2, i
         }
 
         if ( bld->ModelID == 1 )
-            SetupPowerStationInfo(&cell, bld->Power);
+            SetupPowerStationInfo(&cell, bld->Power, blg_id);
 
         CellSetOwner(&cell, ownerid2);
 
@@ -2669,17 +3103,18 @@ void NC_STACK_ypaworld::BuildingDecorationFXUpdate()
 {
     for (cellArea &cell : _cells)
     {
-        bool activeBuilding = (cell.PurposeType == cellArea::PT_BUILDINGS ||
-                               cell.PurposeType == cellArea::PT_POWERSTATION) &&
-                              cell.GetEnergy() > 0;
-
-        if ( !activeBuilding )
+        if ( !yw_IsActiveBuildingSpawnerCell(cell) )
         {
             cell.DecorationFXNextTime = 0;
+            cell.BuildingSpawnLastTime = 0;
+            cell.BuildingSpawnedGids.clear();
             continue;
         }
 
         UpdateDecorationFX(cell.DecorationFX, cell.DecorationFXNextTime, cell.CenterPos);
+
+        if ( cell.PurposeIndex >= 0 && (size_t)cell.PurposeIndex < _buildProtos.size() )
+            yw_UpdateBuildingSpawner(this, cell, _buildProtos[cell.PurposeIndex]);
     }
 }
 
@@ -2842,6 +3277,107 @@ void NC_STACK_ypaworld::RecalcSectorsPowerForPS(const TPowerStationInfo &ps)
     }
 }
 
+static bool yw_IsValidMobilePowerGenerator(NC_STACK_ypaworld *yw, NC_STACK_ypabact *unit)
+{
+    if ( !yw ||
+         !unit ||
+         unit->_owner == World::OWNER_0 ||
+         unit->_status == BACT_STATUS_DEAD ||
+         unit->_status == BACT_STATUS_CREATE ||
+         unit->_status == BACT_STATUS_BEAM ||
+         (unit->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2)) ||
+         unit->_bact_type == BACT_TYPES_MISSLE ||
+         unit->_bact_type == BACT_TYPES_ROBO ||
+         unit->_bact_type == BACT_TYPES_GUN ||
+         (size_t)unit->_vehicleID >= yw->_vhclProtos.size() )
+        return false;
+
+    const World::TVhclProto &proto = yw->_vhclProtos[unit->_vehicleID];
+    return proto.power > 0 && proto.power_radius > 0.0;
+}
+
+static void yw_AddMobilePowerInfluenceFromGenerator(NC_STACK_ypaworld *yw,
+                                                    NC_STACK_ypabact *target,
+                                                    NC_STACK_ypabact *generator,
+                                                    TMobilePowerInfluence &influence)
+{
+    if ( !yw || !target || !generator )
+        return;
+
+    if ( yw_IsValidMobilePowerGenerator(yw, generator) )
+    {
+        const World::TVhclProto &proto = yw->_vhclProtos[generator->_vehicleID];
+
+        float dx = target->_position.x - generator->_position.x;
+        float dz = target->_position.z - generator->_position.z;
+        float distSq = dx * dx + dz * dz;
+        float radiusSq = proto.power_radius * proto.power_radius;
+
+        if ( distSq <= radiusSq )
+        {
+            float dist = sqrt(distSq);
+            float factor = 1.0 - (dist / proto.power_radius);
+            if ( factor < 0.25 )
+                factor = 0.25;
+
+            int addPower = (int)(proto.power * factor + 0.5);
+            if ( addPower > 0 )
+            {
+                float addEnergyPower = addPower;
+
+                if ( generator->_owner == target->_owner )
+                {
+                    influence.AlliedPower += addPower;
+                    if ( influence.AlliedPower > 255 )
+                        influence.AlliedPower = 255;
+
+                    influence.AlliedEnergyPower += addEnergyPower;
+                    if ( influence.AlliedEnergyPower > 255.0 )
+                        influence.AlliedEnergyPower = 255.0;
+                }
+                else
+                {
+                    influence.EnemyPower += addPower;
+                    if ( influence.EnemyPower > 255 )
+                        influence.EnemyPower = 255;
+
+                    influence.EnemyEnergyPower += addEnergyPower;
+                    if ( influence.EnemyEnergyPower > 255.0 )
+                        influence.EnemyEnergyPower = 255.0;
+                }
+            }
+        }
+    }
+
+    for (NC_STACK_ypabact *kid : generator->_kidList)
+        yw_AddMobilePowerInfluenceFromGenerator(yw, target, kid, influence);
+}
+
+TMobilePowerInfluence NC_STACK_ypaworld::FindMobilePowerInfluenceForUnit(NC_STACK_ypabact *target)
+{
+    TMobilePowerInfluence influence;
+
+    if ( !target ||
+         target->_owner == World::OWNER_0 ||
+         target->_status == BACT_STATUS_DEAD ||
+         target->_status == BACT_STATUS_CREATE ||
+         target->_status == BACT_STATUS_BEAM ||
+         (target->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2)) ||
+         target->_bact_type == BACT_TYPES_MISSLE )
+        return influence;
+
+    for (NC_STACK_ypabact *generator : _unitsList)
+        yw_AddMobilePowerInfluenceFromGenerator(this, target, generator, influence);
+
+    return influence;
+}
+
+void NC_STACK_ypaworld::AddMobileVehiclePowerToAccumMap()
+{
+    // Mobile power is owner-aware, so gameplay is applied per target unit in
+    // EnergyInteract instead of through cell.energy_power/cell.owner.
+}
+
 void NC_STACK_ypaworld::DoSectorsEnergyRecalc()
 {
     // Recompute power on sectors
@@ -2851,6 +3387,7 @@ void NC_STACK_ypaworld::DoSectorsEnergyRecalc()
         
         if (itPs == _powerStations.end()) // If we reach end of power stations list, apply power to sectors
         {
+            AddMobileVehiclePowerToAccumMap();
             UpdatePowerEnergy(); // Apply power to sectors and clean power matrix for next compute iteration.
         }
         else
@@ -2860,6 +3397,11 @@ void NC_STACK_ypaworld::DoSectorsEnergyRecalc()
 
             _nextPSForUpdate = itPs->first + 1; // go to next station in next update loop
         }
+    }
+    else
+    {
+        AddMobileVehiclePowerToAccumMap();
+        UpdatePowerEnergy();
     }
 }
 

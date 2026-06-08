@@ -941,6 +941,8 @@ struct cellArea
     Common::PlaneArray<NC_STACK_base::Instance *, 3, 3> BldVPOpts = Common::PlaneArray<NC_STACK_base::Instance *, 3, 3>::ArrayInit(NULL);
     World::TDecorationFXConfig DecorationFX;
     int32_t DecorationFXNextTime = 0;
+    int32_t BuildingSpawnLastTime = 0;
+    std::vector<int32_t> BuildingSpawnedGids;
     uint8_t view_mask = 0; // Who can view this sector (mask)
     uint8_t UnhideMask = 0; // Who can unhide other fractions (mask)
     
@@ -1674,6 +1676,14 @@ struct EnergyAccum
     int32_t Energy = 0;
 };
 
+struct TMobilePowerInfluence
+{
+    int32_t AlliedPower = 0;
+    int32_t EnemyPower = 0;
+    float AlliedEnergyPower = 0.0;
+    float EnemyEnergyPower = 0.0;
+};
+
 struct TLego
 {
     NC_STACK_base *Base = NULL;
@@ -2106,6 +2116,8 @@ public:
     
     void DoSectorsEnergyRecalc();
     void RecalcSectorsPowerForPS(const TPowerStationInfo &ps);
+    void AddMobileVehiclePowerToAccumMap();
+    TMobilePowerInfluence FindMobilePowerInfluenceForUnit(NC_STACK_ypabact *target);
     
     void sub_4D12D8(int id, int a3);
     void sub_4D1594(int id);
@@ -2169,7 +2181,7 @@ public:
     
     NC_STACK_ypabact *yw_createUnit(int model_id);
     void sb_0x456384(const Common::Point &cellId, int ownerid2, int blg_id, int a7);
-    void SetupPowerStationInfo(cellArea *cell, int power);
+    void SetupPowerStationInfo(cellArea *cell, int power, int buildingId);
     void ResetAccumMap();
     
     void CellSetOwner(cellArea *cell, uint8_t owner);

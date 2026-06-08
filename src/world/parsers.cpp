@@ -94,6 +94,17 @@ static void InitStatusSoundFXDefaults(World::TVhclSound &snd, int defaultVolume)
     snd.sndPrm_shk.pos.z = 0.2;
 }
 
+static int ClampSectorPower(int power)
+{
+    if ( power < 0 )
+        return 0;
+
+    if ( power > 255 )
+        return 255;
+
+    return power;
+}
+
 static bool IsUsableScriptText(const std::string &text)
 {
     for (unsigned char ch : text)
@@ -1051,6 +1062,23 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     {
         _vhcl->drain_icon = p2;
     }
+    else if ( !StriCmp(p1, "spawn_icon") )
+    {
+        _vhcl->spawn_icon = p2;
+    }
+    else if ( !StriCmp(p1, "power_icon") )
+    {
+        _vhcl->power_icon = p2;
+    }
+    else if ( !StriCmp(p1, "power") )
+    {
+        _vhcl->power = ClampSectorPower(parser.stol(p2, NULL, 0));
+    }
+    else if ( !StriCmp(p1, "power_radius") )
+    {
+        float radius = parser.stof(p2, 0);
+        _vhcl->power_radius = radius > 0.0 ? radius : 0.0;
+    }
     else if ( !StriCmp(p1, "shk_damaged_slot") )
     {
         _vhcl->damaged_fx.shake.slot = parser.stol(p2, NULL, 0);
@@ -1120,11 +1148,6 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     {
         int maxActive = parser.stol(p2, NULL, 0);
         _vhcl->spawn_max_active = maxActive > 0 ? maxActive : 0;
-    }
-    else if ( !StriCmp(p1, "spawn_label") )
-    {
-        _vhcl->spawn_label = p2;
-        std::replace(_vhcl->spawn_label.begin(), _vhcl->spawn_label.end(), '_', ' ');
     }
     else if ( !StriCmp(p1, "spawn_count") )
     {
@@ -1711,6 +1734,12 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->vp_genesis = 5;
         _vhcl->damaged_fx = TDamagedFXConfig();
         _vhcl->damaged_icon.clear();
+        _vhcl->regen_icon.clear();
+        _vhcl->drain_icon.clear();
+        _vhcl->spawn_icon.clear();
+        _vhcl->power_icon.clear();
+        _vhcl->power = 0;
+        _vhcl->power_radius = 0.0;
         _vhcl->damaged_force_mult = 1.0;
         _vhcl->damaged_maxrot_mult = 1.0;
         _vhcl->damaged_snd_pitch_mult = 1.0;
@@ -1720,7 +1749,6 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->spawn_trigger_radius = 0.0;
         _vhcl->spawn_random_pos = 0.0;
         _vhcl->spawn_max_active = 0;
-        _vhcl->spawn_label.clear();
         _vhcl->spawn_count = 1;
         _vhcl->shield = 50;
         _vhcl->energy = 10000;
@@ -2445,6 +2473,43 @@ int BuildProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1
     else if ( !StriCmp(p1, "type_icon") )
     {
         _bld->TypeIcon = p2[0];
+    }
+    else if ( !StriCmp(p1, "spawn_units") )
+    {
+        _bld->spawn_units = parser.stol(p2, NULL, 0) ? 1 : 0;
+    }
+    else if ( !StriCmp(p1, "spawn_vehicle") )
+    {
+        _bld->spawn_vehicle = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "spawn_interval") )
+    {
+        int interval = parser.stol(p2, NULL, 0);
+        _bld->spawn_interval = interval > 0 ? interval : 0;
+    }
+    else if ( !StriCmp(p1, "spawn_trigger_radius") )
+    {
+        float radius = parser.stof(p2, 0);
+        _bld->spawn_trigger_radius = radius > 0.0 ? radius : 0.0;
+    }
+    else if ( !StriCmp(p1, "spawn_random_pos") )
+    {
+        float radius = parser.stof(p2, 0);
+        _bld->spawn_random_pos = radius > 0.0 ? radius : 0.0;
+    }
+    else if ( !StriCmp(p1, "spawn_max_active") )
+    {
+        int maxActive = parser.stol(p2, NULL, 0);
+        _bld->spawn_max_active = maxActive > 0 ? maxActive : 0;
+    }
+    else if ( !StriCmp(p1, "spawn_count") )
+    {
+        int count = parser.stol(p2, NULL, 0);
+        _bld->spawn_count = count > 0 ? count : 1;
+    }
+    else if ( !StriCmp(p1, "spawn_icon") )
+    {
+        _bld->spawn_icon = p2;
     }
     else if ( p1.size() >= 11 && !StriCmp(p1.substr(0, 11), "snd_normal_") && ParseSampleVariantId(p1.substr(11)) >= 0 )
     {

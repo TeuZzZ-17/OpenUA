@@ -613,6 +613,12 @@ void NC_STACK_ypagun::EnergyInteract(update_msg *arg)
         if ( _pSector->owner == _owner )
             _energy += _energy_max * (arg->frameTime / 1000.0) * _pSector->energy_power / 40000.0;
 
+        TMobilePowerInfluence mobilePower = _world->FindMobilePowerInfluenceForUnit(this);
+        _energy += _energy_max * (arg->frameTime / 1000.0) * (mobilePower.AlliedEnergyPower - mobilePower.EnemyEnergyPower) / 40000.0;
+
+        if ( _energy < 0 )
+            _energy = 0;
+
         if ( _energy > _energy_max )
             _energy = _energy_max;
     }

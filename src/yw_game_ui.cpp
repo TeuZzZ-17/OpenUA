@@ -34,8 +34,8 @@ int dword_5BAF9C;
 namespace
 {
 
-constexpr int STATUS_ICON_MAX_COUNT = 4;
-constexpr int STATUS_ICON_SIZE = 12;
+constexpr int STATUS_ICON_MAX_COUNT = 6;
+constexpr int STATUS_ICON_SIZE = 16;
 constexpr int STATUS_ICON_SPACING = 2;
 
 struct StatusIconCacheEntry
@@ -160,6 +160,36 @@ StatusIconPowerState StatusIconGetPowerStationState(NC_STACK_ypaworld *yw, NC_ST
     return STATUS_ICON_POWER_DRAIN;
 }
 
+bool StatusIconCanUseMobilePowerUnit(NC_STACK_ypabact *bact)
+{
+    return bact &&
+           bact->_owner != World::OWNER_0 &&
+           bact->_energy > 0 &&
+           bact->_energy_max > 0 &&
+           bact->_bact_type != BACT_TYPES_MISSLE &&
+           bact->_bact_type != BACT_TYPES_ROBO &&
+           bact->_bact_type != BACT_TYPES_GUN &&
+           bact->_status != BACT_STATUS_DEAD &&
+           bact->_status != BACT_STATUS_CREATE &&
+           bact->_status != BACT_STATUS_BEAM &&
+           !(bact->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2 | BACT_STFLAG_NORENDER));
+}
+
+void StatusIconCollectMobilePower(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact, StatusIconList &icons, int &iconCount)
+{
+    if ( !yw || !StatusIconCanUseMobilePowerUnit(bact) || (size_t)bact->_vehicleID >= yw->_vhclProtos.size() )
+        return;
+
+    World::TVhclProto &targetProto = yw->_vhclProtos[bact->_vehicleID];
+    TMobilePowerInfluence mobilePower = yw->FindMobilePowerInfluenceForUnit(bact);
+
+    if ( mobilePower.AlliedPower > 0 && bact->_energy < bact->_energy_max )
+        StatusIconAdd(icons, iconCount, targetProto.regen_icon);
+
+    if ( mobilePower.EnemyPower > 0 )
+        StatusIconAdd(icons, iconCount, targetProto.drain_icon);
+}
+
 int StatusIconCollect(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact, World::TVhclProto *vhcl, StatusIconList &icons)
 {
     if ( !bact || !vhcl )
@@ -173,6 +203,15 @@ int StatusIconCollect(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact, World::TVhc
     if ( bact->_damaged_fx_active )
         StatusIconAdd(icons, iconCount, vhcl->damaged_icon);
 
+    if ( StatusIconCanUseMobilePowerUnit(bact) )
+    {
+        if ( vhcl->spawn_units )
+            StatusIconAdd(icons, iconCount, vhcl->spawn_icon);
+
+        if ( vhcl->power > 0 && vhcl->power_radius > 0.0 )
+            StatusIconAdd(icons, iconCount, vhcl->power_icon);
+    }
+
     StatusIconPowerState powerState = StatusIconGetPowerStationState(yw, bact);
     if ( powerState == STATUS_ICON_POWER_DRAIN )
     {
@@ -184,6 +223,8 @@ int StatusIconCollect(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact, World::TVhc
         if ( !vhcl->regen_icon.empty() )
             StatusIconAdd(icons, iconCount, vhcl->regen_icon);
     }
+
+    StatusIconCollectMobilePower(yw, bact, icons, iconCount);
 
     return iconCount;
 }
@@ -255,11 +296,99 @@ void StatusIconRenderCockpit(NC_STACK_ypaworld *yw, sklt_wis *wis, NC_STACK_ypab
     int iconBlockWidth = iconCount * STATUS_ICON_SIZE + (iconCount - 1) * STATUS_ICON_SPACING;
 
     float nameY = hudY + wis->field_92 * 12.0;
-    if ( vhcl->spawn_units )
-        nameY -= wis->field_92 * 0.35;
 
     int nameCenterX = (yw->_screenSize.x / 2) + (yw->_screenSize.x / 2) * hudX;
     int nameCenterY = (yw->_screenSize.y / 2) + (yw->_screenSize.y / 2) * nameY;
+    int left = nameCenterX - (iconBlockWidth / 2);
+    int top = nameCenterY + yw->_fontH + 4;
+
+    int maxLeft = yw->_screenSize.x - iconBlockWidth - 4;
+    if ( left > maxLeft )
+        left = maxLeft;
+    if ( left < 4 )
+        left = 4;
+    if ( top < 4 )
+        top = 4;
+    if ( top > yw->_screenSize.y - STATUS_ICON_SIZE - 4 )
+        top = yw->_screenSize.y - STATUS_ICON_SIZE - 4;
+
+    StatusIconRenderList(yw, icons, iconCount, left, top, STATUS_ICON_SIZE);
+}
+
+int StatusIconCollectVehicleRoleIcons(World::TVhclProto *vhcl, StatusIconList &icons)
+{
+    if ( !vhcl )
+        return 0;
+
+    int iconCount = 0;
+
+    if ( vhcl->spawn_units )
+        StatusIconAdd(icons, iconCount, vhcl->spawn_icon);
+
+    if ( vhcl->power > 0 && vhcl->power_radius > 0.0 )
+        StatusIconAdd(icons, iconCount, vhcl->power_icon);
+
+    return iconCount;
+}
+
+int StatusIconCollectBuildingRoleIcons(World::TBuildingProto *bld, StatusIconList &icons)
+{
+    if ( !bld )
+        return 0;
+
+    int iconCount = 0;
+
+    if ( bld->spawn_units )
+        StatusIconAdd(icons, iconCount, bld->spawn_icon);
+
+    return iconCount;
+}
+
+void StatusIconRenderHudInfoRoles(NC_STACK_ypaworld *yw, sklt_wis *wis, World::TVhclProto *vhcl, float hudX, float hudY)
+{
+    if ( !yw || !wis || !vhcl )
+        return;
+
+    StatusIconList icons;
+    int iconCount = StatusIconCollectVehicleRoleIcons(vhcl, icons);
+    if ( iconCount <= 0 )
+        return;
+
+    int iconBlockWidth = iconCount * STATUS_ICON_SIZE + (iconCount - 1) * STATUS_ICON_SPACING;
+
+    float nameY = hudY + wis->field_92 * 12.0;
+    int nameCenterX = (yw->_screenSize.x / 2) + (yw->_screenSize.x / 2) * hudX;
+    int nameCenterY = (yw->_screenSize.y / 2) + (yw->_screenSize.y / 2) * nameY;
+    int left = nameCenterX - (iconBlockWidth / 2);
+    int top = nameCenterY + yw->_fontH + 4;
+
+    int maxLeft = yw->_screenSize.x - iconBlockWidth - 4;
+    if ( left > maxLeft )
+        left = maxLeft;
+    if ( left < 4 )
+        left = 4;
+    if ( top < 4 )
+        top = 4;
+    if ( top > yw->_screenSize.y - STATUS_ICON_SIZE - 4 )
+        top = yw->_screenSize.y - STATUS_ICON_SIZE - 4;
+
+    StatusIconRenderList(yw, icons, iconCount, left, top, STATUS_ICON_SIZE);
+}
+
+void StatusIconRenderBuildingHudInfoRoles(NC_STACK_ypaworld *yw, sklt_wis *wis, World::TBuildingProto *bld, float hudX, float hudY)
+{
+    if ( !yw || !wis || !bld )
+        return;
+
+    StatusIconList icons;
+    int iconCount = StatusIconCollectBuildingRoleIcons(bld, icons);
+    if ( iconCount <= 0 )
+        return;
+
+    int iconBlockWidth = iconCount * STATUS_ICON_SIZE + (iconCount - 1) * STATUS_ICON_SPACING;
+
+    int nameCenterX = (yw->_screenSize.x / 2) + (yw->_screenSize.x / 2) * hudX;
+    int nameCenterY = (yw->_screenSize.y / 2) + (yw->_screenSize.y / 2) * hudY;
     int left = nameCenterX - (iconBlockWidth / 2);
     int top = nameCenterY + yw->_fontH + 4;
 
@@ -8662,15 +8791,6 @@ void yw_RenderInfoWeaponName(NC_STACK_ypaworld *yw, sklt_wis *wis, CmdStream *cu
     yw_RenderInfoVehicleName(yw, wis, cur, name, xpos, ypos);
 }
 
-void yw_RenderInfoSpawnLabel(NC_STACK_ypaworld *yw, sklt_wis *wis, CmdStream *cur, World::TVhclProto *vhcl, float xpos, float ypos)
-{
-    if ( !vhcl || !vhcl->spawn_units )
-        return;
-
-    std::string label = vhcl->spawn_label.empty() ? "Unit Spawner" : fmt::sprintf("Spawn: %s", vhcl->spawn_label);
-    yw_RenderInfoVehicleName(yw, wis, cur, label, xpos, ypos);
-}
-
 void yw_RenderInfoWeaponWire(NC_STACK_ypaworld *yw, sklt_wis *wis, World::TWeapProto *wpn, float xpos, float ypos)
 {
     UAskeleton::Data *wairufureimu = NULL;
@@ -8820,18 +8940,7 @@ void yw_RenderHUDInfo(NC_STACK_ypaworld *yw, sklt_wis *wis, CmdStream *cur, floa
     if ( v25 )
     {
         float v15 = wis->field_92 * 12.0 + ypos;
-
-        float name_y = v15;
-        float spawn_y = v15 + wis->field_92 * 2.0;
-
-        if ( vhcl->spawn_units )
-        {
-            name_y -= wis->field_92 * 0.35;
-            spawn_y -= wis->field_92 * 0.35;
-        }
-
-        yw_RenderInfoVehicleName(yw, wis, cur, yw->ResolveGameplayVehicleName(bact, *vhcl), xpos, name_y);
-        yw_RenderInfoSpawnLabel(yw, wis, cur, vhcl, xpos, spawn_y);
+        yw_RenderInfoVehicleName(yw, wis, cur, yw->ResolveGameplayVehicleName(bact, *vhcl), xpos, v15);
     }
 
     if ( weap )
@@ -8920,6 +9029,12 @@ int sb_0x4d7c08__sub0__sub0__sub0(NC_STACK_ypaworld *yw)
     FontUA::set_end(&buf);
 
     GFX::Engine.ProcessDrawSeq(buf);
+
+    if ( v6 && (size_t)v6 < yw->_vhclProtos.size() )
+        StatusIconRenderHudInfoRoles(yw, wis, &yw->_vhclProtos[v6], 0.0, -0.5);
+
+    if ( v14 && (size_t)v14 < yw->_buildProtos.size() )
+        StatusIconRenderBuildingHudInfoRoles(yw, wis, &yw->_buildProtos[v14], 0.0, v6 ? -0.43 : -0.5);
 
     return 1;
 }

@@ -291,6 +291,10 @@ struct TVhclProto
     std::string damaged_icon;
     std::string regen_icon;
     std::string drain_icon;
+    std::string spawn_icon;
+    std::string power_icon;
+    int power = 0;
+    float power_radius = 0.0;
     float damaged_force_mult = 1.0;
     float damaged_maxrot_mult = 1.0;
     float damaged_snd_pitch_mult = 1.0;
@@ -300,7 +304,6 @@ struct TVhclProto
     float spawn_trigger_radius = 0.0;
     float spawn_random_pos = 0.0;
     int spawn_max_active = 0;
-    std::string spawn_label;
     int spawn_count = 1;
     std::vector<DestFX> dest_fx;      // dest_fx
     std::vector<DestFX>    ExtDestroyFX; // ext_dest_fx
@@ -465,6 +468,14 @@ struct TBuildingProto
     TDecorationFXConfig DecorationFX;
     TVhclSound SndFX;
     std::vector<TGun> Guns;
+    int spawn_units = 0;
+    int16_t spawn_vehicle = 0;
+    int spawn_interval = 0;
+    float spawn_trigger_radius = 0.0;
+    float spawn_random_pos = 0.0;
+    int spawn_max_active = 0;
+    int spawn_count = 1;
+    std::string spawn_icon;
 };
 
 struct TRoboProto

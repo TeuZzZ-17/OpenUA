@@ -4985,6 +4985,10 @@ void NC_STACK_ypabact::EnergyInteract(update_msg *arg)
             else
                 _energy -= denerg;
 
+            TMobilePowerInfluence mobilePower = _world->FindMobilePowerInfluenceForUnit(this);
+            float mobileDelta = 2.0 * _energy_max * v14 * (mobilePower.AlliedEnergyPower - mobilePower.EnemyEnergyPower) / 7000.0;
+            _energy += mobileDelta;
+
             if ( _energy < 0 )
                 _energy = 0;
 
