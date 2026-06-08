@@ -832,6 +832,8 @@ void NC_STACK_ypaworld::CellSetOwner(cellArea *cell, uint8_t owner)
 {
     if ( cell->owner != owner )
     {
+        uint8_t oldOwner = cell->owner;
+
         HistoryEventAdd( World::History::Conq(cell->CellId.x, cell->CellId.y, owner) );
 
         if ( cell->PurposeType == cellArea::PT_POWERSTATION )
@@ -841,6 +843,15 @@ void NC_STACK_ypaworld::CellSetOwner(cellArea *cell, uint8_t owner)
         _countSectorsPerOwner[owner]++;
 
         cell->owner = owner;
+
+        // Building spawners belong to the original owner of the cell.
+        // When the building/sector is conquered, stop the previous spawner state
+        // and do not let the new owner inherit that spawner.
+        if ( cell->BuildingSpawnInitialOwner == 0 )
+            cell->BuildingSpawnInitialOwner = oldOwner;
+
+        cell->BuildingSpawnLastTime = 0;
+        cell->BuildingSpawnedGids.clear();
     }
 }
 
@@ -2214,7 +2225,17 @@ static bool yw_AdjustBuildingSpawnHeight(NC_STACK_ypaworld *world, const World::
         return false;
     }
 
-    pos->y = ground.isectPos.y - protos[proto.spawn_vehicle].overeof;
+    // Building spawners are intended for airborne defensive units.
+    // Spawn them above the building cell, not at ground level.
+    // UA uses negative Y for higher altitude, so subtracting extraHeight
+    // places the unit above the terrain/building.
+    const float baseAirSpawnHeight = 650.0;
+    const float randomAirSpawnHeight = 250.0;
+    float extraHeight = baseAirSpawnHeight;
+
+    extraHeight += ((float)rand() / (float)RAND_MAX) * randomAirSpawnHeight;
+
+    pos->y = ground.isectPos.y - protos[proto.spawn_vehicle].overeof - extraHeight;
     return true;
 }
 
@@ -2231,7 +2252,10 @@ static bool yw_IsBuildingSpawnPositionClear(NC_STACK_ypaworld *world, cellArea &
         return false;
     }
 
-    if ( !yw_IsBuildingSpawnCandidateCell(buildingCell, sect.pcell, failReason) )
+    // Building spawners intentionally spawn inside their own building cell,
+    // above the powerstation/building. Adjacent cells are still validated
+    // by the old candidate rules if future code ever uses them again.
+    if ( sect.pcell != &buildingCell && !yw_IsBuildingSpawnCandidateCell(buildingCell, sect.pcell, failReason) )
         return false;
 
     float localX = pos->x - sect.pcell->CenterPos.x;
@@ -2332,61 +2356,29 @@ static void yw_LogBuildingSpawnOwnerFailure(NC_STACK_ypaworld *world, cellArea &
 
 static bool yw_FindBuildingSpawnPosition(NC_STACK_ypaworld *world, cellArea &cell, const World::TBuildingProto &proto, vec3d *outPos)
 {
-    struct BuildingSpawnOffset
-    {
-        float x;
-        float z;
-    };
-
-    const float sector = World::CVSectorLength;
-    const BuildingSpawnOffset safeOffsets[] =
-    {
-        { 0.0, -sector },
-        { sector, 0.0 },
-        { 0.0, sector },
-        { -sector, 0.0 },
-        { sector, -sector },
-        { -sector, -sector },
-        { sector, sector },
-        { -sector, sector }
-    };
-
-    const BuildingSpawnOffset jitterOffsets[] =
-    {
-        { 0.0, 0.0 },
-        { 0.45, 0.20 },
-        { -0.35, 0.40 },
-        { 0.25, -0.45 },
-        { -0.45, -0.25 }
-    };
-
-    float jitter = proto.spawn_random_pos > 0.0 ? proto.spawn_random_pos : 0.0;
-    if ( jitter > 180.0 )
-        jitter = 180.0;
-
-    int jitterCount = jitter > 0.0 ? 5 : 1;
     const char *lastFailReason = "no candidate";
 
-    for (const BuildingSpawnOffset &offset : safeOffsets)
+    // Building spawners are now intentionally local: spawned units appear
+    // above the same powerstation/building cell, with limited random X/Z
+    // jitter. This makes Sulg infected powerstations look like they are
+    // emitting airborne spores from themselves instead of from nearby sectors.
+    const float randomXZ = World::CVSectorHalfLength - 260.0;
+    const int maxAttempts = 16;
+
+    for (int attempt = 0; attempt < maxAttempts; attempt++)
     {
-        for (int i = 0; i < jitterCount; i++)
+        vec3d pos = cell.CenterPos;
+
+        float rndX = ((float)rand() / (float)RAND_MAX) * 2.0 - 1.0;
+        float rndZ = ((float)rand() / (float)RAND_MAX) * 2.0 - 1.0;
+
+        pos.x += rndX * randomXZ + 37.0;
+        pos.z += rndZ * randomXZ - 41.0;
+
+        if ( yw_IsBuildingSpawnPositionClear(world, cell, proto, &pos, &lastFailReason) )
         {
-            vec3d pos = cell.CenterPos;
-
-            pos.x += offset.x + 37.0;
-            pos.z += offset.z - 41.0;
-
-            if ( jitter > 0.0 )
-            {
-                pos.x += jitterOffsets[i].x * jitter;
-                pos.z += jitterOffsets[i].z * jitter;
-            }
-
-            if ( yw_IsBuildingSpawnPositionClear(world, cell, proto, &pos, &lastFailReason) )
-            {
-                *outPos = pos;
-                return true;
-            }
+            *outPos = pos;
+            return true;
         }
     }
 
@@ -2449,6 +2441,12 @@ static void yw_UpdateBuildingSpawner(NC_STACK_ypaworld *world, cellArea &cell, c
         return;
 
     if ( cell.owner == World::OWNER_0 || cell.owner == World::OWNER_7 )
+        return;
+
+    if ( cell.BuildingSpawnInitialOwner == 0 )
+        cell.BuildingSpawnInitialOwner = cell.owner;
+
+    if ( cell.owner != cell.BuildingSpawnInitialOwner )
         return;
 
     if ( proto.spawn_vehicle <= 0 || (size_t)proto.spawn_vehicle >= world->GetVhclProtos().size() )

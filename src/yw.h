@@ -943,6 +943,7 @@ struct cellArea
     int32_t DecorationFXNextTime = 0;
     int32_t BuildingSpawnLastTime = 0;
     std::vector<int32_t> BuildingSpawnedGids;
+    uint8_t BuildingSpawnInitialOwner = 0;
     uint8_t view_mask = 0; // Who can view this sector (mask)
     uint8_t UnhideMask = 0; // Who can unhide other fractions (mask)
     

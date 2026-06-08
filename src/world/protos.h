@@ -472,7 +472,6 @@ struct TBuildingProto
     int16_t spawn_vehicle = 0;
     int spawn_interval = 0;
     float spawn_trigger_radius = 0.0;
-    float spawn_random_pos = 0.0;
     int spawn_max_active = 0;
     int spawn_count = 1;
     std::string spawn_icon;

@@ -2492,11 +2492,6 @@ int BuildProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1
         float radius = parser.stof(p2, 0);
         _bld->spawn_trigger_radius = radius > 0.0 ? radius : 0.0;
     }
-    else if ( !StriCmp(p1, "spawn_random_pos") )
-    {
-        float radius = parser.stof(p2, 0);
-        _bld->spawn_random_pos = radius > 0.0 ? radius : 0.0;
-    }
     else if ( !StriCmp(p1, "spawn_max_active") )
     {
         int maxActive = parser.stol(p2, NULL, 0);
