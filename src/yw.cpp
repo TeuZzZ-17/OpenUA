@@ -1688,6 +1688,8 @@ NC_STACK_ypamissile * NC_STACK_ypaworld::ypaworld_func147(ypaworld_arg146 *arg)
     wobj->_destroyFX = wproto.dfx;
     wobj->_extDestroyFX = wproto.ExtDestroyFX;
     wobj->_chainFX = wproto.chain_fx;
+    wobj->_decoration_fx = wproto.decoration_fx;
+    wobj->_decoration_fx_next_time = 0;
 
     int missileType;
 

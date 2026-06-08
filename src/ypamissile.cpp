@@ -1543,7 +1543,7 @@ size_t NC_STACK_ypamissile::SetStateInternal(setState_msg *arg)
 
         SFXEngine::SFXe.startSound(&_soundcarrier, 2);
 
-        if ( !StartChainFXByTrigger(World::TChainFXConfig::TRIGGER_IMPACT) )
+        if ( !StartChainFXByTrigger(World::TChainFXConfig::TRIGGER_DETONATE) )
             StartDestFXByType(World::DestFX::FX_DEATH);
 
         _fly_dir_length = 0;
@@ -1571,7 +1571,7 @@ size_t NC_STACK_ypamissile::SetStateInternal(setState_msg *arg)
 
         SFXEngine::SFXe.startSound(&_soundcarrier, 2);
 
-        if ( !StartChainFXByTrigger(World::TChainFXConfig::TRIGGER_IMPACT) )
+        if ( !StartChainFXByTrigger(World::TChainFXConfig::TRIGGER_IMPACT_WORLD) )
             StartDestFXByType(World::DestFX::FX_MEGADETH);
 
         _fly_dir_length = 0;

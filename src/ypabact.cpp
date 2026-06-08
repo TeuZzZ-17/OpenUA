@@ -8773,7 +8773,7 @@ size_t NC_STACK_ypabact::SetStateInternal(setState_msg *arg)
 
             SFXEngine::SFXe.startSound(&_soundcarrier, 4);
 
-            if ( !StartChainFXByTrigger(World::TChainFXConfig::TRIGGER_DESTROYED) )
+            if ( !StartChainFXByTrigger(World::TChainFXConfig::TRIGGER_CRASH) )
                 StartDestFXByType(World::DestFX::FX_MEGADETH);
 
             _fly_dir_length = 0;

@@ -1909,7 +1909,8 @@ void NC_STACK_ypaworld::SpawnChainFX(const World::TChainFXConfig &config, const 
     if ( bases.empty() )
         return;
 
-    _transientVPs.emplace_back(bases.front(), pos, rot, config.duration);
+    vec3d spawnPos = pos + rot.Transform(config.offset);
+    _transientVPs.emplace_back(bases.front(), spawnPos, rot, config.duration);
 
     TTransientVP &fx = _transientVPs.back();
     fx.chainFX = true;
@@ -2012,6 +2013,32 @@ void NC_STACK_ypaworld::SpawnAttachedTransientVP(int32_t modelId, NC_STACK_ypaba
     fx.followLocalOffset = localOffset;
 }
 
+static NC_STACK_ypabact *yw_FindLiveBactByGidInList(World::RefBactList &list, int32_t gid);
+
+static NC_STACK_ypabact *yw_FindLiveMissileByGidInList(World::MissileList &list, int32_t gid)
+{
+    for (NC_STACK_ypamissile *missile : list)
+    {
+        if ( missile->_gid == gid )
+        {
+            if ( missile->_kidRef.IsListType(World::BLIST_CACHE) || missile->_status == BACT_STATUS_DEAD )
+                return NULL;
+
+            return missile;
+        }
+
+        NC_STACK_ypabact *kid = yw_FindLiveBactByGidInList(missile->_kidList, gid);
+        if ( kid )
+            return kid;
+
+        NC_STACK_ypabact *childMissile = yw_FindLiveMissileByGidInList(missile->_missiles_list, gid);
+        if ( childMissile )
+            return childMissile;
+    }
+
+    return NULL;
+}
+
 static NC_STACK_ypabact *yw_FindLiveBactByGidInList(World::RefBactList &list, int32_t gid)
 {
     for (NC_STACK_ypabact *unit : list)
@@ -2027,6 +2054,10 @@ static NC_STACK_ypabact *yw_FindLiveBactByGidInList(World::RefBactList &list, in
         NC_STACK_ypabact *kid = yw_FindLiveBactByGidInList(unit->_kidList, gid);
         if ( kid )
             return kid;
+
+        NC_STACK_ypabact *missile = yw_FindLiveMissileByGidInList(unit->_missiles_list, gid);
+        if ( missile )
+            return missile;
     }
 
     return NULL;

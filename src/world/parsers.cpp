@@ -621,25 +621,84 @@ static void ResetVehicleScaleFX(TVhclProto *vhcl)
     vhcl->scale_fx_pXX.fill(0);
 }
 
-static World::TChainFXConfig::Trigger ParseChainFXTrigger(const std::string &name)
+static bool ParseDecorationFXParam(ScriptParser::Parser &parser,
+                                   const std::string &p1,
+                                   const std::string &p2,
+                                   World::TDecorationFXConfig &config)
 {
-    if ( !StriCmp(name, "destroyed") )
-        return World::TChainFXConfig::TRIGGER_DESTROYED;
+    if ( !StriCmp(p1, "decoration_fx_vp") )
+    {
+        int vp = parser.stol(p2, NULL, 0);
+        config.vp = vp > 0 ? vp : 0;
+        return true;
+    }
 
-    if ( !StriCmp(name, "impact") )
-        return World::TChainFXConfig::TRIGGER_IMPACT;
+    if ( !StriCmp(p1, "decoration_fx_interval_min") )
+    {
+        config.interval_min = parser.stol(p2, NULL, 0);
+        return true;
+    }
+
+    if ( !StriCmp(p1, "decoration_fx_interval_max") )
+    {
+        config.interval_max = parser.stol(p2, NULL, 0);
+        return true;
+    }
+
+    if ( !StriCmp(p1, "decoration_fx_count_min") )
+    {
+        int count = parser.stol(p2, NULL, 0);
+        config.count_min = std::max(0, std::min(count, 32));
+        return true;
+    }
+
+    if ( !StriCmp(p1, "decoration_fx_count_max") )
+    {
+        int count = parser.stol(p2, NULL, 0);
+        config.count_max = std::max(0, std::min(count, 32));
+        return true;
+    }
+
+    if ( !StriCmp(p1, "decoration_fx_random_pos") )
+    {
+        float radius = parser.stof(p2, 0);
+        config.random_pos = radius > 0.0 ? radius : 0.0;
+        return true;
+    }
+
+    return false;
+}
+
+static World::TChainFXConfig::Trigger ParseChainFXTrigger(const std::string &name, bool weaponPrototype)
+{
+    if ( weaponPrototype )
+    {
+        if ( !StriCmp(name, "detonate") )
+            return World::TChainFXConfig::TRIGGER_DETONATE;
+
+        if ( !StriCmp(name, "impact_world") )
+            return World::TChainFXConfig::TRIGGER_IMPACT_WORLD;
+    }
+    else
+    {
+        if ( !StriCmp(name, "destroyed") )
+            return World::TChainFXConfig::TRIGGER_DESTROYED;
+
+        if ( !StriCmp(name, "crash") )
+            return World::TChainFXConfig::TRIGGER_CRASH;
+    }
 
     return World::TChainFXConfig::TRIGGER_NONE;
 }
 
 static int ParseChainFXBlock(ScriptParser::Parser &parser,
                              std::vector<World::TChainFXConfig> *out,
-                             World::TChainFXConfig::Trigger defaultTrigger,
-                             bool requireExplicitTrigger)
+                             bool weaponPrototype)
 {
     float startSize = 1.0;
     float endSize = 0.0;
     bool hasEndSize = false;
+    vec3d offset;
     int duration = 0;
     std::vector<int16_t> vpModels;
     World::TChainFXConfig::Trigger trigger = World::TChainFXConfig::TRIGGER_NONE;
@@ -673,13 +732,9 @@ static int ParseChainFXBlock(ScriptParser::Parser &parser,
 
             if ( !hasTrigger )
             {
-                if ( requireExplicitTrigger )
-                {
-                    ypa_log_out("WARNING: begin_chain_fx without trigger ignored for weapon prototype\n");
-                    return ScriptParser::RESULT_OK;
-                }
-
-                trigger = defaultTrigger;
+                ypa_log_out("WARNING: begin_chain_fx without trigger ignored for %s prototype\n",
+                            weaponPrototype ? "weapon" : "vehicle");
+                return ScriptParser::RESULT_OK;
             }
 
             if ( !hasEndSize )
@@ -689,6 +744,7 @@ static int ParseChainFXBlock(ScriptParser::Parser &parser,
             {
                 World::TChainFXConfig chain;
                 chain.trigger = trigger;
+                chain.offset = offset;
                 chain.start_size = startSize;
                 chain.end_size = endSize;
                 chain.duration = duration;
@@ -701,10 +757,9 @@ static int ParseChainFXBlock(ScriptParser::Parser &parser,
 
         if ( !StriCmp(p1, "trigger") )
         {
-            trigger = ParseChainFXTrigger(p2);
+            trigger = ParseChainFXTrigger(p2, weaponPrototype);
             hasTrigger = true;
-            if ( trigger == World::TChainFXConfig::TRIGGER_NONE ||
-                 (requireExplicitTrigger && trigger != World::TChainFXConfig::TRIGGER_IMPACT) )
+            if ( trigger == World::TChainFXConfig::TRIGGER_NONE )
             {
                 ypa_log_out("WARNING: Unknown or unsupported begin_chain_fx trigger '%s' ignored\n", p2.c_str());
                 badTrigger = true;
@@ -719,6 +774,12 @@ static int ParseChainFXBlock(ScriptParser::Parser &parser,
         }
         else if ( !StriCmp(p1, "duration") )
             duration = parser.stol(p2, NULL, 0);
+        else if ( !StriCmp(p1, "offset_x") )
+            offset.x = parser.stof(p2, 0);
+        else if ( !StriCmp(p1, "offset_y") )
+            offset.y = parser.stof(p2, 0);
+        else if ( !StriCmp(p1, "offset_z") )
+            offset.z = parser.stof(p2, 0);
         else if ( !StriCmp(p1, "vp_model") )
             vpModels.push_back(parser.stol(p2, NULL, 0));
         else
@@ -732,7 +793,6 @@ static int ParseVehicleChainFXBlock(ScriptParser::Parser &parser, TVhclProto *vh
 {
     return ParseChainFXBlock(parser,
                              &vhcl->chain_fx,
-                             World::TChainFXConfig::TRIGGER_DESTROYED,
                              false);
 }
 
@@ -740,7 +800,6 @@ static int ParseWeaponChainFXBlock(ScriptParser::Parser &parser, TWeapProto *wpn
 {
     return ParseChainFXBlock(parser,
                              &wpn->chain_fx,
-                             World::TChainFXConfig::TRIGGER_NONE,
                              true);
 }
 
@@ -977,33 +1036,8 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
         float radius = parser.stof(p2, 0);
         _vhcl->damaged_fx.random_pos = radius > 0.0 ? radius : 0.0;
     }
-    else if ( !StriCmp(p1, "decoration_fx_vp") )
+    else if ( ParseDecorationFXParam(parser, p1, p2, _vhcl->decoration_fx) )
     {
-        int vp = parser.stol(p2, NULL, 0);
-        _vhcl->decoration_fx.vp = vp > 0 ? vp : 0;
-    }
-    else if ( !StriCmp(p1, "decoration_fx_interval_min") )
-    {
-        _vhcl->decoration_fx.interval_min = parser.stol(p2, NULL, 0);
-    }
-    else if ( !StriCmp(p1, "decoration_fx_interval_max") )
-    {
-        _vhcl->decoration_fx.interval_max = parser.stol(p2, NULL, 0);
-    }
-    else if ( !StriCmp(p1, "decoration_fx_count_min") )
-    {
-        int count = parser.stol(p2, NULL, 0);
-        _vhcl->decoration_fx.count_min = std::max(0, std::min(count, 32));
-    }
-    else if ( !StriCmp(p1, "decoration_fx_count_max") )
-    {
-        int count = parser.stol(p2, NULL, 0);
-        _vhcl->decoration_fx.count_max = std::max(0, std::min(count, 32));
-    }
-    else if ( !StriCmp(p1, "decoration_fx_random_pos") )
-    {
-        float radius = parser.stof(p2, 0);
-        _vhcl->decoration_fx.random_pos = radius > 0.0 ? radius : 0.0;
     }
     else if ( !StriCmp(p1, "damaged_icon") )
     {
@@ -2237,6 +2271,9 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     {
         _wpn->visual_scale = parser.stof(p2, 0);
     }
+    else if ( ParseDecorationFXParam(parser, p1, p2, _wpn->decoration_fx) )
+    {
+    }
     else if ( !StriCmp(p1, "type_icon") )
     {
         _wpn->type_icon = p2[0];
@@ -2398,33 +2435,8 @@ int BuildProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1
     {
         _bld->Energy = parser.stol(p2, NULL, 0);
     }
-    else if ( !StriCmp(p1, "decoration_fx_vp") )
+    else if ( ParseDecorationFXParam(parser, p1, p2, _bld->DecorationFX) )
     {
-        int vp = parser.stol(p2, NULL, 0);
-        _bld->DecorationFX.vp = vp > 0 ? vp : 0;
-    }
-    else if ( !StriCmp(p1, "decoration_fx_interval_min") )
-    {
-        _bld->DecorationFX.interval_min = parser.stol(p2, NULL, 0);
-    }
-    else if ( !StriCmp(p1, "decoration_fx_interval_max") )
-    {
-        _bld->DecorationFX.interval_max = parser.stol(p2, NULL, 0);
-    }
-    else if ( !StriCmp(p1, "decoration_fx_count_min") )
-    {
-        int count = parser.stol(p2, NULL, 0);
-        _bld->DecorationFX.count_min = std::max(0, std::min(count, 32));
-    }
-    else if ( !StriCmp(p1, "decoration_fx_count_max") )
-    {
-        int count = parser.stol(p2, NULL, 0);
-        _bld->DecorationFX.count_max = std::max(0, std::min(count, 32));
-    }
-    else if ( !StriCmp(p1, "decoration_fx_random_pos") )
-    {
-        float radius = parser.stof(p2, 0);
-        _bld->DecorationFX.random_pos = radius > 0.0 ? radius : 0.0;
     }
     else if ( !StriCmp(p1, "sec_type") )
     {

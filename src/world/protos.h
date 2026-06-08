@@ -46,10 +46,13 @@ struct TChainFXConfig
     {
         TRIGGER_NONE = 0,
         TRIGGER_DESTROYED,
-        TRIGGER_IMPACT
+        TRIGGER_CRASH,
+        TRIGGER_DETONATE,
+        TRIGGER_IMPACT_WORLD
     };
 
     uint8_t trigger = TRIGGER_NONE;
+    vec3d offset;
     float start_size = 1.0;
     float end_size = 0.0;
     int duration = 0;
@@ -389,6 +392,7 @@ struct TWeapProto
     std::array<TVhclSound, SND_MAX> sndFXes;
     TWeaponDebuffConfig debuff;
     TWeaponClusterConfig cluster;
+    TDecorationFXConfig decoration_fx;
 //    int field_870 = 0;
 //    int field_874 = 0;
     int energy = 0;
