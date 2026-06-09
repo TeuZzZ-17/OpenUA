@@ -2239,6 +2239,9 @@ void NC_STACK_ypaworld::DeleteLevel()
 
 void NC_STACK_ypaworld::ypaworld_func153(bact_hudi *arg)
 {
+    if ( !arg->field_18 )
+        _hudMissileMultiLockTargets.clear();
+
     _guiVisor = *arg;
 }
 

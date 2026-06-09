@@ -188,6 +188,7 @@ struct TRoboGun
     vec3d dir;
     NC_STACK_ypabact *gun_obj = NULL;
     std::string robo_gun_name;
+    std::string icon;
     uint8_t robo_gun_type = 0;
 
     TRoboGun()
@@ -204,6 +205,7 @@ struct TRoboGun
         dir = b.dir;
         gun_obj = b.gun_obj;
         robo_gun_name = std::move(b.robo_gun_name);
+        icon = std::move(b.icon);
         robo_gun_type = b.robo_gun_type;
     }
 
@@ -213,6 +215,7 @@ struct TRoboGun
         dir = b.dir;
         gun_obj = b.gun_obj;
         robo_gun_name = b.robo_gun_name;
+        icon = b.icon;
         robo_gun_type = b.robo_gun_type;
         return *this;
     }
@@ -292,6 +295,8 @@ struct TVhclProto
     std::string regen_icon;
     std::string drain_icon;
     std::string spawn_icon;
+    std::string radar_icon;
+    std::string unit_gun_icon;
     std::string power_icon;
     int power = 0;
     float power_radius = 0.0;
@@ -414,6 +419,7 @@ struct TWeapProto
     int shot_time_user = 0;
     int salve_shots = 0;
     int salve_delay = 0;
+    int missile_multi_target = 0;
     float energy_heli = 0.0;
     float energy_tank = 0.0;
     float energy_flyer = 0.0;

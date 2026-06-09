@@ -1066,6 +1066,17 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     {
         _vhcl->spawn_icon = p2;
     }
+    else if ( !StriCmp(p1, "radar_icon") )
+    {
+        _vhcl->radar_icon = p2;
+    }
+    else if ( !StriCmp(p1, "unit_gun_icon") )
+    {
+        if (TRoboGun *gun = getUnitGun())
+            gun->icon = p2;
+        else
+            _vhcl->unit_gun_icon = p2;
+    }
     else if ( !StriCmp(p1, "power_icon") )
     {
         _vhcl->power_icon = p2;
@@ -1737,6 +1748,8 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->regen_icon.clear();
         _vhcl->drain_icon.clear();
         _vhcl->spawn_icon.clear();
+        _vhcl->radar_icon.clear();
+        _vhcl->unit_gun_icon.clear();
         _vhcl->power_icon.clear();
         _vhcl->power = 0;
         _vhcl->power_radius = 0.0;
@@ -1865,6 +1878,7 @@ bool WeaponProtoParser::IsScope(ScriptParser::Parser &parser, const std::string 
         _wpn->shot_time_user = 1000;
         _wpn->salve_delay = 0;
         _wpn->salve_shots = 0;
+        _wpn->missile_multi_target = 0;
         _wpn->vp_normal = 0;
         _wpn->vp_fire = 1;
         _wpn->vp_megadeth = 2;
@@ -2238,6 +2252,11 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     else if ( !StriCmp(p1, "salve_delay") )
     {
         _wpn->salve_delay = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "missile_multi_target") )
+    {
+        int maxTargets = parser.stol(p2, NULL, 0);
+        _wpn->missile_multi_target = maxTargets > 0 ? maxTargets : 0;
     }
     else if ( !StriCmp(p1, "add_energy") )
     {

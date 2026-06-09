@@ -34,7 +34,7 @@ int dword_5BAF9C;
 namespace
 {
 
-constexpr int STATUS_ICON_MAX_COUNT = 6;
+constexpr int STATUS_ICON_MAX_COUNT = 8;
 constexpr int STATUS_ICON_SIZE = 16;
 constexpr int STATUS_ICON_SPACING = 2;
 
@@ -190,6 +190,20 @@ void StatusIconCollectMobilePower(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact,
         StatusIconAdd(icons, iconCount, targetProto.drain_icon);
 }
 
+void StatusIconCollectMountedUnitGunIcons(const std::vector<World::TRoboGun> &guns, const std::string &fallbackIcon, StatusIconList &icons, int &iconCount)
+{
+    for (const World::TRoboGun &gun : guns)
+    {
+        if ( gun.robo_gun_type <= 0 )
+            continue;
+
+        if ( !gun.icon.empty() )
+            StatusIconAdd(icons, iconCount, gun.icon);
+        else
+            StatusIconAdd(icons, iconCount, fallbackIcon);
+    }
+}
+
 int StatusIconCollect(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact, World::TVhclProto *vhcl, StatusIconList &icons)
 {
     if ( !bact || !vhcl )
@@ -207,6 +221,11 @@ int StatusIconCollect(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact, World::TVhc
     {
         if ( vhcl->spawn_units )
             StatusIconAdd(icons, iconCount, vhcl->spawn_icon);
+
+        if ( bact->_radar > 0 )
+            StatusIconAdd(icons, iconCount, vhcl->radar_icon);
+
+        StatusIconCollectMountedUnitGunIcons(bact->_unitGuns, vhcl->unit_gun_icon, icons, iconCount);
 
         if ( vhcl->power > 0 && vhcl->power_radius > 0.0 )
             StatusIconAdd(icons, iconCount, vhcl->power_icon);
@@ -324,6 +343,11 @@ int StatusIconCollectVehicleRoleIcons(World::TVhclProto *vhcl, StatusIconList &i
 
     if ( vhcl->spawn_units )
         StatusIconAdd(icons, iconCount, vhcl->spawn_icon);
+
+    if ( vhcl->radar > 0 )
+        StatusIconAdd(icons, iconCount, vhcl->radar_icon);
+
+    StatusIconCollectMountedUnitGunIcons(vhcl->unit_guns, vhcl->unit_gun_icon, icons, iconCount);
 
     if ( vhcl->power > 0 && vhcl->power_radius > 0.0 )
         StatusIconAdd(icons, iconCount, vhcl->power_icon);
@@ -9645,6 +9669,132 @@ void sub_4E3D98(NC_STACK_ypaworld *yw, float x1, float y1, float x2, float y2, S
     *out2 = GFX::Engine.Color(v13, v15, v16);
 }
 
+static bool yw_ProjectHUDMissileLockTarget(NC_STACK_ypaworld *yw, NC_STACK_ypabact *target, float *outX, float *outY)
+{
+    if ( !yw->_userUnit || !target || target->IsDestroyed() || target->_status == BACT_STATUS_DEAD )
+        return false;
+
+    vec3d targetPos = target->_position - yw->_userUnit->_position;
+
+    mat3x3 corrected = yw->_userUnit->_rotation;
+    GFX::Engine.matrixAspectCorrection(corrected, false);
+
+    vec3d hudPos = corrected.Transform(targetPos);
+    if ( hudPos.z == 0.0 )
+        return false;
+
+    *outX = hudPos.x / hudPos.z;
+    *outY = hudPos.y / hudPos.z;
+    return true;
+}
+
+static void yw_RenderHUDWeaponLockMarker(NC_STACK_ypaworld *yw, sklt_wis *wis, UAskeleton::Data *wpn_wure, UAskeleton::Data *wpn_wure2,
+        bool locked, float fromX, float fromY, float toX, float toY, float hudAppearProgress)
+{
+    float lockProgress[2];
+    wis_color_func func;
+    SDL_Color primaryColor;
+    SDL_Color secondaryColor;
+
+    if ( locked )
+    {
+        for (int i = 0; i < 2; i++)
+        {
+            lockProgress[i] = (yw->_timeStamp - wis->field_7A) / 200.0;
+
+            if ( lockProgress[i] > 1.0 )
+                lockProgress[i] = 1.0;
+        }
+
+        primaryColor = yw->GetColor(27);
+        secondaryColor = yw->GetColor(36);
+
+        if ( wis->field_72 )
+            func = sub_4E3D98;
+        else
+            func = NULL;
+    }
+    else
+    {
+        lockProgress[0] = 0;
+        lockProgress[1] = 0;
+
+        secondaryColor = yw->GetColor(28);
+        primaryColor = yw->GetColor(37);
+
+        if ( wis->field_72 )
+            func = sub_4E3B80;
+        else
+            func = NULL;
+    }
+
+    int cl1r = primaryColor.r;
+    int cl1g = primaryColor.g;
+    int cl1b = primaryColor.b;
+    int cl2r = secondaryColor.r;
+    int cl2b = secondaryColor.b;
+    int cl2g = secondaryColor.g;
+
+    for (int i = 0; i < 2; i++)
+    {
+        float drawX, drawY;
+
+        if ( locked )
+        {
+            drawX = (toX - fromX) * lockProgress[i] + fromX;
+            drawY = (toY - fromY) * lockProgress[i] + fromY;
+        }
+        else
+        {
+            drawX = toX;
+            drawY = toY;
+        }
+
+        float scaleY = lockProgress[i] * -0.23 + 0.4;
+        float scaleX = lockProgress[i] * -0.17 + 0.3;
+
+        if ( hudAppearProgress < 1.4 )
+            scaleY = scaleY * hudAppearProgress;
+
+        float angle;
+
+        if ( i & 1 )
+        {
+            angle = lockProgress[i] * 1.571;
+        }
+        else if ( lockProgress[i] >= 1.0 )
+        {
+            angle = (yw->_timeStamp - wis->field_7A) * 0.001 * 6.282;
+        }
+        else
+        {
+            angle = lockProgress[i] * -3.141;
+        }
+
+        float s = sin(angle);
+        float c = cos(angle);
+
+        UAskeleton::Data *sklt;
+
+        if ( i & 1 )
+            sklt = wpn_wure;
+        else
+            sklt = wpn_wure2;
+
+        if ( sklt )
+        {
+            yw->_hud.cl1_r = cl1r;
+            yw->_hud.cl1_g = cl1g;
+            yw->_hud.cl1_b = cl1b;
+            yw->_hud.cl2_r = cl2r;
+            yw->_hud.cl2_g = cl2g;
+            yw->_hud.cl2_b = cl2b;
+
+            yw_RenderVector2D(yw, sklt, drawX, drawY, c, -s, s, c, scaleX, scaleY, primaryColor, func, 0, true);
+        }
+    }
+}
+
 void yw_RenderHUDTarget(NC_STACK_ypaworld *yw, sklt_wis *wis)
 {
     UAskeleton::Data *mg_wure = NULL;
@@ -9744,107 +9894,39 @@ void yw_RenderHUDTarget(NC_STACK_ypaworld *yw, sklt_wis *wis)
 
         if ( yw->_guiVisor.field_4 )
         {
-            float v51[2];
-            wis_color_func func;
+            bool locked = yw->_guiVisor.field_18 != NULL;
+            yw_RenderHUDWeaponLockMarker(yw, wis, wpn_wure, wpn_wure2, locked,
+                    yw->_guiVisor.field_8, yw->_guiVisor.field_C,
+                    yw->_guiVisor.field_10, yw->_guiVisor.field_14, v86);
 
-            SDL_Color a11;
-            SDL_Color v27;
-
-            if ( yw->_guiVisor.field_18 )
+            if ( locked && yw->_hudMissileMultiLockTargets.size() > 1 )
             {
-                for (int i = 0; i < 2; i++)
+                bool primaryInMultiLock = false;
+                for (NC_STACK_ypabact *target : yw->_hudMissileMultiLockTargets)
                 {
-                    v51[i] = (yw->_timeStamp - wis->field_7A) / 200.0;
-
-                    if ( v51[i] > 1.0 )
-                        v51[i] = 1.0;
+                    if ( target == yw->_guiVisor.field_18 )
+                    {
+                        primaryInMultiLock = true;
+                        break;
+                    }
                 }
 
-                a11 = yw->GetColor(27);
-                v27 = yw->GetColor(36);
-
-                if ( wis->field_72 )
-                    func = sub_4E3D98;
-                else
-                    func = NULL;
-            }
-            else
-            {
-                v51[0] = 0;
-                v51[1] = 0;
-
-                v27 = yw->GetColor(28);
-                a11 = yw->GetColor(37);
-
-                if ( wis->field_72 )
-                    func = sub_4E3B80;
-                else
-                    func = NULL;
-            }
-
-            int v63 = a11.r;
-            int v67 = a11.g;
-            int v66 = a11.b;
-            int v68 = v27.r;
-            int v64 = v27.b;
-            int v65 = v27.g;
-
-            for (int i = 0; i < 2; i++)
-            {
-                float v77, v78;
-
-                if ( yw->_guiVisor.field_18 )
+                if ( primaryInMultiLock )
                 {
-                    v77 = (yw->_guiVisor.field_10 - yw->_guiVisor.field_8) * v51[i] + yw->_guiVisor.field_8;
-                    v78 = (yw->_guiVisor.field_14 - yw->_guiVisor.field_C) * v51[i] + yw->_guiVisor.field_C;
-                }
-                else
-                {
-                    v77 = yw->_guiVisor.field_10;
-                    v78 = yw->_guiVisor.field_14;
-                }
+                    for (NC_STACK_ypabact *target : yw->_hudMissileMultiLockTargets)
+                    {
+                        if ( target == yw->_guiVisor.field_18 )
+                            continue;
 
-                float v80 = v51[i] * -0.23 + 0.4;
-                float v74 = v51[i] * -0.17 + 0.3;
-
-                if ( v86 < 1.4 )
-                    v80 = v80 * v86;
-
-                float v85;
-
-                if ( i & 1 )
-                {
-                    v85 = v51[i] * 1.571;
-                }
-                else if ( v51[i] >= 1.0 )
-                {
-                    v85 = (yw->_timeStamp - wis->field_7A) * 0.001 * 6.282;
-                }
-                else
-                {
-                    v85 = v51[i] * -3.141;
-                }
-
-                float v35 = sin(v85);
-                float v83 = cos(v85);
-
-                UAskeleton::Data *v36;
-
-                if ( i & 1 )
-                    v36 = wpn_wure;
-                else
-                    v36 = wpn_wure2;
-
-                if ( v36 )
-                {
-                    yw->_hud.cl1_r = v63;
-                    yw->_hud.cl1_g = v67;
-                    yw->_hud.cl1_b = v66;
-                    yw->_hud.cl2_r = v68;
-                    yw->_hud.cl2_g = v65;
-                    yw->_hud.cl2_b = v64;
-
-                    yw_RenderVector2D(yw, v36, v77, v78, v83, -v35, v35, v83, v74, v80, a11, func, 0, true);
+                        float targetX;
+                        float targetY;
+                        if ( yw_ProjectHUDMissileLockTarget(yw, target, &targetX, &targetY) )
+                        {
+                            yw_RenderHUDWeaponLockMarker(yw, wis, wpn_wure, wpn_wure2, true,
+                                    yw->_guiVisor.field_8, yw->_guiVisor.field_C,
+                                    targetX, targetY, v86);
+                        }
+                    }
                 }
             }
         }

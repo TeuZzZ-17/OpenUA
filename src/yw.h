@@ -2615,6 +2615,7 @@ public:
     TGameRecorder *_replayRecorder = NULL; // For record replay
     
     bact_hudi _guiVisor;
+    std::vector<NC_STACK_ypabact *> _hudMissileMultiLockTargets;
     
     std::vector<TMapGem> _techUpgrades; // tech upgrades in level
     int32_t _upgradeId = 0;

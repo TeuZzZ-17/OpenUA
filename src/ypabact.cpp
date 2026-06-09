@@ -7,6 +7,7 @@
 #include <stack>
 #include <algorithm>
 #include <limits>
+#include <vector>
 #include "yw.h"
 #include "ypabact.h"
 #include "yparobo.h"
@@ -4517,6 +4518,230 @@ static int ypabact_GetPrimaryWeaponSlots(NC_STACK_ypabact *bact, int *outSlots)
     return count;
 }
 
+struct TMissileMultiTargetCandidate
+{
+    NC_STACK_ypabact *target = NULL;
+    float score = 0.0;
+};
+
+constexpr int YPA_WEAPON_FLAG_PROJECTILE = 1;
+constexpr int YPA_WEAPON_FLAG_DIRECT = 2;
+constexpr int YPA_WEAPON_FLAG_TARGETED = 4;
+constexpr int YPA_WEAPON_FLAGS_MISSILE = YPA_WEAPON_FLAG_PROJECTILE | YPA_WEAPON_FLAG_DIRECT | YPA_WEAPON_FLAG_TARGETED;
+constexpr float YPA_MISSILE_MULTI_TARGET_RANGE = 2000.0;
+
+static bool ypabact_IsMissileMultiTargetWeapon(const World::TWeapProto &wproto)
+{
+    return wproto.missile_multi_target > 0 && wproto._weaponFlags == YPA_WEAPON_FLAGS_MISSILE;
+}
+
+static int ypabact_GetMissileMultiTargetLimit(const World::TWeapProto &wproto, int weaponCount)
+{
+    if ( !ypabact_IsMissileMultiTargetWeapon(wproto) || weaponCount <= 1 )
+        return 0;
+
+    int maxTargets = wproto.missile_multi_target;
+    if ( maxTargets > weaponCount )
+        maxTargets = weaponCount;
+
+    return maxTargets;
+}
+
+static bool ypabact_IsMissileMultiTargetUnitType(NC_STACK_ypabact *target)
+{
+    switch ( target->_bact_type )
+    {
+    case BACT_TYPES_BACT:
+    case BACT_TYPES_TANK:
+    case BACT_TYPES_ROBO:
+    case BACT_TYPES_FLYER:
+    case BACT_TYPES_UFO:
+    case BACT_TYPES_CAR:
+    case BACT_TYPES_GUN:
+    case BACT_TYPES_HOVER:
+        return true;
+
+    default:
+        return false;
+    }
+}
+
+static bool ypabact_IsValidMissileMultiTarget(NC_STACK_ypabact *launcher, NC_STACK_ypabact *target)
+{
+    if ( !launcher || !target || launcher == target || !launcher->getBACT_pWorld() )
+        return false;
+
+    if ( target->getBACT_pWorld() != launcher->getBACT_pWorld() )
+        return false;
+
+    if ( launcher->_owner == World::OWNER_0 || target->_owner == World::OWNER_0 || target->_owner == launcher->_owner )
+        return false;
+
+    if ( !ypabact_IsMissileMultiTargetUnitType(target) )
+        return false;
+
+    if ( target->_bact_type == BACT_TYPES_MISSLE ||
+         target->_status == BACT_STATUS_DEAD ||
+         target->_status == BACT_STATUS_CREATE ||
+         target->_status == BACT_STATUS_BEAM ||
+         target->_energy <= 0 ||
+         target->_energy_max <= 0 ||
+         target->IsDestroyed() ||
+         (target->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2 | BACT_STFLAG_NORENDER)) )
+        return false;
+
+    if ( target->_bact_type == BACT_TYPES_GUN )
+    {
+        NC_STACK_ypagun *gun = dynamic_cast<NC_STACK_ypagun *>(target);
+        if ( !gun || (gun->IsRoboGun() && target->_shield >= 100) )
+            return false;
+    }
+
+    return true;
+}
+
+static bool ypabact_GetMissileMultiTargetScore(NC_STACK_ypabact *launcher, NC_STACK_ypabact *target, const vec3d &aimDir, float weaponRadius, float *outScore)
+{
+    if ( !ypabact_IsValidMissileMultiTarget(launcher, target) )
+        return false;
+
+    vec3d targetDelta = target->_position - launcher->_old_pos;
+    if ( targetDelta.dot(aimDir) < 0.0 )
+        return false;
+
+    float targetDistance = targetDelta.length();
+    if ( targetDistance >= YPA_MISSILE_MULTI_TARGET_RANGE )
+        return false;
+
+    vec3d lineDelta = aimDir * targetDelta;
+    float lineDistance = lineDelta.length();
+    float lockRadius = targetDistance * 0.5 + 20.0;
+
+    if ( lineDistance >= lockRadius && lineDistance >= target->_radius + weaponRadius )
+        return false;
+
+    if ( outScore )
+        *outScore = lineDistance + targetDistance * 0.001;
+
+    return true;
+}
+
+static void ypabact_AddMissileMultiTargetCandidate(std::vector<TMissileMultiTargetCandidate> &targets, NC_STACK_ypabact *target, float score)
+{
+    if ( !target )
+        return;
+
+    for (const TMissileMultiTargetCandidate &candidate : targets)
+    {
+        if ( candidate.target == target )
+            return;
+    }
+
+    TMissileMultiTargetCandidate candidate;
+    candidate.target = target;
+    candidate.score = score;
+    targets.push_back(candidate);
+}
+
+static void ypabact_CollectMissileMultiTargetsFromCell(std::vector<TMissileMultiTargetCandidate> &candidates, NC_STACK_ypabact *launcher, cellArea *cell, const vec3d &aimDir, float weaponRadius)
+{
+    if ( !cell )
+        return;
+
+    for( NC_STACK_ypabact* &unit : cell->unitsList )
+    {
+        float score = 0.0;
+        if ( ypabact_GetMissileMultiTargetScore(launcher, unit, aimDir, weaponRadius, &score) )
+            ypabact_AddMissileMultiTargetCandidate(candidates, unit, score);
+    }
+}
+
+static std::vector<NC_STACK_ypabact *> ypabact_CollectMissileMultiTargets(NC_STACK_ypabact *launcher, const bact_arg79 *arg, const World::TWeapProto &wproto, int maxTargets)
+{
+    std::vector<TMissileMultiTargetCandidate> candidates;
+    std::vector<NC_STACK_ypabact *> targets;
+
+    if ( !launcher || !arg || !launcher->getBACT_pWorld() || maxTargets <= 0 )
+        return targets;
+
+    vec3d aimDir = arg->direction;
+    float aimLen = aimDir.length();
+    if ( aimLen <= 0.001 )
+    {
+        aimDir = launcher->_rotation.AxisZ();
+        aimLen = aimDir.length();
+    }
+
+    if ( aimLen <= 0.001 )
+        return targets;
+
+    aimDir = aimDir / aimLen;
+
+    if ( arg->tgType == BACT_TGT_TYPE_UNIT && ypabact_IsValidMissileMultiTarget(launcher, arg->target.pbact) )
+        ypabact_AddMissileMultiTargetCandidate(candidates, arg->target.pbact, -1.0);
+
+    int sectorRadius = (int)(YPA_MISSILE_MULTI_TARGET_RANGE / World::CVSectorLength) + 2;
+    for (int y = -sectorRadius; y <= sectorRadius; y++)
+    {
+        for (int x = -sectorRadius; x <= sectorRadius; x++)
+        {
+            Common::Point cellId(launcher->_cellId.x + x, launcher->_cellId.y + y);
+
+            if ( !launcher->getBACT_pWorld()->IsGamePlaySector(cellId) )
+                continue;
+
+            ypabact_CollectMissileMultiTargetsFromCell(candidates, launcher, &launcher->getBACT_pWorld()->SectorAt(cellId), aimDir, wproto.radius);
+        }
+    }
+
+    std::sort(candidates.begin(), candidates.end(), [](const TMissileMultiTargetCandidate &a, const TMissileMultiTargetCandidate &b) {
+        return a.score < b.score;
+    });
+
+    if ( maxTargets <= 0 || maxTargets > (int)candidates.size() )
+        maxTargets = candidates.size();
+
+    for (int i = 0; i < maxTargets; i++)
+        targets.push_back(candidates[i].target);
+
+    return targets;
+}
+
+static NC_STACK_ypabact *ypabact_GetDistributedMissileTarget(const std::vector<NC_STACK_ypabact *> &targets, int shotIndex)
+{
+    if ( targets.empty() )
+        return NULL;
+
+    return targets[shotIndex % targets.size()];
+}
+
+static void ypabact_StoreHUDMissileMultiLockTargets(NC_STACK_ypabact *launcher, const std::vector<NC_STACK_ypabact *> &missileTargets)
+{
+    if ( !launcher || !launcher->getBACT_pWorld() || !(launcher->_oflags & BACT_OFLAG_USERINPT) )
+        return;
+
+    if ( missileTargets.size() > 1 )
+        launcher->getBACT_pWorld()->_hudMissileMultiLockTargets = missileTargets;
+    else
+        launcher->getBACT_pWorld()->_hudMissileMultiLockTargets.clear();
+}
+
+static void ypabact_UpdateHUDMissileMultiLockTargets(NC_STACK_ypabact *launcher, const bact_arg79 *arg, const World::TWeapProto &wproto, int weaponCount)
+{
+    if ( !launcher || !launcher->getBACT_pWorld() || !(launcher->_oflags & BACT_OFLAG_USERINPT) )
+        return;
+
+    int maxTargets = ypabact_GetMissileMultiTargetLimit(wproto, weaponCount);
+    if ( maxTargets <= 1 )
+    {
+        launcher->getBACT_pWorld()->_hudMissileMultiLockTargets.clear();
+        return;
+    }
+
+    std::vector<NC_STACK_ypabact *> missileTargets = ypabact_CollectMissileMultiTargets(launcher, arg, wproto, maxTargets);
+    ypabact_StoreHUDMissileMultiLockTargets(launcher, missileTargets);
+}
+
 static int ypabact_SelectPrimaryWeaponSlot(NC_STACK_ypabact *bact, int requestedWeapon)
 {
     if ( requestedWeapon != bact->_weapon )
@@ -4707,9 +4932,21 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
     else
         v13 = _num_weapons;
 
+    std::vector<NC_STACK_ypabact *> missileTargets;
+    int maxTargets = ypabact_GetMissileMultiTargetLimit(wproto, v13);
+    bool missileMultiTarget = maxTargets > 1;
+    if ( missileMultiTarget )
+    {
+        missileTargets = ypabact_CollectMissileMultiTargets(this, arg, wproto, maxTargets);
+    }
+
+    ypabact_StoreHUDMissileMultiLockTargets(this, missileTargets);
+
     for (int i = 0; i < v13; i++)
     {
         float v37;
+        bact_arg79 missileArg = *arg;
+        NC_STACK_ypabact *multiTarget = missileMultiTarget ? ypabact_GetDistributedMissileTarget(missileTargets, i) : NULL;
 
         if ( v13 == 1 )
             v37 = arg->start_point.x;
@@ -4734,12 +4971,28 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
 
         wobj->_owner = _owner;
 
+        if ( multiTarget )
+        {
+            missileArg.tgType = BACT_TGT_TYPE_UNIT;
+            missileArg.target.pbact = multiTarget;
+            missileArg.tgt_pos = multiTarget->_position;
+
+            vec3d targetDir = multiTarget->_position - arg147.pos;
+            float targetDirLen = targetDir.length();
+            if ( targetDirLen > 0.001 )
+                missileArg.direction = targetDir / targetDirLen;
+        }
+        else if ( missileMultiTarget && missileArg.tgType == BACT_TGT_TYPE_UNIT && !ypabact_IsValidMissileMultiTarget(this, missileArg.target.pbact) )
+        {
+            missileArg.tgType = BACT_TGT_TYPE_DRCT;
+        }
+
         if ( _bact_type != BACT_TYPES_GUN )
             _energy -= wobj->_energy / 300;
 
-        if ( arg->direction.x != 0.0 || arg->direction.y != 0.0 || arg->direction.z != 0.0 )
+        if ( missileArg.direction.x != 0.0 || missileArg.direction.y != 0.0 || missileArg.direction.z != 0.0 )
         {
-            wobj->_fly_dir = arg->direction;
+            wobj->_fly_dir = missileArg.direction;
         }
         else
         {
@@ -4798,22 +5051,22 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
         {
             setTarget_msg arg67;
 
-            arg67.tgt = arg->target;
-            arg67.tgt_type = arg->tgType;
+            arg67.tgt = missileArg.target;
+            arg67.tgt_type = missileArg.tgType;
             arg67.priority = 0;
-            arg67.tgt_pos = arg->tgt_pos;
+            arg67.tgt_pos = missileArg.tgt_pos;
 
             wobj->SetTarget(&arg67);
 
-            if ( arg->flags & 2 )
+            if ( missileArg.flags & 2 )
             {
-                if ( arg->tgType == BACT_TGT_TYPE_CELL )
-                    wobj->_primTpos.y = arg->tgt_pos.y;
+                if ( missileArg.tgType == BACT_TGT_TYPE_CELL )
+                    wobj->_primTpos.y = missileArg.tgt_pos.y;
             }
         }
 
         uamessage_newWeapon wpnMsg;
-        wpnMsg.targetPos = arg->tgt_pos;
+        wpnMsg.targetPos = missileArg.tgt_pos;
 
         if ( v42 == 2 )
         {
@@ -4849,7 +5102,7 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
             _world->NetBroadcastMessage(&wpnMsg, sizeof(wpnMsg), true);
         }
 
-        if ( arg->flags & 1 )
+        if ( missileArg.flags & 1 )
         {
             if ( i == 0 )
             {
@@ -4861,11 +5114,11 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
             }
         }
         
-        if ( arg->flags & 4 )
+        if ( missileArg.flags & 4 )
             wobj->SetIgnoreBuilds(1);
             
 
-        if ( arg->tgType != BACT_TGT_TYPE_UNIT )
+        if ( missileArg.tgType != BACT_TGT_TYPE_UNIT )
         {
             int life_time_nt = wproto.life_time_nt;
 
@@ -7318,6 +7571,23 @@ size_t NC_STACK_ypabact::UserTargeting(bact_arg106 *arg)
     if ( targeto )
     {
         sub_4843BC(targeto, a3a);
+
+        if ( _weapon != -1 && !a3a )
+        {
+            bact_arg79 previewArg = {};
+            previewArg.direction = vec3d(0.0, 0.0, 0.0);
+            previewArg.tgType = BACT_TGT_TYPE_UNIT;
+            previewArg.target.pbact = targeto;
+            previewArg.tgt_pos = targeto->_position;
+            previewArg.weapon = _weapon;
+
+            int weaponCount = _num_weapons <= 1 ? 1 : _num_weapons;
+            ypabact_UpdateHUDMissileMultiLockTargets(this, &previewArg, _world->GetWeaponsProtos().at(_weapon), weaponCount);
+        }
+        else if ( _oflags & BACT_OFLAG_USERINPT )
+        {
+            _world->_hudMissileMultiLockTargets.clear();
+        }
 
         setTarget_msg arg67;
         arg67.tgt_type = BACT_TGT_TYPE_UNIT;
