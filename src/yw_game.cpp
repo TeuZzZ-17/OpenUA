@@ -2757,6 +2757,22 @@ void NC_STACK_ypaworld::sb_0x456384(const Common::Point &cellId, int ownerid2, i
 
         CellSetOwner(&cell, ownerid2);
 
+        // Building spawner runtime ownership must be tied to the building that
+        // has just been created, not to a previous owner stored when the sector
+        // was conquered before construction.
+        if ( bld->spawn_units )
+        {
+            cell.BuildingSpawnInitialOwner = ownerid2;
+            cell.BuildingSpawnLastTime = 0;
+            cell.BuildingSpawnedGids.clear();
+        }
+        else
+        {
+            cell.BuildingSpawnInitialOwner = 0;
+            cell.BuildingSpawnLastTime = 0;
+            cell.BuildingSpawnedGids.clear();
+        }
+
         for( NC_STACK_ypabact * &unit: _unitsList )
         {
             if (unit->_bact_type == BACT_TYPES_ROBO && unit->_owner == ownerid2)
