@@ -1171,6 +1171,79 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
 
         _vhcl->spawn_count = count;
     }
+    else if ( !StriCmp(p1, "proximity_defense_enable") )
+    {
+        _vhcl->proximity_defense_enable = parser.stol(p2, NULL, 0) ? 1 : 0;
+    }
+    else if ( !StriCmp(p1, "proximity_defense_weapon") )
+    {
+        int weaponId = parser.stol(p2, NULL, 0);
+        _vhcl->proximity_defense_weapon = weaponId > 0 ? weaponId : 0;
+    }
+    else if ( !StriCmp(p1, "proximity_defense_trigger_radius") )
+    {
+        float radius = parser.stof(p2, 0);
+        _vhcl->proximity_defense_trigger_radius = radius > 0.0 ? radius : 0.0;
+    }
+    else if ( !StriCmp(p1, "proximity_defense_interval") )
+    {
+        int interval = parser.stol(p2, NULL, 0);
+        _vhcl->proximity_defense_interval = interval > 0 ? interval : 1000;
+    }
+    else if ( !StriCmp(p1, "proximity_defense_shots") )
+    {
+        int shots = parser.stol(p2, NULL, 0);
+        _vhcl->proximity_defense_shots = shots > 0 ? shots : 1;
+    }
+    else if ( !StriCmp(p1, "proximity_defense_fire_x") )
+    {
+        _vhcl->proximity_defense_fire_pos.x = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "proximity_defense_fire_y") )
+    {
+        _vhcl->proximity_defense_fire_pos.y = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "proximity_defense_fire_z") )
+    {
+        _vhcl->proximity_defense_fire_pos.z = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "proximity_defense_vp_launch") )
+    {
+        int vp = parser.stol(p2, NULL, 0);
+        _vhcl->proximity_defense_vp_launch = vp > 0 ? vp : -1;
+    }
+    else if ( !StriCmp(p1, "proximity_defense_fire_mode") )
+    {
+        if ( !StriCmp(p2, "sequential") )
+            _vhcl->proximity_defense_fire_mode = 1;
+        else
+            _vhcl->proximity_defense_fire_mode = 0;
+    }
+    else if ( !StriCmp(p1, "proximity_defense_sequence_delay") )
+    {
+        int delay = parser.stol(p2, NULL, 0);
+        _vhcl->proximity_defense_sequence_delay = delay > 0 ? delay : 100;
+    }
+    else if ( !StriCmp(p1, "proximity_defense_random_yaw_min") )
+    {
+        _vhcl->proximity_defense_random_yaw_set = true;
+        _vhcl->proximity_defense_random_yaw_min = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "proximity_defense_random_yaw_max") )
+    {
+        _vhcl->proximity_defense_random_yaw_set = true;
+        _vhcl->proximity_defense_random_yaw_max = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "proximity_defense_random_pitch_min") )
+    {
+        _vhcl->proximity_defense_random_pitch_set = true;
+        _vhcl->proximity_defense_random_pitch_min = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "proximity_defense_random_pitch_max") )
+    {
+        _vhcl->proximity_defense_random_pitch_set = true;
+        _vhcl->proximity_defense_random_pitch_max = parser.stof(p2, 0);
+    }
     else if ( !StriCmp(p1, "visual_scale") )
     {
         _vhcl->visual_scale = parser.stof(p2, 0);
@@ -1763,6 +1836,21 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->spawn_random_pos = 0.0;
         _vhcl->spawn_max_active = 0;
         _vhcl->spawn_count = 1;
+        _vhcl->proximity_defense_enable = 0;
+        _vhcl->proximity_defense_weapon = 0;
+        _vhcl->proximity_defense_trigger_radius = 0.0;
+        _vhcl->proximity_defense_interval = 1000;
+        _vhcl->proximity_defense_shots = 12;
+        _vhcl->proximity_defense_fire_pos = vec3d(0.0, 0.0, 0.0);
+        _vhcl->proximity_defense_vp_launch = -1;
+        _vhcl->proximity_defense_fire_mode = 0;
+        _vhcl->proximity_defense_sequence_delay = 100;
+        _vhcl->proximity_defense_random_yaw_set = false;
+        _vhcl->proximity_defense_random_yaw_min = 0.0;
+        _vhcl->proximity_defense_random_yaw_max = 360.0;
+        _vhcl->proximity_defense_random_pitch_set = false;
+        _vhcl->proximity_defense_random_pitch_min = -10.0;
+        _vhcl->proximity_defense_random_pitch_max = 45.0;
         _vhcl->shield = 50;
         _vhcl->energy = 10000;
         _vhcl->adist_sector = 800.0;

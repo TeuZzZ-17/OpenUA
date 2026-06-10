@@ -1534,6 +1534,37 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_carrier_spawn_root_gid = 0;
         bacto->_carrier_spawn_root_vehicle = 0;
         bacto->_carrier_spawned_gids.clear();
+        bacto->_proximity_defense_enable = vhcl.proximity_defense_enable;
+        bacto->_proximity_defense_weapon = vhcl.proximity_defense_weapon;
+        bacto->_proximity_defense_trigger_radius = vhcl.proximity_defense_trigger_radius > 0.0 ? vhcl.proximity_defense_trigger_radius : 0.0;
+        bacto->_proximity_defense_interval = vhcl.proximity_defense_interval > 0 ? vhcl.proximity_defense_interval : 1000;
+        bacto->_proximity_defense_shots = vhcl.proximity_defense_shots > 0 ? vhcl.proximity_defense_shots : 1;
+        bacto->_proximity_defense_fire_pos = vhcl.proximity_defense_fire_pos;
+        bacto->_proximity_defense_vp_launch = vhcl.proximity_defense_vp_launch;
+        bacto->_proximity_defense_fire_mode = vhcl.proximity_defense_fire_mode;
+        bacto->_proximity_defense_sequence_delay = vhcl.proximity_defense_sequence_delay > 0 ? vhcl.proximity_defense_sequence_delay : 100;
+        bacto->_proximity_defense_random_yaw_set = vhcl.proximity_defense_random_yaw_set;
+        bacto->_proximity_defense_random_yaw_min = vhcl.proximity_defense_random_yaw_min;
+        bacto->_proximity_defense_random_yaw_max = vhcl.proximity_defense_random_yaw_max;
+        if ( bacto->_proximity_defense_random_yaw_min > bacto->_proximity_defense_random_yaw_max )
+        {
+            float tmpYaw = bacto->_proximity_defense_random_yaw_min;
+            bacto->_proximity_defense_random_yaw_min = bacto->_proximity_defense_random_yaw_max;
+            bacto->_proximity_defense_random_yaw_max = tmpYaw;
+        }
+        bacto->_proximity_defense_random_pitch_set = vhcl.proximity_defense_random_pitch_set;
+        bacto->_proximity_defense_random_pitch_min = vhcl.proximity_defense_random_pitch_min;
+        bacto->_proximity_defense_random_pitch_max = vhcl.proximity_defense_random_pitch_max;
+        if ( bacto->_proximity_defense_random_pitch_min > bacto->_proximity_defense_random_pitch_max )
+        {
+            float tmpPitch = bacto->_proximity_defense_random_pitch_min;
+            bacto->_proximity_defense_random_pitch_min = bacto->_proximity_defense_random_pitch_max;
+            bacto->_proximity_defense_random_pitch_max = tmpPitch;
+        }
+        bacto->_proximity_defense_sequence_active = false;
+        bacto->_proximity_defense_sequence_shots_fired = 0;
+        bacto->_proximity_defense_next_shot_time = 0;
+        bacto->_proximity_defense_next_activation_time = 0;
         bacto->SetUnitGuns(vhcl_id->skip_unit_guns ? std::vector<World::TRoboGun>() : vhcl.unit_guns);
 
         bacto->_destroyFX = vhcl.dest_fx;

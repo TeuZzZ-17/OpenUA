@@ -557,13 +557,15 @@ static bool ypabact_IsCarrierSpawnEnemy(NC_STACK_ypabact *carrier, NC_STACK_ypab
     return true;
 }
 
-static bool ypabact_CarrierHasEnemyNearby(NC_STACK_ypabact *carrier)
+static bool ypabact_HasEnemyNearby(NC_STACK_ypabact *carrier, float radius)
 {
     NC_STACK_ypaworld *world = carrier->getBACT_pWorld();
     if ( !world )
         return false;
 
-    float radius = carrier->_spawn_trigger_radius;
+    if ( radius <= 0.0 )
+        return false;
+
     float radiusSq = radius * radius;
     int sectorRadius = (int)(radius / World::CVSectorLength) + 2;
     Common::Point center = World::PositionToSectorID(carrier->_position);
@@ -591,6 +593,11 @@ static bool ypabact_CarrierHasEnemyNearby(NC_STACK_ypabact *carrier)
     }
 
     return false;
+}
+
+static bool ypabact_CarrierHasEnemyNearby(NC_STACK_ypabact *carrier)
+{
+    return ypabact_HasEnemyNearby(carrier, carrier->_spawn_trigger_radius);
 }
 
 static bool ypabact_IsCarrierSpawnPositionClear(NC_STACK_ypabact *carrier, const vec3d &pos)
@@ -842,6 +849,25 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _carrier_spawn_root_gid = 0;
     _carrier_spawn_root_vehicle = 0;
     _carrier_spawned_gids.clear();
+    _proximity_defense_enable = 0;
+    _proximity_defense_weapon = 0;
+    _proximity_defense_trigger_radius = 0.0;
+    _proximity_defense_interval = 1000;
+    _proximity_defense_shots = 12;
+    _proximity_defense_fire_pos = vec3d(0.0, 0.0, 0.0);
+    _proximity_defense_vp_launch = -1;
+    _proximity_defense_fire_mode = 0;
+    _proximity_defense_sequence_delay = 100;
+    _proximity_defense_random_yaw_set = false;
+    _proximity_defense_random_yaw_min = 0.0;
+    _proximity_defense_random_yaw_max = 360.0;
+    _proximity_defense_random_pitch_set = false;
+    _proximity_defense_random_pitch_min = -10.0;
+    _proximity_defense_random_pitch_max = 45.0;
+    _proximity_defense_sequence_active = false;
+    _proximity_defense_sequence_shots_fired = 0;
+    _proximity_defense_next_shot_time = 0;
+    _proximity_defense_next_activation_time = 0;
     _gunDisplayName.clear();
     _unitGunsParentRotation = mat3x3::Ident();
     _unitGunsSpawned = false;
@@ -946,6 +972,25 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _carrier_spawn_root_gid = 0;
     _carrier_spawn_root_vehicle = 0;
     _carrier_spawned_gids.clear();
+    _proximity_defense_enable = 0;
+    _proximity_defense_weapon = 0;
+    _proximity_defense_trigger_radius = 0.0;
+    _proximity_defense_interval = 1000;
+    _proximity_defense_shots = 12;
+    _proximity_defense_fire_pos = vec3d(0.0, 0.0, 0.0);
+    _proximity_defense_vp_launch = -1;
+    _proximity_defense_fire_mode = 0;
+    _proximity_defense_sequence_delay = 100;
+    _proximity_defense_random_yaw_set = false;
+    _proximity_defense_random_yaw_min = 0.0;
+    _proximity_defense_random_yaw_max = 360.0;
+    _proximity_defense_random_pitch_set = false;
+    _proximity_defense_random_pitch_min = -10.0;
+    _proximity_defense_random_pitch_max = 45.0;
+    _proximity_defense_sequence_active = false;
+    _proximity_defense_sequence_shots_fired = 0;
+    _proximity_defense_next_shot_time = 0;
+    _proximity_defense_next_activation_time = 0;
     _unitGuns.clear();
     _gunDisplayName.clear();
     _unitGunsParentRotation = mat3x3::Ident();
@@ -1575,6 +1620,7 @@ void NC_STACK_ypabact::Update(update_msg *arg)
     UpdateDamageFX(arg);
     UpdateDecorationFX(arg);
     UpdateCarrierSpawn(arg);
+    UpdateProximityDefense(arg);
     AI_layer1(arg);
     UpdateUnitGuns(arg);
 
@@ -4806,6 +4852,154 @@ int NC_STACK_ypabact::GetCurrentWeaponId()
     return slots[index];
 }
 
+static bool ypabact_CanUseProximityDefense(NC_STACK_ypabact *unit)
+{
+    if ( !unit || !unit->getBACT_pWorld() )
+        return false;
+
+    if ( !unit->_proximity_defense_enable )
+        return false;
+
+    if ( unit->_proximity_defense_weapon <= 0 || (size_t)unit->_proximity_defense_weapon >= unit->getBACT_pWorld()->GetWeaponsProtos().size() )
+        return false;
+
+    if ( unit->_proximity_defense_trigger_radius <= 0.0 )
+        return false;
+
+    if ( unit->_proximity_defense_shots <= 0 )
+        return false;
+
+    if ( unit->_owner == World::OWNER_0 )
+        return false;
+
+    if ( unit->_bact_type == BACT_TYPES_MISSLE )
+        return false;
+
+    if ( unit->_status == BACT_STATUS_DEAD ||
+         unit->_status == BACT_STATUS_CREATE ||
+         unit->_status == BACT_STATUS_BEAM )
+        return false;
+
+    if ( unit->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2 | BACT_STFLAG_NORENDER) )
+        return false;
+
+    return true;
+}
+
+static vec3d ypabact_GetProximityDefenseLocalDirection(NC_STACK_ypabact *unit, int shotIndex, int totalShots)
+{
+    float yaw = ((float)shotIndex / (float)totalShots) * 360.0;
+    float pitch = 0.0;
+
+    if ( unit->_proximity_defense_random_yaw_set )
+    {
+        float yawMin = unit->_proximity_defense_random_yaw_min;
+        float yawMax = unit->_proximity_defense_random_yaw_max;
+
+        if ( yawMin > yawMax )
+            std::swap(yawMin, yawMax);
+
+        yaw = yawMin + ((float)rand() / (float)RAND_MAX) * (yawMax - yawMin);
+    }
+
+    if ( unit->_proximity_defense_random_pitch_set )
+    {
+        float pitchMin = unit->_proximity_defense_random_pitch_min;
+        float pitchMax = unit->_proximity_defense_random_pitch_max;
+
+        if ( pitchMin > pitchMax )
+            std::swap(pitchMin, pitchMax);
+
+        pitch = pitchMin + ((float)rand() / (float)RAND_MAX) * (pitchMax - pitchMin);
+    }
+
+    float yawRad = yaw * C_PI / 180.0;
+    float pitchRad = pitch * C_PI / 180.0;
+    float horizontal = cos(pitchRad);
+
+    return vec3d(sin(yawRad) * horizontal, sin(pitchRad), cos(yawRad) * horizontal);
+}
+
+static bool ypabact_FireProximityDefenseShot(NC_STACK_ypabact *unit, int shotIndex, int totalShots)
+{
+    if ( !unit || !unit->getBACT_pWorld() || totalShots <= 0 )
+        return false;
+
+    NC_STACK_ypaworld *world = unit->getBACT_pWorld();
+    if ( (size_t)unit->_proximity_defense_weapon >= world->GetWeaponsProtos().size() )
+        return false;
+
+    World::TWeapProto &wproto = world->GetWeaponsProtos().at(unit->_proximity_defense_weapon);
+    if ( !(wproto._weaponFlags & YPA_WEAPON_FLAG_PROJECTILE) )
+        return false;
+
+    vec3d localDir = ypabact_GetProximityDefenseLocalDirection(unit, shotIndex, totalShots);
+    vec3d shotDir = unit->_rotation.Transpose().Transform(localDir);
+    float shotDirLen = shotDir.length();
+    if ( shotDirLen <= 0.001 )
+        return false;
+
+    shotDir = shotDir / shotDirLen;
+
+    ypaworld_arg146 arg147;
+    arg147.vehicle_id = unit->_proximity_defense_weapon;
+    arg147.pos = unit->_position + unit->_rotation.Transpose().Transform(unit->_proximity_defense_fire_pos);
+
+    NC_STACK_ypamissile *wobj = world->ypaworld_func147(&arg147);
+    if ( !wobj )
+        return false;
+
+    wobj->SetLauncherBact(unit);
+    wobj->SetStartHeight(arg147.pos.y);
+    wobj->_owner = unit->_owner;
+    wobj->_fly_dir = shotDir;
+    wobj->_fly_dir_length = unit->_fly_dir_length + wproto.start_speed;
+
+    if ( !(wproto._weaponFlags & 0x12) )
+        wobj->_fly_dir_length *= 0.2;
+
+    wobj->_rotation.SetZ(wobj->_fly_dir);
+    wobj->_rotation.SetX(unit->_rotation.AxisX());
+    wobj->_rotation.SetY(wobj->_rotation.AxisZ() * wobj->_rotation.AxisX());
+
+    if ( unit->_proximity_defense_vp_launch > 0 )
+        world->SpawnTransientVP(unit->_proximity_defense_vp_launch, wobj->_position, wobj->_rotation, 1000);
+
+    wobj->_kidRef.Detach();
+    wobj->_parent = NULL;
+    unit->_missiles_list.push_back(wobj);
+
+    int missileType = wobj->GetMissileType();
+    if ( missileType == NC_STACK_ypamissile::MISL_DIRECT )
+    {
+        wobj->_primTtype = BACT_TGT_TYPE_DRCT;
+        wobj->_target_dir = wobj->_fly_dir;
+    }
+    else if ( missileType == NC_STACK_ypamissile::MISL_TARGETED )
+    {
+        setTarget_msg target = {};
+        target.tgt_type = BACT_TGT_TYPE_DRCT;
+        target.priority = 0;
+        target.tgt_pos = arg147.pos + shotDir * 1000.0;
+        wobj->SetTarget(&target);
+    }
+
+    wobj->_host_station = unit->_host_station;
+    SFXEngine::SFXe.startSound(&wobj->_soundcarrier, 1);
+
+    if ( wobj->_primTtype != BACT_TGT_TYPE_UNIT && wproto.life_time_nt )
+        wobj->SetLifeTime(wproto.life_time_nt);
+
+    return true;
+}
+
+static void ypabact_FireProximityDefenseBurst(NC_STACK_ypabact *unit)
+{
+    int shots = unit->_proximity_defense_shots > 0 ? unit->_proximity_defense_shots : 1;
+    for (int i = 0; i < shots; i++)
+        ypabact_FireProximityDefenseShot(unit, i, shots);
+}
+
 void NC_STACK_ypabact::UpdateCarrierSpawn(update_msg *)
 {
     if ( !ypabact_CanCarrierSpawn(this) )
@@ -4850,6 +5044,77 @@ void NC_STACK_ypabact::UpdateCarrierSpawn(update_msg *)
         if ( unit )
             _carrier_spawned_gids.push_back(unit->_gid);
     }
+}
+
+void NC_STACK_ypabact::UpdateProximityDefense(update_msg *)
+{
+    if ( !ypabact_CanUseProximityDefense(this) )
+    {
+        _proximity_defense_sequence_active = false;
+        return;
+    }
+
+    // V1 is single-player/local only; avoiding unsynchronised network projectiles is safer.
+    if ( _world->_isNetGame )
+        return;
+
+    int interval = _proximity_defense_interval > 0 ? _proximity_defense_interval : 1000;
+    int shots = _proximity_defense_shots > 0 ? _proximity_defense_shots : 1;
+
+    if ( _proximity_defense_fire_mode == 1 && _proximity_defense_sequence_active )
+    {
+        int delay = _proximity_defense_sequence_delay > 0 ? _proximity_defense_sequence_delay : 100;
+
+        if ( _clock < _proximity_defense_next_shot_time )
+            return;
+
+        ypabact_FireProximityDefenseShot(this, _proximity_defense_sequence_shots_fired, shots);
+        _proximity_defense_sequence_shots_fired++;
+
+        if ( _proximity_defense_sequence_shots_fired >= shots )
+        {
+            _proximity_defense_sequence_active = false;
+            _proximity_defense_sequence_shots_fired = 0;
+            _proximity_defense_next_activation_time = _clock + interval;
+        }
+        else
+        {
+            _proximity_defense_next_shot_time = _clock + delay;
+        }
+
+        return;
+    }
+
+    if ( _clock < _proximity_defense_next_activation_time )
+        return;
+
+    if ( !ypabact_HasEnemyNearby(this, _proximity_defense_trigger_radius) )
+        return;
+
+    if ( _proximity_defense_fire_mode == 1 )
+    {
+        int delay = _proximity_defense_sequence_delay > 0 ? _proximity_defense_sequence_delay : 100;
+        _proximity_defense_sequence_active = true;
+        _proximity_defense_sequence_shots_fired = 1;
+
+        ypabact_FireProximityDefenseShot(this, 0, shots);
+
+        if ( _proximity_defense_sequence_shots_fired >= shots )
+        {
+            _proximity_defense_sequence_active = false;
+            _proximity_defense_sequence_shots_fired = 0;
+            _proximity_defense_next_activation_time = _clock + interval;
+        }
+        else
+        {
+            _proximity_defense_next_shot_time = _clock + delay;
+        }
+
+        return;
+    }
+
+    ypabact_FireProximityDefenseBurst(this);
+    _proximity_defense_next_activation_time = _clock + interval;
 }
 
 size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
@@ -6572,6 +6837,25 @@ void NC_STACK_ypabact::Renew()
     _carrier_spawn_root_gid = 0;
     _carrier_spawn_root_vehicle = 0;
     _carrier_spawned_gids.clear();
+    _proximity_defense_enable = 0;
+    _proximity_defense_weapon = 0;
+    _proximity_defense_trigger_radius = 0.0;
+    _proximity_defense_interval = 1000;
+    _proximity_defense_shots = 12;
+    _proximity_defense_fire_pos = vec3d(0.0, 0.0, 0.0);
+    _proximity_defense_vp_launch = -1;
+    _proximity_defense_fire_mode = 0;
+    _proximity_defense_sequence_delay = 100;
+    _proximity_defense_random_yaw_set = false;
+    _proximity_defense_random_yaw_min = 0.0;
+    _proximity_defense_random_yaw_max = 360.0;
+    _proximity_defense_random_pitch_set = false;
+    _proximity_defense_random_pitch_min = -10.0;
+    _proximity_defense_random_pitch_max = 45.0;
+    _proximity_defense_sequence_active = false;
+    _proximity_defense_sequence_shots_fired = 0;
+    _proximity_defense_next_shot_time = 0;
+    _proximity_defense_next_activation_time = 0;
     _newtarget_time = 0;
     _assess_time = 0;
     _scale_pos = 0;

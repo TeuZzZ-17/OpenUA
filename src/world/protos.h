@@ -310,6 +310,21 @@ struct TVhclProto
     float spawn_random_pos = 0.0;
     int spawn_max_active = 0;
     int spawn_count = 1;
+    int proximity_defense_enable = 0;
+    int proximity_defense_weapon = 0;
+    float proximity_defense_trigger_radius = 0.0;
+    int proximity_defense_interval = 1000;
+    int proximity_defense_shots = 12;
+    vec3d proximity_defense_fire_pos;
+    int proximity_defense_vp_launch = -1;
+    int proximity_defense_fire_mode = 0;
+    int proximity_defense_sequence_delay = 100;
+    bool proximity_defense_random_yaw_set = false;
+    float proximity_defense_random_yaw_min = 0.0;
+    float proximity_defense_random_yaw_max = 360.0;
+    bool proximity_defense_random_pitch_set = false;
+    float proximity_defense_random_pitch_min = -10.0;
+    float proximity_defense_random_pitch_max = 45.0;
     std::vector<DestFX> dest_fx;      // dest_fx
     std::vector<DestFX>    ExtDestroyFX; // ext_dest_fx
     std::array<TVhclSound, SND_MAX> sndFX;
