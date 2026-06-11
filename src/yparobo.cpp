@@ -6853,7 +6853,13 @@ int NC_STACK_yparobo::getROBO_absReload()
 
 bool NC_STACK_yparobo::IsPlayerRobo() const
 {
-    return (_roboState & ROBOSTATE_PLAYERROBO) != 0;
+    if ( !(_roboState & ROBOSTATE_PLAYERROBO) )
+        return false;
+
+    if ( _world && _world->IsSpectatorControlled() && this == _world->getYW_userHostStation() )
+        return false;
+
+    return true;
 }
 
 bool NC_STACK_yparobo::IsPlayerRoboAIBehavior() const

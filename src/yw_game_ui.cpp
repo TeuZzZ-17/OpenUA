@@ -1112,6 +1112,16 @@ void sb_0x4f8f64__sub2__sub0(CmdStream *cur, float a1, float a2, char a3, int a4
     }
 }
 
+static bool yw_IsStrategicMapCellVisible(NC_STACK_ypaworld *yw, const cellArea *cell)
+{
+    if ( !yw || !cell )
+        return false;
+
+    if ( yw->IsSpectatorControlled() )
+        return (robo_map.MapViewMask & cell->view_mask) != 0;
+
+    return yw->_userRobo && cell->IsCanSee(yw->_userRobo->_owner);
+}
 
 void sb_0x4f8f64__sub2(NC_STACK_ypaworld *yw, CmdStream *cur)
 {
@@ -1158,7 +1168,7 @@ void sb_0x4f8f64__sub2(NC_STACK_ypaworld *yw, CmdStream *cur)
             {
                 if ( ps.second.pCell )
                 {
-                    if ( ps.second.pCell->IsCanSee(yw->_userRobo->_owner) )
+                    if ( yw_IsStrategicMapCellVisible(yw, ps.second.pCell) )
                     {
                         if ( ps.second.EffectivePower > 0 )
                         {
@@ -1193,7 +1203,7 @@ void sb_0x4f8f64__sub2(NC_STACK_ypaworld *yw, CmdStream *cur)
             for ( const TMapGem &gem : yw->_techUpgrades )
             {
                 cellArea &cell = yw->SectorAt(gem.CellId);
-                if ( cell.IsCanSee(yw->_userRobo->_owner) )
+                if ( yw_IsStrategicMapCellVisible(yw, &cell) )
                 {
                     int v13 = 1;
 
@@ -1215,7 +1225,7 @@ void sb_0x4f8f64__sub2(NC_STACK_ypaworld *yw, CmdStream *cur)
             {
                 if ( gate.PCell->PurposeType == cellArea::PT_GATECLOSED )
                 {
-                    if ( gate.PCell->IsCanSee(yw->_userRobo->_owner) )
+                    if ( yw_IsStrategicMapCellVisible(yw, gate.PCell) )
                     {
                         vec2d tmp = World::SectorIDToCenterPos2( gate.CellId );
                         sub_4F6980(cur, tmp.x, tmp.y, 0x93, a4, a4);
@@ -1225,7 +1235,7 @@ void sb_0x4f8f64__sub2(NC_STACK_ypaworld *yw, CmdStream *cur)
                     {
                         if ( ks.PCell )
                         {
-                            if ( ks.PCell->IsCanSee(yw->_userRobo->_owner) )
+                            if ( yw_IsStrategicMapCellVisible(yw, ks.PCell) )
                             {
                                 if ( ks.PCell->owner == yw->_userRobo->_owner || yw->_timeStamp / 300 & 1 )
                                 {
@@ -1238,7 +1248,7 @@ void sb_0x4f8f64__sub2(NC_STACK_ypaworld *yw, CmdStream *cur)
                 }
                 else if ( gate.PCell->PurposeType == cellArea::PT_GATEOPENED )
                 {
-                    if ( gate.PCell->IsCanSee(yw->_userRobo->_owner) )
+                    if ( yw_IsStrategicMapCellVisible(yw, gate.PCell) )
                     {
                         if ( yw->_timeStamp / 300 & 1 )
                         {
@@ -1283,7 +1293,7 @@ void sb_0x4f8f64__sub2(NC_STACK_ypaworld *yw, CmdStream *cur)
                 {
                     int v34 = 0;
 
-                    if ( sitem.PCell->IsCanSee(yw->_userRobo->_owner) )
+                    if ( yw_IsStrategicMapCellVisible(yw, sitem.PCell) )
                     {
                         if ( sitem.PCell->owner == yw->_userRobo->_owner || yw->_timeStamp / 300 & 1 )
                             v34 = 1;
@@ -1301,7 +1311,7 @@ void sb_0x4f8f64__sub2(NC_STACK_ypaworld *yw, CmdStream *cur)
                         {
                             if ( ks.PCell )
                             {
-                                if ( ks.PCell->IsCanSee(yw->_userRobo->_owner) )
+                                if ( yw_IsStrategicMapCellVisible(yw, ks.PCell) )
                                 {
                                     if ( ks.PCell->owner == yw->_userRobo->_owner || yw->_timeStamp / 500 & 1 )
                                     {

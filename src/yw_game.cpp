@@ -1,6 +1,7 @@
 #include <inttypes.h>
 #include <string.h>
 #include <math.h>
+#include <fstream>
 #include "env.h"
 #include "includes.h"
 #include "yw_internal.h"
@@ -691,49 +692,6 @@ bool NC_STACK_ypaworld::CanControlUnitInSpectatorMode(const NC_STACK_ypabact *ba
     return IsSpectatorBact(bact);
 }
 
-static bool yw_OwnerHasBuildAvailability(NC_STACK_ypaworld *yw, int owner)
-{
-    if ( !yw || owner <= World::OWNER_0 || owner >= 8 )
-        return false;
-
-    const int ownerMask = 1 << owner;
-
-    for ( const World::TVhclProto &proto : yw->_vhclProtos )
-    {
-        if ( proto.model_id != BACT_TYPES_NOPE && (proto.disable_enable_bitmask & ownerMask) )
-            return true;
-    }
-
-    for ( const World::TBuildingProto &proto : yw->_buildProtos )
-    {
-        if ( proto.EnableMask & ownerMask )
-            return true;
-    }
-
-    return false;
-}
-
-static void yw_CopyOwnerBuildAvailability(NC_STACK_ypaworld *yw, int sourceOwner, int destOwner)
-{
-    if ( !yw || sourceOwner <= World::OWNER_0 || sourceOwner >= 8 || destOwner <= World::OWNER_0 || destOwner >= 8 )
-        return;
-
-    const int sourceMask = 1 << sourceOwner;
-    const int destMask = 1 << destOwner;
-
-    for ( World::TVhclProto &proto : yw->_vhclProtos )
-    {
-        if ( proto.disable_enable_bitmask & sourceMask )
-            proto.disable_enable_bitmask |= destMask;
-    }
-
-    for ( World::TBuildingProto &proto : yw->_buildProtos )
-    {
-        if ( proto.EnableMask & sourceMask )
-            proto.EnableMask |= destMask;
-    }
-}
-
 struct TSpectatorRoboAI
 {
     uint8_t conBudget;
@@ -754,42 +712,19 @@ struct TSpectatorRoboAI
     int cplDelay;
 };
 
-static bool yw_RoboHasExplicitAIBudget(const NC_STACK_yparobo *robo)
-{
-    return robo &&
-           (robo->_roboEpConquer ||
-            robo->_roboEpDefense ||
-            robo->_roboEpRecon ||
-            robo->_roboEpRobo ||
-            robo->_roboEpPower ||
-            robo->_roboEpRadar ||
-            robo->_roboEpSafety ||
-            robo->_roboEpChangePlace);
-}
-
-static TSpectatorRoboAI yw_ReadSpectatorRoboAI(const NC_STACK_yparobo *robo)
+struct TSpectatorOwnerProfile
 {
     TSpectatorRoboAI ai = {};
-
-    ai.conBudget = robo->_roboEpConquer;
-    ai.conDelay = robo->_roboConqDelay;
-    ai.defBudget = robo->_roboEpDefense;
-    ai.defDelay = robo->_roboEnemyDelay;
-    ai.recBudget = robo->_roboEpRecon;
-    ai.recDelay = robo->_roboExploreDelay;
-    ai.robBudget = robo->_roboEpRobo;
-    ai.robDelay = robo->_roboDangerDelay;
-    ai.powBudget = robo->_roboEpPower;
-    ai.powDelay = robo->_roboPowerDelay;
-    ai.radBudget = robo->_roboEpRadar;
-    ai.radDelay = robo->_roboRadarDelay;
-    ai.safBudget = robo->_roboEpSafety;
-    ai.safDelay = robo->_roboSafetyDelay;
-    ai.cplBudget = robo->_roboEpChangePlace;
-    ai.cplDelay = robo->_roboPositionDelay;
-
-    return ai;
-}
+    bool hasAI = false;
+    bool hasRoboEnergy = false;
+    bool hasRoboReloadConst = false;
+    int roboEnergy = 0;
+    int roboReloadConst = 0;
+    bool loadedExternal = false;
+    std::string loadedPath;
+    std::vector<int> enabledVehicles;
+    std::vector<int> enabledBuildings;
+};
 
 static void yw_ApplySpectatorRoboAI(NC_STACK_yparobo *robo, const TSpectatorRoboAI &ai)
 {
@@ -856,79 +791,324 @@ static TSpectatorRoboAI yw_GetSpectatorPresetRoboAI(const std::string &presetNam
     return yw_MakeSpectatorRoboAI(80, 0, 80, 0, 70, 0, 70, 60000, 50, 0, 40, 0, 40, 0, 50, 300000);
 }
 
-static NC_STACK_yparobo *yw_FindRandomSpectatorAICandidate(NC_STACK_ypaworld *yw)
+static TSpectatorOwnerProfile yw_GetInternalSpectatorOwnerProfile()
 {
-    std::vector<NC_STACK_yparobo *> preferredCandidates;
-    std::vector<NC_STACK_yparobo *> fallbackCandidates;
-    int playerOwner = yw->_userRobo ? yw->_userRobo->_owner : World::OWNER_0;
+    TSpectatorOwnerProfile profile;
+    profile.ai = yw_GetSpectatorPresetRoboAI("balanced");
+    profile.hasAI = true;
+    profile.roboEnergy = 900000;
+    profile.roboReloadConst = 143125;
+    profile.hasRoboEnergy = true;
+    profile.hasRoboReloadConst = true;
+    profile.loadedExternal = false;
+    profile.loadedPath = "internal balanced fallback";
+    profile.enabledVehicles = {1, 2, 3, 56};
+    profile.enabledBuildings = {1, 2, 3};
+    return profile;
+}
+
+static std::string yw_TrimSpectatorProfileText(const std::string &text)
+{
+    size_t first = text.find_first_not_of(" \t\r\n");
+    if ( first == std::string::npos )
+        return std::string();
+
+    size_t last = text.find_last_not_of(" \t\r\n");
+    return text.substr(first, last - first + 1);
+}
+
+static std::string yw_StripSpectatorProfileComment(const std::string &line)
+{
+    size_t comment = line.find_first_of(";#");
+    if ( comment == std::string::npos )
+        return line;
+
+    return line.substr(0, comment);
+}
+
+static bool yw_ParseSpectatorProfileInt(const std::string &text, int *out)
+{
+    if ( !out )
+        return false;
+
+    try
+    {
+        size_t parsed = 0;
+        int value = std::stoi(text, &parsed, 0);
+        if ( parsed != text.size() )
+            return false;
+
+        *out = value;
+        return true;
+    }
+    catch (...)
+    {
+        return false;
+    }
+}
+
+static void yw_SetSpectatorAIValue(TSpectatorRoboAI *ai, const std::string &key, int value)
+{
+    if ( !StriCmp(key, "con_budget") )
+        ai->conBudget = value;
+    else if ( !StriCmp(key, "con_delay") )
+        ai->conDelay = value;
+    else if ( !StriCmp(key, "def_budget") )
+        ai->defBudget = value;
+    else if ( !StriCmp(key, "def_delay") )
+        ai->defDelay = value;
+    else if ( !StriCmp(key, "rec_budget") )
+        ai->recBudget = value;
+    else if ( !StriCmp(key, "rec_delay") )
+        ai->recDelay = value;
+    else if ( !StriCmp(key, "rob_budget") )
+        ai->robBudget = value;
+    else if ( !StriCmp(key, "rob_delay") )
+        ai->robDelay = value;
+    else if ( !StriCmp(key, "pow_budget") )
+        ai->powBudget = value;
+    else if ( !StriCmp(key, "pow_delay") )
+        ai->powDelay = value;
+    else if ( !StriCmp(key, "rad_budget") )
+        ai->radBudget = value;
+    else if ( !StriCmp(key, "rad_delay") )
+        ai->radDelay = value;
+    else if ( !StriCmp(key, "saf_budget") )
+        ai->safBudget = value;
+    else if ( !StriCmp(key, "saf_delay") )
+        ai->safDelay = value;
+    else if ( !StriCmp(key, "cpl_budget") )
+        ai->cplBudget = value;
+    else if ( !StriCmp(key, "cpl_delay") )
+        ai->cplDelay = value;
+}
+
+static bool yw_LoadSpectatorOwnerProfileFile(const std::string &path, TSpectatorOwnerProfile *profile)
+{
+    std::ifstream file(path.c_str());
+    if ( !file )
+        return false;
+
+    std::string section;
+    std::string line;
+    int lineNo = 0;
+
+    while ( std::getline(file, line) )
+    {
+        lineNo++;
+        line = yw_TrimSpectatorProfileText(yw_StripSpectatorProfileComment(line));
+        if ( line.empty() )
+            continue;
+
+        if ( line.front() == '[' && line.back() == ']' )
+        {
+            section = yw_TrimSpectatorProfileText(line.substr(1, line.size() - 2));
+            continue;
+        }
+
+        bool enableSection = !StriCmp(section, "enable_vehicles") ||
+                             !StriCmp(section, "enable_buildings");
+
+        size_t eq = line.find('=');
+        if ( eq == std::string::npos && !enableSection )
+        {
+            ypa_log_out("WARNING: malformed spectator owner profile line %d in %s.\n", lineNo, path.c_str());
+            return false;
+        }
+
+        std::string key;
+        int value = 1;
+
+        if ( eq == std::string::npos )
+        {
+            key = yw_TrimSpectatorProfileText(line);
+        }
+        else
+        {
+            key = yw_TrimSpectatorProfileText(line.substr(0, eq));
+            std::string valueText = yw_TrimSpectatorProfileText(line.substr(eq + 1));
+            if ( !yw_ParseSpectatorProfileInt(valueText, &value) )
+            {
+                ypa_log_out("WARNING: bad spectator owner profile value at line %d in %s.\n", lineNo, path.c_str());
+                return false;
+            }
+        }
+
+        if ( key.empty() )
+        {
+            ypa_log_out("WARNING: bad spectator owner profile value at line %d in %s.\n", lineNo, path.c_str());
+            return false;
+        }
+
+        if ( !StriCmp(section, "ai") )
+        {
+            yw_SetSpectatorAIValue(&profile->ai, key, value);
+            profile->hasAI = true;
+        }
+        else if ( !StriCmp(section, "enable_vehicles") )
+        {
+            int id = 0;
+            if ( yw_ParseSpectatorProfileInt(key, &id) && id > 0 && value )
+                profile->enabledVehicles.push_back(id);
+        }
+        else if ( !StriCmp(section, "enable_buildings") )
+        {
+            int id = 0;
+            if ( yw_ParseSpectatorProfileInt(key, &id) && id > 0 && value )
+                profile->enabledBuildings.push_back(id);
+        }
+        else if ( !StriCmp(section, "robo") )
+        {
+            if ( !StriCmp(key, "energy") )
+            {
+                profile->roboEnergy = value;
+                profile->hasRoboEnergy = true;
+            }
+            else if ( !StriCmp(key, "reload_const") )
+            {
+                profile->roboReloadConst = value;
+                profile->hasRoboReloadConst = true;
+            }
+        }
+    }
+
+    return true;
+}
+
+static TSpectatorOwnerProfile yw_LoadSpectatorOwnerProfile()
+{
+    std::string profileName = System::IniConf::GameSpectatorOwnerProfile.Get<std::string>();
+    if ( profileName.empty() )
+        profileName = "balanced";
+
+    std::string virtualPath = "data:AIPresets/" + profileName + ".ini";
+    std::string path = Common::Env.ApplyPrefix(virtualPath);
+    TSpectatorOwnerProfile profile;
+
+    ypa_log_out("[SPECTATOR_PROFILE] selected profile '%s'.\n", profileName.c_str());
+    ypa_log_out("[SPECTATOR_PROFILE] trying '%s' resolved '%s'.\n", virtualPath.c_str(), path.c_str());
+
+    if ( yw_LoadSpectatorOwnerProfileFile(path, &profile) )
+    {
+        profile.loadedExternal = true;
+        profile.loadedPath = path;
+        return profile;
+    }
+
+    std::string fallbackPath = "Data/AIPresets/" + profileName + ".ini";
+    if ( fallbackPath != path && yw_LoadSpectatorOwnerProfileFile(fallbackPath, &profile) )
+    {
+        profile.loadedExternal = true;
+        profile.loadedPath = fallbackPath;
+        return profile;
+    }
+
+    ypa_log_out("[SPECTATOR_PROFILE] failed to load profile '%s' from '%s', using internal balanced fallback.\n", profileName.c_str(), path.c_str());
+    return yw_GetInternalSpectatorOwnerProfile();
+}
+
+static NC_STACK_yparobo *yw_FindSpectatorOwnerRobo(NC_STACK_ypaworld *yw)
+{
+    if ( yw->_userRobo && yw->_userRobo->_owner == World::OWNER_RESIST )
+        return dynamic_cast<NC_STACK_yparobo *>(yw->_userRobo);
 
     for (NC_STACK_ypabact *unit : yw->_unitsList)
     {
         NC_STACK_yparobo *robo = dynamic_cast<NC_STACK_yparobo *>(unit);
-        if ( !robo ||
-             robo == yw->_userRobo ||
-             robo->_owner == World::OWNER_0 ||
-             robo->_status == BACT_STATUS_DEAD ||
-             robo->_status == BACT_STATUS_CREATE ||
-             robo->_status == BACT_STATUS_BEAM ||
-             yw->IsSpectatorBact(robo) ||
-             !yw_RoboHasExplicitAIBudget(robo) )
-        {
-            continue;
-        }
-
-        if ( robo->_owner != playerOwner )
-            preferredCandidates.push_back(robo);
-        else
-            fallbackCandidates.push_back(robo);
+        if ( robo && robo->_owner == World::OWNER_RESIST )
+            return robo;
     }
-
-    if ( !preferredCandidates.empty() )
-        return preferredCandidates[rand() % preferredCandidates.size()];
-
-    if ( !fallbackCandidates.empty() )
-        return fallbackCandidates[rand() % fallbackCandidates.size()];
 
     return NULL;
 }
 
-void NC_STACK_ypaworld::ApplySpectatorOwnerAIFallback()
+static void yw_ApplySpectatorOwnerBuildAvailability(NC_STACK_ypaworld *yw, const TSpectatorOwnerProfile &profile, int *enabledVehicles, int *enabledBuildings)
+{
+    const int ownerMask = 1 << World::OWNER_RESIST;
+
+    if ( enabledVehicles )
+        *enabledVehicles = 0;
+
+    if ( enabledBuildings )
+        *enabledBuildings = 0;
+
+    for ( World::TVhclProto &proto : yw->_vhclProtos )
+        proto.disable_enable_bitmask &= ~ownerMask;
+
+    for ( World::TBuildingProto &proto : yw->_buildProtos )
+        proto.EnableMask &= ~ownerMask;
+
+    for ( int id : profile.enabledVehicles )
+    {
+        if ( id > 0 && id < (int)yw->_vhclProtos.size() )
+        {
+            yw->_vhclProtos[id].disable_enable_bitmask |= ownerMask;
+            if ( enabledVehicles )
+                (*enabledVehicles)++;
+        }
+        else
+            ypa_log_out("WARNING: spectator owner profile ignored invalid vehicle id %d.\n", id);
+    }
+
+    for ( int id : profile.enabledBuildings )
+    {
+        if ( id > 0 && id < (int)yw->_buildProtos.size() )
+        {
+            yw->_buildProtos[id].EnableMask |= ownerMask;
+            if ( enabledBuildings )
+                (*enabledBuildings)++;
+        }
+        else
+            ypa_log_out("WARNING: spectator owner profile ignored invalid building id %d.\n", id);
+    }
+}
+
+static void yw_ApplySpectatorOwnerRoboStats(NC_STACK_yparobo *robo, const TSpectatorOwnerProfile &profile)
+{
+    if ( profile.hasRoboEnergy )
+    {
+        robo->_energy = profile.roboEnergy;
+        robo->_energy_max = profile.roboEnergy;
+        robo->setROBO_battVehicle(profile.roboEnergy);
+        robo->setROBO_battBeam(profile.roboEnergy);
+    }
+
+    if ( profile.hasRoboReloadConst )
+        robo->_reload_const = profile.roboReloadConst;
+}
+
+void NC_STACK_ypaworld::ApplySpectatorOwnerProfile()
 {
     if ( !IsSpectatorModeEnabled() || !_userRobo )
         return;
 
-    NC_STACK_yparobo *playerRobo = dynamic_cast<NC_STACK_yparobo *>(_userRobo);
-    if ( !playerRobo || yw_RoboHasExplicitAIBudget(playerRobo) )
-        return;
-
-    std::string mode = System::IniConf::GameSpectatorOwnerAIMode.Get<std::string>();
-    const int playerOwner = playerRobo->_owner;
-    const bool ownerHasBuildAvailability = yw_OwnerHasBuildAvailability(this, playerOwner);
-
-    if ( mode.empty() || !StriCmp(mode, "copy_random") )
+    NC_STACK_yparobo *ownerRobo = yw_FindSpectatorOwnerRobo(this);
+    if ( !ownerRobo )
     {
-        if ( NC_STACK_yparobo *candidate = yw_FindRandomSpectatorAICandidate(this) )
-        {
-            yw_ApplySpectatorRoboAI(playerRobo, yw_ReadSpectatorRoboAI(candidate));
-
-            if ( !ownerHasBuildAvailability && candidate->_owner != playerOwner )
-                yw_CopyOwnerBuildAvailability(this, candidate->_owner, playerOwner);
-
-            return;
-        }
-
-        yw_ApplySpectatorRoboAI(playerRobo, yw_GetSpectatorPresetRoboAI(System::IniConf::GameSpectatorOwnerAIPreset.Get<std::string>()));
+        ypa_log_out("WARNING: spectator owner profile could not find owner 1 Host Station.\n");
         return;
     }
 
-    if ( !StriCmp(mode, "preset") )
-    {
-        yw_ApplySpectatorRoboAI(playerRobo, yw_GetSpectatorPresetRoboAI(System::IniConf::GameSpectatorOwnerAIPreset.Get<std::string>()));
-        return;
-    }
+    TSpectatorOwnerProfile profile = yw_LoadSpectatorOwnerProfile();
 
-    if ( StriCmp(mode, "off") )
-        ypa_log_out("WARNING: unknown game.spectator_owner_ai_mode '%s'; spectator owner AI fallback disabled.\n", mode.c_str());
+    if ( profile.hasAI )
+        yw_ApplySpectatorRoboAI(ownerRobo, profile.ai);
+
+    int enabledVehicles = 0;
+    int enabledBuildings = 0;
+    yw_ApplySpectatorOwnerBuildAvailability(this, profile, &enabledVehicles, &enabledBuildings);
+    yw_ApplySpectatorOwnerRoboStats(ownerRobo, profile);
+
+    ypa_log_out("[SPECTATOR_PROFILE] source: %s (%s).\n",
+                profile.loadedExternal ? "external" : "fallback",
+                profile.loadedPath.c_str());
+    ypa_log_out("[SPECTATOR_PROFILE] enabled vehicles: %d, enabled buildings: %d.\n",
+                enabledVehicles,
+                enabledBuildings);
+    ypa_log_out("[SPECTATOR_PROFILE] owner 1 Host Station energy=%d reload_const=%d.\n",
+                ownerRobo->_energy_max,
+                ownerRobo->_reload_const);
+    ypa_log_out("[SPECTATOR_PROFILE] owner 1 AI activated: yes.\n");
 }
 
 static bool yw_IsUsableSpectatorBact(NC_STACK_ypaworld *yw, NC_STACK_ypabact *unit)
@@ -1037,7 +1217,7 @@ void NC_STACK_ypaworld::TryActivateSpectatorMode()
     if ( !IsSpectatorModeEnabled() || _levelInfo.Mode == 1 )
         return;
 
-    ApplySpectatorOwnerAIFallback();
+    ApplySpectatorOwnerProfile();
 
     int spectatorVehicleID = System::IniConf::GameSpectatorVehicleID.Get<int32_t>();
     if ( spectatorVehicleID <= 0 || spectatorVehicleID >= (int)_vhclProtos.size() )

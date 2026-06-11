@@ -2056,7 +2056,7 @@ public:
     bool IsSpectatorBact(const NC_STACK_ypabact *bact) const;
     bool IsSpectatorControlled() const;
     bool CanControlUnitInSpectatorMode(const NC_STACK_ypabact *bact) const;
-    void ApplySpectatorOwnerAIFallback();
+    void ApplySpectatorOwnerProfile();
     void TryActivateSpectatorMode();
     virtual std::vector<World::TWeapProto> &GetWeaponsProtos() { return _weaponProtos; };
     virtual std::vector<World::TBuildingProto> &GetBuildProtos() { return _buildProtos; };
