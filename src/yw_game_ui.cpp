@@ -767,9 +767,12 @@ void sub_4F6980(CmdStream *cur, float a1, float a2, char a3, int a4, int a5)
 
 void sub_4F72E8(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact)
 {
-    if ( bact->ShouldHideFromStrategicUI() )
+    if ( !bact || bact->ShouldHideFromStrategicUI() )
         return;
 
+    // Keep this renderer close to vanilla. Spectator target filtering belongs in
+    // gameplay/target selection, not in strategic-line drawing; filtering lines
+    // here proved unsafe during in-game testing. Only null-check target pointers.
     if ( bact != yw->_userRobo && bact->_host_station != bact->_parent && bact->_parent )
     {
         SDL_Color clr;
@@ -789,6 +792,9 @@ void sub_4F72E8(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact)
             bct = bact->_parent;
         }
 
+        if ( !bct )
+            return;
+
         sub_4F68FC(bact->_position.x, bact->_position.z, bct->_position.x, bct->_position.z, clr);
         return;
     }
@@ -796,6 +802,8 @@ void sub_4F72E8(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact)
     if ( bact->_secndTtype == BACT_TGT_TYPE_UNIT )
     {
         NC_STACK_ypabact *bct = bact->_secndT.pbact;
+        if ( !bct )
+            return;
 
         sub_4F68FC(bact->_position.x, bact->_position.z, bct->_position.x, bct->_position.z,  yw->GetColor(10));
         return;
@@ -813,6 +821,9 @@ void sub_4F72E8(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact)
         }
         else if ( bact->_primTtype == BACT_TGT_TYPE_UNIT )
         {
+            if ( !bact->_primT.pbact )
+                return;
+
             sub_4F68FC(bact->_position.x, bact->_position.z, bact->_primT.pbact->_position.x, bact->_primT.pbact->_position.z, yw->GetColor(9));
         }
 
@@ -837,7 +848,6 @@ void sub_4F72E8(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact)
         }
     }
 }
-
 void  sb_0x4f8f64__sub1__sub0(NC_STACK_ypaworld *yw)
 {
     for( NC_STACK_ypabact* &bact : yw->_unitsList )
@@ -990,6 +1000,7 @@ void sb_0x4f8f64__sub1(NC_STACK_ypaworld *yw)
             sub_4F68FC(0.0, yw->_userUnit->_position.z, yw->_mapLength.x, yw->_userUnit->_position.z, yw->GetColor(13));
         }
 
+        if ( !yw->IsSpectatorControlled() )
         {
             vec3d playerRoboTarget;
             if ( GetPlayerRoboAIBehaviorMapTarget(yw, &playerRoboTarget) )
@@ -1481,9 +1492,13 @@ void sub_4F6DFC(NC_STACK_ypaworld *yw, CmdStream *cur, int height, int width, NC
                 sub_4F68FC(a3, v28, v27, v29, clr); // Also draw base of view triangle
         }
 
-        if ( bact->_bact_type != BACT_TYPES_MISSLE && bact->_bact_type != BACT_TYPES_ROBO && bact->_owner == yw->_userRobo->_owner )
+        const bool drawHealthBar = yw->IsSpectatorControlled()
+            ? (bact->_owner != World::OWNER_0 && !yw->IsSpectatorBact(bact))
+            : (bact->_owner == yw->_userRobo->_owner);
+
+        if ( bact->_bact_type != BACT_TYPES_MISSLE && bact->_bact_type != BACT_TYPES_ROBO && drawHealthBar )
         {
-            if ( robo_map.field_1EC & 4 && robo_map.field_1EE > 2 )
+            if ( robo_map.field_1EC & 4 && robo_map.field_1EE > 2 && bact->_energy_max > 0 )
             {
                 float v32 = (float)bact->_energy / (float)bact->_energy_max;
                 int v19;
@@ -3010,7 +3025,7 @@ int sb_0x451034__sub3(NC_STACK_ypaworld *yw)
 
     if ( yw->_roboFinderStatus.Valid )
     {
-        if ( yw->_roboFinderStatus.IsOpen )
+        if ( yw->_roboFinderStatus.IsOpen && !yw->IsSpectatorControlled() )
         {
             yw->GuiWinOpen(&squadron_manager);
             yw->GuiWinToFront(&squadron_manager);
@@ -3556,7 +3571,7 @@ void gui_update_create_btn__sub0(NC_STACK_ypaworld *yw)
 
 void gui_update_create_btn(NC_STACK_ypaworld *yw, CmdStream *cur)
 {
-    if ( yw->_userUnit->_status == BACT_STATUS_DEAD )
+    if ( yw->_userUnit->_status == BACT_STATUS_DEAD || yw->IsSpectatorControlled() )
     {
         bzda.buttons[0] = ButtonBox(); //create_btn
 
@@ -3606,6 +3621,28 @@ void gui_update_create_btn(NC_STACK_ypaworld *yw, CmdStream *cur)
 
 void gui_update_map_squad_btn(NC_STACK_ypaworld *yw, CmdStream *cur)
 {
+    if ( yw->IsSpectatorControlled() )
+    {
+        int v8 = bzda.field_908;
+
+        bzda.buttons[2] = ButtonBox(v8, bzda.field_918, yw->_iconOrderW, yw->_iconOrderH);
+        v8 += yw->_iconOrderW;
+        bzda.buttons[3] = ButtonBox();
+
+        if ( robo_map.IsClosed() )
+            FontUA::select_tileset(cur, 21);
+        else
+            FontUA::select_tileset(cur, 22);
+
+        FontUA::store_u8(cur, 72);
+
+        FontUA::select_tileset(cur, 23);
+        FontUA::store_u8(cur, 73);
+
+        yw->GuiWinClose( &squadron_manager );
+        return;
+    }
+
     if ( yw->_userUnit->_status == BACT_STATUS_DEAD )
     {
         FontUA::select_tileset(cur, 23);
@@ -3650,6 +3687,7 @@ void gui_update_map_squad_btn(NC_STACK_ypaworld *yw, CmdStream *cur)
 void gui_update_player_panel(NC_STACK_ypaworld *yw, CmdStream *cur)
 {
     int v35 = 0;
+    bool spectatorControlled = yw->IsSpectatorControlled();
 
     if ( yw->_userRobo == yw->_userUnit )
     {
@@ -3701,7 +3739,13 @@ void gui_update_player_panel(NC_STACK_ypaworld *yw, CmdStream *cur)
     if ( yw->_userRobo->_status == BACT_STATUS_DEAD )
         v35 = 0;
 
-    if ( bzda.field_1CC & 8 )
+    if ( spectatorControlled )
+    {
+        v35 = 0;
+        yw->GuiWinClose( &gui_lstvw );
+    }
+
+    if ( !spectatorControlled && (bzda.field_1CC & 8) )
     {
         bzda.buttons[1] = ButtonBox(bzda.field_90C, bzda.field_918, yw->_iconOrderW, yw->_iconOrderH); //into_vhcl_btn
 
@@ -3814,6 +3858,23 @@ void gui_update_player_panel(NC_STACK_ypaworld *yw, CmdStream *cur)
 
 void gui_update_tools(NC_STACK_ypaworld *yw, CmdStream *cur)
 {
+    if ( yw->IsSpectatorControlled() )
+    {
+        // Observer mode keeps only the exit/menu button. Situation Analyzer and
+        // Help are tied to owner-1 player context and should not be available.
+        bzda.buttons[8] = ButtonBox(); // analyzer_btn
+        bzda.buttons[9] = ButtonBox(); // help_btn
+        bzda.buttons[10] = ButtonBox(bzda.field_910, bzda.field_918, yw->_iconOrderW, yw->_iconOrderH); // menu_btn
+
+        if ( bzda.field_91C & 0x400 )
+            FontUA::select_tileset(cur, 22);
+        else
+            FontUA::select_tileset(cur, 21);
+
+        FontUA::store_u8(cur, 85);
+        return;
+    }
+
     if ( yw->_userUnit->_status == BACT_STATUS_DEAD )
     {
         bzda.buttons[8] = ButtonBox(); // analyzer_btn
@@ -4059,6 +4120,18 @@ void ypaworld_func64__sub7__sub2__sub7(NC_STACK_ypaworld *yw)
 int ypaworld_func64__sub7__sub2__sub3(NC_STACK_ypaworld *yw, TInputState *inpt)
 {
     TClickBoxInf *winpt = &inpt->ClickInf;
+
+    if ( yw->IsSpectatorControlled() )
+    {
+        if ( inpt->HotKeyID == 8 && yw->_userUnit->_status != BACT_STATUS_DEAD )
+        {
+            winpt->selected_btnID = 2;
+            winpt->selected_btn = &bzda;
+            winpt->flag |= TClickBoxInf::FLAG_BTN_DOWN;
+        }
+
+        return 0;
+    }
 
     switch ( inpt->HotKeyID )
     {
@@ -4622,6 +4695,9 @@ void sb_0x4c66f8__sub0(NC_STACK_ypaworld *yw)
 
 void sb_0x4c66f8(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact1, NC_STACK_ypabact *bact2)
 {
+    if ( !yw->CanControlUnitInSpectatorMode(bact1) )
+        return;
+
     if ( bact1 != bact2 )
     {
         if ( bact1->_status != BACT_STATUS_CREATE && bact1->_status != BACT_STATUS_DEAD && bact1->_status != BACT_STATUS_BEAM )
@@ -4674,6 +4750,9 @@ void  ypaworld_func64__sub7__sub2(NC_STACK_ypaworld *yw, TInputState *inpt)
     bzda.field_91C = 0;
 
     int a2a = 1;
+    if ( yw->IsSpectatorControlled() && inpt->HotKeyID != 8 )
+        inpt->HotKeyID = -1;
+
     if ( bzda.field_1D4 & 1 )
     {
         switch ( inpt->HotKeyID )
@@ -4702,7 +4781,7 @@ void  ypaworld_func64__sub7__sub2(NC_STACK_ypaworld *yw, TInputState *inpt)
                 break;
         }
 
-        if ( yw->_userUnit->_status == BACT_STATUS_DEAD )
+        if ( yw->_userUnit->_status == BACT_STATUS_DEAD && !yw->IsSpectatorControlled() )
         {
             if ( yw->_fireBtnDownHappen )
             {
@@ -4833,7 +4912,7 @@ void  ypaworld_func64__sub7__sub2(NC_STACK_ypaworld *yw, TInputState *inpt)
                         else
                             yw->GuiWinClose(&robo_map);
                     }
-                    else if ( winpt->selected_btnID == 3 )
+                    else if ( winpt->selected_btnID == 3 && !yw->IsSpectatorControlled() )
                     {
                         if (squadron_manager.IsClosed())
                         {
@@ -4847,7 +4926,7 @@ void  ypaworld_func64__sub7__sub2(NC_STACK_ypaworld *yw, TInputState *inpt)
 
                 if ( winpt->selected_btnID == 2 )
                     yw->SetShowingTooltipWithHotkey(Locale::TIP_GUI_MAPWND, 8);
-                else if ( winpt->selected_btnID == 3 )
+                else if ( winpt->selected_btnID == 3 && !yw->IsSpectatorControlled() )
                     yw->SetShowingTooltipWithHotkey(Locale::TIP_GUI_FINDERWND, 9);
 
                 break;
@@ -5265,6 +5344,13 @@ void ypaworld_func64__sub7__sub7__sub0(NC_STACK_ypaworld *yw)
 {
     up_panel.cmdCommands.clear();
 
+    if ( yw->IsSpectatorControlled() )
+    {
+        Input::Engine.RemClickBox(&up_panel);
+        FontUA::set_end(&up_panel.cmdCommands);
+        return;
+    }
+
     if ( yw->_userRobo->_status != BACT_STATUS_DEAD )
     {
         int v3 = up_panel.x - yw->_screenSize.x / 2;
@@ -5345,6 +5431,12 @@ void ypaworld_func64__sub7__sub7__sub0(NC_STACK_ypaworld *yw)
 void ypaworld_func64__sub7__sub7(NC_STACK_ypaworld *yw, TInputState *inpt)
 {
     TClickBoxInf *winpt = &inpt->ClickInf;
+
+    if ( yw->IsSpectatorControlled() )
+    {
+        ypaworld_func64__sub7__sub7__sub0(yw);
+        return;
+    }
 
     if ( winpt->selected_btn == &up_panel )
     {
@@ -6216,6 +6308,15 @@ void sub_4C1FBC()
 
 void ypaworld_func64__sub7__sub1__sub0(NC_STACK_ypaworld *yw)
 {
+    if ( yw && yw->IsSpectatorControlled() )
+    {
+        yw->_activeCmdrID = 0;
+        yw->_activeCmdrRemapIndex = -1;
+        yw->_activeCmdrKidsCount = 0;
+        yw->_cmdrIdToSelect = -1;
+        return;
+    }
+
     int v8 = 0;
 
     int v22 = flt_516524 / World::CVSectorLength;
@@ -6326,9 +6427,15 @@ void  RoboMap_InputHandle(NC_STACK_ypaworld *yw, TInputState *inpt)
     }
     else
     {
-        robo_map.MapViewMask = cellArea::ViewMask( yw->_userRobo->_owner );
+        robo_map.MapViewMask = yw->IsSpectatorControlled() ? -1 : cellArea::ViewMask( yw->_userRobo->_owner );
 
         TClickBoxInf *winpt = &inpt->ClickInf;
+
+        if ( yw->IsSpectatorControlled() && (robo_map.field_1E8 & 0x200) )
+        {
+            robo_map.field_1E8 &= 0xFFFFFDFF;
+            yw->_guiDragDefaultMouse = false;
+        }
 
         if ( yw->_showDebugMode )
             robo_map.MapViewMask = -1;
@@ -6480,9 +6587,13 @@ void  RoboMap_InputHandle(NC_STACK_ypaworld *yw, TInputState *inpt)
                 }
                 else
                 {
-                    bzda.field_1D0 = 1;
                     robo_map.field_1E8 &= 0xFFFFFDFF;
-                    ypaworld_func64__sub7__sub1__sub0(yw);
+
+                    if ( !yw->IsSpectatorControlled() )
+                    {
+                        bzda.field_1D0 = 1;
+                        ypaworld_func64__sub7__sub1__sub0(yw);
+                    }
                 }
             }
         }
@@ -6503,7 +6614,7 @@ void  RoboMap_InputHandle(NC_STACK_ypaworld *yw, TInputState *inpt)
 
             if ( winpt->flag & TClickBoxInf::FLAG_LM_DOWN )
             {
-                if ( winpt->selected_btnID == 17 )
+                if ( winpt->selected_btnID == 17 && !yw->IsSpectatorControlled() )
                 {
                     robo_map.field_1E8 |= 0x200;
                     dword_516510 = winpt->move.ScreenPos.x;
@@ -7532,6 +7643,17 @@ void NC_STACK_ypaworld::sub_4C40AC()
 {
     _cmdrsRemap.clear();
     _cmdrsRemap.reserve(128);
+
+    if ( IsSpectatorControlled() )
+    {
+        _activeCmdrID = 0;
+        _activeCmdrRemapIndex = -1;
+        _activeCmdrKidsCount = 0;
+        _cmdrIdToSelect = -1;
+        _lastMsgSender = GetLastMsgSender();
+        return;
+    }
+
     if ( _userRobo )
     {
         for ( NC_STACK_ypabact * &bact : _userRobo->GetKidList())
@@ -7918,6 +8040,9 @@ void ypaworld_func64__sub15(NC_STACK_ypaworld *yw)
 
 void NC_STACK_ypaworld::VoiceMessagePlayFile(const std::string &flname, NC_STACK_ypabact *unit, int priority)
 {
+    if ( IsSpectatorControlled() )
+        return;
+
     _voiceMessage.Reset();
 
     std::string oldRsrc = Common::Env.SetPrefix("rsrc", "data:");
@@ -7965,6 +8090,9 @@ void NC_STACK_ypaworld::VoiceMessagePlayFile(const std::string &flname, NC_STACK
 }
 void NC_STACK_ypaworld::VoiceMessagePlayMsg(NC_STACK_ypabact *unit, int priority, int msgID)
 {
+    if ( IsSpectatorControlled() )
+        return;
+
     if ( _voiceMessage.Priority < 0 || _voiceMessage.Priority < priority )
     {
 
@@ -9576,7 +9704,7 @@ void sb_0x4d7c08__sub0__sub4(NC_STACK_ypaworld *yw)
             FontUA::FormateCenteredSkipableItem(yw->_guiTiles[15], &buf, msg, yw->_screenSize.x);
         }
     }
-    else if ( yw->_userUnit != yw->_userRobo && yw->_hud.field_0 )
+    else if ( yw->_userUnit != yw->_userRobo && yw->_hud.field_0 && !yw->IsSpectatorControlled() )
     {
         yw_RenderHUDRadare(yw);
 
@@ -10386,7 +10514,7 @@ void ypaworld_func2__sub0__sub1(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact1, 
 
         if ( yw->_roboFinderStatus.Valid )
         {
-            if ( yw->_roboFinderStatus.IsOpen )
+            if ( yw->_roboFinderStatus.IsOpen && !yw->IsSpectatorControlled() )
             {
                 yw->GuiWinOpen( &squadron_manager );
                 yw->GuiWinToFront( &squadron_manager );
@@ -10431,7 +10559,7 @@ void ypaworld_func2__sub0__sub1(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact1, 
 
         if ( yw->_vhclFinderStatus.Valid )
         {
-            if ( yw->_vhclFinderStatus.IsOpen )
+            if ( yw->_vhclFinderStatus.IsOpen && !yw->IsSpectatorControlled() )
             {
                 yw->GuiWinOpen( &squadron_manager );
                 yw->GuiWinToFront( &squadron_manager );
@@ -10460,7 +10588,7 @@ void ypaworld_func2__sub0__sub1(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact1, 
 
         if ( yw->_vhclFinderStatus.Valid )
         {
-            if ( yw->_vhclFinderStatus.IsOpen )
+            if ( yw->_vhclFinderStatus.IsOpen && !yw->IsSpectatorControlled() )
             {
                 yw->GuiWinOpen( &squadron_manager );
                 yw->GuiWinToFront( &squadron_manager );
@@ -11054,6 +11182,9 @@ int sub_4D3C80(NC_STACK_ypaworld *yw)
 
 void NC_STACK_ypaworld::ypaworld_func64__sub21__sub5(int arg)
 {
+    if ( IsSpectatorControlled() && arg != World::DOACTION_0 )
+        return;
+
     switch ( arg )
     {
     case World::DOACTION_8:
@@ -11501,10 +11632,17 @@ void NC_STACK_ypaworld::ypaworld_func64__sub21(TInputState *arg)
                 }
             }
 
+            if ( IsSpectatorControlled() )
+            {
+                doAction = World::DOACTION_0;
+                mousePointer = 1;
+                tooltip = 0;
+            }
+
             _doAction = ypaworld_func64__sub21__sub4(arg, doAction);
             int v18 = _doAction;
 
-            if ( ypaworld_func64__sub21__sub6(&arg->ClickInf) )
+            if ( !IsSpectatorControlled() && ypaworld_func64__sub21__sub6(&arg->ClickInf) )
             {
                 v18 = World::DOACTION_5;
                 mousePointer = 8;

@@ -168,6 +168,7 @@ enum DIALOGS
     DLG_S_TXT3      = 29,
     DLG_S_TXT4      = 30,
     DLG_S_HOSTSTATIONAI = 31,
+    DLG_S_SPECTATORMODE = 32,
     DLG_S_RES       = 40,
     DLG_S_RESCHANGE = 41,
     DLG_S_RESWARN   = 42,
@@ -488,6 +489,7 @@ enum TIP
     TIP_INPUT_USEJOY        = 196,
     TIP_INPUT_FFJOY         = 197,
     TIP_INPUT_REMOVEKEY     = 198,
+    TIP_CONF_SPECTATORMODE  = 199,
     
     TIP_MAX
 };

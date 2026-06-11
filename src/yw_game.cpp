@@ -661,6 +661,430 @@ void NC_STACK_ypaworld::yw_InitSquads(const std::vector<MapSquad> &squads)
     }
 }
 
+bool NC_STACK_ypaworld::IsSpectatorModeEnabled() const
+{
+    return System::IniConf::GameSpectatorMode.Get<bool>() &&
+           System::IniConf::GameSpectatorVehicleID.Get<int32_t>() > 0;
+}
+
+bool NC_STACK_ypaworld::IsSpectatorVehicleID(int vehicleID) const
+{
+    return IsSpectatorModeEnabled() &&
+           vehicleID == System::IniConf::GameSpectatorVehicleID.Get<int32_t>();
+}
+
+bool NC_STACK_ypaworld::IsSpectatorBact(const NC_STACK_ypabact *bact) const
+{
+    return bact && IsSpectatorVehicleID(bact->_vehicleID);
+}
+
+bool NC_STACK_ypaworld::IsSpectatorControlled() const
+{
+    return IsSpectatorBact(_userUnit);
+}
+
+bool NC_STACK_ypaworld::CanControlUnitInSpectatorMode(const NC_STACK_ypabact *bact) const
+{
+    if ( !IsSpectatorControlled() )
+        return true;
+
+    return IsSpectatorBact(bact);
+}
+
+static bool yw_OwnerHasBuildAvailability(NC_STACK_ypaworld *yw, int owner)
+{
+    if ( !yw || owner <= World::OWNER_0 || owner >= 8 )
+        return false;
+
+    const int ownerMask = 1 << owner;
+
+    for ( const World::TVhclProto &proto : yw->_vhclProtos )
+    {
+        if ( proto.model_id != BACT_TYPES_NOPE && (proto.disable_enable_bitmask & ownerMask) )
+            return true;
+    }
+
+    for ( const World::TBuildingProto &proto : yw->_buildProtos )
+    {
+        if ( proto.EnableMask & ownerMask )
+            return true;
+    }
+
+    return false;
+}
+
+static void yw_CopyOwnerBuildAvailability(NC_STACK_ypaworld *yw, int sourceOwner, int destOwner)
+{
+    if ( !yw || sourceOwner <= World::OWNER_0 || sourceOwner >= 8 || destOwner <= World::OWNER_0 || destOwner >= 8 )
+        return;
+
+    const int sourceMask = 1 << sourceOwner;
+    const int destMask = 1 << destOwner;
+
+    for ( World::TVhclProto &proto : yw->_vhclProtos )
+    {
+        if ( proto.disable_enable_bitmask & sourceMask )
+            proto.disable_enable_bitmask |= destMask;
+    }
+
+    for ( World::TBuildingProto &proto : yw->_buildProtos )
+    {
+        if ( proto.EnableMask & sourceMask )
+            proto.EnableMask |= destMask;
+    }
+}
+
+struct TSpectatorRoboAI
+{
+    uint8_t conBudget;
+    int conDelay;
+    uint8_t defBudget;
+    int defDelay;
+    uint8_t recBudget;
+    int recDelay;
+    uint8_t robBudget;
+    int robDelay;
+    uint8_t powBudget;
+    int powDelay;
+    uint8_t radBudget;
+    int radDelay;
+    uint8_t safBudget;
+    int safDelay;
+    uint8_t cplBudget;
+    int cplDelay;
+};
+
+static bool yw_RoboHasExplicitAIBudget(const NC_STACK_yparobo *robo)
+{
+    return robo &&
+           (robo->_roboEpConquer ||
+            robo->_roboEpDefense ||
+            robo->_roboEpRecon ||
+            robo->_roboEpRobo ||
+            robo->_roboEpPower ||
+            robo->_roboEpRadar ||
+            robo->_roboEpSafety ||
+            robo->_roboEpChangePlace);
+}
+
+static TSpectatorRoboAI yw_ReadSpectatorRoboAI(const NC_STACK_yparobo *robo)
+{
+    TSpectatorRoboAI ai = {};
+
+    ai.conBudget = robo->_roboEpConquer;
+    ai.conDelay = robo->_roboConqDelay;
+    ai.defBudget = robo->_roboEpDefense;
+    ai.defDelay = robo->_roboEnemyDelay;
+    ai.recBudget = robo->_roboEpRecon;
+    ai.recDelay = robo->_roboExploreDelay;
+    ai.robBudget = robo->_roboEpRobo;
+    ai.robDelay = robo->_roboDangerDelay;
+    ai.powBudget = robo->_roboEpPower;
+    ai.powDelay = robo->_roboPowerDelay;
+    ai.radBudget = robo->_roboEpRadar;
+    ai.radDelay = robo->_roboRadarDelay;
+    ai.safBudget = robo->_roboEpSafety;
+    ai.safDelay = robo->_roboSafetyDelay;
+    ai.cplBudget = robo->_roboEpChangePlace;
+    ai.cplDelay = robo->_roboPositionDelay;
+
+    return ai;
+}
+
+static void yw_ApplySpectatorRoboAI(NC_STACK_yparobo *robo, const TSpectatorRoboAI &ai)
+{
+    robo->_roboEpConquer = ai.conBudget;
+    robo->_roboConqDelay = ai.conDelay;
+    robo->_roboEpDefense = ai.defBudget;
+    robo->_roboEnemyDelay = ai.defDelay;
+    robo->_roboEpRecon = ai.recBudget;
+    robo->_roboExploreDelay = ai.recDelay;
+    robo->_roboEpRobo = ai.robBudget;
+    robo->_roboDangerDelay = ai.robDelay;
+    robo->_roboEpPower = ai.powBudget;
+    robo->_roboPowerDelay = ai.powDelay;
+    robo->_roboEpRadar = ai.radBudget;
+    robo->_roboRadarDelay = ai.radDelay;
+    robo->_roboEpSafety = ai.safBudget;
+    robo->_roboSafetyDelay = ai.safDelay;
+    robo->_roboEpChangePlace = ai.cplBudget;
+    robo->_roboPositionDelay = ai.cplDelay;
+}
+
+static TSpectatorRoboAI yw_MakeSpectatorRoboAI(int conBudget, int conDelay,
+                                                int defBudget, int defDelay,
+                                                int recBudget, int recDelay,
+                                                int robBudget, int robDelay,
+                                                int powBudget, int powDelay,
+                                                int radBudget, int radDelay,
+                                                int safBudget, int safDelay,
+                                                int cplBudget, int cplDelay)
+{
+    TSpectatorRoboAI ai = {};
+
+    ai.conBudget = conBudget;
+    ai.conDelay = conDelay;
+    ai.defBudget = defBudget;
+    ai.defDelay = defDelay;
+    ai.recBudget = recBudget;
+    ai.recDelay = recDelay;
+    ai.robBudget = robBudget;
+    ai.robDelay = robDelay;
+    ai.powBudget = powBudget;
+    ai.powDelay = powDelay;
+    ai.radBudget = radBudget;
+    ai.radDelay = radDelay;
+    ai.safBudget = safBudget;
+    ai.safDelay = safDelay;
+    ai.cplBudget = cplBudget;
+    ai.cplDelay = cplDelay;
+
+    return ai;
+}
+
+static TSpectatorRoboAI yw_GetSpectatorPresetRoboAI(const std::string &presetName)
+{
+    if ( !StriCmp(presetName, "aggressive") )
+        return yw_MakeSpectatorRoboAI(85, 0, 70, 0, 70, 0, 90, 30000, 35, 0, 30, 0, 25, 0, 70, 180000);
+
+    if ( !StriCmp(presetName, "defensive") )
+        return yw_MakeSpectatorRoboAI(60, 0, 90, 0, 50, 0, 55, 90000, 70, 0, 45, 0, 75, 0, 30, 600000);
+
+    if ( !StriCmp(presetName, "recon") )
+        return yw_MakeSpectatorRoboAI(75, 0, 60, 0, 90, 0, 50, 90000, 45, 0, 80, 0, 35, 0, 45, 300000);
+
+    return yw_MakeSpectatorRoboAI(80, 0, 80, 0, 70, 0, 70, 60000, 50, 0, 40, 0, 40, 0, 50, 300000);
+}
+
+static NC_STACK_yparobo *yw_FindRandomSpectatorAICandidate(NC_STACK_ypaworld *yw)
+{
+    std::vector<NC_STACK_yparobo *> preferredCandidates;
+    std::vector<NC_STACK_yparobo *> fallbackCandidates;
+    int playerOwner = yw->_userRobo ? yw->_userRobo->_owner : World::OWNER_0;
+
+    for (NC_STACK_ypabact *unit : yw->_unitsList)
+    {
+        NC_STACK_yparobo *robo = dynamic_cast<NC_STACK_yparobo *>(unit);
+        if ( !robo ||
+             robo == yw->_userRobo ||
+             robo->_owner == World::OWNER_0 ||
+             robo->_status == BACT_STATUS_DEAD ||
+             robo->_status == BACT_STATUS_CREATE ||
+             robo->_status == BACT_STATUS_BEAM ||
+             yw->IsSpectatorBact(robo) ||
+             !yw_RoboHasExplicitAIBudget(robo) )
+        {
+            continue;
+        }
+
+        if ( robo->_owner != playerOwner )
+            preferredCandidates.push_back(robo);
+        else
+            fallbackCandidates.push_back(robo);
+    }
+
+    if ( !preferredCandidates.empty() )
+        return preferredCandidates[rand() % preferredCandidates.size()];
+
+    if ( !fallbackCandidates.empty() )
+        return fallbackCandidates[rand() % fallbackCandidates.size()];
+
+    return NULL;
+}
+
+void NC_STACK_ypaworld::ApplySpectatorOwnerAIFallback()
+{
+    if ( !IsSpectatorModeEnabled() || !_userRobo )
+        return;
+
+    NC_STACK_yparobo *playerRobo = dynamic_cast<NC_STACK_yparobo *>(_userRobo);
+    if ( !playerRobo || yw_RoboHasExplicitAIBudget(playerRobo) )
+        return;
+
+    std::string mode = System::IniConf::GameSpectatorOwnerAIMode.Get<std::string>();
+    const int playerOwner = playerRobo->_owner;
+    const bool ownerHasBuildAvailability = yw_OwnerHasBuildAvailability(this, playerOwner);
+
+    if ( mode.empty() || !StriCmp(mode, "copy_random") )
+    {
+        if ( NC_STACK_yparobo *candidate = yw_FindRandomSpectatorAICandidate(this) )
+        {
+            yw_ApplySpectatorRoboAI(playerRobo, yw_ReadSpectatorRoboAI(candidate));
+
+            if ( !ownerHasBuildAvailability && candidate->_owner != playerOwner )
+                yw_CopyOwnerBuildAvailability(this, candidate->_owner, playerOwner);
+
+            return;
+        }
+
+        yw_ApplySpectatorRoboAI(playerRobo, yw_GetSpectatorPresetRoboAI(System::IniConf::GameSpectatorOwnerAIPreset.Get<std::string>()));
+        return;
+    }
+
+    if ( !StriCmp(mode, "preset") )
+    {
+        yw_ApplySpectatorRoboAI(playerRobo, yw_GetSpectatorPresetRoboAI(System::IniConf::GameSpectatorOwnerAIPreset.Get<std::string>()));
+        return;
+    }
+
+    if ( StriCmp(mode, "off") )
+        ypa_log_out("WARNING: unknown game.spectator_owner_ai_mode '%s'; spectator owner AI fallback disabled.\n", mode.c_str());
+}
+
+static bool yw_IsUsableSpectatorBact(NC_STACK_ypaworld *yw, NC_STACK_ypabact *unit)
+{
+    return unit &&
+           yw &&
+           yw->IsSpectatorBact(unit) &&
+           unit->_status != BACT_STATUS_DEAD &&
+           unit->_status != BACT_STATUS_CREATE &&
+           unit->_status != BACT_STATUS_BEAM &&
+           unit->_energy > 0 &&
+           !(unit->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2));
+}
+
+static NC_STACK_ypabact *yw_FindSpectatorBactInList(NC_STACK_ypaworld *yw, World::RefBactList &list)
+{
+    for (NC_STACK_ypabact *unit : list)
+    {
+        if ( yw_IsUsableSpectatorBact(yw, unit) )
+            return unit;
+
+        if ( NC_STACK_ypabact *kid = yw_FindSpectatorBactInList(yw, unit->_kidList) )
+            return kid;
+    }
+
+    return NULL;
+}
+
+static void yw_ApplySpectatorObserverSafety(NC_STACK_ypabact *spectator)
+{
+    if ( !spectator )
+        return;
+
+    // Runtime-only neutralization: the spectator is an observer, not an
+    // owner-1 combat unit. Owner 1 remains simulated through the Host
+    // Station AI fallback, while the observer itself is neutral/intangible.
+    spectator->_owner = World::OWNER_0;
+    spectator->_m_owner = World::OWNER_0;
+    spectator->_killer = NULL;
+    spectator->_killer_owner = World::OWNER_0;
+    spectator->_host_station = NULL;
+    spectator->_weapon = -1;
+    spectator->_mgun = -1;
+    spectator->_weapon_flags = 0;
+    spectator->_radar = 0;
+    spectator->_unhideRadar = 0;
+    spectator->_status_flg |= BACT_STFLAG_NOMSG;
+    spectator->setBACT_bactCollisions(false);
+    spectator->setBACT_exactCollisions(false);
+}
+
+static float yw_ClampSpectatorCoord(float value, float minValue, float maxValue)
+{
+    if ( maxValue < minValue )
+        return value;
+
+    if ( value < minValue )
+        return minValue;
+
+    if ( value > maxValue )
+        return maxValue;
+
+    return value;
+}
+
+static vec3d yw_GetSpectatorSpawnPosition(NC_STACK_ypaworld *yw)
+{
+    Common::Point cell(1, 1);
+    if ( yw->_mapSize.x > 2 && yw->_mapSize.y > 2 )
+        cell = Common::Point(yw->_mapSize.x / 2, yw->_mapSize.y / 2);
+
+    // Spectator Mode is an observer mode, not owner-1 gameplay. Spawn the
+    // observer in the map center instead of near the player Host Station.
+    vec3d pos = World::SectorIDToCenterPos3(cell);
+
+    const float halfSector = World::CVSectorHalfLength;
+    pos.x = yw_ClampSpectatorCoord(pos.x, halfSector, yw->_mapLength.x - halfSector);
+    pos.z = yw_ClampSpectatorCoord(pos.z, -yw->_mapLength.y + halfSector, -halfSector);
+
+    ypaworld_arg136 ray;
+    ray.stPos = vec3d(pos.x, -50000.0, pos.z);
+    ray.vect = vec3d::OY(100000.0);
+    ray.flags = 0;
+
+    yw->ypaworld_func136(&ray);
+
+    if ( ray.isect )
+    {
+        pos.y = ray.isectPos.y - 50.0;
+    }
+    else
+    {
+        yw_130arg sectInfo;
+        sectInfo.pos_x = pos.x;
+        sectInfo.pos_z = pos.z;
+
+        if ( yw->GetSectorInfo(&sectInfo) )
+            pos.y = sectInfo.pcell->height - 50.0;
+    }
+
+    return pos;
+}
+
+void NC_STACK_ypaworld::TryActivateSpectatorMode()
+{
+    if ( !IsSpectatorModeEnabled() || _levelInfo.Mode == 1 )
+        return;
+
+    ApplySpectatorOwnerAIFallback();
+
+    int spectatorVehicleID = System::IniConf::GameSpectatorVehicleID.Get<int32_t>();
+    if ( spectatorVehicleID <= 0 || spectatorVehicleID >= (int)_vhclProtos.size() )
+    {
+        ypa_log_out("WARNING: game.spectator_vehicle_id %d is invalid; spectator mode disabled for this level.\n", spectatorVehicleID);
+        return;
+    }
+
+    NC_STACK_ypabact *spectator = yw_FindSpectatorBactInList(this, _unitsList);
+
+    if ( !spectator )
+    {
+        ypaworld_arg146 arg146;
+        arg146.vehicle_id = spectatorVehicleID;
+        arg146.pos = yw_GetSpectatorSpawnPosition(this);
+
+        spectator = ypaworld_func146(&arg146);
+        if ( !spectator )
+        {
+            ypa_log_out("WARNING: could not create spectator vehicle id %d.\n", spectatorVehicleID);
+            return;
+        }
+
+        ypaworld_func134(spectator);
+    }
+
+    yw_ApplySpectatorObserverSafety(spectator);
+
+    if ( _viewerBact && _viewerBact != spectator )
+        _viewerBact->setBACT_viewer(false);
+
+    if ( _userUnit && _userUnit != spectator )
+        _userUnit->setBACT_inputting(false);
+
+    spectator->setBACT_viewer(true);
+    spectator->setBACT_inputting(true);
+
+    // Spectator mode must not start with owner-1 squads pre-selected. The
+    // original player faction is simulated by AI only; direct player command
+    // selection remains disabled while the spectator is controlled.
+    _activeCmdrID = 0;
+    _activeCmdrRemapIndex = -1;
+    _activeCmdrKidsCount = 0;
+    _cmdrIdToSelect = -1;
+    _cmdrsRemap.clear();
+}
+
 void NC_STACK_ypaworld::InitBuddies()
 {
     if ( !_levelInfo.Buddies.empty() )
@@ -3155,6 +3579,9 @@ void NC_STACK_ypaworld::ypaworld_func64__sub6__sub0()
             {
                 if ( comnd->_status != BACT_STATUS_DEAD && comnd->_status != BACT_STATUS_BEAM )
                 {
+                    if ( IsSpectatorBact(comnd) )
+                        continue;
+
                     bool a4 = false;
 
                     if ( comnd->_bact_type == BACT_TYPES_GUN )
@@ -3169,7 +3596,7 @@ void NC_STACK_ypaworld::ypaworld_func64__sub6__sub0()
 
                         for( NC_STACK_ypabact * &unit : comnd->_kidList )
                         {
-                            if ( unit->_status != BACT_STATUS_DEAD && unit->_status != BACT_STATUS_BEAM )
+                            if ( unit->_status != BACT_STATUS_DEAD && unit->_status != BACT_STATUS_BEAM && !IsSpectatorBact(unit) )
                                 _countUnitsPerOwner[ unit->_owner ]++;
                         }
                     }
@@ -4156,6 +4583,12 @@ void NC_STACK_ypaworld::VoiceMessageCalcPositionToUnit()
 
 void NC_STACK_ypaworld::VoiceMessageUpdate()
 {
+    if ( IsSpectatorControlled() )
+    {
+        _voiceMessage.Reset();
+        return;
+    }
+
     if ( _voiceMessage.Priority >= 0 )
     {
         if ( _voiceMessage.Unit->_status != BACT_STATUS_DEAD )
@@ -4176,6 +4609,9 @@ void NC_STACK_ypaworld::VoiceMessageUpdate()
 
 void ypaworld_func64__sub3(NC_STACK_ypaworld *yw)
 {
+    if ( yw->IsSpectatorControlled() )
+        return;
+
     if ( yw->_userUnit->_pSector->owner != yw->_userRobo->_owner )
     {
         if ( yw->_userUnit->_pSector->owner )

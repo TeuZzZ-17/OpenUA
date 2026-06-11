@@ -357,16 +357,9 @@ static rsrc * wav_load_pcm_wav(NC_STACK_wav *obj, IDVList &stak, const std::stri
 
                     if ( res )
                     {
-                        const char *path = wav_is_legacy_pcm8_mono(fmt) ? "legacy_wav_direct" : "modern_pcm_wav";
-
-                        ypa_log_out("[AUDIO_LOAD] filename=%s detected=WAV_PCM decoder_path=%s channels=%d sample_rate=%d bits_per_sample=%d sample_format=interleaved_pcm openal_format=%s bytes=%u result=success reason=ok\n",
-                                    filname.c_str(),
-                                    path,
-                                    fmt.NumChannels,
-                                    fmt.SampleRate,
-                                    fmt.BitsPerSample,
-                                    wav_al_format_name(alFormat),
-                                    (unsigned int)pcm.size());
+                        // Successful audio loads are intentionally not logged by default.
+                        // The old [AUDIO_LOAD] success spam drowned out useful crash/debug
+                        // information in Ypa_Log.TXT. Failure diagnostics below are kept.
                     }
 
                     return res;
@@ -489,13 +482,7 @@ static rsrc * wav_load_legacy_raw_wav(NC_STACK_wav *obj, IDVList &stak, const st
                     smpl->SampleRate = fmt.SampleRate;
                     smpl->Format = AL_FORMAT_MONO8;
 
-                    ypa_log_out("[AUDIO_LOAD] filename=%s detected=WAV_PCM decoder_path=legacy_wav channels=%d sample_rate=%d bits_per_sample=%d sample_format=unsigned_pcm8 openal_format=%s bytes=%u result=success reason=ok\n",
-                                filname.c_str(),
-                                fmt.NumChannels,
-                                fmt.SampleRate,
-                                fmt.BitsPerSample,
-                                wav_al_format_name(smpl->Format),
-                                (unsigned int)sbchunk.SubchunkSize);
+                    // Successful legacy WAV load logging disabled; keep failure logs only.
 
                     delete fil;
                     return res;
@@ -898,14 +885,8 @@ static rsrc * wav_load_modern_audio(NC_STACK_wav *obj, IDVList &stak, const std:
         if ( !sampleFmtName )
             sampleFmtName = "unknown";
 
-        ypa_log_out("[AUDIO_LOAD] filename=%s detected=%s decoder_path=modern_ffmpeg channels=%d sample_rate=%d bits_per_sample=16 sample_format=%s->s16_interleaved openal_format=%s bytes=%u result=success reason=ok\n",
-                    filname.c_str(),
-                    avcodec_get_name(codecPar->codec_id),
-                    outChannels,
-                    sampleRate,
-                    sampleFmtName,
-                    wav_al_format_name(outChannels > 1 ? AL_FORMAT_STEREO16 : AL_FORMAT_MONO16),
-                    (unsigned int)pcm.size());
+        // Successful FFmpeg audio load logging disabled; keep failure logs only.
+        (void)sampleFmtName;
     }
 
 cleanup:

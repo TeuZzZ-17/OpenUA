@@ -480,6 +480,7 @@ void NC_STACK_ypaufo::User_layer(update_msg *arg)
     float v88 = arg->frameTime / 1000.0;
 
     int a4 = getBACT_bactCollisions();
+    const bool spectatorObserver = _world && _world->IsSpectatorBact(this);
 
     _old_pos = _position;
 
@@ -634,7 +635,7 @@ void NC_STACK_ypaufo::User_layer(update_msg *arg)
             arg79.tgType = BACT_TGT_TYPE_UNIT;
         }
 
-        if ( arg->inpt->Buttons.IsAny({0, 1}) )
+        if ( !spectatorObserver && arg->inpt->Buttons.IsAny({0, 1}) )
         {
             arg79.weapon = _weapon;
             arg79.direction = _rotation.AxisZ();
@@ -653,7 +654,7 @@ void NC_STACK_ypaufo::User_layer(update_msg *arg)
             LaunchMissile(&arg79);
         }
 
-        if ( _weapon == -1 )
+        if ( _weapon == -1 || spectatorObserver )
         {
             if ( arg->inpt->Buttons.IsAny({0, 1}) )
             {
@@ -688,7 +689,7 @@ void NC_STACK_ypaufo::User_layer(update_msg *arg)
                 _fly_dir_length = 0;
         }
 
-        if ( _mgun != -1 )
+        if ( !spectatorObserver && _mgun != -1 )
         {
             if ( _status_flg & BACT_STFLAG_FIRE )
             {

@@ -1011,6 +1011,9 @@ void ypaworld_func129__sub0(NC_STACK_ypaworld *yw, const cellArea &cell, yw_arg1
 
 void NC_STACK_ypaworld::ypaworld_func129(yw_arg129 *arg)
 {
+    if ( arg->unit && IsSpectatorBact(arg->unit) )
+        return;
+
     Common::Point sec = World::PositionToSectorID( arg->pos );
     cellArea &cell = _cells.At(sec);
 
@@ -3872,6 +3875,47 @@ bool NC_STACK_ypaworld::CreateVideoControls()
                                                                                                 return false;
                                                                                             }
 
+                                                                                            btn_64arg.width = checkBoxWidth;
+                                                                                            btn_64arg.tileset_down = 19;
+                                                                                            btn_64arg.tileset_up = 18;
+                                                                                            btn_64arg.field_3A = 30;
+                                                                                            btn_64arg.xpos = 3 * buttonsSpace + checkBoxWidth + v120;
+                                                                                            btn_64arg.ypos = 11 * (_fontH + vertMenuSpace);
+                                                                                            btn_64arg.button_type = NC_STACK_button::TYPE_CHECKBX;
+                                                                                            btn_64arg.pressedCode = 0;
+                                                                                            btn_64arg.flags = 0;
+                                                                                            btn_64arg.caption = "g";
+                                                                                            btn_64arg.caption2 = "g";
+                                                                                            btn_64arg.downCode = 1139;
+                                                                                            btn_64arg.upCode = 1140;
+                                                                                            btn_64arg.button_id = 1175;
+
+                                                                                            if ( !_GameShell->video_button->Add(&btn_64arg) )
+                                                                                            {
+                                                                                                ypa_log_out("Unable to add spectator mode checkbox\n");
+                                                                                                return false;
+                                                                                            }
+
+                                                                                            btn_64arg.tileset_down = 16;
+                                                                                            btn_64arg.tileset_up = 16;
+                                                                                            btn_64arg.field_3A = 16;
+                                                                                            btn_64arg.button_type = NC_STACK_button::TYPE_CAPTION;
+                                                                                            btn_64arg.xpos = v120 + 2 * checkBoxWidth + 4 * buttonsSpace;
+                                                                                            btn_64arg.width = v120;
+                                                                                            btn_64arg.caption = Locale::Text::Dialogs(Locale::DLG_S_SPECTATORMODE);
+                                                                                            btn_64arg.caption2.clear();
+                                                                                            btn_64arg.downCode = 0;
+                                                                                            btn_64arg.upCode = 0;
+                                                                                            btn_64arg.pressedCode = 0;
+                                                                                            btn_64arg.button_id = 1175;
+                                                                                            btn_64arg.flags = NC_STACK_button::FLAG_TEXT;
+
+                                                                                            if ( !_GameShell->video_button->Add(&btn_64arg) )
+                                                                                            {
+                                                                                                ypa_log_out("Unable to add spectator mode label\n");
+                                                                                                return false;
+                                                                                            }
+
                                                                                             btn_64arg.ypos = 10 * (_fontH + vertMenuSpace);
                                                                                             btn_64arg.tileset_down = 16;
                                                                                             btn_64arg.tileset_up = 16;
@@ -5874,6 +5918,7 @@ size_t NC_STACK_ypaworld::ypaworld_func161(yw_arg161 *arg)
                                 InitGates();
                                 InitSuperItems();
                                 UpdatePowerEnergy();
+                                TryActivateSpectatorMode();
                             }
                             
                             PrepareAllFillers();
@@ -6200,6 +6245,10 @@ void NC_STACK_ypaworld::UpdateGameShell()
 
     v16.butID = 1174;
     v16.field_4 = (!System::IniConf::GamePlayerRoboAIBehavior.Get<bool>()) + 1;
+    _GameShell->video_button->SetState(&v16);
+
+    v16.butID = 1175;
+    v16.field_4 = (!System::IniConf::GameSpectatorMode.Get<bool>()) + 1;
     _GameShell->video_button->SetState(&v16);
 
     v16.butID = 1157;
@@ -7146,6 +7195,9 @@ void NC_STACK_ypaworld::setYW_userHostStation(NC_STACK_ypabact *host)
 
 void NC_STACK_ypaworld::setYW_userVehicle(NC_STACK_ypabact *bact)
 {
+    if ( !CanControlUnitInSpectatorMode(bact) )
+        return;
+
     if ( bact != _userUnit )
     {
         NC_STACK_ypabact *oldpBact = _userUnit;

@@ -23,6 +23,12 @@ public:
     
     static std::string Tooltip(uint32_t id)
     {
+        // OpenUA-only options may collide with stale strings in existing
+        // language.lng files. Force their source defaults until language packs
+        // are explicitly updated.
+        if ( id == TIP_CONF_HOSTSTATIONAI || id == TIP_CONF_SPECTATORMODE )
+            return DefaultStrings::Tooltips[ id ];
+
         return Get(LBL_TIPS + id, DefaultStrings::Tooltips[ id ]);
     }
     

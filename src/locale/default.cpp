@@ -132,6 +132,7 @@ std::array<std::string, DLG_MAX> DefaultStrings::Dialogs = Common::ArrayInit<std
     {DLG_S_TXT3      , "3"},
     {DLG_S_TXT4      , "4"},
     {DLG_S_HOSTSTATIONAI, "Host Station AI Behavior"},
+    {DLG_S_SPECTATORMODE, "Spectator Mode"},
     {DLG_S_RES       , "RESOLUTION SHELL"},
     {DLG_S_RESCHANGE , "DO YOU WANT TO CHANGE VIDEOMODE?"},
     {DLG_S_RESWARN   , "THIS CAN ... PROBLEMS"},
@@ -457,7 +458,8 @@ std::array<std::string, TIP_MAX> DefaultStrings::Tooltips = Common::ArrayInit<st
     {TIP_INPUT_USEJOY, "USE JOYSTICK"},
     {TIP_INPUT_FFJOY, "USE FORCEFEEDBACK FOR JOSTICK"},
     {TIP_INPUT_REMOVEKEY, "REMOVE KEY FROM ACTION"},
-    {TIP_CONF_HOSTSTATIONAI, "Makes the player Host Station move and behave more like enemy Host Stations"}
+    {TIP_CONF_HOSTSTATIONAI, "Makes the player Host Station move and behave more like enemy Host Stations"},
+    {TIP_CONF_SPECTATORMODE, "Observe the battle through a dedicated spectator vehicle."}
 });
 
 

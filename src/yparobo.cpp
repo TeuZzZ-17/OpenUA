@@ -6504,6 +6504,9 @@ void NC_STACK_yparobo::ypabact_func65__sub0()
 
 void NC_STACK_yparobo::setBACT_inputting(bool inpt)
 {
+    if ( inpt && _world && !_world->CanControlUnitInSpectatorMode(this) )
+        return;
+
     NC_STACK_ypabact::setBACT_inputting(inpt);
 
     if ( inpt )

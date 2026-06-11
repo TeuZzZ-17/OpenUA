@@ -574,6 +574,7 @@ public:
     std::string paletteTheme;
     std::string confPaletteTheme;
     bool confPlayerRoboAIBehavior;
+    bool confSpectatorMode;
     
     int _settingsChangeOptions;
     
@@ -808,6 +809,7 @@ public:
     void UpdatePaletteThemeText();
     bool SavePaletteThemeToNucleusIni();
     bool SavePlayerRoboAIBehaviorToNucleusIni();
+    bool SaveSpectatorModeToNucleusIni();
     void sub_46A7F8();
     void ShowAbout();
     
@@ -2048,6 +2050,14 @@ public:
     virtual int getYW_visSectors();
     virtual NC_STACK_ypabact *getYW_userHostStation();
     virtual NC_STACK_ypabact *getYW_userVehicle();
+
+    bool IsSpectatorModeEnabled() const;
+    bool IsSpectatorVehicleID(int vehicleID) const;
+    bool IsSpectatorBact(const NC_STACK_ypabact *bact) const;
+    bool IsSpectatorControlled() const;
+    bool CanControlUnitInSpectatorMode(const NC_STACK_ypabact *bact) const;
+    void ApplySpectatorOwnerAIFallback();
+    void TryActivateSpectatorMode();
     virtual std::vector<World::TWeapProto> &GetWeaponsProtos() { return _weaponProtos; };
     virtual std::vector<World::TBuildingProto> &GetBuildProtos() { return _buildProtos; };
     virtual std::vector<World::TVhclProto> &GetVhclProtos() { return _vhclProtos; };

@@ -5119,6 +5119,9 @@ void NC_STACK_ypabact::UpdateProximityDefense(update_msg *)
 
 size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
 {
+    if ( _world && _world->IsSpectatorBact(this) )
+        return 0;
+
     NC_STACK_ypamissile *wobj = NULL;
 
     int slots[4];
@@ -6294,7 +6297,7 @@ NC_STACK_ypabact * NC_STACK_ypabact::GetEnemyCandidateInSector(const cellArea &c
         if ( cel_unit->_bact_type == BACT_TYPES_MISSLE ||
              cel_unit->_status == BACT_STATUS_DEAD )
             continue;
-        
+
         // Do not target same fraction unit or owner == 0
         if ( cel_unit->_owner == _owner || cel_unit->_owner == World::OWNER_0 )
             continue;
@@ -7349,6 +7352,9 @@ static float ypabact_GetMgunOffset(const NC_STACK_ypabact *bact, int shotId, int
 
 size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
 {
+    if ( _world && _world->IsSpectatorBact(this) )
+        return 0;
+
     int a5 = 0;
 
     if ( _world->_isNetGame )
@@ -8390,6 +8396,9 @@ size_t NC_STACK_ypabact::TargetAssess(bact_arg110 *arg)
 
         if ( enemy )
         {
+            if ( _world->IsSpectatorBact(enemy) )
+                return TA_CANCEL;
+
             float enemyDistance = (enemy->_position.XZ() - _position.XZ()).length();
 
             if ( !enemy->_pSector->IsCanSee(_owner) )
@@ -9344,6 +9353,9 @@ size_t NC_STACK_ypabact::SetStateInternal(setState_msg *arg)
 
 void NC_STACK_ypabact::ChangeSectorEnergy(yw_arg129 *arg)
 {
+    if ( _world && _world->IsSpectatorBact(this) )
+        return;
+
     arg->OwnerID = World::OWNER_RECALC;
 
     _world->ypaworld_func129(arg);
@@ -9903,6 +9915,9 @@ void NC_STACK_ypabact::setBACT_viewer(bool vwr)
 
     if ( vwr )
     {
+        if ( _world && !_world->CanControlUnitInSpectatorMode(this) )
+            return;
+
         if (_world->_viewerBact)
         {
             if ( _world->_viewerBact->_bact_type != BACT_TYPES_MISSLE )
@@ -9969,6 +9984,9 @@ void NC_STACK_ypabact::setBACT_inputting(bool inpt)
 {
     if ( inpt )
     {
+        if ( _world && !_world->CanControlUnitInSpectatorMode(this) )
+            return;
+
         _oflags |= BACT_OFLAG_USERINPT;
         _world->setYW_userVehicle(this);
 
