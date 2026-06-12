@@ -262,6 +262,10 @@ public:
     float field_25C;
     float field_260;
     float field_264;
+    bool middlePanActive = false;
+    Common::Point middlePanStartMouse;
+    float middlePanStartX = 0.0;
+    float middlePanStartZ = 0.0;
     
     CmdStream t1_cmdbuf_1;
     CmdStream t1_cmdbuf_2;

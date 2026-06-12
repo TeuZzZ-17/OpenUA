@@ -1574,6 +1574,10 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_proximity_defense_sequence_shots_fired = 0;
         bacto->_proximity_defense_next_shot_time = 0;
         bacto->_proximity_defense_next_activation_time = 0;
+        bacto->_seek_and_destroy = vhcl.seek_and_destroy ? 1 : 0;
+        bacto->_seek_and_destroy_weapon = vhcl.seek_and_destroy_weapon > 0 ? vhcl.seek_and_destroy_weapon : 0;
+        bacto->_seek_and_destroy_trigger_radius = vhcl.seek_and_destroy_trigger_radius > 0.0 ? vhcl.seek_and_destroy_trigger_radius : 0.0;
+        bacto->_seek_and_destroy_triggered = false;
         bacto->SetUnitGuns(vhcl_id->skip_unit_guns ? std::vector<World::TRoboGun>() : vhcl.unit_guns);
 
         bacto->_destroyFX = vhcl.dest_fx;

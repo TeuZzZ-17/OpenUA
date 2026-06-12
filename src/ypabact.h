@@ -438,6 +438,8 @@ public:
     virtual void BeforeSoundCarrierUpdate();
     void UpdateCarrierSpawn(update_msg *arg);
     void UpdateProximityDefense(update_msg *arg);
+    void UpdateSeekAndDestroy(update_msg *arg);
+    bool ApplySeekAndDestroyRammingGuidance(bool clearAvoidanceFlags);
     void UpdateDamageFX(update_msg *arg);
     void UpdateDecorationFX(update_msg *arg);
     void ApplyWeaponDebuff(World::TWeaponDebuffConfig &debuff, NC_STACK_ypabact *source);
@@ -838,6 +840,10 @@ public:
     int _proximity_defense_sequence_shots_fired;
     int _proximity_defense_next_shot_time;
     int _proximity_defense_next_activation_time;
+    int _seek_and_destroy;
+    int _seek_and_destroy_weapon;
+    float _seek_and_destroy_trigger_radius;
+    bool _seek_and_destroy_triggered;
     std::vector<World::TRoboGun> _unitGuns;
     std::string _gunDisplayName;
     mat3x3 _unitGunsParentRotation;

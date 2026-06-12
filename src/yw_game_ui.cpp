@@ -229,6 +229,9 @@ int StatusIconCollect(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact, World::TVhc
 
         if ( vhcl->power > 0 && vhcl->power_radius > 0.0 )
             StatusIconAdd(icons, iconCount, vhcl->power_icon);
+
+        if ( vhcl->seek_and_destroy )
+            StatusIconAdd(icons, iconCount, vhcl->seek_and_destroy_icon);
     }
 
     StatusIconPowerState powerState = StatusIconGetPowerStationState(yw, bact);
@@ -351,6 +354,9 @@ int StatusIconCollectVehicleRoleIcons(World::TVhclProto *vhcl, StatusIconList &i
 
     if ( vhcl->power > 0 && vhcl->power_radius > 0.0 )
         StatusIconAdd(icons, iconCount, vhcl->power_icon);
+
+    if ( vhcl->seek_and_destroy )
+        StatusIconAdd(icons, iconCount, vhcl->seek_and_destroy_icon);
 
     return iconCount;
 }
@@ -2826,6 +2832,7 @@ void  sb_0x451034__sub2(NC_STACK_ypaworld *yw)
 
     robo_map.field_1ED = 0;
     robo_map.field_1E8 = 0;
+    robo_map.middlePanActive = false;
     robo_map.MapViewMask = cellArea::ViewMask(1);
 
     robo_map.field_254 = 0.45;
@@ -6449,6 +6456,7 @@ void  RoboMap_InputHandle(NC_STACK_ypaworld *yw, TInputState *inpt)
     if ( robo_map.IsClosed() )
     {
         robo_map.field_1E8 &= 0xFFFFFDE8;
+        robo_map.middlePanActive = false;
     }
     else
     {
@@ -6513,7 +6521,22 @@ void  RoboMap_InputHandle(NC_STACK_ypaworld *yw, TInputState *inpt)
             break;
         }
 
-        if ( robo_map.field_1E8 & 1 )
+        if ( robo_map.middlePanActive )
+        {
+            if ( winpt->flag & TClickBoxInf::FLAG_MM_HOLD )
+            {
+                robo_map.field_1ED = 0;
+                robo_map.field_1D8 = robo_map.middlePanStartX + (float)(robo_map.middlePanStartMouse.x - winpt->move.ScreenPos.x) * robo_map.field_1E0;
+                robo_map.field_1DC = robo_map.middlePanStartZ - (float)(robo_map.middlePanStartMouse.y - winpt->move.ScreenPos.y) * robo_map.field_1E4;
+                sub_4C1814(yw, robo_map.field_1CC - robo_map.field_244, robo_map.field_1D2);
+            }
+            else
+            {
+                robo_map.middlePanActive = false;
+                yw->_guiDragDefaultMouse = false;
+            }
+        }
+        else if ( robo_map.field_1E8 & 1 )
         {
             if ( winpt->flag & TClickBoxInf::FLAG_LM_HOLD )
             {
@@ -6624,6 +6647,19 @@ void  RoboMap_InputHandle(NC_STACK_ypaworld *yw, TInputState *inpt)
         }
         else if ( winpt->selected_btn == &robo_map )
         {
+            if ( winpt->flag & TClickBoxInf::FLAG_MM_DOWN )
+            {
+                if ( winpt->selected_btnID == 17 )
+                {
+                    robo_map.middlePanActive = true;
+                    robo_map.middlePanStartMouse = winpt->move.ScreenPos;
+                    robo_map.middlePanStartX = robo_map.field_1D8;
+                    robo_map.middlePanStartZ = robo_map.field_1DC;
+                    robo_map.field_1ED = 0;
+                    yw->_guiDragDefaultMouse = true;
+                }
+            }
+
             if ( winpt->flag & TClickBoxInf::FLAG_RM_DOWN )
             {
                 if ( winpt->selected_btnID == 17 )

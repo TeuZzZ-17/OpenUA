@@ -21,6 +21,8 @@
 int ypabact_id = 1;
 extern int dword_5B1128;
 
+static bool ypabact_IsSeekAndDestroyArmed(NC_STACK_ypabact *unit);
+
 static void ypabact_ResetDamagedFX(NC_STACK_ypabact *bact)
 {
     bact->_damaged_fx = World::TDamagedFXConfig();
@@ -869,6 +871,10 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _proximity_defense_sequence_shots_fired = 0;
     _proximity_defense_next_shot_time = 0;
     _proximity_defense_next_activation_time = 0;
+    _seek_and_destroy = 0;
+    _seek_and_destroy_weapon = 0;
+    _seek_and_destroy_trigger_radius = 0.0;
+    _seek_and_destroy_triggered = false;
     _gunDisplayName.clear();
     _unitGunsParentRotation = mat3x3::Ident();
     _unitGunsSpawned = false;
@@ -993,6 +999,10 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _proximity_defense_sequence_shots_fired = 0;
     _proximity_defense_next_shot_time = 0;
     _proximity_defense_next_activation_time = 0;
+    _seek_and_destroy = 0;
+    _seek_and_destroy_weapon = 0;
+    _seek_and_destroy_trigger_radius = 0.0;
+    _seek_and_destroy_triggered = false;
     _unitGuns.clear();
     _gunDisplayName.clear();
     _unitGunsParentRotation = mat3x3::Ident();
@@ -1627,6 +1637,7 @@ void NC_STACK_ypabact::Update(update_msg *arg)
     UpdateCarrierSpawn(arg);
     UpdateProximityDefense(arg);
     AI_layer1(arg);
+    UpdateSeekAndDestroy(arg);
     UpdateUnitGuns(arg);
 
     for( NC_STACK_ypamissile *misl : Utils::IterateListCopy<NC_STACK_ypamissile *>(_missiles_list))
@@ -2941,6 +2952,8 @@ void NC_STACK_ypabact::AI_layer3(update_msg *arg)
             }
         }
 
+        ApplySeekAndDestroyRammingGuidance(false);
+
         AI_layer3__sub1(this, arg);
 
         /*if ( bact->status_flg & BACT_STFLAG_DODGE ) //Unused flag
@@ -3633,8 +3646,15 @@ void NC_STACK_ypabact::FightWithBact(bact_arg75 *arg)
     if ( _atk_ret == TA_FIGHT )
     {
         float foeDistance = ( foePos->XZ() - _position.XZ() ).length();
+        bool seekAndDestroyArmed = ypabact_IsSeekAndDestroyArmed(this);
 
-        if ( _status_flg & BACT_STFLAG_APPROACH )
+        if ( seekAndDestroyArmed )
+        {
+            _status_flg &= ~BACT_STFLAG_APPROACH;
+            _status_flg |= BACT_STFLAG_ATTACK;
+            _target_vec = *foePos - _position;
+        }
+        else if ( _status_flg & BACT_STFLAG_APPROACH )
         {
             _status_flg &= ~BACT_STFLAG_ATTACK;
 
@@ -3783,7 +3803,10 @@ void NC_STACK_ypabact::FightWithBact(bact_arg75 *arg)
             }
             else
             {
-                _status_flg &= ~BACT_STFLAG_ATTACK;
+                if ( ypabact_IsSeekAndDestroyArmed(this) )
+                    _status_flg |= BACT_STFLAG_ATTACK;
+                else
+                    _status_flg &= ~BACT_STFLAG_ATTACK;
             }
 
             if ( v45 < 1000.0 &&   _mgun != -1 &&   v40.dot(_rotation.AxisZ()) > 0.85 )
@@ -4561,6 +4584,187 @@ static bool ypabact_IsValidWeaponId(NC_STACK_ypabact *bact, int weaponId)
     return world && weaponId >= 0 && weaponId < (int)world->GetWeaponsProtos().size();
 }
 
+static bool ypabact_IsSeekAndDestroyArmed(NC_STACK_ypabact *unit)
+{
+    if ( !unit ||
+         !unit->_seek_and_destroy ||
+         unit->_seek_and_destroy_triggered ||
+         !unit->getBACT_pWorld() ||
+         unit->_status == BACT_STATUS_DEAD ||
+         unit->_status == BACT_STATUS_CREATE ||
+         unit->_status == BACT_STATUS_BEAM ||
+         (unit->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2)) )
+    {
+        return false;
+    }
+
+    if ( unit->getBACT_pWorld()->IsSpectatorBact(unit) )
+        return false;
+
+    if ( !ypabact_IsValidWeaponId(unit, unit->_seek_and_destroy_weapon) )
+        return false;
+
+    World::TWeapProto &wproto = unit->getBACT_pWorld()->GetWeaponsProtos().at(unit->_seek_and_destroy_weapon);
+    return (wproto._weaponFlags & 1) != 0;
+}
+
+static bool ypabact_IsValidSeekAndDestroyTarget(NC_STACK_ypabact *unit, NC_STACK_ypabact *target)
+{
+    if ( !unit ||
+         !target ||
+         unit == target ||
+         !unit->getBACT_pWorld() ||
+         target->getBACT_pWorld() != unit->getBACT_pWorld() ||
+         !ypabact_CanUseGameplayStatusMechanics(target) )
+    {
+        return false;
+    }
+
+    if ( unit->_owner == World::OWNER_0 ||
+         target->_owner == World::OWNER_0 ||
+         target->_owner == unit->_owner )
+    {
+        return false;
+    }
+
+    if ( unit->getBACT_pWorld()->IsSpectatorBact(target) )
+        return false;
+
+    switch ( target->_bact_type )
+    {
+    case BACT_TYPES_BACT:
+    case BACT_TYPES_TANK:
+    case BACT_TYPES_ROBO:
+    case BACT_TYPES_FLYER:
+    case BACT_TYPES_UFO:
+    case BACT_TYPES_CAR:
+    case BACT_TYPES_GUN:
+    case BACT_TYPES_HOVER:
+        break;
+
+    default:
+        return false;
+    }
+
+    if ( target->_bact_type == BACT_TYPES_GUN )
+    {
+        NC_STACK_ypagun *gun = dynamic_cast<NC_STACK_ypagun *>(target);
+        if ( !gun || (gun->IsRoboGun() && target->_shield >= 100) )
+            return false;
+    }
+
+    return true;
+}
+
+static bool ypabact_IsSeekAndDestroyContact(NC_STACK_ypabact *unit, NC_STACK_ypabact *target)
+{
+    if ( !ypabact_IsValidSeekAndDestroyTarget(unit, target) )
+        return false;
+
+    float detonationDistance = unit->_seek_and_destroy_trigger_radius > 0.0 ? unit->_seek_and_destroy_trigger_radius : unit->_radius + target->_radius;
+    if ( detonationDistance <= 0.0 )
+        return false;
+
+    return (target->_position - unit->_position).length() <= detonationDistance;
+}
+
+static NC_STACK_ypabact *ypabact_FindSeekAndDestroyContactTarget(NC_STACK_ypabact *unit)
+{
+    if ( !ypabact_IsSeekAndDestroyArmed(unit) )
+        return NULL;
+
+    if ( unit->_secndTtype == BACT_TGT_TYPE_UNIT && ypabact_IsSeekAndDestroyContact(unit, unit->_secndT.pbact) )
+        return unit->_secndT.pbact;
+
+    if ( unit->_primTtype == BACT_TGT_TYPE_UNIT && ypabact_IsSeekAndDestroyContact(unit, unit->_primT.pbact) )
+        return unit->_primT.pbact;
+
+    float fuseRadius = unit->_seek_and_destroy_trigger_radius > 0.0 ? unit->_seek_and_destroy_trigger_radius : unit->_radius;
+    if ( fuseRadius < unit->_radius )
+        fuseRadius = unit->_radius;
+
+    int sectorRadius = (int)ceil(fuseRadius / World::CVSectorLength) + 2;
+    if ( sectorRadius < 2 )
+        sectorRadius = 2;
+
+    for (int y = -sectorRadius; y <= sectorRadius; y++)
+    {
+        for (int x = -sectorRadius; x <= sectorRadius; x++)
+        {
+            Common::Point cellId(unit->_cellId.x + x, unit->_cellId.y + y);
+
+            if ( !unit->getBACT_pWorld()->IsGamePlaySector(cellId) )
+                continue;
+
+            cellArea &cell = unit->getBACT_pWorld()->SectorAt(cellId);
+            for ( NC_STACK_ypabact *target : cell.unitsList )
+            {
+                if ( ypabact_IsSeekAndDestroyContact(unit, target) )
+                    return target;
+            }
+        }
+    }
+
+    return NULL;
+}
+
+static NC_STACK_ypabact *ypabact_GetSeekAndDestroyRammingTarget(NC_STACK_ypabact *unit)
+{
+    if ( !ypabact_IsSeekAndDestroyArmed(unit) )
+        return NULL;
+
+    if ( unit->_secndTtype == BACT_TGT_TYPE_UNIT )
+    {
+        if ( ypabact_IsValidSeekAndDestroyTarget(unit, unit->_secndT.pbact) )
+            return unit->_secndT.pbact;
+
+        setTarget_msg arg67;
+        arg67.tgt_type = BACT_TGT_TYPE_NONE;
+        arg67.priority = 1;
+        unit->SetTarget(&arg67);
+    }
+
+    if ( unit->_primTtype == BACT_TGT_TYPE_UNIT )
+    {
+        if ( ypabact_IsValidSeekAndDestroyTarget(unit, unit->_primT.pbact) )
+            return unit->_primT.pbact;
+
+        setTarget_msg arg67;
+        arg67.tgt_type = BACT_TGT_TYPE_CELL;
+        arg67.tgt_pos = unit->_position;
+        arg67.priority = 0;
+        unit->SetTarget(&arg67);
+    }
+
+    return NULL;
+}
+
+bool NC_STACK_ypabact::ApplySeekAndDestroyRammingGuidance(bool clearAvoidanceFlags)
+{
+    if ( _oflags & BACT_OFLAG_USERINPT )
+        return false;
+
+    NC_STACK_ypabact *target = ypabact_GetSeekAndDestroyRammingTarget(this);
+    if ( !target )
+        return false;
+
+    vec3d desired = target->_position - _position;
+    float desiredLen = desired.length();
+    if ( desiredLen <= 0.001 )
+        return false;
+
+    _target_vec = desired;
+    _target_dir = desired / desiredLen;
+
+    _status_flg |= BACT_STFLAG_MOVE | BACT_STFLAG_ATTACK;
+    _status_flg &= ~BACT_STFLAG_APPROACH;
+
+    if ( clearAvoidanceFlags )
+        _status_flg &= ~(BACT_STFLAG_DODGE_LEFT | BACT_STFLAG_DODGE_RIGHT);
+
+    return true;
+}
+
 static int ypabact_GetPrimaryWeaponSlots(NC_STACK_ypabact *bact, int *outSlots)
 {
     int count = 0;
@@ -5128,6 +5332,91 @@ void NC_STACK_ypabact::UpdateProximityDefense(update_msg *)
 
     ypabact_FireProximityDefenseBurst(this);
     _proximity_defense_next_activation_time = _clock + interval;
+}
+
+static NC_STACK_ypabact *ypabact_GetSeekAndDestroyPayloadListOwner(NC_STACK_ypabact *unit)
+{
+    if ( unit->_parent && unit->_parent->_status != BACT_STATUS_DEAD )
+        return unit->_parent;
+
+    if ( unit->_host_station && unit->_host_station->_status != BACT_STATUS_DEAD )
+        return unit->_host_station;
+
+    if ( unit->getBACT_pWorld() )
+    {
+        NC_STACK_ypabact *userHost = unit->getBACT_pWorld()->getYW_userHostStation();
+        if ( userHost && userHost != unit && userHost->_status != BACT_STATUS_DEAD )
+            return userHost;
+    }
+
+    return unit;
+}
+
+void NC_STACK_ypabact::UpdateSeekAndDestroy(update_msg *)
+{
+    NC_STACK_ypabact *target = ypabact_FindSeekAndDestroyContactTarget(this);
+    if ( !target )
+        return;
+
+    _seek_and_destroy_triggered = true;
+
+    ypaworld_arg146 arg147;
+    arg147.vehicle_id = _seek_and_destroy_weapon;
+    arg147.pos = _position;
+
+    NC_STACK_ypamissile *payload = _world->ypaworld_func147(&arg147);
+    if ( !payload )
+    {
+        _seek_and_destroy_triggered = false;
+        return;
+    }
+
+    vec3d payloadDir = _rotation.AxisZ();
+    if ( payloadDir.normalise() <= 0.001 )
+        payloadDir = vec3d::OZ(1.0);
+
+    payload->SetLauncherBact(this);
+    payload->SetStartHeight(arg147.pos.y);
+    payload->_owner = _owner;
+    payload->_host_station = _host_station;
+    payload->_fly_dir = payloadDir;
+    payload->_fly_dir_length = 0.0;
+    payload->_rotation.SetZ(payload->_fly_dir);
+    payload->_rotation.SetX(_rotation.AxisX());
+    payload->_rotation.SetY(payload->_rotation.AxisZ() * payload->_rotation.AxisX());
+    payload->_kidRef.Detach();
+    payload->_parent = NULL;
+    ypabact_GetSeekAndDestroyPayloadListOwner(this)->_missiles_list.push_back(payload);
+
+    payload->DetonateSeekAndDestroyPayload(target);
+
+    bool wasInvulnerable = _invulnerable;
+    _invulnerable = false;
+
+    int suicideDamage = _energy_max > 0 ? _energy_max : (_energy > 0 ? _energy : 1);
+    if ( suicideDamage > std::numeric_limits<int>::max() / 2 )
+        suicideDamage = std::numeric_limits<int>::max() / 2;
+
+    bact_arg84 arg84;
+    arg84.unit = this;
+    arg84.energy = -2 * suicideDamage;
+
+    ModifyEnergy(&arg84);
+
+    if ( _status != BACT_STATUS_DEAD )
+    {
+        _energy = 0;
+
+        setState_msg arg78;
+        arg78.unsetFlags = 0;
+        arg78.setFlags = 0;
+        arg78.newStatus = BACT_STATUS_DEAD;
+
+        SetState(&arg78);
+        Die();
+    }
+
+    _invulnerable = wasInvulnerable;
 }
 
 size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
@@ -6881,6 +7170,10 @@ void NC_STACK_ypabact::Renew()
     _proximity_defense_sequence_shots_fired = 0;
     _proximity_defense_next_shot_time = 0;
     _proximity_defense_next_activation_time = 0;
+    _seek_and_destroy = 0;
+    _seek_and_destroy_weapon = 0;
+    _seek_and_destroy_trigger_radius = 0.0;
+    _seek_and_destroy_triggered = false;
     _newtarget_time = 0;
     _assess_time = 0;
     _scale_pos = 0;

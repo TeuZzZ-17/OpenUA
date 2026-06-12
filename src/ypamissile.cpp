@@ -1671,6 +1671,38 @@ void NC_STACK_ypamissile::Impact()
     _mislDirectHitSectors.clear();
 }
 
+void NC_STACK_ypamissile::DetonateAtContact(NC_STACK_ypabact *directHit)
+{
+    DetonateSeekAndDestroyPayload(directHit);
+}
+
+void NC_STACK_ypamissile::DetonateSeekAndDestroyPayload(NC_STACK_ypabact *directHit)
+{
+    if ( _status == BACT_STATUS_DEAD )
+        return;
+
+    if ( directHit &&
+         directHit != this &&
+         directHit != _mislEmitter &&
+         directHit->_bact_type != BACT_TYPES_MISSLE &&
+         directHit->_status != BACT_STATUS_DEAD )
+    {
+        ApplyDirectHitToBact(directHit);
+    }
+
+    Impact();
+
+    setState_msg arg78;
+    arg78.unsetFlags = 0;
+    arg78.setFlags = 0;
+    arg78.newStatus = BACT_STATUS_DEAD;
+
+    SetState(&arg78);
+
+    if ( !StartChainFXByTrigger(World::TChainFXConfig::TRIGGER_IMPACT_WORLD) )
+        StartDestFXByType(World::DestFX::FX_MEGADETH);
+}
+
 void NC_STACK_ypamissile::AlignMissile(float dtime)
 {
     if ( _fly_dir != vec3d(0.0, 0.0, 0.0) )

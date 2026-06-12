@@ -96,6 +96,10 @@ void NC_STACK_ypatank::AI_layer3(update_msg *arg)
     if ( v220 > 0.0 )
         _target_dir = _target_vec / v220;
 
+    bool seekAndDestroyRamming = ApplySeekAndDestroyRammingGuidance(false);
+    if ( seekAndDestroyRamming )
+        v220 = _target_vec.length();
+
     bool v215 = !_secndTtype && v220 < World::CVSectorLength;
 
     switch ( _status )
@@ -299,7 +303,7 @@ void NC_STACK_ypatank::AI_layer3(update_msg *arg)
                 if ( _thraction < 0.0 )
                     _thraction = 0;
 
-                if ( !(_status_flg & BACT_STFLAG_ATTACK) || !_tankExpectTgt || _tankCollisionFlag )
+                if ( seekAndDestroyRamming || !(_status_flg & BACT_STFLAG_ATTACK) || !_tankExpectTgt || _tankCollisionFlag )
                 {
                     move_msg arg74;
                     arg74.flag = 0;

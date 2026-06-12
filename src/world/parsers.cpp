@@ -1081,6 +1081,10 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     {
         _vhcl->power_icon = p2;
     }
+    else if ( !StriCmp(p1, "seek_and_destroy_icon") )
+    {
+        _vhcl->seek_and_destroy_icon = p2;
+    }
     else if ( !StriCmp(p1, "power") )
     {
         _vhcl->power = ClampSectorPower(parser.stol(p2, NULL, 0));
@@ -1243,6 +1247,20 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     {
         _vhcl->proximity_defense_random_pitch_set = true;
         _vhcl->proximity_defense_random_pitch_max = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "seek_and_destroy") )
+    {
+        _vhcl->seek_and_destroy = parser.stol(p2, NULL, 0) ? 1 : 0;
+    }
+    else if ( !StriCmp(p1, "seek_and_destroy_weapon") )
+    {
+        int weaponId = parser.stol(p2, NULL, 0);
+        _vhcl->seek_and_destroy_weapon = weaponId > 0 ? weaponId : 0;
+    }
+    else if ( !StriCmp(p1, "seek_and_destroy_trigger_radius") )
+    {
+        float radius = parser.stof(p2, 0);
+        _vhcl->seek_and_destroy_trigger_radius = radius > 0.0 ? radius : 0.0;
     }
     else if ( !StriCmp(p1, "visual_scale") )
     {
@@ -1828,6 +1846,7 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->radar_icon.clear();
         _vhcl->unit_gun_icon.clear();
         _vhcl->power_icon.clear();
+        _vhcl->seek_and_destroy_icon.clear();
         _vhcl->power = 0;
         _vhcl->power_radius = 0.0;
         _vhcl->damaged_force_mult = 1.0;
@@ -1855,6 +1874,9 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->proximity_defense_random_pitch_set = false;
         _vhcl->proximity_defense_random_pitch_min = -10.0;
         _vhcl->proximity_defense_random_pitch_max = 45.0;
+        _vhcl->seek_and_destroy = 0;
+        _vhcl->seek_and_destroy_weapon = 0;
+        _vhcl->seek_and_destroy_trigger_radius = 0.0;
         _vhcl->shield = 50;
         _vhcl->energy = 10000;
         _vhcl->adist_sector = 800.0;

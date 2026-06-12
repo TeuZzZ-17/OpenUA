@@ -298,6 +298,7 @@ struct TVhclProto
     std::string radar_icon;
     std::string unit_gun_icon;
     std::string power_icon;
+    std::string seek_and_destroy_icon;
     int power = 0;
     float power_radius = 0.0;
     float damaged_force_mult = 1.0;
@@ -325,6 +326,9 @@ struct TVhclProto
     bool proximity_defense_random_pitch_set = false;
     float proximity_defense_random_pitch_min = -10.0;
     float proximity_defense_random_pitch_max = 45.0;
+    int seek_and_destroy = 0;
+    int seek_and_destroy_weapon = 0;
+    float seek_and_destroy_trigger_radius = 0.0;
     std::vector<DestFX> dest_fx;      // dest_fx
     std::vector<DestFX>    ExtDestroyFX; // ext_dest_fx
     std::array<TVhclSound, SND_MAX> sndFX;
