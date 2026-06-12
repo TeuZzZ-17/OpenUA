@@ -202,6 +202,6 @@ int StriCmp(const std::string &a, const std::string &b)
 
 bool StrGetBool(const std::string &str)
 {
-    return !StriCmp(str, "yes") || !StriCmp(str, "true") || !StriCmp(str, "on");
+    return !StriCmp(str, "yes") || !StriCmp(str, "true") || !StriCmp(str, "on") || !StriCmp(str, "1");
 }
 

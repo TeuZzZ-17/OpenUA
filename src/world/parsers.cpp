@@ -1248,6 +1248,10 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     {
         _vhcl->visual_scale = parser.stof(p2, 0);
     }
+    else if ( !StriCmp(p1, "invulnerable") )
+    {
+        _vhcl->invulnerable = StrGetBool(p2);
+    }
     else if ( !StriCmp(p1, "type_icon") )
     {
         _vhcl->type_icon = p2[0];

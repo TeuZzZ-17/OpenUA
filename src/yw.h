@@ -2056,6 +2056,13 @@ public:
     bool IsSpectatorBact(const NC_STACK_ypabact *bact) const;
     bool IsSpectatorControlled() const;
     bool CanControlUnitInSpectatorMode(const NC_STACK_ypabact *bact) const;
+    bool IsSpectatorFollowActive() const;
+    NC_STACK_ypabact *GetSpectatorFollowTarget() const;
+    bool IsValidSpectatorFollowTarget(NC_STACK_ypabact *bact) const;
+    void SetSpectatorFollowTarget(NC_STACK_ypabact *bact);
+    void ClearSpectatorFollowTarget();
+    void ReturnToSpectatorVehicle();
+    bool UpdateSpectatorFollowCamera(TInputState *inpt);
     void ApplySpectatorOwnerProfile();
     void TryActivateSpectatorMode();
     virtual std::vector<World::TWeapProto> &GetWeaponsProtos() { return _weaponProtos; };
@@ -2473,6 +2480,11 @@ public:
     NC_STACK_ypabact *_viewerBact = NULL;
     vec3d _viewerPosition;
     mat3x3 _viewerRotation;
+    NC_STACK_ypabact *_spectatorFollowTarget = NULL;
+    TF::TForm3D _spectatorFollowView;
+    float _spectatorFollowDistance = 900.0;
+    float _spectatorFollowYaw = 0.0;
+    float _spectatorFollowPitch = 0.25;
     
     NC_STACK_base *_skyObject  = NULL;
     

@@ -201,7 +201,7 @@ public:
     static Common::Ini::Key GamePlayerRoboAIBehavior;
     static Common::Ini::Key GameSpectatorMode;
     static Common::Ini::Key GameSpectatorVehicleID;
-    static Common::Ini::Key GameSpectatorOwnerProfile;
+    static Common::Ini::Key GameSpectatorOwner1AI;
     static Common::Ini::Key GameRoboBuildingCollisionDamagePercent;
     
     static Common::Ini::Key NetGameExclusiveGem;

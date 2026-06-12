@@ -75,6 +75,7 @@ struct TClickBoxInf
     TMousePos move;
     TMousePos ldw_pos;
     TMousePos lup_pos;
+    int32_t wheel = 0;
 };
 
 struct TInputState

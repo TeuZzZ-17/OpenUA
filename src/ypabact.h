@@ -660,6 +660,7 @@ public:
     int _base_snd_wait_pitch;
     int _energy;
     int _energy_max;
+    bool _invulnerable;
     int _reload_const;
 //    int16_t field_3CE;
     uint8_t _shield;

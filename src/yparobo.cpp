@@ -908,7 +908,7 @@ void NC_STACK_yparobo::ChangeSectorEnergyFromRoboCollision(yw_arg129 *arg)
     }
 
     int destroyedBuildings = buildingsBefore - buildingsAfter;
-    if ( destroyedBuildings <= 0 || _energy_max <= 0 )
+    if ( destroyedBuildings <= 0 || _energy_max <= 0 || _invulnerable )
         return;
 
     int damagePercent = System::IniConf::GameRoboBuildingCollisionDamagePercent.Get<int>();

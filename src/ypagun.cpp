@@ -614,7 +614,10 @@ void NC_STACK_ypagun::EnergyInteract(update_msg *arg)
             _energy += _energy_max * (arg->frameTime / 1000.0) * _pSector->energy_power / 40000.0;
 
         TMobilePowerInfluence mobilePower = _world->FindMobilePowerInfluenceForUnit(this);
-        _energy += _energy_max * (arg->frameTime / 1000.0) * (mobilePower.AlliedEnergyPower - mobilePower.EnemyEnergyPower) / 40000.0;
+        float mobileDelta = _energy_max * (arg->frameTime / 1000.0) * (mobilePower.AlliedEnergyPower - mobilePower.EnemyEnergyPower) / 40000.0;
+
+        if ( mobileDelta >= 0.0 || !_invulnerable )
+            _energy += mobileDelta;
 
         if ( _energy < 0 )
             _energy = 0;

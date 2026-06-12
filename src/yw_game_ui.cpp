@@ -3751,7 +3751,10 @@ void gui_update_player_panel(NC_STACK_ypaworld *yw, CmdStream *cur)
 
     if ( spectatorControlled )
     {
-        v35 = 0;
+        // Keep normal command buttons disabled in Spectator Mode. While the
+        // follow camera is active, expose only the vanilla back/up button and
+        // reuse it as Return to Spectator.
+        v35 = yw->IsSpectatorFollowActive() ? 0x10 : 0;
         yw->GuiWinClose( &gui_lstvw );
     }
 
@@ -4944,6 +4947,18 @@ void  ypaworld_func64__sub7__sub2(NC_STACK_ypaworld *yw, TInputState *inpt)
             case 4: //Back to host station
                 if ( winpt->flag & (TClickBoxInf::FLAG_BTN_DOWN | TClickBoxInf::FLAG_BTN_HOLD) )
                     bzda.field_91C |= 0x10;
+
+                if ( yw->IsSpectatorFollowActive() )
+                {
+                    if ( winpt->flag & TClickBoxInf::FLAG_BTN_UP )
+                    {
+                        yw->ReturnToSpectatorVehicle();
+                        yw->_guiDragDefaultMouse = false;
+                    }
+
+                    yw->SetShowingTooltipWithHotkey(Locale::TIP_GUI_RETURNSPECTATOR, 21);
+                    break;
+                }
 
                 if ( winpt->flag & TClickBoxInf::FLAG_BTN_UP )
                 {
@@ -9615,6 +9630,41 @@ void yw_RenderUnitLifeBar(NC_STACK_ypaworld *yw, CmdStream *cur, NC_STACK_ypabac
     }
 }
 
+static bool yw_ShouldRenderSpectatorWorldStatus(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact)
+{
+    if ( !yw || !yw->IsSpectatorControlled() || !bact )
+        return false;
+
+    NC_STACK_ypabact *followTarget = yw->GetSpectatorFollowTarget();
+    const float spectatorStatusMaxDist = 2350.0;
+    vec3d statusOrigin = yw->_viewerPosition;
+    vec3d delta = bact->_position - statusOrigin;
+
+    if ( bact != followTarget && delta.dot(delta) > POW2(spectatorStatusMaxDist) )
+        return false;
+
+    return bact->_owner != World::OWNER_0 &&
+           !yw->IsSpectatorBact(bact) &&
+           bact->_bact_type != BACT_TYPES_MISSLE &&
+           bact->_status != BACT_STATUS_CREATE &&
+           bact->_status != BACT_STATUS_BEAM &&
+           bact->_status != BACT_STATUS_DEAD &&
+           bact->_energy_max > 0 &&
+           !bact->ShouldHideFromStrategicUI();
+}
+
+static void yw_RenderSpectatorWorldStatus(NC_STACK_ypaworld *yw, CmdStream *cur, NC_STACK_ypabact *bact)
+{
+    if ( !bact )
+        return;
+
+    if ( yw_ShouldRenderSpectatorWorldStatus(yw, bact) )
+        yw_RenderUnitLifeBar(yw, cur, bact);
+
+    for ( NC_STACK_ypabact *kid : bact->_kidList )
+        yw_RenderSpectatorWorldStatus(yw, cur, kid);
+}
+
 
 void yw_RenderOverlayCursors(NC_STACK_ypaworld *yw, CmdStream *cur)
 {
@@ -9738,16 +9788,24 @@ void sb_0x4d7c08__sub0__sub4(NC_STACK_ypaworld *yw)
         yw_RenderHUDVectorGFX(yw, &buf);
     }
 
+    if ( yw->IsSpectatorControlled() )
+    {
+        for ( NC_STACK_ypabact *unit : yw->_unitsList )
+            yw_RenderSpectatorWorldStatus(yw, &buf, unit);
+    }
+
     if ( yw->_guiActFlags & 0x20 )
     {
         if ( !yw->_bactOnMouse->ShouldHideFromStrategicUI() )
         {
             yw_RenderCursorOverUnit(yw, yw->_bactOnMouse);
-            yw_RenderUnitLifeBar(yw, &buf, yw->_bactOnMouse);
+
+            if ( !yw->IsSpectatorControlled() )
+                yw_RenderUnitLifeBar(yw, &buf, yw->_bactOnMouse);
         }
     }
 
-    if ( yw->_guiVisor.field_18 && !yw->_guiVisor.field_18->ShouldHideFromStrategicUI() )
+    if ( !yw->IsSpectatorControlled() && yw->_guiVisor.field_18 && !yw->_guiVisor.field_18->ShouldHideFromStrategicUI() )
         yw_RenderUnitLifeBar(yw, &buf, yw->_guiVisor.field_18);
 
     yw_RenderOverlayCursors(yw, &buf);
@@ -10960,7 +11018,9 @@ void NC_STACK_ypaworld::yw_MAP_MouseSelect(TClickBoxInf *winp)
             _cellMouseIsectPos.z = -((float)v24 * robo_map.field_1E4 + 0.75);
         }
 
-        if ( _guiActFlags & 2 && !(bzda.field_1D0 & 0x30) && cell.IsCanSee(_userRobo->_owner) )
+        bool canSelectCell = IsSpectatorControlled() ? ((robo_map.MapViewMask & cell.view_mask) != 0) : cell.IsCanSee(_userRobo->_owner);
+
+        if ( _guiActFlags & 2 && !(bzda.field_1D0 & 0x30) && canSelectCell )
         {
 
             int v16 = 0;
@@ -10970,6 +11030,9 @@ void NC_STACK_ypaworld::yw_MAP_MouseSelect(TClickBoxInf *winp)
                 for( NC_STACK_ypabact* &v17 : cell.unitsList )
                 {
                     if ( v17->ShouldHideFromStrategicUI() )
+                        continue;
+
+                    if ( IsSpectatorControlled() && v17->_owner == World::OWNER_0 )
                         continue;
 
                     if ( (v16 != 1 || v17->_owner != _userRobo->_owner) && (v16 || v17->_owner == _userRobo->_owner) )
@@ -11323,6 +11386,17 @@ void NC_STACK_ypaworld::ypaworld_func64__sub21(TInputState *arg)
         yw_MouseSelect(arg);
         ypaworld_func64__sub21__sub7();
 
+        if ( IsSpectatorControlled() &&
+             (arg->ClickInf.flag & TClickBoxInf::FLAG_LM_DOWN) &&
+             (_guiActFlags & 0x20) &&
+             _bactOnMouse &&
+             IsValidSpectatorFollowTarget(_bactOnMouse) )
+        {
+            SetSpectatorFollowTarget(_bactOnMouse);
+            arg->ClickInf.flag &= ~TClickBoxInf::FLAG_LM_DOWN;
+            return;
+        }
+
         int tooltip = 0;
         int mousePointer = 0;
         int doAction = World::DOACTION_0;
@@ -11645,7 +11719,11 @@ void NC_STACK_ypaworld::ypaworld_func64__sub21(TInputState *arg)
             if ( IsSpectatorControlled() )
             {
                 doAction = World::DOACTION_0;
-                mousePointer = 1;
+                if ( (_guiActFlags & 0x20) && IsValidSpectatorFollowTarget(_bactOnMouse) )
+                    mousePointer = 2;
+                else
+                    mousePointer = 1;
+
                 tooltip = 0;
             }
 

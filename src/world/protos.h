@@ -334,6 +334,7 @@ struct TVhclProto
     int16_t field_1D6F = 0;
     int shield = 0;
     int energy = 0;
+    bool invulnerable = false;
     int field_1D79 = 0;
     float adist_sector = 0.0;
     float adist_bact = 0.0;

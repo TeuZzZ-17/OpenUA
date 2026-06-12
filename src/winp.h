@@ -85,6 +85,7 @@ protected:
     static int _mLUcnt, _mLDcnt;
     static int _mRUcnt, _mRDcnt;
     static int _mMUcnt, _mMDcnt;
+    static int _mWheel;
 
     static Common::Point _mPos;
     static Common::Point _mMove;

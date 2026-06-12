@@ -172,20 +172,23 @@ void NC_STACK_ypacar::DoKamikaze()
                             int v26 = exp(tmp.length() * -2.8 / World::CVSectorLength) * _carBlast;
                             int v67 = ((1.0 - (float)v19->_shield * 0.01) * (float)v26);
 
-                            v19->_energy -= v67;
-
-                            if ( _world->_isNetGame )
+                            if ( !v19->_invulnerable )
                             {
-                                v63 = 1;
+                                v19->_energy -= v67;
 
-                                uamessage_vhclEnergy veMsg;
-                                veMsg.msgID = UAMSG_VHCLENERGY;
-                                veMsg.tstamp = _world->_timeStamp;
-                                veMsg.owner = v19->_owner;
-                                veMsg.id = v19->_gid;
-                                veMsg.energy = -v67;
+                                if ( _world->_isNetGame )
+                                {
+                                    v63 = 1;
 
-                                _world->NetBroadcastMessage(&veMsg, sizeof(veMsg), true);
+                                    uamessage_vhclEnergy veMsg;
+                                    veMsg.msgID = UAMSG_VHCLENERGY;
+                                    veMsg.tstamp = _world->_timeStamp;
+                                    veMsg.owner = v19->_owner;
+                                    veMsg.id = v19->_gid;
+                                    veMsg.energy = -v67;
+
+                                    _world->NetBroadcastMessage(&veMsg, sizeof(veMsg), true);
+                                }
                             }
                         }
 
@@ -282,7 +285,9 @@ void NC_STACK_ypacar::DoKamikaze()
     SetState(&arg78);
 
     _bact_type = BACT_TYPES_CAR;
-    _energy = -10;
+
+    if ( !_invulnerable )
+        _energy = -10;
 }
 
 void NC_STACK_ypacar::User_layer(update_msg *arg)

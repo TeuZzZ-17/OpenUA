@@ -23,6 +23,18 @@ Do not perform broad refactors unless explicitly requested.
 
 ---
 
+## 0. Primary project context source
+
+When working on this repository, use `OpenUA_Project_Memory_Bible.md` as the primary compact source of truth for current project state, roadmap, parameter naming, and completed features.
+
+Other project documents such as parameter guides, LDF/SCR guides, SKLtron notes, lore bible, README, and build guides are useful specialist references.
+
+Do not rely on old temporary test files, old NUCLEUS examples, old patch zips, screenshots, or intermediate Codex reports as current truth unless the task explicitly points to them.
+
+Do not save or propagate obsolete experimental names if the Memory Bible says they were removed or renamed.
+
+---
+
 ## 1. Core mission
 
 When working on this repo, always optimize for:
@@ -618,14 +630,32 @@ Approved or candidate future work may include:
   * `visual_scale_x`
   * `visual_scale_y`
   * `visual_scale_z`
-* Contact Detonation Units:
+* Seek and Destroy / kamikaze units:
 
-  * `contact_detonation_enable`
-  * `contact_detonation_weapon`
+  * `seek_and_destroy`
+  * `seek_and_destroy_weapon`
 
 Do not implement roadmap items unless explicitly requested.
 
 Do not expand the roadmap with duplicates.
+
+Current Spectator Mode parameter names:
+
+```ini
+game.spectator_mode = yes/no
+game.spectator_vehicle_id = <vehicle_id>
+game.spectator_owner1_ai = balanced
+```
+
+Old removed Spectator Mode names must not be used or re-added unless explicitly requested:
+
+```ini
+game.spectator_owner_profile
+game.spectator_owner_ai_mode
+copy_random/off mode
+```
+
+Spectator Follow Unit V1 exists but requires stabilization. Do not treat it as fully polished unless later validated.
 
 ---
 
@@ -799,7 +829,7 @@ Do not rename it back to Porcupine Weapon.
 
 ---
 
-## 23. Contact Detonation Units — future candidate
+## 23. Seek and Destroy / kamikaze units — future candidate
 
 Candidate feature, not implemented unless later state says otherwise.
 
@@ -807,11 +837,18 @@ Goal:
 
 Allow a vehicle/unit to use its body as a delivery system for an explosive payload.
 
-Desired V1 parameters:
+Official V1 parameters:
 
 ```ini
-contact_detonation_enable = 1
-contact_detonation_weapon = <weapon_id>
+seek_and_destroy = 1
+seek_and_destroy_weapon = <weapon_id>
+```
+
+Old provisional names are obsolete and must not be used:
+
+```ini
+seek_and_destroy
+seek_and_destroy_weapon
 ```
 
 No `scan_radius` in V1.
@@ -826,17 +863,16 @@ Behavior intent:
 * detonation occurs when vehicle radii touch:
 
   * conceptually `distance <= self.radius + target.radius`
-* use `contact_detonation_weapon` as instant payload at suicide unit position
+* use `seek_and_destroy_weapon` as instant payload at suicide unit position
 * do not spawn a fake missile trajectory
 * after detonation, suicide unit dies/is removed
 * unit may optionally also have a normal weapon while chasing
-* must not stop at normal firing distance if contact detonation is enabled
+* must not stop at normal firing distance if `seek_and_destroy` is enabled
 * should continue closing until physical contact
 
-Likely complexity: high, because it touches AI movement, target handling, collision/radius, death/removal, and weapon payload logic.
+Likely complexity: High, because it touches AI movement, target handling, collision/radius, death/removal, and weapon payload logic.
 
 ---
-
 ## 24. Building spawner system
 
 Already handled/completed.
@@ -1363,7 +1399,7 @@ Good final report:
 
 ```text
 Summary:
-Implemented parser fields and default-disabled prototype storage for contact detonation.
+Implemented parser fields and default-disabled prototype storage for seek and destroy.
 
 Files modified:
 - src/world/protos.h
@@ -1374,14 +1410,14 @@ Build:
 
 Behavior:
 - Missing parameters preserve vanilla behavior.
-- contact_detonation_enable defaults to false.
+- seek_and_destroy defaults to false.
 - No gameplay detonation logic added yet.
 
 Risks:
 - None expected at runtime because fields are parsed but unused.
 
 Suggested in-game test:
-- Add contact_detonation_enable/contact_detonation_weapon to one test vehicle and confirm the game still loads.
+- Add seek_and_destroy/seek_and_destroy_weapon to one test vehicle and confirm the game still loads.
 ```
 
 Bad final report:

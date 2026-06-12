@@ -201,7 +201,7 @@ Common::Ini::Key IniConf::GameTimeLine("game.timeline", Common::Ini::KT_DIGIT, (
 Common::Ini::Key IniConf::GamePlayerRoboAIBehavior("game.player_robo_ai_behavior", Common::Ini::KT_BOOL, false);
 Common::Ini::Key IniConf::GameSpectatorMode("game.spectator_mode", Common::Ini::KT_BOOL, false);
 Common::Ini::Key IniConf::GameSpectatorVehicleID("game.spectator_vehicle_id", Common::Ini::KT_DIGIT, (int32_t)0);
-Common::Ini::Key IniConf::GameSpectatorOwnerProfile("game.spectator_owner_profile", Common::Ini::KT_STRING, std::string("balanced"));
+Common::Ini::Key IniConf::GameSpectatorOwner1AI("game.spectator_owner1_ai", Common::Ini::KT_STRING, std::string("balanced"));
 Common::Ini::Key IniConf::GameRoboBuildingCollisionDamagePercent("game.robo_building_collision_damage_percent", Common::Ini::KT_DIGIT, (int32_t)8);
 
 // Ypaworld keys
@@ -387,7 +387,7 @@ void IniConf::Init()
         , &GamePlayerRoboAIBehavior
         , &GameSpectatorMode
         , &GameSpectatorVehicleID
-        , &GameSpectatorOwnerProfile
+        , &GameSpectatorOwner1AI
         , &GameRoboBuildingCollisionDamagePercent
 
         , &NetGameExclusiveGem

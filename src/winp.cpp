@@ -21,6 +21,7 @@ bool NC_STACK_winp::_mDBLstate;
 int NC_STACK_winp::_mLUcnt, NC_STACK_winp::_mLDcnt;
 int NC_STACK_winp::_mRUcnt, NC_STACK_winp::_mRDcnt;
 int NC_STACK_winp::_mMUcnt, NC_STACK_winp::_mMDcnt;
+int NC_STACK_winp::_mWheel;
 
 Common::Point NC_STACK_winp::_mPos;
 Common::Point NC_STACK_winp::_mMove;
@@ -285,6 +286,10 @@ int NC_STACK_winp::InputWatch(void *, SDL_Event *event)
             OnMouseMove(pos, rel);
     }
     break;
+
+    case SDL_MOUSEWHEEL:
+        _mWheel += event->wheel.y;
+        break;
 
     default:
         break;
@@ -746,9 +751,11 @@ void NC_STACK_winp::QueryPointer(TClickBoxInf *arg)
     CheckJoy();
 
     arg->move.ScreenPos = _mPos;
+    arg->wheel = _mWheel;
     _mMove = _mMoveQuery;
     
     _mMoveQuery = Common::Point();
+    _mWheel = 0;
 
     if ( _mLstate )
         arg->flag |= TClickBoxInf::FLAG_LM_HOLD;

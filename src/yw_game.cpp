@@ -692,6 +692,270 @@ bool NC_STACK_ypaworld::CanControlUnitInSpectatorMode(const NC_STACK_ypabact *ba
     return IsSpectatorBact(bact);
 }
 
+static bool yw_IsBactInSpectatorFollowTree(NC_STACK_ypabact *node, NC_STACK_ypabact *target)
+{
+    if ( !node )
+        return false;
+
+    if ( node == target )
+        return true;
+
+    for ( NC_STACK_ypabact *kid : node->_kidList )
+    {
+        if ( yw_IsBactInSpectatorFollowTree(kid, target) )
+            return true;
+    }
+
+    return false;
+}
+
+bool NC_STACK_ypaworld::IsSpectatorFollowActive() const
+{
+    return _spectatorFollowTarget != NULL;
+}
+
+NC_STACK_ypabact *NC_STACK_ypaworld::GetSpectatorFollowTarget() const
+{
+    return _spectatorFollowTarget;
+}
+
+bool NC_STACK_ypaworld::IsValidSpectatorFollowTarget(NC_STACK_ypabact *bact) const
+{
+    if ( !IsSpectatorControlled() || !bact )
+        return false;
+
+    bool found = false;
+    for ( NC_STACK_ypabact *unit : _unitsList )
+    {
+        if ( yw_IsBactInSpectatorFollowTree(unit, bact) )
+        {
+            found = true;
+            break;
+        }
+    }
+
+    if ( !found )
+        return false;
+
+    return bact->_owner != World::OWNER_0 &&
+           !IsSpectatorBact(bact) &&
+           bact->_status != BACT_STATUS_DEAD &&
+           bact->_status != BACT_STATUS_CREATE &&
+           bact->_status != BACT_STATUS_BEAM &&
+           bact->_bact_type != BACT_TYPES_MISSLE &&
+           !bact->ShouldHideFromStrategicUI();
+}
+
+void NC_STACK_ypaworld::SetSpectatorFollowTarget(NC_STACK_ypabact *bact)
+{
+    if ( !IsValidSpectatorFollowTarget(bact) )
+        return;
+
+    _spectatorFollowTarget = bact;
+    _viewerBact = bact;
+    _spectatorFollowDistance = 900.0;
+    _spectatorFollowPitch = 0.25;
+    _spectatorFollowYaw = atan2(-bact->_rotation.m20, bact->_rotation.m22);
+
+    if ( _userUnit && IsSpectatorBact(_userUnit) )
+        _userUnit->setBACT_inputting(false);
+
+    _mouseGrabbed = false;
+}
+
+void NC_STACK_ypaworld::ClearSpectatorFollowTarget()
+{
+    _spectatorFollowTarget = NULL;
+}
+
+void NC_STACK_ypaworld::ReturnToSpectatorVehicle()
+{
+    ClearSpectatorFollowTarget();
+
+    if ( _userUnit && IsSpectatorBact(_userUnit) )
+    {
+        _viewerBact = _userUnit;
+        _userUnit->setBACT_viewer(true);
+        _userUnit->setBACT_inputting(true);
+    }
+
+    _mouseGrabbed = false;
+}
+
+bool NC_STACK_ypaworld::UpdateSpectatorFollowCamera(TInputState *inpt)
+{
+    if ( !IsSpectatorFollowActive() )
+        return false;
+
+    if ( !IsValidSpectatorFollowTarget(_spectatorFollowTarget) )
+    {
+        ReturnToSpectatorVehicle();
+        return false;
+    }
+
+    if ( inpt )
+    {
+        const float fperiod = inpt->Period / 1000.0;
+
+        if ( _mouseGrabbed )
+        {
+            float yawInput = inpt->Sliders[10];
+            float pitchInput = inpt->Sliders[11];
+
+            if ( fabs(yawInput) < 0.01 )
+                yawInput = 0.0;
+
+            if ( fabs(pitchInput) < 0.025 )
+                pitchInput = 0.0;
+
+            _spectatorFollowYaw -= yawInput * 1.8 * fperiod;
+            _spectatorFollowPitch += pitchInput * 1.35 * fperiod;
+
+            if ( _spectatorFollowPitch < -0.75 )
+                _spectatorFollowPitch = -0.75;
+            else if ( _spectatorFollowPitch > 0.95 )
+                _spectatorFollowPitch = 0.95;
+        }
+
+        if ( inpt->ClickInf.wheel )
+        {
+            _spectatorFollowDistance -= inpt->ClickInf.wheel * 180.0;
+
+            // Spectator Follow should never zoom out far enough to expose the
+            // finite UA sky dome/skybox. Keep the camera cinematic and local.
+            if ( _spectatorFollowDistance < 220.0 )
+                _spectatorFollowDistance = 220.0;
+            else if ( _spectatorFollowDistance > 1300.0 )
+                _spectatorFollowDistance = 1300.0;
+        }
+    }
+
+    if ( _spectatorFollowDistance > 1300.0 )
+        _spectatorFollowDistance = 1300.0;
+
+    bool followTargetIsGround = _spectatorFollowTarget->_bact_type == BACT_TYPES_TANK ||
+                                _spectatorFollowTarget->_bact_type == BACT_TYPES_CAR  ||
+                                _spectatorFollowTarget->_bact_type == BACT_TYPES_GUN;
+
+    // Ground units should not be forced into an excessively high, top-down
+    // camera when the player zooms in. Keep their close camera lower and less
+    // vertical, while still preserving the terrain safety clamp below.
+    if ( followTargetIsGround && _spectatorFollowDistance < 1200.0 && _spectatorFollowPitch > 0.55 )
+        _spectatorFollowPitch = 0.55;
+
+    float cp = cos(_spectatorFollowPitch);
+    float sp = sin(_spectatorFollowPitch);
+    float sy = sin(_spectatorFollowYaw);
+    float cy = cos(_spectatorFollowYaw);
+
+    vec3d orbitForward(-sy * cp, -sp, cy * cp);
+    if ( orbitForward.length() <= 0.001 )
+        orbitForward = vec3d(0.0, 0.0, 1.0);
+    else
+        orbitForward = vec3d::Normalise(orbitForward);
+
+    float targetHeight = _spectatorFollowTarget->_height * 0.45;
+    if ( followTargetIsGround )
+    {
+        if ( targetHeight < 45.0 )
+            targetHeight = 45.0;
+        if ( targetHeight > 95.0 )
+            targetHeight = 95.0;
+    }
+    else if ( targetHeight < 80.0 )
+        targetHeight = 80.0;
+
+    vec3d focus = _spectatorFollowTarget->_position + vec3d::OY(targetHeight);
+    vec3d camPos = focus - orbitForward * _spectatorFollowDistance;
+
+    // Keep the camera out of the terrain. A single final-position clamp is
+    // not enough on steep ground: the camera ray can cross a higher sector
+    // between the followed unit and the final camera position, especially for
+    // ground units.  In UA coordinates smaller Y is higher, so "raising" the
+    // camera means subtracting from camPos.y.
+    float terrainSafeMargin = 140.0;
+    int terrainSamples = 5;
+
+    if ( followTargetIsGround )
+    {
+        if ( _spectatorFollowDistance < 900.0 )
+        {
+            terrainSafeMargin = 80.0;
+            terrainSamples = 3;
+        }
+        else if ( _spectatorFollowDistance < 1400.0 )
+        {
+            terrainSafeMargin = 105.0;
+            terrainSamples = 4;
+        }
+    }
+
+    float raiseCamera = 0.0;
+
+    for ( int i = 1; i <= terrainSamples; ++i )
+    {
+        float t = (float)i / (float)terrainSamples;
+        vec3d sample = focus + (camPos - focus) * t;
+
+        yw_130arg sectInfo;
+        sectInfo.pos_x = sample.x;
+        sectInfo.pos_z = sample.z;
+
+        if ( GetSectorInfo(&sectInfo) && sectInfo.pcell )
+        {
+            float safeY = sectInfo.pcell->height - terrainSafeMargin;
+
+            if ( sample.y > safeY )
+            {
+                float needed = (sample.y - safeY) / t;
+                if ( needed > raiseCamera )
+                    raiseCamera = needed;
+            }
+        }
+    }
+
+    if ( raiseCamera > 0.0 )
+        camPos.y -= raiseCamera;
+
+    // Rebuild the view matrix from the final camera position to the focus point
+    // with world-down locked as the camera vertical reference. This keeps the
+    // Spectator Follow camera roll-free, so horizontal mouse look no longer
+    // banks/tilts the whole horizon.
+    vec3d forward = focus - camPos;
+    if ( forward.length() <= 0.001 )
+        forward = orbitForward;
+    else
+        forward = vec3d::Normalise(forward);
+
+    vec3d right = vec3d::OY(1.0) * forward;
+    if ( right.length() <= 0.001 )
+        right = vec3d(1.0, 0.0, 0.0);
+    else
+        right = vec3d::Normalise(right);
+
+    vec3d down = forward * right;
+    if ( down.length() <= 0.001 )
+        down = vec3d::OY(1.0);
+    else
+        down = vec3d::Normalise(down);
+
+    mat3x3 rot = mat3x3::Basis(right, down, forward);
+
+    _viewerBact = _spectatorFollowTarget;
+    _viewerPosition = camPos;
+    _viewerRotation = rot;
+    _spectatorFollowView.Pos = camPos;
+    _spectatorFollowView.SclRot = rot;
+    _spectatorFollowView.Scale = vec3d(1.0, 1.0, 1.0);
+    _spectatorFollowView.Parent = NULL;
+    _spectatorFollowView.flags = 0;
+
+    GFX::Engine.matrixAspectCorrection(_spectatorFollowView.SclRot, false);
+    TF::Engine.SetViewPoint(&_spectatorFollowView);
+
+    return true;
+}
+
 struct TSpectatorRoboAI
 {
     uint8_t conBudget;
@@ -977,7 +1241,7 @@ static bool yw_LoadSpectatorOwnerProfileFile(const std::string &path, TSpectator
 
 static TSpectatorOwnerProfile yw_LoadSpectatorOwnerProfile()
 {
-    std::string profileName = System::IniConf::GameSpectatorOwnerProfile.Get<std::string>();
+    std::string profileName = System::IniConf::GameSpectatorOwner1AI.Get<std::string>();
     if ( profileName.empty() )
         profileName = "balanced";
 

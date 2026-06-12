@@ -353,6 +353,7 @@ enum TIP
     TIP_COUNTINSQUAD        = 46,
     TIP_ANALYZER            = 47,
     TIP_ONLINEHELP          = 48,
+    TIP_GUI_RETURNSPECTATOR = 49,
     
     TIP_DO_SELECT           = 64,
     TIP_DO_MOVE             = 65,

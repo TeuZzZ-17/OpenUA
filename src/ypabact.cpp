@@ -733,6 +733,7 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _base_snd_wait_pitch = 0;
     _energy = 0;
     _energy_max = 0;
+    _invulnerable = false;
     _reload_const = 0;
     _shield = 0;
     _radar = 0;
@@ -947,6 +948,7 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _yls_time = 3000;
     _aggr = 50;
     _energy_max = 10000;
+    _invulnerable = false;
     ypabact_ResetDamagedFX(this);
     _decoration_fx = World::TDecorationFXConfig();
     _decoration_fx_next_time = 0;
@@ -1580,6 +1582,9 @@ void NC_STACK_ypabact::Update(update_msg *arg)
 //    bact->pos_y_cntr = sect_info.pos_y_cntr;
 
     _pSector = sect_info.pcell;
+
+    if ( _invulnerable && _energy <= 0 )
+        _energy = _energy_max > 0 ? _energy_max : 1;
 
     if ( oldcell != sect_info.pcell ) // If cell changed
     {
@@ -4508,6 +4513,14 @@ void NC_STACK_ypabact::Die()
 
 void NC_STACK_ypabact::SetState(setState_msg *arg)
 {
+    if ( _invulnerable && arg->newStatus == BACT_STATUS_DEAD )
+    {
+        if ( _energy <= 0 )
+            _energy = _energy_max > 0 ? _energy_max : 1;
+
+        return;
+    }
+
     if ( (_bact_type == BACT_TYPES_TANK || _bact_type == BACT_TYPES_CAR) && arg->newStatus == BACT_STATUS_DEAD )
     {
         setState_msg newarg;
@@ -5255,7 +5268,7 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
             missileArg.tgType = BACT_TGT_TYPE_DRCT;
         }
 
-        if ( _bact_type != BACT_TYPES_GUN )
+        if ( _bact_type != BACT_TYPES_GUN && !_invulnerable )
             _energy -= wobj->_energy / 300;
 
         if ( missileArg.direction.x != 0.0 || missileArg.direction.y != 0.0 || missileArg.direction.z != 0.0 )
@@ -5503,12 +5516,14 @@ void NC_STACK_ypabact::EnergyInteract(update_msg *arg)
 
             if ( _owner == _pSector->owner )
                 _energy += denerg;
-            else
+            else if ( !_invulnerable )
                 _energy -= denerg;
 
             TMobilePowerInfluence mobilePower = _world->FindMobilePowerInfluenceForUnit(this);
             float mobileDelta = 2.0 * _energy_max * v14 * (mobilePower.AlliedEnergyPower - mobilePower.EnemyEnergyPower) / 7000.0;
-            _energy += mobileDelta;
+
+            if ( mobileDelta >= 0.0 || !_invulnerable )
+                _energy += mobileDelta;
 
             if ( _energy < 0 )
                 _energy = 0;
@@ -5580,6 +5595,9 @@ void NC_STACK_ypabact::ApplyImpulse(bact_arg83 *arg)
 
 void NC_STACK_ypabact::ModifyEnergy(bact_arg84 *arg)
 {
+    if ( _invulnerable && arg->energy < 0 )
+        return;
+
     if (_world && (_oflags & BACT_OFLAG_VIEWER))
     {
         if (_world->getYW_invulnerable() && arg->energy > -1000000)
@@ -5864,7 +5882,8 @@ size_t NC_STACK_ypabact::CrashOrLand(bact_arg86 *arg)
 
                         if ( arg->field_one & 1 )
                         {
-                            _energy -= fabs(_fly_dir_length) * 10.0;
+                            if ( !_invulnerable )
+                                _energy -= fabs(_fly_dir_length) * 10.0;
 
                             if ( _energy <= 0 || (GetVP() == _vp_dead && _status == BACT_STATUS_DEAD) )
                             {
@@ -5913,7 +5932,9 @@ size_t NC_STACK_ypabact::CrashOrLand(bact_arg86 *arg)
 
                                 if ( _reb_count > 50 )
                                 {
-                                    _energy = -10000;
+                                    if ( !_invulnerable )
+                                        _energy = -10000;
+
                                     _status_flg |= BACT_STFLAG_LAND;
                                 }
                             }
@@ -5953,7 +5974,8 @@ size_t NC_STACK_ypabact::CrashOrLand(bact_arg86 *arg)
 
                         if ( arg->field_one & 1 )
                         {
-                            _energy -= fabs(_fly_dir_length) * 10.0;
+                            if ( !_invulnerable )
+                                _energy -= fabs(_fly_dir_length) * 10.0;
 
                             if ( _energy <= 0 || (GetVP() == _vp_dead && _status == BACT_STATUS_DEAD) )
                             {
@@ -7375,7 +7397,7 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
         if ( a4 )
             v107 = 1;
     }
-    else
+    else if ( !_invulnerable )
     {
         _energy -= _gun_power * arg->field_C / 300.0;
     }

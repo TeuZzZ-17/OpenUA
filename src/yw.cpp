@@ -419,6 +419,9 @@ size_t NC_STACK_ypaworld::Deinit()
 
 void sub_445230(NC_STACK_ypaworld *yw)
 {
+    if ( yw->UpdateSpectatorFollowCamera(NULL) )
+        return;
+
     if ( yw->_viewerBact->getBACT_extraViewer() )
     {
         NC_STACK_ypabact *v4 = yw->_viewerBact;
@@ -560,6 +563,8 @@ size_t NC_STACK_ypaworld::Process(base_64arg *arg)
                 /*_win3d->setRSTR_BGpen(0);
                 _win3d->raster_func192(NULL);*/
             }
+
+            UpdateSpectatorFollowCamera(arg->field_8);
 
             ypaworld_func64__sub15(this);
             ypaworld_func64__sub16(this);
@@ -1455,6 +1460,7 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
     {
         bacto->_energy = vhcl.energy;
         bacto->_energy_max = vhcl.energy;
+        bacto->_invulnerable = vhcl.invulnerable;
         bacto->_shield = vhcl.shield;
         bacto->_mass = vhcl.mass;
         bacto->_base_force = vhcl.force;
@@ -5758,6 +5764,9 @@ void NC_STACK_ypaworld::ypaworld_func159(yw_arg159 *arg)
 {
     if ( arg->MsgID )
         VoiceMessagePlayMsg(arg->unit, arg->Priority, arg->MsgID);
+
+    if ( IsSpectatorControlled() && (arg->MsgID || arg->unit) )
+        return;
 
     if ( arg->unit )
         info_log.field_255C = arg->unit->_gid;
