@@ -738,8 +738,8 @@ public:
     int32_t _damaged_fx_next_time;
     World::TDecorationFXConfig _decoration_fx;
     int32_t _decoration_fx_next_time = 0;
-    float _damaged_force_mult;
-    float _damaged_maxrot_mult;
+    float _damaged_force_malus;
+    float _damaged_maxrot_malus;
     float _damaged_snd_pitch_mult;
     bool _damaged_fx_active;
     TActiveDebuffState _active_debuff;

@@ -1387,7 +1387,10 @@ size_t yw_handleNormMsg(NC_STACK_ypaworld *yw, windp_recvMsg *msg, std::string *
 
         int wpnType = weapo->GetMissileType();
 
-        if ( wpnType == 3 )
+        World::TWeapProto &netWproto = yw->GetWeaponsProtos().at(nwMsg->type);
+        bool homingBomb = netWproto.IsHomingBomb();
+
+        if ( wpnType == 3 || homingBomb )
         {
             setTarget_msg stargt;
             stargt.tgt_pos = nwMsg->targetPos;

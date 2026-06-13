@@ -337,8 +337,8 @@ static void ypabact_ApplyDamagedRuntime(NC_STACK_ypabact *bact, bool active)
 {
     bact->_damaged_fx_active = active;
 
-    float forceMult = active ? ypabact_SafeDamageMult(bact->_damaged_force_mult) : 1.0;
-    float maxrotMult = active ? ypabact_SafeDamageMult(bact->_damaged_maxrot_mult) : 1.0;
+    float forceMult = active ? ypabact_DebuffMalusToMult(bact->_damaged_force_malus) : 1.0;
+    float maxrotMult = active ? ypabact_DebuffMalusToMult(bact->_damaged_maxrot_malus) : 1.0;
 
     if ( bact->_active_debuff.active )
     {
@@ -356,7 +356,18 @@ static int ypabact_ScaledPitch(TSoundSource &snd, int basePitch, float mult)
         return basePitch;
 
     if ( snd.PSample && snd.PSample->SampleRate > 0 )
-        return (int)((snd.PSample->SampleRate + basePitch) * mult) - snd.PSample->SampleRate;
+    {
+        float rate = (float)(snd.PSample->SampleRate + basePitch) * mult;
+
+        // Very low or invalid playback rates can make some looping vehicle sounds
+        // effectively disappear, especially heli/hover idle loops. Keep the
+        // effective rate valid while still allowing obvious pitch reduction.
+        float minRate = (float)snd.PSample->SampleRate * 0.10f;
+        if ( !isnormal(rate) || rate < minRate )
+            rate = minRate;
+
+        return (int)rate - snd.PSample->SampleRate;
+    }
 
     return (int)(basePitch * mult);
 }
@@ -380,7 +391,11 @@ static void ypabact_ApplyDamagedSoundPitch(NC_STACK_ypabact *bact)
     if ( pitchMult != 1.0 )
     {
         normal.Pitch = ypabact_ScaledPitch(normal, normal.Pitch, pitchMult);
-        wait.Pitch = ypabact_ScaledPitch(wait, wait.Pitch, pitchMult);
+
+        // SND_WAIT can be the active loop for heli hover/idle. Unlike SND_NORMAL,
+        // it is not always rebuilt by Move(), so scale it from the prototype base
+        // pitch instead of repeatedly scaling the previous frame's pitch.
+        wait.Pitch = ypabact_ScaledPitch(wait, bact->_base_snd_wait_pitch, pitchMult);
     }
 }
 
@@ -1013,8 +1028,8 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     ypabact_ResetDamagedFX(this);
     _decoration_fx = World::TDecorationFXConfig();
     _decoration_fx_next_time = 0;
-    _damaged_force_mult = 1.0;
-    _damaged_maxrot_mult = 1.0;
+    _damaged_force_malus = 0.0;
+    _damaged_maxrot_malus = 0.0;
     _damaged_snd_pitch_mult = 1.0;
     _damaged_fx_active = false;
     _active_debuff.Clear();
@@ -1208,8 +1223,8 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _visual_scale_vec = vec3d(1.0, 1.0, 1.0);
     _decoration_fx = World::TDecorationFXConfig();
     _decoration_fx_next_time = 0;
-    _damaged_force_mult = 1.0;
-    _damaged_maxrot_mult = 1.0;
+    _damaged_force_malus = 0.0;
+    _damaged_maxrot_malus = 0.0;
     _damaged_snd_pitch_mult = 1.0;
     _damaged_fx_active = false;
     _active_debuff.Clear();
@@ -3864,7 +3879,20 @@ void NC_STACK_ypabact::Move(move_msg *arg)
     float v30 = fabs(_fly_dir_length) * v50;
     float v31 = _force * _force - _mass * 100.0 * _mass;
 
-    float v43 = v30 / (sqrt(v31) / _airconst_static);
+    float v43 = 0.0;
+    if ( v31 > 0.0 && isnormal(v31) && _airconst_static != 0.0 )
+    {
+        float denom = sqrt(v31) / _airconst_static;
+        if ( denom > 0.0 && isnormal(denom) )
+            v43 = v30 / denom;
+    }
+
+    // Heli vehicles use the base BACT movement/audio path. If a debuff lowers
+    // force far enough, the old sqrt(_force^2 - mass*100*mass) expression can
+    // become NaN and poison Pitch, which makes the heli loop go silent. Treat
+    // invalid speed-pitch contribution as no extra movement pitch.
+    if ( !isnormal(v43) || v43 < 0.0 )
+        v43 = 0.0;
 
     if ( v43 > v50 )
         v43 = v50;
@@ -5077,15 +5105,23 @@ struct TMissileMultiTargetCandidate
     float score = 0.0;
 };
 
-constexpr int YPA_WEAPON_FLAG_PROJECTILE = 1;
-constexpr int YPA_WEAPON_FLAG_DIRECT = 2;
-constexpr int YPA_WEAPON_FLAG_TARGETED = 4;
-constexpr int YPA_WEAPON_FLAGS_MISSILE = YPA_WEAPON_FLAG_PROJECTILE | YPA_WEAPON_FLAG_DIRECT | YPA_WEAPON_FLAG_TARGETED;
+constexpr int YPA_WEAPON_FLAG_PROJECTILE = World::TWeapProto::WEAPON_FLAG_PROJECTILE;
+constexpr int YPA_WEAPON_FLAGS_MISSILE = World::TWeapProto::WEAPON_FLAGS_MISSILE;
 constexpr float YPA_MISSILE_MULTI_TARGET_RANGE = 2000.0;
 
 static bool ypabact_IsMissileMultiTargetWeapon(const World::TWeapProto &wproto)
 {
     return wproto.missile_multi_target > 0 && wproto._weaponFlags == YPA_WEAPON_FLAGS_MISSILE;
+}
+
+static bool ypabact_IsHomingBombWeapon(const World::TWeapProto &wproto)
+{
+    return wproto.IsHomingBomb();
+}
+
+static bool ypabact_IsBombMultiTargetWeapon(const World::TWeapProto &wproto)
+{
+    return ypabact_IsHomingBombWeapon(wproto) && wproto.bomb_multi_target > 0;
 }
 
 static int ypabact_GetMissileMultiTargetLimit(const World::TWeapProto &wproto, int weaponCount)
@@ -5094,6 +5130,18 @@ static int ypabact_GetMissileMultiTargetLimit(const World::TWeapProto &wproto, i
         return 0;
 
     int maxTargets = wproto.missile_multi_target;
+    if ( maxTargets > weaponCount )
+        maxTargets = weaponCount;
+
+    return maxTargets;
+}
+
+static int ypabact_GetBombMultiTargetLimit(const World::TWeapProto &wproto, int weaponCount)
+{
+    if ( !ypabact_IsBombMultiTargetWeapon(wproto) || weaponCount <= 1 )
+        return 0;
+
+    int maxTargets = wproto.bomb_multi_target;
     if ( maxTargets > weaponCount )
         maxTargets = weaponCount;
 
@@ -5209,7 +5257,27 @@ static void ypabact_CollectMissileMultiTargetsFromCell(std::vector<TMissileMulti
     }
 }
 
-static std::vector<NC_STACK_ypabact *> ypabact_CollectMissileMultiTargets(NC_STACK_ypabact *launcher, const bact_arg79 *arg, const World::TWeapProto &wproto, int maxTargets)
+static void ypabact_CollectHomingBombTargetsFromCell(std::vector<TMissileMultiTargetCandidate> &candidates, NC_STACK_ypabact *launcher, cellArea *cell, const vec3d &referencePos, float weaponRadius)
+{
+    if ( !cell )
+        return;
+
+    for( NC_STACK_ypabact* &unit : cell->unitsList )
+    {
+        if ( !ypabact_IsValidMissileMultiTarget(launcher, unit) )
+            continue;
+
+        vec3d targetDelta = unit->_position - referencePos;
+        float horizontalDistance = targetDelta.XZ().length();
+        if ( horizontalDistance >= YPA_MISSILE_MULTI_TARGET_RANGE )
+            continue;
+
+        float score = horizontalDistance + fabs(targetDelta.y) * 0.05 + weaponRadius * 0.001;
+        ypabact_AddMissileMultiTargetCandidate(candidates, unit, score);
+    }
+}
+
+static std::vector<NC_STACK_ypabact *> ypabact_CollectMissileMultiTargets(NC_STACK_ypabact *launcher, const bact_arg79 *arg, const World::TWeapProto &wproto, int maxTargets, bool useTargetAimDir = false)
 {
     std::vector<TMissileMultiTargetCandidate> candidates;
     std::vector<NC_STACK_ypabact *> targets;
@@ -5218,6 +5286,14 @@ static std::vector<NC_STACK_ypabact *> ypabact_CollectMissileMultiTargets(NC_STA
         return targets;
 
     vec3d aimDir = arg->direction;
+    if ( useTargetAimDir )
+    {
+        if ( arg->tgType == BACT_TGT_TYPE_UNIT && arg->target.pbact )
+            aimDir = arg->target.pbact->_position - launcher->_old_pos;
+        else if ( arg->tgType == BACT_TGT_TYPE_CELL )
+            aimDir = arg->tgt_pos - launcher->_old_pos;
+    }
+
     float aimLen = aimDir.length();
     if ( aimLen <= 0.001 )
     {
@@ -5244,6 +5320,48 @@ static std::vector<NC_STACK_ypabact *> ypabact_CollectMissileMultiTargets(NC_STA
                 continue;
 
             ypabact_CollectMissileMultiTargetsFromCell(candidates, launcher, &launcher->getBACT_pWorld()->SectorAt(cellId), aimDir, wproto.radius);
+        }
+    }
+
+    std::sort(candidates.begin(), candidates.end(), [](const TMissileMultiTargetCandidate &a, const TMissileMultiTargetCandidate &b) {
+        return a.score < b.score;
+    });
+
+    if ( maxTargets <= 0 || maxTargets > (int)candidates.size() )
+        maxTargets = candidates.size();
+
+    for (int i = 0; i < maxTargets; i++)
+        targets.push_back(candidates[i].target);
+
+    return targets;
+}
+
+static std::vector<NC_STACK_ypabact *> ypabact_CollectHomingBombTargets(NC_STACK_ypabact *launcher, const bact_arg79 *arg, const World::TWeapProto &wproto, int maxTargets)
+{
+    std::vector<TMissileMultiTargetCandidate> candidates;
+    std::vector<NC_STACK_ypabact *> targets;
+
+    if ( !launcher || !arg || !launcher->getBACT_pWorld() || maxTargets <= 0 )
+        return targets;
+
+    if ( arg->tgType == BACT_TGT_TYPE_UNIT && ypabact_IsValidMissileMultiTarget(launcher, arg->target.pbact) )
+        ypabact_AddMissileMultiTargetCandidate(candidates, arg->target.pbact, -1.0);
+
+    vec3d referencePos = launcher->_position;
+    if ( arg->tgType == BACT_TGT_TYPE_CELL )
+        referencePos = arg->tgt_pos;
+
+    int sectorRadius = (int)(YPA_MISSILE_MULTI_TARGET_RANGE / World::CVSectorLength) + 2;
+    for (int y = -sectorRadius; y <= sectorRadius; y++)
+    {
+        for (int x = -sectorRadius; x <= sectorRadius; x++)
+        {
+            Common::Point cellId(launcher->_cellId.x + x, launcher->_cellId.y + y);
+
+            if ( !launcher->getBACT_pWorld()->IsGamePlaySector(cellId) )
+                continue;
+
+            ypabact_CollectHomingBombTargetsFromCell(candidates, launcher, &launcher->getBACT_pWorld()->SectorAt(cellId), referencePos, wproto.radius);
         }
     }
 
@@ -5916,21 +6034,34 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
     else
         v13 = _num_weapons;
 
-    std::vector<NC_STACK_ypabact *> missileTargets;
+    std::vector<NC_STACK_ypabact *> weaponTargets;
     int maxTargets = ypabact_GetMissileMultiTargetLimit(wproto, v13);
     bool missileMultiTarget = maxTargets > 1;
+    bool homingBomb = ypabact_IsHomingBombWeapon(wproto);
     if ( missileMultiTarget )
     {
-        missileTargets = ypabact_CollectMissileMultiTargets(this, arg, wproto, maxTargets);
+        weaponTargets = ypabact_CollectMissileMultiTargets(this, arg, wproto, maxTargets);
     }
 
-    ypabact_StoreHUDMissileMultiLockTargets(this, missileTargets);
+    bool bombMultiTarget = false;
+    if ( !missileMultiTarget )
+    {
+        maxTargets = ypabact_GetBombMultiTargetLimit(wproto, v13);
+        bombMultiTarget = maxTargets > 1;
+        if ( bombMultiTarget )
+            weaponTargets = ypabact_CollectHomingBombTargets(this, arg, wproto, maxTargets);
+        else if ( homingBomb )
+            weaponTargets = ypabact_CollectHomingBombTargets(this, arg, wproto, 1);
+    }
+
+    ypabact_StoreHUDMissileMultiLockTargets(this, missileMultiTarget ? weaponTargets : std::vector<NC_STACK_ypabact *>());
 
     for (int i = 0; i < v13; i++)
     {
         float v37;
         bact_arg79 missileArg = *arg;
-        NC_STACK_ypabact *multiTarget = missileMultiTarget ? ypabact_GetDistributedMissileTarget(missileTargets, i) : NULL;
+        bool distributeTargets = missileMultiTarget || bombMultiTarget || homingBomb;
+        NC_STACK_ypabact *multiTarget = distributeTargets ? ypabact_GetDistributedMissileTarget(weaponTargets, i) : NULL;
 
         if ( v13 == 1 )
             v37 = arg->start_point.x;
@@ -6030,8 +6161,7 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
         _missiles_list.push_back(wobj);
 
         int v42 = wobj->GetMissileType();
-
-        if ( v42 == 3 )
+        if ( v42 == NC_STACK_ypamissile::MISL_TARGETED || homingBomb )
         {
             setTarget_msg arg67;
 
@@ -7813,8 +7943,8 @@ size_t NC_STACK_ypabact::CheckFireAI(bact_arg101 *arg)
         v8 = &_world->GetWeaponsProtos().at( _weapon );
 
 
-        if ( v8->_weaponFlags & 1 )
-            v36 = v8->_weaponFlags & 0xFE;
+        if ( v8->_weaponFlags & World::TWeapProto::WEAPON_FLAG_PROJECTILE )
+            v36 = v8->GetFireControlFlags();
         else
             v8 = NULL;
     }
@@ -8526,9 +8656,11 @@ size_t NC_STACK_ypabact::UserTargeting(bact_arg106 *arg)
     else
         v55 = _world->GetWeaponsProtos().at(_weapon).radius;
 
+    bool homingBomb = _weapon != -1 && _world->GetWeaponsProtos().at(_weapon).IsHomingBomb();
     int a3a = !(_weapon_flags & 2) && !(_weapon_flags & 0x10);
+    bool searchWeaponTarget = !a3a || homingBomb;
 
-    if ( _weapon != -1 && !a3a )
+    if ( _weapon != -1 && searchWeaponTarget )
     {
         yw_130arg arg130;
         arg130.pos_x = _position.x;

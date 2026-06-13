@@ -318,8 +318,8 @@ struct TVhclProto
     std::string seek_and_explode_icon;
     int power = 0;
     float power_radius = 0.0;
-    float damaged_force_mult = 1.0;
-    float damaged_maxrot_mult = 1.0;
+    float damaged_force_malus = 0.0;
+    float damaged_maxrot_malus = 0.0;
     float damaged_snd_pitch_mult = 1.0;
     int spawn_units = 0;
     int16_t spawn_vehicle = 0;
@@ -426,9 +426,42 @@ struct TWeapProto
         SND_MAX    = 3
     };
 
+    enum
+    {
+        WEAPON_FLAG_PROJECTILE = 1,
+        WEAPON_FLAG_DIRECT = 2,
+        WEAPON_FLAG_TARGETED = 4,
+        WEAPON_FLAG_OBSAVOID = 8,
+        WEAPON_FLAG_GRENADE = 16,
+        WEAPON_FLAG_HOMING_BOMB = 32,
+
+        WEAPON_FLAGS_BOMB = WEAPON_FLAG_PROJECTILE,
+        WEAPON_FLAGS_ROCKET = WEAPON_FLAG_PROJECTILE | WEAPON_FLAG_DIRECT,
+        WEAPON_FLAGS_MISSILE = WEAPON_FLAG_PROJECTILE | WEAPON_FLAG_DIRECT | WEAPON_FLAG_TARGETED,
+        WEAPON_FLAGS_OBSAVOID = WEAPON_FLAG_PROJECTILE | WEAPON_FLAG_DIRECT | WEAPON_FLAG_OBSAVOID,
+        WEAPON_FLAGS_GRENADE = WEAPON_FLAG_PROJECTILE | WEAPON_FLAG_GRENADE,
+        WEAPON_FLAGS_HOMING_BOMB = WEAPON_FLAG_PROJECTILE | WEAPON_FLAG_HOMING_BOMB
+    };
+
     int8_t unitID = 0;
     uint8_t enable_mask = 0;
     int16_t _weaponFlags = 0;
+
+    bool IsHomingBomb() const
+    {
+        return _weaponFlags == WEAPON_FLAGS_HOMING_BOMB;
+    }
+
+    bool IsBombLike() const
+    {
+        return _weaponFlags == WEAPON_FLAGS_BOMB || IsHomingBomb();
+    }
+
+    int GetFireControlFlags() const
+    {
+        return IsBombLike() ? 0 : (_weaponFlags & ~WEAPON_FLAG_PROJECTILE);
+    }
+
     uint8_t type_icon = 0;
     std::string name;
     int16_t vp_normal = 0;
@@ -468,6 +501,7 @@ struct TWeapProto
     int salve_shots = 0;
     int salve_delay = 0;
     int missile_multi_target = 0;
+    int bomb_multi_target = 0;
     float energy_heli = 0.0;
     float energy_tank = 0.0;
     float energy_flyer = 0.0;

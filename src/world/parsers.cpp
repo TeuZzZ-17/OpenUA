@@ -1202,15 +1202,23 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     {
         _vhcl->damaged_fx.shake.mute = parser.stof(p2, 0);
     }
-    else if ( !StriCmp(p1, "damaged_force_mult") )
+    else if ( !StriCmp(p1, "damaged_force_malus") )
     {
-        float mult = parser.stof(p2, 0);
-        _vhcl->damaged_force_mult = mult >= 0.0 ? mult : 1.0;
+        float malus = parser.stof(p2, 0);
+        if ( malus < 0.0 )
+            malus = 0.0;
+        else if ( malus > 1.0 )
+            malus = 1.0;
+        _vhcl->damaged_force_malus = malus;
     }
-    else if ( !StriCmp(p1, "damaged_maxrot_mult") )
+    else if ( !StriCmp(p1, "damaged_maxrot_malus") )
     {
-        float mult = parser.stof(p2, 0);
-        _vhcl->damaged_maxrot_mult = mult >= 0.0 ? mult : 1.0;
+        float malus = parser.stof(p2, 0);
+        if ( malus < 0.0 )
+            malus = 0.0;
+        else if ( malus > 1.0 )
+            malus = 1.0;
+        _vhcl->damaged_maxrot_malus = malus;
     }
     else if ( !StriCmp(p1, "damaged_snd_pitch_mult") )
     {
@@ -2001,8 +2009,8 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->seek_and_explode_icon.clear();
         _vhcl->power = 0;
         _vhcl->power_radius = 0.0;
-        _vhcl->damaged_force_mult = 1.0;
-        _vhcl->damaged_maxrot_mult = 1.0;
+        _vhcl->damaged_force_malus = 0.0;
+        _vhcl->damaged_maxrot_malus = 0.0;
         _vhcl->damaged_snd_pitch_mult = 1.0;
         _vhcl->spawn_units = 0;
         _vhcl->spawn_vehicle = 0;
@@ -2152,6 +2160,7 @@ bool WeaponProtoParser::IsScope(ScriptParser::Parser &parser, const std::string 
         _wpn->salve_delay = 0;
         _wpn->salve_shots = 0;
         _wpn->missile_multi_target = 0;
+        _wpn->bomb_multi_target = 0;
         _wpn->vp_normal = 0;
         _wpn->vp_fire = 1;
         _wpn->vp_megadeth = 2;
@@ -2216,13 +2225,15 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     if ( !StriCmp(p1, "model") )
     {
         if ( !StriCmp(p2, "grenade") )
-            _wpn->_weaponFlags = 17;
+            _wpn->_weaponFlags = TWeapProto::WEAPON_FLAGS_GRENADE;
         else if ( !StriCmp(p2, "rocket") )
-            _wpn->_weaponFlags = 3;
+            _wpn->_weaponFlags = TWeapProto::WEAPON_FLAGS_ROCKET;
         else if ( !StriCmp(p2, "missile") )
-            _wpn->_weaponFlags = 7;
+            _wpn->_weaponFlags = TWeapProto::WEAPON_FLAGS_MISSILE;
+        else if ( !StriCmp(p2, "homing_bomb") )
+            _wpn->_weaponFlags = TWeapProto::WEAPON_FLAGS_HOMING_BOMB;
         else if ( !StriCmp(p2, "bomb") || !StriCmp(p2, "special") )
-            _wpn->_weaponFlags = 1;
+            _wpn->_weaponFlags = TWeapProto::WEAPON_FLAGS_BOMB;
         else
             return ScriptParser::RESULT_BAD_DATA;
     }
@@ -2540,6 +2551,11 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     {
         int maxTargets = parser.stol(p2, NULL, 0);
         _wpn->missile_multi_target = maxTargets > 0 ? maxTargets : 0;
+    }
+    else if ( !StriCmp(p1, "bomb_multi_target") )
+    {
+        int maxTargets = parser.stol(p2, NULL, 0);
+        _wpn->bomb_multi_target = maxTargets > 0 ? maxTargets : 0;
     }
     else if ( !StriCmp(p1, "add_energy") )
     {

@@ -140,6 +140,7 @@ protected:
     NC_STACK_ypabact *FindAttachedTarget();
     void UpdateAttachedDetonationPosition();
     void ApplyAttachedDirectHitDamage();
+    void SteerHomingBombDirection(float dtime);
     bool TryClusterSplit();
 
     struct TBuildingHitRef

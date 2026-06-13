@@ -1699,8 +1699,8 @@ size_t NC_STACK_ypatank::CheckFireAI(bact_arg101 *arg)
     {
         v22 = &_world->GetWeaponsProtos().at( _weapon );
 
-        if ( v22->_weaponFlags & 1 )
-            v43 = v22->_weaponFlags & 0xFE;
+        if ( v22->_weaponFlags & World::TWeapProto::WEAPON_FLAG_PROJECTILE )
+            v43 = v22->GetFireControlFlags();
         else
             v22 = NULL;
     }
