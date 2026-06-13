@@ -444,6 +444,8 @@ public:
     bool ApplySeekAndExplodeRammingGuidance(bool clearAvoidanceFlags);
     void UpdateDamageFX(update_msg *arg);
     void UpdateDecorationFX(update_msg *arg);
+    void AddAoePush(const vec3d &dir, float distance); // queue aoe_unit_push knockback
+    void UpdateAoePush(update_msg *arg);               // integrate/decay it per frame
     void ApplyWeaponDebuff(World::TWeaponDebuffConfig &debuff, NC_STACK_ypabact *source);
     void UpdateActiveDebuff(update_msg *arg);
     void ClearActiveDebuff();
@@ -716,6 +718,11 @@ public:
     float _thraction;
     vec3d _fly_dir;
     float _fly_dir_length;
+
+    // OpenUA aoe_unit_push: residual knockback velocity, integrated and decayed
+    // every frame by UpdateAoePush() so the shockwave shoves every unit class
+    // smoothly and uniformly (not an instant teleport).
+    vec3d _aoePushVel = vec3d(0.0, 0.0, 0.0);
 
     vec3d _position; //Current pos
     vec3d _old_pos; //Prev pos

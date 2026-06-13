@@ -797,6 +797,57 @@ const char *NC_STACK_ypamissile::GetAreaDamageSkipReason(NC_STACK_ypabact *bct, 
     return NULL;
 }
 
+// Push eligibility filter for aoe_unit_push.
+// More permissive than GetAreaDamageSkipReason on purpose:
+// units that just got killed by this same explosion (direct hit or strong AoE)
+// MUST still be thrown, so we do NOT skip BACT_STATUS_DEAD / BACT_STFLAG_DEATH1 here.
+// Only the final death-FX wreck (DEATH2) is left undisturbed, matching legacy Impact().
+const char *NC_STACK_ypamissile::GetAreaPushSkipReason(NC_STACK_ypabact *bct, bool allowFriendly) const
+{
+    if ( !bct || bct == this || bct == _mislEmitter )
+        return "self";
+
+    if ( bct->_bact_type == BACT_TYPES_MISSLE )
+        return "missile";
+
+    // Robo / Host Station are always immune to push.
+    if ( bct->_bact_type == BACT_TYPES_ROBO )
+        return "robo";
+
+    // Final death-FX wreck: do not disturb (same guard as legacy Impact()).
+    if ( bct->_status_flg & BACT_STFLAG_DEATH2 )
+        return "death2";
+
+    if ( bct->_bact_type == BACT_TYPES_GUN && bct->GetEffectiveShield() >= 100.0f )
+    {
+        NC_STACK_ypagun *gun = dynamic_cast<NC_STACK_ypagun *>( bct );
+
+        if ( gun && gun->IsRoboGun() )
+            return "shielded_robo_gun";
+    }
+
+    if ( _mislEmitter && !allowFriendly && bct->_owner == _mislEmitter->_owner )
+        return "friendly";
+
+    if ( _mislEmitter && _mislEmitter->_bact_type == BACT_TYPES_GUN )
+    {
+        NC_STACK_ypagun *gun = dynamic_cast<NC_STACK_ypagun *>( _mislEmitter );
+
+        if ( gun && bct->_owner == _owner && gun->IsRoboGun() && !_mislEmitter->_isUnitGunChild )
+        {
+            if ( bct->_bact_type == BACT_TYPES_GUN )
+            {
+                NC_STACK_ypagun *bgun = dynamic_cast<NC_STACK_ypagun *>( bct );
+
+                if ( bgun && bgun->IsRoboGun() && !bct->_isUnitGunChild )
+                    return "own_robo_gun";
+            }
+        }
+    }
+
+    return NULL;
+}
+
 bool NC_STACK_ypamissile::IsDirectHitUnit(NC_STACK_ypabact *bct) const
 {
     return std::find(_mislDirectHitUnits.begin(), _mislDirectHitUnits.end(), bct) != _mislDirectHitUnits.end();
@@ -979,7 +1030,10 @@ void NC_STACK_ypamissile::RememberDirectHitSectorAt(const vec3d &pos)
 
 void NC_STACK_ypamissile::ApplyAreaDamage()
 {
-    if ( _mislAoeUnitRadius <= 0.0 || _mislAoeUnitEnergy <= 0 || !_world )
+    bool doAoeDamage = (_mislAoeUnitEnergy > 0);
+    bool doAoePush   = (_mislAoeUnitPush > 0);
+
+    if ( _mislAoeUnitRadius <= 0.0 || (!doAoeDamage && !doAoePush) || !_world )
         return;
 
     bool allowFriendly = getBACT_viewer();
@@ -1008,15 +1062,20 @@ void NC_STACK_ypamissile::ApplyAreaDamage()
 
             for ( NC_STACK_ypabact *bct : cell.unitsList.safe_iter() )
             {
-                if ( GetAreaDamageSkipReason(bct, allowFriendly) )
+                // Damage and push use SEPARATE eligibility filters.
+                // Damage keeps the strict filter (no re-hitting dead/dying units).
+                // Push uses a permissive filter so units killed by THIS explosion
+                // (direct hit or strong AoE) are still thrown (Bug #2/#3/#4 fix).
+                const char *dmgSkip  = GetAreaDamageSkipReason(bct, allowFriendly);
+                const char *pushSkip = doAoePush ? GetAreaPushSkipReason(bct, allowFriendly) : "push_disabled";
+
+                if ( dmgSkip && pushSkip )
                     continue;
 
-                float distance = (bct->_position - _position).length();
+                vec3d delta = bct->_position - _position;
+                float distance = delta.length();
 
                 if ( distance > _mislAoeUnitRadius )
-                    continue;
-
-                if ( IsDirectHitUnit(bct) )
                     continue;
 
                 if ( std::find(damagedUnits.begin(), damagedUnits.end(), bct) != damagedUnits.end() )
@@ -1024,9 +1083,45 @@ void NC_STACK_ypamissile::ApplyAreaDamage()
 
                 damagedUnits.push_back(bct);
 
-                int areaEnergy = ypamissile_ScaleAoeEnergy(_mislAoeUnitEnergy, ypamissile_AoeFalloffFactor(distance, _mislAoeUnitRadius, _mislAoeFalloff != 0));
-                if ( areaEnergy > 0 )
-                    ApplyDamageToBact(bct, areaEnergy);
+                // Uniform knockback for every unit class.
+                // We hand the unit a residual knockback (AddAoePush) that its own
+                // per-frame UpdateAoePush() then plays out smoothly over time. This
+                // avoids both the instant "teleport" of a direct position move and the
+                // class-dependent chaos of touching _fly_dir (some classes never
+                // integrate velocity while idle). Result: tanks, flyers and UFOs all
+                // get the SAME smooth push, independent of mass and ground/air state.
+                if ( doAoePush && !pushSkip )
+                {
+                    // Radial 3D direction away from the blast, with a safe fallback
+                    // when the unit sits exactly at the blast center.
+                    vec3d pushDir;
+                    if ( distance > 1.0f )
+                        pushDir = delta / distance;
+                    else
+                        pushDir = vec3d(1.0f, 0.0f, 0.0f);
+
+                    // Knockback distance (in world units) = aoe_unit_push, optionally
+                    // reduced by linear falloff when aoe_falloff = 1.
+                    float pushStrength = (float)_mislAoeUnitPush;
+                    if ( _mislAoeFalloff )
+                    {
+                        float t = 1.0f - distance / _mislAoeUnitRadius;
+                        if ( t < 0.0f ) t = 0.0f;
+                        pushStrength *= t;
+                    }
+
+                    if ( pushStrength > 0.0f )
+                        bct->AddAoePush(pushDir, pushStrength);
+                }
+
+                // AoE damage skips direct-hit units (they already received direct damage)
+                // and anything the strict filter rejected (dead/dying/friendly/...).
+                if ( doAoeDamage && !dmgSkip && !IsDirectHitUnit(bct) )
+                {
+                    int areaEnergy = ypamissile_ScaleAoeEnergy(_mislAoeUnitEnergy, ypamissile_AoeFalloffFactor(distance, _mislAoeUnitRadius, _mislAoeFalloff != 0));
+                    if ( areaEnergy > 0 )
+                        ApplyDamageToBact(bct, areaEnergy);
+                }
             }
         }
     }
@@ -1948,6 +2043,11 @@ void NC_STACK_ypamissile::SetAreaDamage(float unitRadius, int unitEnergy, float 
     _mislAoeSectorRadius = sectorRadius;
     _mislAoeSectorEnergy = sectorEnergy;
     _mislAoeFalloff = falloff ? 1 : 0;
+}
+
+void NC_STACK_ypamissile::SetAoeUnitPush(int push)
+{
+    _mislAoeUnitPush = push;
 }
 
 void NC_STACK_ypamissile::SetRadiusHeli(float rad)

@@ -91,6 +91,7 @@ public:
     virtual void SetPowerRobo(int);
     virtual void SetAreaDamage(float unitRadius, int unitEnergy, float buildingRadius, int buildingEnergy,
                                float sectorRadius, int sectorEnergy, int falloff);
+    virtual void SetAoeUnitPush(int push);
     virtual void SetRadiusHeli(float);
     virtual void SetRadiusTank(float);
     virtual void SetRadiusFlyer(float);
@@ -122,6 +123,7 @@ protected:
     int ApplyDamageToBact(NC_STACK_ypabact *bct, int baseEnergy);
     void ApplyDirectHitToBact(NC_STACK_ypabact *bct);
     const char *GetAreaDamageSkipReason(NC_STACK_ypabact *bct, bool allowFriendly) const;
+    const char *GetAreaPushSkipReason(NC_STACK_ypabact *bct, bool allowFriendly) const;
     bool IsDirectHitUnit(NC_STACK_ypabact *bct) const;
     void RememberDirectHitUnit(NC_STACK_ypabact *bct);
     vec3d GetBuildingSlotCenter(const cellArea &cell, int bldX, int bldY) const;
@@ -173,6 +175,7 @@ protected:
     float _mislAoeSectorRadius   = 0.0;
     int _mislAoeSectorEnergy     = 0;
     int _mislAoeFalloff          = 0;
+    int _mislAoeUnitPush         = 0;
     int _mislClusterAge          = 0;
     bool _mislClusterDone        = false;
     bool _mislClusterChild       = false;

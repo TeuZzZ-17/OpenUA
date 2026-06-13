@@ -1832,6 +1832,7 @@ NC_STACK_ypamissile * NC_STACK_ypaworld::ypaworld_func147(ypaworld_arg146 *arg)
                          wproto.aoe_building_radius, wproto.aoe_building_energy,
                          wproto.aoe_sector_radius, wproto.aoe_sector_energy,
                          wproto.aoe_falloff);
+    wobj->SetAoeUnitPush(wproto.aoe_unit_push);
 
     /* Original bug caused by mixing vararg and float values
        that does not passed as 32-bit float value and

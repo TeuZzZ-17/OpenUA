@@ -1914,6 +1914,7 @@ void NC_STACK_ypabact::Update(update_msg *arg)
     UpdateCarrierSpawn(arg);
     UpdateProximityDefense(arg);
     AI_layer1(arg);
+    UpdateAoePush(arg);
     UpdateSeekAndExplode(arg);
     UpdateUnitGuns(arg);
 
@@ -2263,6 +2264,53 @@ void NC_STACK_ypabact::UpdateDecorationFX(update_msg *)
         return;
 
     ypabact_SpawnDecorationFXEvent(this);
+}
+
+// OpenUA aoe_unit_push knockback.
+// AddAoePush() is called once by the explosion. It converts the requested push
+// distance into a residual velocity so that, integrated and decayed over the
+// next ~AOE_PUSH_TAU seconds, the unit travels about `distance` world units.
+// Using a residual velocity on the unit (rather than moving _position instantly
+// or touching the class-specific _fly_dir physics) makes the knockback both
+// smooth (spread over several frames) and uniform across every vehicle class.
+static const float AOE_PUSH_TAU = 0.30f; // knockback time constant, seconds
+
+void NC_STACK_ypabact::AddAoePush(const vec3d &dir, float distance)
+{
+    if ( distance <= 0.0f )
+        return;
+
+    _aoePushVel += dir * (distance / AOE_PUSH_TAU);
+}
+
+void NC_STACK_ypabact::UpdateAoePush(update_msg *arg)
+{
+    if ( _aoePushVel.length() < 1.0f )
+    {
+        _aoePushVel = vec3d(0.0, 0.0, 0.0);
+        return;
+    }
+
+    float dtime = arg->frameTime / 1000.0;
+
+    // Move this frame's slice, terrain-checked so we never shove a unit through
+    // the ground or a wall (same safety as the engine's ApplyImpulse).
+    vec3d step = _aoePushVel * dtime;
+
+    ypaworld_arg136 moveTest;
+    moveTest.stPos = _position;
+    moveTest.vect  = step;
+    moveTest.flags = 0;
+
+    _world->ypaworld_func136(&moveTest);
+
+    if ( moveTest.isect )
+        _aoePushVel = vec3d(0.0, 0.0, 0.0); // hit terrain: stop the knockback
+    else
+        _position += step;
+
+    // Exponential decay toward zero.
+    _aoePushVel *= expf(-dtime / AOE_PUSH_TAU);
 }
 
 void NC_STACK_ypabact::Render(baseRender_msg *arg)
