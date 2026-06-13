@@ -170,7 +170,7 @@ void NC_STACK_ypacar::DoKamikaze()
                             vec3d tmp = _position - v19->_position;
 
                             int v26 = exp(tmp.length() * -2.8 / World::CVSectorLength) * _carBlast;
-                            int v67 = ((1.0 - (float)v19->_shield * 0.01) * (float)v26);
+                            int v67 = ((1.0 - v19->GetEffectiveShield() * 0.01) * (float)v26);
 
                             if ( !v19->_invulnerable )
                             {

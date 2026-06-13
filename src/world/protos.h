@@ -173,6 +173,7 @@ struct TWeaponDebuffConfig
     int duration = 5000;
     float force_malus = 0.0;
     float maxrot_malus = 0.0;
+    float shield_malus = 0.0;
     float snd_pitch_mult = 1.0;
     std::vector<int16_t> fx_vps;
     float fx_random_pos = 0.0;

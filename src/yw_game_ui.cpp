@@ -8951,7 +8951,7 @@ void yw_RenderInfoShieldbar(NC_STACK_ypaworld *yw, sklt_wis *wis, CmdStream *cur
     int v10;
 
     if ( bact )
-        v10 = bact->_shield;
+        v10 = (int)bact->GetEffectiveShield();
     else
         v10 = vhcl->shield;
 
@@ -9673,7 +9673,7 @@ void yw_RenderUnitLifeBar(NC_STACK_ypaworld *yw, CmdStream *cur, NC_STACK_ypabac
                         if ( barHeight + shieldTop < yw->_screenSize.y )
                         {
                             yw_RenderUnitSquareBar(yw, cur, v42, lifeTop, v13, bact->_energy, bact->_energy_max, 2, 6);
-                            yw_RenderUnitSquareBar(yw, cur, v42, shieldTop, v13, bact->_shield, 100, 1, 5);
+                            yw_RenderUnitSquareBar(yw, cur, v42, shieldTop, v13, (int)bact->GetEffectiveShield(), 100, 1, 5);
 
                             if ( bact->_vehicleID >= 0 && (size_t)bact->_vehicleID < yw->_vhclProtos.size() )
                                 StatusIconRenderWorld(yw, bact, &yw->_vhclProtos[bact->_vehicleID], v42, lifeTop, v43, barHeight);

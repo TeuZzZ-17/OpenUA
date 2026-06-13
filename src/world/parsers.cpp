@@ -2301,6 +2301,11 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
         float malus = parser.stof(p2, 0);
         _wpn->debuff.maxrot_malus = std::max(0.0f, std::min(malus, 1.0f));
     }
+    else if ( !StriCmp(p1, "debuff_shield_malus") )
+    {
+        float malus = parser.stof(p2, 0);
+        _wpn->debuff.shield_malus = std::max(0.0f, std::min(malus, 1.0f));
+    }
     else if ( !StriCmp(p1, "debuff_snd_pitch_mult") )
     {
         float mult = parser.stof(p2, 0);

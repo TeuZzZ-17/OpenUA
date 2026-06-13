@@ -74,6 +74,7 @@ struct TActiveDebuffState
     int next_tick_time = 0;
     float force_malus = 0.0;
     float maxrot_malus = 0.0;
+    float shield_malus = 0.0;
     float snd_pitch_mult = 1.0;
     std::vector<int16_t> fx_vps;
     float fx_random_pos = 0.0;
@@ -94,6 +95,7 @@ struct TActiveDebuffState
         next_tick_time = 0;
         force_malus = 0.0;
         maxrot_malus = 0.0;
+        shield_malus = 0.0;
         snd_pitch_mult = 1.0;
         fx_vps.clear();
         fx_random_pos = 0.0;
@@ -447,6 +449,8 @@ public:
     void ClearActiveDebuff();
     virtual void ApplyImpulse(bact_arg83 *arg);
     virtual void ModifyEnergy(bact_arg84 *arg);
+    float GetEffectiveShield() const;
+    float GetEffectiveShieldWithAdditionalMalus(float additionalMalus) const;
     virtual bool ypabact_func85(vec3d *arg);
     virtual size_t CrashOrLand(bact_arg86 *arg);
     virtual size_t CollisionWithBact(int arg);

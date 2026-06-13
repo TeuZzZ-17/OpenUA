@@ -521,7 +521,7 @@ bool NC_STACK_ypamissile::TubeCollisionTest(bool applyDirectDamage, NC_STACK_ypa
                 if ( bct == this || bct == _mislEmitter || bct->_bact_type == BACT_TYPES_MISSLE || bct->_status == BACT_STATUS_DEAD )
                     continue;
 
-                if (bct->_bact_type == BACT_TYPES_GUN && bct->_shield >= 100)
+                if (bct->_bact_type == BACT_TYPES_GUN && bct->GetEffectiveShield() >= 100.0f)
                 {
                     NC_STACK_ypagun *gun = dynamic_cast<NC_STACK_ypagun *>( bct );
 
@@ -686,7 +686,7 @@ int NC_STACK_ypamissile::CalcDamageForBact(NC_STACK_ypabact *bct, int baseEnergy
         break;
     }
 
-    float shieldedDamage = damage * (100 - bct->_shield);
+    float shieldedDamage = damage * (100.0f - bct->GetEffectiveShield());
     float divisor = ( bct->getBACT_inputting() || bct->getBACT_viewer() ) ? 250.0 : 100.0;
 
     return ceil(shieldedDamage / divisor);
@@ -706,6 +706,14 @@ int NC_STACK_ypamissile::ApplyDamageToBact(NC_STACK_ypabact *bct, int baseEnergy
     if ( _world && _vehicleID >= 0 && (size_t)_vehicleID < _world->GetWeaponsProtos().size() )
         wproto = &_world->GetWeaponsProtos().at(_vehicleID);
 
+    bool preAppliedDebuff = false;
+    if ( wproto && wproto->debuff.allow && wproto->debuff.shield_malus > 0.0f &&
+         bct->_energy > 0 && bct->_status != BACT_STATUS_DEAD )
+    {
+        bct->ApplyWeaponDebuff(wproto->debuff, _mislEmitter);
+        preAppliedDebuff = true;
+    }
+
     int damage = CalcDamageForBact(bct, baseEnergy);
 
     if ( !damage )
@@ -717,7 +725,7 @@ int NC_STACK_ypamissile::ApplyDamageToBact(NC_STACK_ypabact *bct, int baseEnergy
 
     bct->ModifyEnergy(&arg84);
 
-    if ( wproto && wproto->debuff.allow && bct->_energy > 0 && bct->_status != BACT_STATUS_DEAD )
+    if ( wproto && wproto->debuff.allow && !preAppliedDebuff && bct->_energy > 0 && bct->_status != BACT_STATUS_DEAD )
         bct->ApplyWeaponDebuff(wproto->debuff, _mislEmitter);
 
     return damage;
@@ -753,7 +761,7 @@ const char *NC_STACK_ypamissile::GetAreaDamageSkipReason(NC_STACK_ypabact *bct, 
     if ( bct->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2) )
         return "death_fx";
 
-    if (bct->_bact_type == BACT_TYPES_GUN && bct->_shield >= 100)
+    if (bct->_bact_type == BACT_TYPES_GUN && bct->GetEffectiveShield() >= 100.0f)
     {
         NC_STACK_ypagun *gun = dynamic_cast<NC_STACK_ypagun *>( bct );
 

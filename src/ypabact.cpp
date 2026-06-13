@@ -1992,6 +1992,7 @@ void NC_STACK_ypabact::ApplyWeaponDebuff(World::TWeaponDebuffConfig &debuff, NC_
     _active_debuff.next_tick_time = _clock + _active_debuff.tick_time;
     _active_debuff.force_malus = std::max(0.0f, std::min(debuff.force_malus, 1.0f));
     _active_debuff.maxrot_malus = std::max(0.0f, std::min(debuff.maxrot_malus, 1.0f));
+    _active_debuff.shield_malus = std::max(0.0f, std::min(debuff.shield_malus, 1.0f));
     _active_debuff.snd_pitch_mult = ypabact_SafeDamageMult(debuff.snd_pitch_mult);
     _active_debuff.fx_vps = debuff.fx_vps;
     _active_debuff.fx_random_pos = debuff.fx_random_pos > 0.0 ? debuff.fx_random_pos : 0.0;
@@ -4938,7 +4939,7 @@ static bool ypabact_IsValidSeekAndExplodeTarget(NC_STACK_ypabact *unit, NC_STACK
     if ( target->_bact_type == BACT_TYPES_GUN )
     {
         NC_STACK_ypagun *gun = dynamic_cast<NC_STACK_ypagun *>(target);
-        if ( !gun || (gun->IsRoboGun() && target->_shield >= 100) )
+        if ( !gun || (gun->IsRoboGun() && target->GetEffectiveShield() >= 100.0f) )
             return false;
     }
 
@@ -5145,7 +5146,7 @@ static bool ypabact_IsValidMissileMultiTarget(NC_STACK_ypabact *launcher, NC_STA
     if ( target->_bact_type == BACT_TYPES_GUN )
     {
         NC_STACK_ypagun *gun = dynamic_cast<NC_STACK_ypagun *>(target);
-        if ( !gun || (gun->IsRoboGun() && target->_shield >= 100) )
+        if ( !gun || (gun->IsRoboGun() && target->GetEffectiveShield() >= 100.0f) )
             return false;
     }
 
@@ -6294,6 +6295,27 @@ void NC_STACK_ypabact::ApplyImpulse(bact_arg83 *arg)
         else
             _rotation = mat3x3::RotateZ(-angle) * _rotation;
     }
+}
+
+float NC_STACK_ypabact::GetEffectiveShieldWithAdditionalMalus(float additionalMalus) const
+{
+    float shield = (float)_shield;
+    float mult = 1.0f;
+
+    if ( _active_debuff.active )
+        mult *= ypabact_DebuffMalusToMult(_active_debuff.shield_malus);
+
+    mult *= ypabact_DebuffMalusToMult(additionalMalus);
+
+    if ( mult < 0.0f )
+        mult = 0.0f;
+
+    return shield * mult;
+}
+
+float NC_STACK_ypabact::GetEffectiveShield() const
+{
+    return GetEffectiveShieldWithAdditionalMalus(0.0f);
 }
 
 void NC_STACK_ypabact::ModifyEnergy(bact_arg84 *arg)
@@ -8234,7 +8256,7 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
                             v89 = gun->IsRoboGun();
                         }
 
-                        if ( cellUnit->_bact_type != BACT_TYPES_GUN || !v89 || cellUnit->_shield < 100 )
+                        if ( cellUnit->_bact_type != BACT_TYPES_GUN || !v89 || cellUnit->GetEffectiveShield() < 100.0f )
                         {
                             if ( (_oflags & BACT_OFLAG_USERINPT || cellUnit->_owner != _owner) && (!v107 || cellUnit != _host_station) )
                             {
@@ -8292,13 +8314,13 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
 
                                                         if ( cellUnit->getBACT_inputting() || cellUnit->getBACT_viewer() )
                                                         {
-                                                            float v39 = (_gun_power * arg->field_C) * (100.0 - (float)cellUnit->_shield);
+                                                            float v39 = (_gun_power * arg->field_C) * (100.0 - cellUnit->GetEffectiveShield());
                                                             energ = (v39 * 0.004);
                                                         }
                                                         else
                                                         {
 
-                                                            float v41 = (_gun_power * arg->field_C) * (100.0 - (float)cellUnit->_shield);
+                                                            float v41 = (_gun_power * arg->field_C) * (100.0 - cellUnit->GetEffectiveShield());
                                                             energ = v41 / 100;
                                                         }
 
@@ -8558,7 +8580,7 @@ size_t NC_STACK_ypabact::UserTargeting(bact_arg106 *arg)
                                 if (bct->_bact_type == BACT_TYPES_GUN)
                                 {
                                     NC_STACK_ypagun *gun = dynamic_cast<NC_STACK_ypagun *>( bct );
-                                    v53 = gun->IsRoboGun() && bct->_shield >= 100;
+                                    v53 = gun->IsRoboGun() && bct->GetEffectiveShield() >= 100.0f;
                                 }
 
                                 if ( !v53 )
