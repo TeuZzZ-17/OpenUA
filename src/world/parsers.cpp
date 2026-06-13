@@ -2152,6 +2152,7 @@ bool WeaponProtoParser::IsScope(ScriptParser::Parser &parser, const std::string 
         _wpn->salve_delay = 0;
         _wpn->salve_shots = 0;
         _wpn->missile_multi_target = 0;
+        _wpn->bomb_multi_target = 0;
         _wpn->vp_normal = 0;
         _wpn->vp_fire = 1;
         _wpn->vp_megadeth = 2;
@@ -2216,13 +2217,15 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     if ( !StriCmp(p1, "model") )
     {
         if ( !StriCmp(p2, "grenade") )
-            _wpn->_weaponFlags = 17;
+            _wpn->_weaponFlags = TWeapProto::WEAPON_FLAGS_GRENADE;
         else if ( !StriCmp(p2, "rocket") )
-            _wpn->_weaponFlags = 3;
+            _wpn->_weaponFlags = TWeapProto::WEAPON_FLAGS_ROCKET;
         else if ( !StriCmp(p2, "missile") )
-            _wpn->_weaponFlags = 7;
+            _wpn->_weaponFlags = TWeapProto::WEAPON_FLAGS_MISSILE;
+        else if ( !StriCmp(p2, "homing_bomb") )
+            _wpn->_weaponFlags = TWeapProto::WEAPON_FLAGS_HOMING_BOMB;
         else if ( !StriCmp(p2, "bomb") || !StriCmp(p2, "special") )
-            _wpn->_weaponFlags = 1;
+            _wpn->_weaponFlags = TWeapProto::WEAPON_FLAGS_BOMB;
         else
             return ScriptParser::RESULT_BAD_DATA;
     }
@@ -2540,6 +2543,11 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     {
         int maxTargets = parser.stol(p2, NULL, 0);
         _wpn->missile_multi_target = maxTargets > 0 ? maxTargets : 0;
+    }
+    else if ( !StriCmp(p1, "bomb_multi_target") )
+    {
+        int maxTargets = parser.stol(p2, NULL, 0);
+        _wpn->bomb_multi_target = maxTargets > 0 ? maxTargets : 0;
     }
     else if ( !StriCmp(p1, "add_energy") )
     {
