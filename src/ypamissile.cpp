@@ -1211,6 +1211,74 @@ vec3d NC_STACK_ypamissile::CalcForceVector()
                             - vec3d(0.0, _mass * 9.80665, 0.0));
 }
 
+static bool ypamissile_IsHomingBombProto(const World::TWeapProto &wproto)
+{
+    return wproto.IsHomingBomb();
+}
+
+static bool ypamissile_IsHomingBomb(NC_STACK_ypamissile *missile)
+{
+    if ( !missile || !missile->getBACT_pWorld() || missile->_vehicleID < 0 )
+        return false;
+
+    std::vector<World::TWeapProto> &weapons = missile->getBACT_pWorld()->GetWeaponsProtos();
+    if ( (size_t)missile->_vehicleID >= weapons.size() )
+        return false;
+
+    return ypamissile_IsHomingBombProto(weapons.at(missile->_vehicleID));
+}
+
+static bool ypamissile_HasHomingBombTarget(NC_STACK_ypamissile *missile)
+{
+    if ( !ypamissile_IsHomingBomb(missile) )
+        return false;
+
+    if ( missile->_primTtype == BACT_TGT_TYPE_CELL )
+        return true;
+
+    if ( missile->_primTtype != BACT_TGT_TYPE_UNIT || !missile->_primT.pbact )
+        return false;
+
+    NC_STACK_ypabact *target = missile->_primT.pbact;
+    return target->_status != BACT_STATUS_DEAD &&
+           target->_status != BACT_STATUS_CREATE &&
+           target->_energy > 0 &&
+           !target->IsDestroyed() &&
+           !(target->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2 | BACT_STFLAG_NORENDER));
+}
+
+void NC_STACK_ypamissile::SteerHomingBombDirection(float dtime)
+{
+    vec3d desired = _target_dir;
+    if ( desired.normalise() <= 0.001 )
+        return;
+
+    vec3d current = _fly_dir;
+    if ( current.normalise() <= 0.001 )
+        current = _rotation.AxisZ();
+
+    if ( current.normalise() <= 0.001 )
+    {
+        _fly_dir = desired;
+        return;
+    }
+
+    vec3d axis = current * desired;
+    if ( axis.normalise() <= 0.001 )
+        return;
+
+    float rotAngle = clp_acos(current.dot(desired));
+    float maxAngle = _maxrot * dtime;
+
+    if ( maxAngle > 0.0 && rotAngle > maxAngle )
+        rotAngle = maxAngle;
+
+    if ( fabs(rotAngle) > BOMB_MIN_ANGLE )
+        _fly_dir = mat3x3::AxisAngle(axis, rotAngle).Transform(_fly_dir);
+
+    _fly_dir.normalise();
+}
+
 void NC_STACK_ypamissile::AI_layer3(update_msg *arg)
 {
     _world->ypaworld_func145(this);
@@ -1296,6 +1364,18 @@ void NC_STACK_ypamissile::AI_layer3(update_msg *arg)
             case MISL_BOMB:
                 arg74.field_0 = v38;
                 arg74.flag = 1;
+                if ( ypamissile_HasHomingBombTarget(this) )
+                {
+                    if ( _force > 0.0 )
+                    {
+                        arg74.flag = 0;
+                        arg74.vec = CalcForceVector();
+                    }
+                    else
+                    {
+                        SteerHomingBombDirection(v38);
+                    }
+                }
                 Move(&arg74);
                 break;
 

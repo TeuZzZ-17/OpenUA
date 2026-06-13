@@ -1798,19 +1798,20 @@ NC_STACK_ypamissile * NC_STACK_ypaworld::ypaworld_func147(ypaworld_arg146 *arg)
 
     switch(wproto._weaponFlags)
     {
-    case 1:
+    case World::TWeapProto::WEAPON_FLAGS_BOMB:
+    case World::TWeapProto::WEAPON_FLAGS_HOMING_BOMB:
         missileType = NC_STACK_ypamissile::MISL_BOMB;
         break;
 
-    case 7:
+    case World::TWeapProto::WEAPON_FLAGS_MISSILE:
         missileType = NC_STACK_ypamissile::MISL_TARGETED;
         break;
 
-    case 11:
+    case World::TWeapProto::WEAPON_FLAGS_OBSAVOID:
         missileType = NC_STACK_ypamissile::MISL_OBSAVOID;
         break;
 
-    case 17:
+    case World::TWeapProto::WEAPON_FLAGS_GRENADE:
         missileType = NC_STACK_ypamissile::MISL_GRENADE;
         break;
 
