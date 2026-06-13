@@ -9,6 +9,8 @@
 #include "../utils.h"
 #include "../system/inivals.h"
 
+#include <algorithm>
+
 namespace World
 {
 namespace Parsers
@@ -677,6 +679,92 @@ static bool ParseDecorationFXParam(ScriptParser::Parser &parser,
         return true;
     }
 
+    if ( !StriCmp(p1, "decoration_fx_scale") )
+    {
+        float scale = parser.stof(p2, 0);
+        config.scale = scale > 0.0 ? scale : 1.0;
+        return true;
+    }
+
+    if ( !StriCmp(p1, "decoration_fx_offset_x") )
+    {
+        config.offset.x = parser.stof(p2, 0);
+        return true;
+    }
+
+    if ( !StriCmp(p1, "decoration_fx_offset_y") )
+    {
+        config.offset.y = parser.stof(p2, 0);
+        return true;
+    }
+
+    if ( !StriCmp(p1, "decoration_fx_offset_z") )
+    {
+        config.offset.z = parser.stof(p2, 0);
+        return true;
+    }
+
+
+    return false;
+}
+
+static bool ParseVisualScaleParam(ScriptParser::Parser &parser,
+                                  const std::string &p1,
+                                  const std::string &p2,
+                                  float &fixedScale,
+                                  uint8_t &mode,
+                                  float &randomMin,
+                                  float &randomMax,
+                                  vec3d &axisScale)
+{
+    if ( !StriCmp(p1, "visual_scale") )
+    {
+        float scale = parser.stof(p2, 0);
+        fixedScale = scale > 0.0 ? scale : 1.0;
+        mode = VISUAL_SCALE_FIXED;
+        return true;
+    }
+
+    if ( !StriCmp(p1, "visual_scale_random_min") )
+    {
+        float scale = parser.stof(p2, 0);
+        randomMin = scale > 0.0 ? scale : 1.0;
+        mode = VISUAL_SCALE_RANDOM;
+        return true;
+    }
+
+    if ( !StriCmp(p1, "visual_scale_random_max") )
+    {
+        float scale = parser.stof(p2, 0);
+        randomMax = scale > 0.0 ? scale : 1.0;
+        mode = VISUAL_SCALE_RANDOM;
+        return true;
+    }
+
+    if ( !StriCmp(p1, "visual_scale_x") )
+    {
+        float scale = parser.stof(p2, 0);
+        axisScale.x = scale > 0.0 ? scale : 1.0;
+        mode = VISUAL_SCALE_AXIS;
+        return true;
+    }
+
+    if ( !StriCmp(p1, "visual_scale_y") )
+    {
+        float scale = parser.stof(p2, 0);
+        axisScale.y = scale > 0.0 ? scale : 1.0;
+        mode = VISUAL_SCALE_AXIS;
+        return true;
+    }
+
+    if ( !StriCmp(p1, "visual_scale_z") )
+    {
+        float scale = parser.stof(p2, 0);
+        axisScale.z = scale > 0.0 ? scale : 1.0;
+        mode = VISUAL_SCALE_AXIS;
+        return true;
+    }
+
     return false;
 }
 
@@ -1081,9 +1169,9 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     {
         _vhcl->power_icon = p2;
     }
-    else if ( !StriCmp(p1, "seek_and_destroy_icon") )
+    else if ( !StriCmp(p1, "seek_and_explode_icon") )
     {
-        _vhcl->seek_and_destroy_icon = p2;
+        _vhcl->seek_and_explode_icon = p2;
     }
     else if ( !StriCmp(p1, "power") )
     {
@@ -1175,6 +1263,40 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
 
         _vhcl->spawn_count = count;
     }
+    else if ( !StriCmp(p1, "spawn_at_death_units") )
+    {
+        _vhcl->spawn_at_death_units = parser.stol(p2, NULL, 0) ? 1 : 0;
+    }
+    else if ( !StriCmp(p1, "spawn_at_death_vehicle") )
+    {
+        int vehicleId = parser.stol(p2, NULL, 0);
+        _vhcl->spawn_at_death_vehicle = vehicleId > 0 ? vehicleId : 0;
+    }
+    else if ( !StriCmp(p1, "spawn_at_death_count") )
+    {
+        int count = parser.stol(p2, NULL, 0);
+
+        if ( count <= 0 )
+            count = 1;
+        else if ( count > 8 )
+            count = 8;
+
+        _vhcl->spawn_at_death_count = count;
+    }
+    else if ( !StriCmp(p1, "spawn_at_death_random_pos") )
+    {
+        float radius = parser.stof(p2, 0);
+        _vhcl->spawn_at_death_random_pos = radius > 0.0 ? radius : 0.0;
+    }
+    else if ( !StriCmp(p1, "spawn_at_death_instant") )
+    {
+        _vhcl->spawn_at_death_instant = parser.stol(p2, NULL, 0) ? 1 : 0;
+    }
+    else if ( !StriCmp(p1, "spawn_at_death_immunity_time") )
+    {
+        int time = parser.stol(p2, NULL, 0);
+        _vhcl->spawn_at_death_immunity_time = time > 0 ? time : 0;
+    }
     else if ( !StriCmp(p1, "proximity_defense_enable") )
     {
         _vhcl->proximity_defense_enable = parser.stol(p2, NULL, 0) ? 1 : 0;
@@ -1228,6 +1350,10 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
         int delay = parser.stol(p2, NULL, 0);
         _vhcl->proximity_defense_sequence_delay = delay > 0 ? delay : 100;
     }
+    else if ( !StriCmp(p1, "proximity_defense_at_death") )
+    {
+        _vhcl->proximity_defense_at_death = parser.stol(p2, NULL, 0) ? 1 : 0;
+    }
     else if ( !StriCmp(p1, "proximity_defense_random_yaw_min") )
     {
         _vhcl->proximity_defense_random_yaw_set = true;
@@ -1248,23 +1374,27 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
         _vhcl->proximity_defense_random_pitch_set = true;
         _vhcl->proximity_defense_random_pitch_max = parser.stof(p2, 0);
     }
-    else if ( !StriCmp(p1, "seek_and_destroy") )
+    else if ( !StriCmp(p1, "seek_and_explode") )
     {
-        _vhcl->seek_and_destroy = parser.stol(p2, NULL, 0) ? 1 : 0;
+        _vhcl->seek_and_explode = parser.stol(p2, NULL, 0) ? 1 : 0;
     }
-    else if ( !StriCmp(p1, "seek_and_destroy_weapon") )
+    else if ( !StriCmp(p1, "seek_and_explode_weapon") )
     {
         int weaponId = parser.stol(p2, NULL, 0);
-        _vhcl->seek_and_destroy_weapon = weaponId > 0 ? weaponId : 0;
+        _vhcl->seek_and_explode_weapon = weaponId > 0 ? weaponId : 0;
     }
-    else if ( !StriCmp(p1, "seek_and_destroy_trigger_radius") )
+    else if ( !StriCmp(p1, "seek_and_explode_trigger_radius") )
     {
         float radius = parser.stof(p2, 0);
-        _vhcl->seek_and_destroy_trigger_radius = radius > 0.0 ? radius : 0.0;
+        _vhcl->seek_and_explode_trigger_radius = radius > 0.0 ? radius : 0.0;
     }
-    else if ( !StriCmp(p1, "visual_scale") )
+    else if ( ParseVisualScaleParam(parser, p1, p2,
+                                    _vhcl->visual_scale,
+                                    _vhcl->visual_scale_mode,
+                                    _vhcl->visual_scale_random_min,
+                                    _vhcl->visual_scale_random_max,
+                                    _vhcl->visual_scale_axis) )
     {
-        _vhcl->visual_scale = parser.stof(p2, 0);
     }
     else if ( !StriCmp(p1, "invulnerable") )
     {
@@ -1358,6 +1488,20 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     {
         int weapon = parser.stol(p2, NULL, 0);
         _vhcl->extra_weapons[2] = weapon > 0 ? weapon : 0;
+    }
+    else if ( !StriCmp(p1, "lowhp_weapon_enable") )
+    {
+        _vhcl->lowhp_weapon_enable = parser.stol(p2, NULL, 0) ? 1 : 0;
+    }
+    else if ( !StriCmp(p1, "lowhp_threshold") )
+    {
+        float threshold = parser.stof(p2, 0);
+        _vhcl->lowhp_threshold = threshold > 0.0 ? threshold : 0.30;
+    }
+    else if ( !StriCmp(p1, "lowhp_weapon") )
+    {
+        int weapon = parser.stol(p2, NULL, 0);
+        _vhcl->lowhp_weapon = weapon > 0 ? weapon : 0;
     }
     else if ( !StriCmp(p1, "weapon_switch_mode") )
     {
@@ -1817,6 +1961,9 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->weapon = -1;
         _vhcl->extra_weapons = {0, 0, 0};
         _vhcl->weapon_switch_mode = 0;
+        _vhcl->lowhp_weapon_enable = 0;
+        _vhcl->lowhp_threshold = 0.30;
+        _vhcl->lowhp_weapon = 0;
         _vhcl->mgun = -1;
         _vhcl->num_mguns = 1;
         _vhcl->weapon_spread_x = 0.0;
@@ -1838,6 +1985,11 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->vp_wait = 3;
         _vhcl->vp_dead = 4;
         _vhcl->vp_genesis = 5;
+        _vhcl->visual_scale = 1.0;
+        _vhcl->visual_scale_mode = VISUAL_SCALE_FIXED;
+        _vhcl->visual_scale_random_min = 1.0;
+        _vhcl->visual_scale_random_max = 1.0;
+        _vhcl->visual_scale_axis = vec3d(1.0, 1.0, 1.0);
         _vhcl->damaged_fx = TDamagedFXConfig();
         _vhcl->damaged_icon.clear();
         _vhcl->regen_icon.clear();
@@ -1846,7 +1998,7 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->radar_icon.clear();
         _vhcl->unit_gun_icon.clear();
         _vhcl->power_icon.clear();
-        _vhcl->seek_and_destroy_icon.clear();
+        _vhcl->seek_and_explode_icon.clear();
         _vhcl->power = 0;
         _vhcl->power_radius = 0.0;
         _vhcl->damaged_force_mult = 1.0;
@@ -1859,6 +2011,12 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->spawn_random_pos = 0.0;
         _vhcl->spawn_max_active = 0;
         _vhcl->spawn_count = 1;
+        _vhcl->spawn_at_death_units = 0;
+        _vhcl->spawn_at_death_vehicle = 0;
+        _vhcl->spawn_at_death_count = 1;
+        _vhcl->spawn_at_death_random_pos = 0.0;
+        _vhcl->spawn_at_death_instant = 0;
+        _vhcl->spawn_at_death_immunity_time = 0;
         _vhcl->proximity_defense_enable = 0;
         _vhcl->proximity_defense_weapon = 0;
         _vhcl->proximity_defense_trigger_radius = 0.0;
@@ -1868,15 +2026,16 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->proximity_defense_vp_launch = -1;
         _vhcl->proximity_defense_fire_mode = 0;
         _vhcl->proximity_defense_sequence_delay = 100;
+        _vhcl->proximity_defense_at_death = 0;
         _vhcl->proximity_defense_random_yaw_set = false;
         _vhcl->proximity_defense_random_yaw_min = 0.0;
         _vhcl->proximity_defense_random_yaw_max = 360.0;
         _vhcl->proximity_defense_random_pitch_set = false;
         _vhcl->proximity_defense_random_pitch_min = -10.0;
         _vhcl->proximity_defense_random_pitch_max = 45.0;
-        _vhcl->seek_and_destroy = 0;
-        _vhcl->seek_and_destroy_weapon = 0;
-        _vhcl->seek_and_destroy_trigger_radius = 0.0;
+        _vhcl->seek_and_explode = 0;
+        _vhcl->seek_and_explode_weapon = 0;
+        _vhcl->seek_and_explode_trigger_radius = 0.0;
         _vhcl->shield = 50;
         _vhcl->energy = 10000;
         _vhcl->adist_sector = 800.0;
@@ -2000,6 +2159,11 @@ bool WeaponProtoParser::IsScope(ScriptParser::Parser &parser, const std::string 
         _wpn->vp_dead = 4;
         _wpn->vp_genesis = 5;
         _wpn->vp_launch = 0;
+        _wpn->visual_scale = 1.0;
+        _wpn->visual_scale_mode = VISUAL_SCALE_FIXED;
+        _wpn->visual_scale_random_min = 1.0;
+        _wpn->visual_scale_random_max = 1.0;
+        _wpn->visual_scale_axis = vec3d(1.0, 1.0, 1.0);
         _wpn->type_icon = 65;
         _wpn->debuff = TWeaponDebuffConfig();
         _wpn->debuff.tick_snd.volume = 120;
@@ -2127,15 +2291,15 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
         int duration = parser.stol(p2, NULL, 0);
         _wpn->debuff.duration = duration > 0 ? duration : 0;
     }
-    else if ( !StriCmp(p1, "debuff_force_mult") )
+    else if ( !StriCmp(p1, "debuff_force_malus") )
     {
-        float mult = parser.stof(p2, 0);
-        _wpn->debuff.force_mult = mult >= 0.0 ? mult : 1.0;
+        float malus = parser.stof(p2, 0);
+        _wpn->debuff.force_malus = std::max(0.0f, std::min(malus, 1.0f));
     }
-    else if ( !StriCmp(p1, "debuff_maxrot_mult") )
+    else if ( !StriCmp(p1, "debuff_maxrot_malus") )
     {
-        float mult = parser.stof(p2, 0);
-        _wpn->debuff.maxrot_mult = mult >= 0.0 ? mult : 1.0;
+        float malus = parser.stof(p2, 0);
+        _wpn->debuff.maxrot_malus = std::max(0.0f, std::min(malus, 1.0f));
     }
     else if ( !StriCmp(p1, "debuff_snd_pitch_mult") )
     {
@@ -2428,9 +2592,13 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     {
         _wpn->vp_launch = parser.stol(p2, NULL, 0);
     }
-    else if ( !StriCmp(p1, "visual_scale") )
+    else if ( ParseVisualScaleParam(parser, p1, p2,
+                                    _wpn->visual_scale,
+                                    _wpn->visual_scale_mode,
+                                    _wpn->visual_scale_random_min,
+                                    _wpn->visual_scale_random_max,
+                                    _wpn->visual_scale_axis) )
     {
-        _wpn->visual_scale = parser.stof(p2, 0);
     }
     else if ( ParseDecorationFXParam(parser, p1, p2, _wpn->decoration_fx) )
     {

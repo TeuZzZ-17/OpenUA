@@ -2376,7 +2376,7 @@ public:
 
     void SpawnTransientVP(int32_t modelId, const vec3d &pos, const mat3x3 &rot, int32_t lifeTime);
     void SpawnChainFX(const World::TChainFXConfig &config, const vec3d &pos, const mat3x3 &rot);
-    void SpawnAttachedTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime);
+    void SpawnAttachedTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime, float scale = 1.0, bool useOwnerTransform = false);
     bool UpdateRandomFXTimer(int intervalMin, int intervalMax, int32_t &nextTime);
     void SpawnRandomizedTransientVP(int32_t modelId, const vec3d &ownerPos, float randomPos);
     void UpdateDecorationFX(const World::TDecorationFXConfig &config, int32_t &nextTime, const vec3d &ownerPos);
@@ -2428,6 +2428,8 @@ public:
         bool followOwner = false;
         int32_t followOwnerGid = 0;
         vec3d followLocalOffset;
+        bool followUseOwnerTransform = false;
+        float scale = 1.0;
         bool chainFX = false;
         std::vector<NC_STACK_base *> chainBases;
         int32_t chainIndex = -1;

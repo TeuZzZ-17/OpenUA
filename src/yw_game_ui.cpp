@@ -230,8 +230,8 @@ int StatusIconCollect(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact, World::TVhc
         if ( vhcl->power > 0 && vhcl->power_radius > 0.0 )
             StatusIconAdd(icons, iconCount, vhcl->power_icon);
 
-        if ( vhcl->seek_and_destroy )
-            StatusIconAdd(icons, iconCount, vhcl->seek_and_destroy_icon);
+        if ( vhcl->seek_and_explode )
+            StatusIconAdd(icons, iconCount, vhcl->seek_and_explode_icon);
     }
 
     StatusIconPowerState powerState = StatusIconGetPowerStationState(yw, bact);
@@ -283,6 +283,37 @@ void StatusIconRenderWorld(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact, World:
         top = 4;
 
     StatusIconRenderList(yw, icons, iconCount, left, top, STATUS_ICON_SIZE);
+}
+
+static void yw_RenderUnitSquareBar(NC_STACK_ypaworld *yw, CmdStream *cur, int left, int top, int squareCount, int value, int maxValue, uint8_t filledTile, uint8_t emptyTile)
+{
+    if ( !yw || !cur || squareCount <= 0 || maxValue <= 0 )
+        return;
+
+    if ( value < 0 )
+        value = 0;
+    else if ( value > maxValue )
+        value = maxValue;
+
+    FontUA::select_tileset(cur, 50);
+    FontUA::set_center_xpos(cur, left - (yw->_screenSize.x / 2) );
+    FontUA::set_center_ypos(cur, top - (yw->_screenSize.y / 2) );
+
+    int step = maxValue / squareCount;
+    if ( step <= 0 )
+        step = 1;
+
+    int threshold = step / 2;
+
+    for (int i = 1; i <= squareCount; i++)
+    {
+        if ( threshold > value )
+            FontUA::store_u8(cur, emptyTile);
+        else
+            FontUA::store_u8(cur, filledTile);
+
+        threshold += step;
+    }
 }
 
 bool StatusIconCanRenderCockpitUnit(NC_STACK_ypabact *bact)
@@ -355,8 +386,8 @@ int StatusIconCollectVehicleRoleIcons(World::TVhclProto *vhcl, StatusIconList &i
     if ( vhcl->power > 0 && vhcl->power_radius > 0.0 )
         StatusIconAdd(icons, iconCount, vhcl->power_icon);
 
-    if ( vhcl->seek_and_destroy )
-        StatusIconAdd(icons, iconCount, vhcl->seek_and_destroy_icon);
+    if ( vhcl->seek_and_explode )
+        StatusIconAdd(icons, iconCount, vhcl->seek_and_explode_icon);
 
     return iconCount;
 }
@@ -9631,33 +9662,21 @@ void yw_RenderUnitLifeBar(NC_STACK_ypaworld *yw, CmdStream *cur, NC_STACK_ypabac
                 v42 -= v43 / 2;
                 v41 -= (yw->_guiTiles[50]->h / 2) + (yw->_screenSize.y / 16);
 
+                int barHeight = yw->_guiTiles[50]->h;
+                int shieldTop = v41;
+                int lifeTop = shieldTop - barHeight - 1;
+
                 if ( v42 >= 0 )
                 {
-                    if ( v42 + v43 < yw->_screenSize.x && v41 >= 0 )
+                    if ( v42 + v43 < yw->_screenSize.x && lifeTop >= 0 )
                     {
-                        if ( yw->_guiTiles[50]->h + v41 < yw->_screenSize.y )
+                        if ( barHeight + shieldTop < yw->_screenSize.y )
                         {
-                            FontUA::select_tileset(cur, 50);
-
-                            FontUA::set_center_xpos(cur, v42 - (yw->_screenSize.x / 2) );
-                            FontUA::set_center_ypos(cur, v41 - (yw->_screenSize.y / 2) );
-
-                            int v38 = bact->_energy_max / v13;
-
-                            int v27 = v38 / 2; //v38 - (v38 / 2);
-
-                            for (int i = 1; i <= v13; i++)
-                            {
-                                if ( v27 > bact->_energy )
-                                    FontUA::store_u8(cur, 6);
-                                else
-                                    FontUA::store_u8(cur, 2);
-
-                                v27 += v38;
-                            }
+                            yw_RenderUnitSquareBar(yw, cur, v42, lifeTop, v13, bact->_energy, bact->_energy_max, 2, 6);
+                            yw_RenderUnitSquareBar(yw, cur, v42, shieldTop, v13, bact->_shield, 100, 1, 5);
 
                             if ( bact->_vehicleID >= 0 && (size_t)bact->_vehicleID < yw->_vhclProtos.size() )
-                                StatusIconRenderWorld(yw, bact, &yw->_vhclProtos[bact->_vehicleID], v42, v41, v43, yw->_guiTiles[50]->h);
+                                StatusIconRenderWorld(yw, bact, &yw->_vhclProtos[bact->_vehicleID], v42, lifeTop, v43, barHeight);
                         }
                     }
                 }

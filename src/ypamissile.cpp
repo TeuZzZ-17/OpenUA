@@ -694,6 +694,18 @@ int NC_STACK_ypamissile::CalcDamageForBact(NC_STACK_ypabact *bct, int baseEnergy
 
 int NC_STACK_ypamissile::ApplyDamageToBact(NC_STACK_ypabact *bct, int baseEnergy)
 {
+    if ( !bct )
+        return 0;
+
+    NC_STACK_ypabact *userHost = _world ? _world->getYW_userHostStation() : NULL;
+
+    if ( _world && userHost && !(userHost->_owner == _owner || !_world->_isNetGame) )
+        return 0;
+
+    World::TWeapProto *wproto = NULL;
+    if ( _world && _vehicleID >= 0 && (size_t)_vehicleID < _world->GetWeaponsProtos().size() )
+        wproto = &_world->GetWeaponsProtos().at(_vehicleID);
+
     int damage = CalcDamageForBact(bct, baseEnergy);
 
     if ( !damage )
@@ -703,24 +715,12 @@ int NC_STACK_ypamissile::ApplyDamageToBact(NC_STACK_ypabact *bct, int baseEnergy
     arg84.energy = -damage;
     arg84.unit = _mislEmitter;
 
-    NC_STACK_ypabact *userHost = _world->getYW_userHostStation();
+    bct->ModifyEnergy(&arg84);
 
-    if ( userHost->_owner == _owner || !_world->_isNetGame )
-    {
-        bct->ModifyEnergy(&arg84);
+    if ( wproto && wproto->debuff.allow && bct->_energy > 0 && bct->_status != BACT_STATUS_DEAD )
+        bct->ApplyWeaponDebuff(wproto->debuff, _mislEmitter);
 
-        if ( bct->_energy > 0 && bct->_status != BACT_STATUS_DEAD && _vehicleID >= 0 && (size_t)_vehicleID < _world->GetWeaponsProtos().size() )
-        {
-            World::TWeapProto &wproto = _world->GetWeaponsProtos().at(_vehicleID);
-
-            if ( wproto.debuff.allow )
-                bct->ApplyWeaponDebuff(wproto.debuff, _mislEmitter);
-        }
-
-        return damage;
-    }
-
-    return 0;
+    return damage;
 }
 
 void NC_STACK_ypamissile::ApplyDirectHitToBact(NC_STACK_ypabact *bct)
@@ -1673,10 +1673,10 @@ void NC_STACK_ypamissile::Impact()
 
 void NC_STACK_ypamissile::DetonateAtContact(NC_STACK_ypabact *directHit)
 {
-    DetonateSeekAndDestroyPayload(directHit);
+    DetonateSeekAndExplodePayload(directHit);
 }
 
-void NC_STACK_ypamissile::DetonateSeekAndDestroyPayload(NC_STACK_ypabact *directHit)
+void NC_STACK_ypamissile::DetonateSeekAndExplodePayload(NC_STACK_ypabact *directHit)
 {
     if ( _status == BACT_STATUS_DEAD )
         return;

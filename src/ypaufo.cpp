@@ -90,7 +90,7 @@ void NC_STACK_ypaufo::AI_layer3(update_msg *arg)
     if ( v108 != 0.0 )
         _target_dir = _target_vec / v108;
 
-    if ( ApplySeekAndDestroyRammingGuidance(false) )
+    if ( ApplySeekAndExplodeRammingGuidance(false) )
         v108 = _target_vec.length();
 
     int v8 = !_secndTtype && v108 < World::CVSectorLength;

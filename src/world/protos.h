@@ -20,6 +20,15 @@ struct TDecorationFXConfig
     int count_min = 0;
     int count_max = 0;
     float random_pos = 0.0;
+    float scale = 1.0;
+    vec3d offset;
+};
+
+enum VisualScaleMode
+{
+    VISUAL_SCALE_FIXED = 0,
+    VISUAL_SCALE_RANDOM = 1,
+    VISUAL_SCALE_AXIS = 2
 };
 
 struct DestFX
@@ -162,8 +171,8 @@ struct TWeaponDebuffConfig
     bool mindcontrol = false;
     int tick_time = 1000;
     int duration = 5000;
-    float force_mult = 1.0;
-    float maxrot_mult = 1.0;
+    float force_malus = 0.0;
+    float maxrot_malus = 0.0;
     float snd_pitch_mult = 1.0;
     std::vector<int16_t> fx_vps;
     float fx_random_pos = 0.0;
@@ -265,6 +274,9 @@ struct TVhclProto
     int8_t weapon = 0;
     std::array<int16_t, 3> extra_weapons = {0, 0, 0};
     int weapon_switch_mode = 0; // 0 sequence, 1 random
+    int lowhp_weapon_enable = 0;
+    float lowhp_threshold = 0.30;
+    int16_t lowhp_weapon = 0;
     int field_4 = 0;
     int8_t mgun = 0;
     int16_t num_mguns = 1;
@@ -289,6 +301,10 @@ struct TVhclProto
     int16_t vp_megadeth = 0;
     int16_t vp_genesis = 0;
     float visual_scale = 1.0;
+    uint8_t visual_scale_mode = VISUAL_SCALE_FIXED;
+    float visual_scale_random_min = 1.0;
+    float visual_scale_random_max = 1.0;
+    vec3d visual_scale_axis = vec3d(1.0, 1.0, 1.0);
     TDamagedFXConfig damaged_fx;
     TDecorationFXConfig decoration_fx;
     std::string damaged_icon;
@@ -298,7 +314,7 @@ struct TVhclProto
     std::string radar_icon;
     std::string unit_gun_icon;
     std::string power_icon;
-    std::string seek_and_destroy_icon;
+    std::string seek_and_explode_icon;
     int power = 0;
     float power_radius = 0.0;
     float damaged_force_mult = 1.0;
@@ -311,6 +327,12 @@ struct TVhclProto
     float spawn_random_pos = 0.0;
     int spawn_max_active = 0;
     int spawn_count = 1;
+    int spawn_at_death_units = 0;
+    int16_t spawn_at_death_vehicle = 0;
+    int spawn_at_death_count = 1;
+    float spawn_at_death_random_pos = 0.0;
+    int spawn_at_death_instant = 0;
+    int spawn_at_death_immunity_time = 0;
     int proximity_defense_enable = 0;
     int proximity_defense_weapon = 0;
     float proximity_defense_trigger_radius = 0.0;
@@ -320,15 +342,16 @@ struct TVhclProto
     int proximity_defense_vp_launch = -1;
     int proximity_defense_fire_mode = 0;
     int proximity_defense_sequence_delay = 100;
+    int proximity_defense_at_death = 0;
     bool proximity_defense_random_yaw_set = false;
     float proximity_defense_random_yaw_min = 0.0;
     float proximity_defense_random_yaw_max = 360.0;
     bool proximity_defense_random_pitch_set = false;
     float proximity_defense_random_pitch_min = -10.0;
     float proximity_defense_random_pitch_max = 45.0;
-    int seek_and_destroy = 0;
-    int seek_and_destroy_weapon = 0;
-    float seek_and_destroy_trigger_radius = 0.0;
+    int seek_and_explode = 0;
+    int seek_and_explode_weapon = 0;
+    float seek_and_explode_trigger_radius = 0.0;
     std::vector<DestFX> dest_fx;      // dest_fx
     std::vector<DestFX>    ExtDestroyFX; // ext_dest_fx
     std::array<TVhclSound, SND_MAX> sndFX;
@@ -415,6 +438,10 @@ struct TWeapProto
     int16_t vp_genesis = 0;
     int16_t vp_launch = 0;
     float visual_scale = 1.0;
+    uint8_t visual_scale_mode = VISUAL_SCALE_FIXED;
+    float visual_scale_random_min = 1.0;
+    float visual_scale_random_max = 1.0;
+    vec3d visual_scale_axis = vec3d(1.0, 1.0, 1.0);
     std::vector<DestFX> dfx;
     std::vector<DestFX> ExtDestroyFX; // ext_dest_fx
     std::array<TVhclSound, SND_MAX> sndFXes;

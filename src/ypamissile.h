@@ -47,7 +47,7 @@ public:
     virtual void ResetViewing(); // Detach camera
     virtual void Impact(); // Apply impulse to all in sector
     virtual void DetonateAtContact(NC_STACK_ypabact *directHit);
-    virtual void DetonateSeekAndDestroyPayload(NC_STACK_ypabact *directHit);
+    virtual void DetonateSeekAndExplodePayload(NC_STACK_ypabact *directHit);
     virtual void AlignMissile(float dtime = 0.0);
     virtual void AlignMissileByNormal(const vec3d &normal);
 

@@ -2874,9 +2874,12 @@ void NC_STACK_ypaworld::UpdateDecorationFX(const World::TDecorationFXConfig &con
         SpawnRandomizedTransientVP(config.vp, ownerPos, config.random_pos);
 }
 
-void NC_STACK_ypaworld::SpawnAttachedTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime)
+void NC_STACK_ypaworld::SpawnAttachedTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime, float scale, bool useOwnerTransform)
 {
-    if ( !owner || modelId <= 0 || modelId >= (int32_t)_vhclModels.size() || lifeTime <= 0 )
+    if ( !owner || modelId <= 0 || modelId >= (int32_t)_vhclModels.size() )
+        return;
+
+    if ( lifeTime <= 0 )
         return;
 
     NC_STACK_base *base = _vhclModels.at(modelId);
@@ -2890,6 +2893,8 @@ void NC_STACK_ypaworld::SpawnAttachedTransientVP(int32_t modelId, NC_STACK_ypaba
     fx.followOwner = true;
     fx.followOwnerGid = owner->_gid;
     fx.followLocalOffset = localOffset;
+    fx.followUseOwnerTransform = useOwnerTransform;
+    fx.scale = scale > 0.0 ? scale : 1.0;
 }
 
 static NC_STACK_ypabact *yw_FindLiveBactByGidInList(World::RefBactList &list, int32_t gid);
@@ -3393,11 +3398,19 @@ static void yw_RenderTransientVPs(NC_STACK_ypaworld *world, std::list<NC_STACK_y
             // the exact ground height under the vehicle. Clamping against it randomly
             // yanks smoke/fire far above the hull when a tank climbs/descends terrain,
             // which is the intermittent "floating FX" bug seen in-game.
-            it->pos = owner->_position + it->followLocalOffset;
-            it->rot = mat3x3::Ident();
+            if ( it->followUseOwnerTransform )
+            {
+                it->pos = owner->_position + owner->_rotation.Transpose().Transform(it->followLocalOffset);
+                it->rot = owner->_rotation;
+            }
+            else
+            {
+                it->pos = owner->_position + it->followLocalOffset;
+                it->rot = mat3x3::Ident();
+            }
         }
 
-        float scale = 1.0;
+        float scale = it->scale > 0.0 ? it->scale : 1.0;
         if ( it->chainFX )
         {
             float t = 1.0;
@@ -3409,7 +3422,7 @@ static void yw_RenderTransientVPs(NC_STACK_ypaworld *world, std::list<NC_STACK_y
             else if ( t > 1.0 )
                 t = 1.0;
 
-            scale = it->startScale + (it->endScale - it->startScale) * t;
+            scale *= it->startScale + (it->endScale - it->startScale) * t;
 
             if ( !it->chainBases.empty() )
             {

@@ -1,6 +1,7 @@
 #include <inttypes.h>
 #include <string.h>
 #include <math.h>
+#include <algorithm>
 #include <cctype>
 #include <string>
 #include "includes.h"
@@ -68,6 +69,38 @@ static bool yw_IsUsableGameplayName(const std::string &name)
     }
 
     return false;
+}
+
+static vec3d yw_ResolveVisualScale(uint8_t mode, float fixedScale, float randomMin, float randomMax, const vec3d &axisScale)
+{
+    switch ( mode )
+    {
+    case World::VISUAL_SCALE_RANDOM:
+    {
+        float minScale = randomMin > 0.0 ? randomMin : 1.0;
+        float maxScale = randomMax > 0.0 ? randomMax : 1.0;
+        if ( maxScale < minScale )
+            std::swap(minScale, maxScale);
+
+        float scale = minScale;
+        if ( maxScale > minScale )
+            scale += ((float)rand() / (float)RAND_MAX) * (maxScale - minScale);
+
+        return vec3d(scale, scale, scale);
+    }
+
+    case World::VISUAL_SCALE_AXIS:
+        return vec3d(axisScale.x > 0.0 ? axisScale.x : 1.0,
+                     axisScale.y > 0.0 ? axisScale.y : 1.0,
+                     axisScale.z > 0.0 ? axisScale.z : 1.0);
+
+    case World::VISUAL_SCALE_FIXED:
+    default:
+    {
+        float scale = fixedScale > 0.0 ? fixedScale : 1.0;
+        return vec3d(scale, scale, scale);
+    }
+    }
 }
 
 std::string NC_STACK_ypaworld::GetVehicleName(uint32_t id) const
@@ -1488,6 +1521,9 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_weapon_switch_mode = vhcl.weapon_switch_mode;
         bacto->_weapon_slot_index = 0;
         bacto->_current_weapon_id = vhcl.weapon;
+        bacto->_lowhp_weapon_enable = vhcl.lowhp_weapon_enable;
+        bacto->_lowhp_threshold = vhcl.lowhp_threshold > 0.0 ? vhcl.lowhp_threshold : 0.30;
+        bacto->_lowhp_weapon = vhcl.lowhp_weapon > 0 ? vhcl.lowhp_weapon : 0;
 
         if ( vhcl.weapon == -1 )
             bacto->_weapon_flags = 0;
@@ -1523,6 +1559,11 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_vp_megadeth = _vhclModels.at( vhcl.vp_megadeth );
         bacto->_vp_genesis = _vhclModels.at( vhcl.vp_genesis );
         bacto->_visual_scale = vhcl.visual_scale;
+        bacto->_visual_scale_vec = yw_ResolveVisualScale(vhcl.visual_scale_mode,
+                                                          vhcl.visual_scale,
+                                                          vhcl.visual_scale_random_min,
+                                                          vhcl.visual_scale_random_max,
+                                                          vhcl.visual_scale_axis);
         bacto->_damaged_fx = vhcl.damaged_fx;
         bacto->_damaged_fx_next_time = 0;
         bacto->_decoration_fx = vhcl.decoration_fx;
@@ -1540,6 +1581,17 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_spawn_max_active = vhcl.spawn_max_active > 0 ? vhcl.spawn_max_active : 0;
         bacto->_spawn_count = vhcl.spawn_count > 0 ? vhcl.spawn_count : 1;
         bacto->_spawn_last_time = 0;
+        bacto->_spawn_at_death_units = vhcl.spawn_at_death_units;
+        bacto->_spawn_at_death_vehicle = vhcl.spawn_at_death_vehicle;
+        bacto->_spawn_at_death_count = vhcl.spawn_at_death_count > 0 ? vhcl.spawn_at_death_count : 1;
+        if ( bacto->_spawn_at_death_count > 8 )
+            bacto->_spawn_at_death_count = 8;
+        bacto->_spawn_at_death_random_pos = vhcl.spawn_at_death_random_pos > 0.0 ? vhcl.spawn_at_death_random_pos : 0.0;
+        bacto->_spawn_at_death_instant = vhcl.spawn_at_death_instant ? 1 : 0;
+        bacto->_spawn_at_death_immunity_time = vhcl.spawn_at_death_immunity_time > 0 ? vhcl.spawn_at_death_immunity_time : 0;
+        bacto->_spawn_at_death_done = false;
+        bacto->_spawn_at_death_protection_end_time = 0;
+        bacto->_spawn_at_death_restore_vulnerable = false;
         bacto->_carrier_spawn_root_gid = 0;
         bacto->_carrier_spawn_root_vehicle = 0;
         bacto->_carrier_spawned_gids.clear();
@@ -1552,6 +1604,7 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_proximity_defense_vp_launch = vhcl.proximity_defense_vp_launch;
         bacto->_proximity_defense_fire_mode = vhcl.proximity_defense_fire_mode;
         bacto->_proximity_defense_sequence_delay = vhcl.proximity_defense_sequence_delay > 0 ? vhcl.proximity_defense_sequence_delay : 100;
+        bacto->_proximity_defense_at_death = vhcl.proximity_defense_at_death ? 1 : 0;
         bacto->_proximity_defense_random_yaw_set = vhcl.proximity_defense_random_yaw_set;
         bacto->_proximity_defense_random_yaw_min = vhcl.proximity_defense_random_yaw_min;
         bacto->_proximity_defense_random_yaw_max = vhcl.proximity_defense_random_yaw_max;
@@ -1574,10 +1627,11 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_proximity_defense_sequence_shots_fired = 0;
         bacto->_proximity_defense_next_shot_time = 0;
         bacto->_proximity_defense_next_activation_time = 0;
-        bacto->_seek_and_destroy = vhcl.seek_and_destroy ? 1 : 0;
-        bacto->_seek_and_destroy_weapon = vhcl.seek_and_destroy_weapon > 0 ? vhcl.seek_and_destroy_weapon : 0;
-        bacto->_seek_and_destroy_trigger_radius = vhcl.seek_and_destroy_trigger_radius > 0.0 ? vhcl.seek_and_destroy_trigger_radius : 0.0;
-        bacto->_seek_and_destroy_triggered = false;
+        bacto->_proximity_defense_at_death_done = false;
+        bacto->_seek_and_explode = vhcl.seek_and_explode ? 1 : 0;
+        bacto->_seek_and_explode_weapon = vhcl.seek_and_explode_weapon > 0 ? vhcl.seek_and_explode_weapon : 0;
+        bacto->_seek_and_explode_trigger_radius = vhcl.seek_and_explode_trigger_radius > 0.0 ? vhcl.seek_and_explode_trigger_radius : 0.0;
+        bacto->_seek_and_explode_triggered = false;
         bacto->SetUnitGuns(vhcl_id->skip_unit_guns ? std::vector<World::TRoboGun>() : vhcl.unit_guns);
 
         bacto->_destroyFX = vhcl.dest_fx;
@@ -1728,6 +1782,11 @@ NC_STACK_ypamissile * NC_STACK_ypaworld::ypaworld_func147(ypaworld_arg146 *arg)
     wobj->_vp_megadeth = _vhclModels.at(wproto.vp_megadeth);
     wobj->_vp_genesis =  _vhclModels.at(wproto.vp_genesis);
     wobj->_visual_scale = wproto.visual_scale;
+    wobj->_visual_scale_vec = yw_ResolveVisualScale(wproto.visual_scale_mode,
+                                                    wproto.visual_scale,
+                                                    wproto.visual_scale_random_min,
+                                                    wproto.visual_scale_random_max,
+                                                    wproto.visual_scale_axis);
 
     wobj->_destroyFX = wproto.dfx;
     wobj->_extDestroyFX = wproto.ExtDestroyFX;

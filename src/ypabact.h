@@ -72,8 +72,8 @@ struct TActiveDebuffState
     int tick_time = 1000;
     int expire_time = 0;
     int next_tick_time = 0;
-    float force_mult = 1.0;
-    float maxrot_mult = 1.0;
+    float force_malus = 0.0;
+    float maxrot_malus = 0.0;
     float snd_pitch_mult = 1.0;
     std::vector<int16_t> fx_vps;
     float fx_random_pos = 0.0;
@@ -92,8 +92,8 @@ struct TActiveDebuffState
         tick_time = 1000;
         expire_time = 0;
         next_tick_time = 0;
-        force_mult = 1.0;
-        maxrot_mult = 1.0;
+        force_malus = 0.0;
+        maxrot_malus = 0.0;
         snd_pitch_mult = 1.0;
         fx_vps.clear();
         fx_random_pos = 0.0;
@@ -438,8 +438,8 @@ public:
     virtual void BeforeSoundCarrierUpdate();
     void UpdateCarrierSpawn(update_msg *arg);
     void UpdateProximityDefense(update_msg *arg);
-    void UpdateSeekAndDestroy(update_msg *arg);
-    bool ApplySeekAndDestroyRammingGuidance(bool clearAvoidanceFlags);
+    void UpdateSeekAndExplode(update_msg *arg);
+    bool ApplySeekAndExplodeRammingGuidance(bool clearAvoidanceFlags);
     void UpdateDamageFX(update_msg *arg);
     void UpdateDecorationFX(update_msg *arg);
     void ApplyWeaponDebuff(World::TWeaponDebuffConfig &debuff, NC_STACK_ypabact *source);
@@ -614,7 +614,6 @@ public:
     void CopyWaypointsStuff(NC_STACK_ypabact *bact);
     
     World::RefBactList &GetKidList() { return _kidList; }
-    
 
     // static methods for return correspond for reflist  kid ref node
     static World::RefBactList::Node& GetCellRefNode(NC_STACK_ypabact *&bact)
@@ -724,6 +723,7 @@ public:
     float _height_max_user;
     vec3d _scale;
     float _visual_scale = 1.0;
+    vec3d _visual_scale_vec = vec3d(1.0, 1.0, 1.0);
     NC_STACK_base *_vp_normal;
     NC_STACK_base *_vp_fire;
     NC_STACK_base *_vp_wait;
@@ -781,6 +781,9 @@ public:
     int _weapon_switch_mode;
     int _weapon_slot_index;
     int _current_weapon_id;
+    int _lowhp_weapon_enable;
+    float _lowhp_threshold;
+    int _lowhp_weapon;
     uint8_t _weapon_flags;
     int _mgun;
     int _num_mguns;
@@ -818,6 +821,15 @@ public:
     int _spawn_max_active;
     int _spawn_count;
     int _spawn_last_time;
+    int _spawn_at_death_units;
+    int _spawn_at_death_vehicle;
+    int _spawn_at_death_count;
+    float _spawn_at_death_random_pos;
+    int _spawn_at_death_instant;
+    int _spawn_at_death_immunity_time;
+    bool _spawn_at_death_done;
+    int _spawn_at_death_protection_end_time;
+    bool _spawn_at_death_restore_vulnerable;
     int _carrier_spawn_root_gid;
     int _carrier_spawn_root_vehicle;
     std::vector<int32_t> _carrier_spawned_gids;
@@ -830,6 +842,7 @@ public:
     int _proximity_defense_vp_launch;
     int _proximity_defense_fire_mode;
     int _proximity_defense_sequence_delay;
+    int _proximity_defense_at_death;
     bool _proximity_defense_random_yaw_set;
     float _proximity_defense_random_yaw_min;
     float _proximity_defense_random_yaw_max;
@@ -840,10 +853,11 @@ public:
     int _proximity_defense_sequence_shots_fired;
     int _proximity_defense_next_shot_time;
     int _proximity_defense_next_activation_time;
-    int _seek_and_destroy;
-    int _seek_and_destroy_weapon;
-    float _seek_and_destroy_trigger_radius;
-    bool _seek_and_destroy_triggered;
+    bool _proximity_defense_at_death_done;
+    int _seek_and_explode;
+    int _seek_and_explode_weapon;
+    float _seek_and_explode_trigger_radius;
+    bool _seek_and_explode_triggered;
     std::vector<World::TRoboGun> _unitGuns;
     std::string _gunDisplayName;
     mat3x3 _unitGunsParentRotation;
