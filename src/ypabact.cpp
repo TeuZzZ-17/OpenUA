@@ -94,7 +94,8 @@ static bool ypabact_IsUsableControlFallback(NC_STACK_ypabact *bact, NC_STACK_ypa
     return bact &&
            bact != dying &&
            bact->_status != BACT_STATUS_DEAD &&
-           !(bact->_status_flg & BACT_STFLAG_DEATH1);
+           !(bact->_status_flg & BACT_STFLAG_DEATH1) &&
+           !bact->IsMortarPlatform(); // OpenUA: mortars are never a control fallback
 }
 
 static void ypabact_SafeDetachControlFrom(NC_STACK_ypabact *dying, NC_STACK_ypabact *preferredFallback);
@@ -1135,8 +1136,7 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _proximity_defense_next_activation_time = 0;
     _proximity_defense_at_death_done = false;
     _mortar_barrage_active = false;
-    _mortar_barrage_total_shots = 0;
-    _mortar_barrage_shots_fired = 0;
+    _mortar_shots_remaining = 0;
     _mortar_next_shot_time = 0;
     _mortar_next_activation_time = 0;
     _mortar_next_scan_time = 0;
@@ -1288,8 +1288,7 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _proximity_defense_next_activation_time = 0;
     _proximity_defense_at_death_done = false;
     _mortar_barrage_active = false;
-    _mortar_barrage_total_shots = 0;
-    _mortar_barrage_shots_fired = 0;
+    _mortar_shots_remaining = 0;
     _mortar_next_shot_time = 0;
     _mortar_next_activation_time = 0;
     _mortar_next_scan_time = 0;
@@ -5434,7 +5433,7 @@ static bool ypabact_IsHomingBombWeapon(const World::TWeapProto &wproto)
 
 static bool ypabact_IsBombMultiTargetWeapon(const World::TWeapProto &wproto)
 {
-    return ypabact_IsHomingBombWeapon(wproto) && wproto.bomb_multi_target > 0;
+    return ypabact_IsHomingBombWeapon(wproto) && wproto.homing_bomb_multi_target > 0;
 }
 
 static int ypabact_GetMissileMultiTargetLimit(const World::TWeapProto &wproto, int weaponCount)
@@ -5454,7 +5453,7 @@ static int ypabact_GetBombMultiTargetLimit(const World::TWeapProto &wproto, int 
     if ( !ypabact_IsBombMultiTargetWeapon(wproto) || weaponCount <= 1 )
         return 0;
 
-    int maxTargets = wproto.bomb_multi_target;
+    int maxTargets = wproto.homing_bomb_multi_target;
     if ( maxTargets > weaponCount )
         maxTargets = weaponCount;
 
@@ -6193,6 +6192,41 @@ static int ypabact_GetMortarWeaponId(NC_STACK_ypabact *unit)
     return 0;
 }
 
+// OpenUA custom: true if this unit carries a "model = mortar" weapon in any slot.
+// Used to keep mortar platforms map-only (no first-person possession).
+bool NC_STACK_ypabact::IsMortarPlatform()
+{
+    return ypabact_GetMortarWeaponId(this) > 0;
+}
+
+// OpenUA custom: true if this is a mortar platform that opted into manual
+// map-click control (mortar_manual_call = 1 on its mortar weapon).
+bool NC_STACK_ypabact::IsManualMortarPlatform()
+{
+    if ( !_world )
+        return false;
+
+    int weaponId = ypabact_GetMortarWeaponId(this);
+    if ( weaponId <= 0 )
+        return false;
+
+    return _world->GetWeaponsProtos().at(weaponId).mortar_manual_call != 0;
+}
+
+// OpenUA custom: bombardment zone radius of this unit's mortar weapon (0 if none).
+// Used to draw the white aiming preview ring on the 2D map.
+float NC_STACK_ypabact::GetMortarBarrageRadius()
+{
+    if ( !_world )
+        return 0.0f;
+
+    int weaponId = ypabact_GetMortarWeaponId(this);
+    if ( weaponId <= 0 )
+        return 0.0f;
+
+    return _world->GetWeaponsProtos().at(weaponId).mortar_barrage_radius;
+}
+
 static bool ypabact_CanUseMortar(NC_STACK_ypabact *unit)
 {
     if ( !unit || !unit->getBACT_pWorld() )
@@ -6222,20 +6256,22 @@ static bool ypabact_CanUseMortar(NC_STACK_ypabact *unit)
     return true;
 }
 
-static vec3d ypabact_GetMortarVisualAimPoint(NC_STACK_ypabact *unit, const World::TWeapProto &wproto, const vec3d &targetCenter)
+// OpenUA custom: the actual ballistic launch direction of a shell aimed at
+// targetCenter. Matches NC_STACK_ypamissile::UpdateMortarBallistic(): the shell
+// follows pos(t)=lerp(start,target) horizontally with a parabolic vertical arc
+// pos.y = baseY - arcHeight*4*t*(1-t). Differentiating at t=0 gives the initial
+// velocity below (engine convention: +Y is DOWN, so -4*arcHeight points upward).
+// The barrel is aimed along this vector so it visibly points up into the arc.
+static vec3d ypabact_GetMortarLaunchDir(NC_STACK_ypabact *unit, const World::TWeapProto &wproto, const vec3d &targetCenter)
 {
-    vec3d aimPoint = targetCenter;
+    vec3d delta = targetCenter - unit->_position;
 
-    if ( unit && wproto.mortar_arc_height > 0.0f )
-    {
-        // Engine convention: +Y is down, so visual artillery elevation aims at a
-        // point above the launcher by subtracting from Y.
-        float elevatedY = unit->_position.y - (wproto.mortar_arc_height * 0.5f);
-        if ( aimPoint.y > elevatedY )
-            aimPoint.y = elevatedY;
-    }
+    vec3d dir;
+    dir.x = delta.x;
+    dir.z = delta.z;
+    dir.y = delta.y - 4.0f * wproto.mortar_arc_height;
 
-    return aimPoint;
+    return dir; // caller normalises
 }
 
 static float ypabact_ClampMortarAimDelta(float delta, float maxRot)
@@ -6262,8 +6298,7 @@ static void ypabact_AimMortarLauncherVisual(NC_STACK_ypabact *unit, const World:
     if ( gun->_gunBasis.length() <= 0.001f || gun->_gunRott.length() <= 0.001f )
         return;
 
-    vec3d aimPoint = ypabact_GetMortarVisualAimPoint(unit, wproto, targetCenter);
-    vec3d vTgt = aimPoint - unit->_position;
+    vec3d vTgt = ypabact_GetMortarLaunchDir(unit, wproto, targetCenter);
     float dist = vTgt.length();
     if ( dist <= 0.001f )
         return;
@@ -6325,8 +6360,14 @@ static void ypabact_AimMortarLauncherVisual(NC_STACK_ypabact *unit, const World:
     float yAngle = clp_asin( invRed.dot(unit->_rotation.AxisZ()) );
     float yWant = clp_asin( invRed.dot(vTgt) );
 
-    if ( yWant > gun->_gunMaxUp )
-        yWant = gun->_gunMaxUp;
+    // OpenUA custom: mortars are high-angle artillery. Guarantee a generous upward
+    // elevation envelope even if the gun model's gun_up_angle is small, so the
+    // barrel convincingly points up into the ballistic arc.
+    const float MORTAR_MIN_MAX_UP = 1.30f; // ~74 degrees
+    float gunMaxUp = gun->_gunMaxUp > MORTAR_MIN_MAX_UP ? gun->_gunMaxUp : MORTAR_MIN_MAX_UP;
+
+    if ( yWant > gunMaxUp )
+        yWant = gunMaxUp;
 
     if ( yWant < -gun->_gunMaxDown )
         yWant = -gun->_gunMaxDown;
@@ -6334,8 +6375,10 @@ static void ypabact_AimMortarLauncherVisual(NC_STACK_ypabact *unit, const World:
     float yDelta = yWant - yAngle;
     yDelta = ypabact_ClampMortarAimDelta(yDelta, maxRot);
 
+    // No extra damping: yDelta is already speed-limited by maxRot when not instant,
+    // so the barrel reaches the wanted elevation instead of stalling short of it.
     if ( fabs(yDelta) > 0.001f )
-        unit->_rotation = mat3x3::RotateX(instant ? yDelta : yDelta * 0.3f) * unit->_rotation;
+        unit->_rotation = mat3x3::RotateX(yDelta) * unit->_rotation;
 
     unit->_viewer_rotation = unit->_rotation;
 }
@@ -6529,6 +6572,22 @@ static bool ypabact_FireMortarShell(NC_STACK_ypabact *unit, int weaponId, const 
         landing.z += sin(ang) * r;
     }
 
+    // Ground-burst mode (mortar_airburst = 0): snap the impact height to the real
+    // terrain at THIS shell's own landing point (spread included), so it explodes on
+    // contact with the ground instead of at the nominal target/arc height (airburst).
+    if ( !wproto.mortar_airburst )
+    {
+        ypaworld_arg136 gnd;
+        gnd.stPos = vec3d(landing.x, -30000.0, landing.z);
+        gnd.vect  = vec3d(0.0, 50000.0, 0.0);
+        gnd.flags = 0;
+
+        world->ypaworld_func136(&gnd);
+
+        if ( gnd.isect )
+            landing.y = gnd.isectPos.y;
+    }
+
     ypabact_AimMortarLauncherVisual(unit, wproto, targetCenter, 0, true);
     ypabact_TriggerMortarFireVisual(unit);
 
@@ -6583,6 +6642,31 @@ static bool ypabact_FireMortarShell(NC_STACK_ypabact *unit, int weaponId, const 
     return true;
 }
 
+// Fire one shell at the unit's current mortar target, then advance the shared shot
+// budget. When the budget is spent the barrage ends and the cooldown starts. This
+// single place owns the budget/cooldown bookkeeping for both the AI and manual paths.
+static void ypabact_FireMortarShotAndAdvance(NC_STACK_ypabact *unit, int weaponId,
+                                             const World::TWeapProto &wproto)
+{
+    int delay    = wproto.mortar_barrage_shot_delay > 0 ? wproto.mortar_barrage_shot_delay : 0;
+    int cooldown = wproto.mortar_barrage_cooldown  > 0 ? wproto.mortar_barrage_cooldown  : 10000;
+
+    ypabact_FireMortarShell(unit, weaponId, wproto, unit->_mortar_target_center);
+
+    unit->_mortar_shots_remaining--;
+
+    if ( unit->_mortar_shots_remaining <= 0 )
+    {
+        unit->_mortar_shots_remaining = 0;
+        unit->_mortar_barrage_active = false;
+        unit->_mortar_next_activation_time = unit->_clock + cooldown; // cooldown starts now
+    }
+    else
+    {
+        unit->_mortar_next_shot_time = unit->_clock + delay;
+    }
+}
+
 void NC_STACK_ypabact::UpdateMortar(update_msg *arg)
 {
     if ( !_world )
@@ -6611,9 +6695,7 @@ void NC_STACK_ypabact::UpdateMortar(update_msg *arg)
         return;
     }
 
-    int delay = wproto.mortar_barrage_shot_delay > 0 ? wproto.mortar_barrage_shot_delay : 0;
-
-    // Active barrage: fire exactly one shell per frame, respecting the shot delay.
+    // Active barrage: fire one shell per shot-delay until the shared budget runs out.
     if ( _mortar_barrage_active )
     {
         ypabact_AimMortarLauncherVisual(this, wproto, _mortar_target_center, arg ? arg->frameTime : 0, false);
@@ -6621,14 +6703,7 @@ void NC_STACK_ypabact::UpdateMortar(update_msg *arg)
         if ( _clock < _mortar_next_shot_time )
             return;
 
-        ypabact_FireMortarShell(this, weaponId, wproto, _mortar_target_center);
-        _mortar_barrage_shots_fired++;
-
-        if ( _mortar_barrage_shots_fired >= _mortar_barrage_total_shots )
-            _mortar_barrage_active = false;
-        else
-            _mortar_next_shot_time = _clock + delay;
-
+        ypabact_FireMortarShotAndAdvance(this, weaponId, wproto);
         return;
     }
 
@@ -6649,9 +6724,13 @@ void NC_STACK_ypabact::UpdateMortar(update_msg *arg)
     StartMortarBarrage(targetCenter);
 }
 
-// Begin a barrage aimed at targetCenter. Shared by the automatic AI and the manual
-// call. Sets the cooldown from barrage start (so the mortar can never fire every
-// frame) and fires the first shell immediately. Returns false if not eligible.
+// Begin OR redirect a barrage aimed at targetCenter. Shared by the automatic AI and
+// the manual call. Returns false if not eligible.
+//
+// Anti-exploit: the barrage's shots are a shared per-cycle budget. Redirecting an
+// active barrage only re-aims it and keeps spending the SAME budget (no refill), so
+// rapidly re-targeting can never dodge the cooldown. The budget refills (and the
+// cooldown clears) only after the cooldown has fully elapsed.
 bool NC_STACK_ypabact::StartMortarBarrage(const vec3d &targetCenter)
 {
     if ( !_world )
@@ -6667,30 +6746,33 @@ bool NC_STACK_ypabact::StartMortarBarrage(const vec3d &targetCenter)
     if ( shots <= 0 )
         return false;
 
-    int delay = wproto.mortar_barrage_shot_delay > 0 ? wproto.mortar_barrage_shot_delay : 0;
-    int cooldown = wproto.mortar_barrage_cooldown > 0 ? wproto.mortar_barrage_cooldown : 10000;
+    // Redirect an in-progress barrage: keep the remaining budget, just re-aim. The
+    // already-scheduled next shot lands on the new area. No refill => no exploit.
+    if ( _mortar_barrage_active && _mortar_shots_remaining > 0 )
+    {
+        _mortar_target_center = targetCenter;
+        return true;
+    }
+
+    // Fresh barrage: only allowed once the cooldown has fully elapsed.
+    if ( _clock < _mortar_next_activation_time )
+        return false;
 
     _mortar_barrage_active = true;
-    _mortar_barrage_total_shots = shots;
-    _mortar_barrage_shots_fired = 0;
+    _mortar_shots_remaining = shots; // refill the cycle budget
     _mortar_target_center = targetCenter;
-    _mortar_next_activation_time = _clock + cooldown;
 
-    ypabact_AimMortarLauncherVisual(this, wproto, targetCenter, 0, true);
-    ypabact_FireMortarShell(this, weaponId, wproto, targetCenter);
-    _mortar_barrage_shots_fired = 1;
-
-    if ( _mortar_barrage_shots_fired >= shots )
-        _mortar_barrage_active = false;
-    else
-        _mortar_next_shot_time = _clock + delay;
+    // Fire the first shell immediately (this also spends one budget shot and, if the
+    // budget is just 1, ends the barrage and starts the cooldown right away).
+    ypabact_FireMortarShotAndAdvance(this, weaponId, wproto);
 
     return true;
 }
 
 // Check whether this unit can answer a manual bombardment call against targetPos.
-// Validates ownership-agnostic readiness, manual-call opt-in, cooldown, range,
-// radar visibility and enemy-in-zone, exactly like the automatic path.
+// Validates readiness, manual-call opt-in and range/radar. It does NOT enforce the
+// automatic cooldown, an in-progress barrage or enemy-in-zone: a manual strike is
+// the player's explicit order and may interrupt/redirect the current barrage.
 bool NC_STACK_ypabact::CanManualMortar(const vec3d &targetPos, int *outWeaponId)
 {
     if ( !_world || _world->_isNetGame )
@@ -6708,10 +6790,13 @@ bool NC_STACK_ypabact::CanManualMortar(const vec3d &targetPos, int *outWeaponId)
     if ( wproto.mortar_barrage_shots <= 0 )
         return false;
 
-    // Must be idle and off cooldown.
-    if ( _mortar_barrage_active )
-        return false;
-    if ( _clock < _mortar_next_activation_time )
+    // Mirror exactly when StartMortarBarrage will succeed: either we can redirect an
+    // active barrage (spending its remaining shared budget), or start a fresh one
+    // (idle and off cooldown). A manual call may interrupt/redirect a running barrage
+    // but NEVER bypasses the cooldown once the shot budget is spent (anti-exploit).
+    bool canRedirect = _mortar_barrage_active && _mortar_shots_remaining > 0;
+    bool canStartNew = !_mortar_barrage_active && _clock >= _mortar_next_activation_time;
+    if ( !canRedirect && !canStartNew )
         return false;
 
     // Range from this unit to the requested target point.
@@ -6726,18 +6811,14 @@ bool NC_STACK_ypabact::CanManualMortar(const vec3d &targetPos, int *outWeaponId)
     if ( distSq < minRange * minRange || distSq > maxRange * maxRange )
         return false;
 
-    // Radar: the target sector must be visible to our faction.
+    // Radar: the target sector must be visible to our faction. This is the only
+    // visibility gate on a manual strike. mortar_requires_enemy_in_zone is NOT
+    // enforced here: a manual bombardment is the player's explicit decision, so a
+    // target area inside valid range (and radar, if required) is always allowed.
     if ( wproto.mortar_requires_radar )
     {
         Common::Point cellId = World::PositionToSectorID(targetPos);
         if ( !_world->IsSector(cellId) || !_world->SectorAt(cellId).IsCanSee(_owner) )
-            return false;
-    }
-
-    // Enemy presence inside the bombardment zone.
-    if ( wproto.mortar_requires_enemy_in_zone && wproto.mortar_barrage_radius > 0.0 )
-    {
-        if ( ypabact_CountMortarEnemiesInZone(this, targetPos, wproto.mortar_barrage_radius) <= 0 )
             return false;
     }
 
@@ -8685,8 +8766,7 @@ void NC_STACK_ypabact::Renew()
     _proximity_defense_next_activation_time = 0;
     _proximity_defense_at_death_done = false;
     _mortar_barrage_active = false;
-    _mortar_barrage_total_shots = 0;
-    _mortar_barrage_shots_fired = 0;
+    _mortar_shots_remaining = 0;
     _mortar_next_shot_time = 0;
     _mortar_next_activation_time = 0;
     _mortar_next_scan_time = 0;
@@ -11757,6 +11837,11 @@ void NC_STACK_ypabact::setBACT_viewer(bool vwr)
         if ( _world && !_world->CanControlUnitInSpectatorMode(this) )
             return;
 
+        // OpenUA custom: mortar platforms are map-only artillery; never let the
+        // camera/viewer enter one (that is what made it look possessed in 1st person).
+        if ( _world && IsMortarPlatform() )
+            return;
+
         if (_world->_viewerBact)
         {
             if ( _world->_viewerBact->_bact_type != BACT_TYPES_MISSLE )
@@ -11824,6 +11909,11 @@ void NC_STACK_ypabact::setBACT_inputting(bool inpt)
     if ( inpt )
     {
         if ( _world && !_world->CanControlUnitInSpectatorMode(this) )
+            return;
+
+        // OpenUA custom: mortar platforms are artillery used only from the 2D
+        // strategic map. Never let the player take first-person control of them.
+        if ( _world && IsMortarPlatform() )
             return;
 
         _oflags |= BACT_OFLAG_USERINPT;

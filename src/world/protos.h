@@ -554,7 +554,7 @@ struct TWeapProto
     int salve_shots = 0;
     int salve_delay = 0;
     int missile_multi_target = 0;
-    int bomb_multi_target = 0;
+    int homing_bomb_multi_target = 0; // OpenUA: multi-target spread, only on model = homing_bomb
     float energy_heli = 0.0;
     float energy_tank = 0.0;
     float energy_flyer = 0.0;
@@ -596,9 +596,10 @@ struct TWeapProto
     int   mortar_flight_time = 2500;       // ms from launch to impact (<=0 => 2500 default)
     float mortar_spread_radius = 0.0;      // per-shell random landing scatter radius
     float mortar_inflight_drift = 0.0;     // optional small horizontal drift during flight
-    int   mortar_minimap_marker = 0;       // 1 = show bombardment marker (Phase 2, parsed only)
-    int   mortar_manual_call = 0;          // 1 = allow manual call (Phase 2, parsed only)
-    int   mortar_manual_energy_cost = 0;   // energy paid on a successful manual strike (Phase 2)
+    int   mortar_airburst = 1;             // 1 = explode at the timed arc apex/target height (airburst); 0 = land on the real terrain height at the shell's own impact point
+    int   mortar_minimap_marker = 0;       // 1 = show bombardment zone on the 2D strategic map
+    int   mortar_manual_call = 0;          // 1 = allow manual 2D-map-click bombardment control
+    int   mortar_manual_energy_cost = 0;   // DEPRECATED: still parsed for old scripts, ignored at runtime (manual strikes are free)
     NC_STACK_skeleton *wireframe = NULL;
     IDVList initParams;
     std::vector<TChainFXConfig> chain_fx;

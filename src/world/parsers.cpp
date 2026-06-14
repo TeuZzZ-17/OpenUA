@@ -2316,7 +2316,7 @@ bool WeaponProtoParser::IsScope(ScriptParser::Parser &parser, const std::string 
         _wpn->salve_delay = 0;
         _wpn->salve_shots = 0;
         _wpn->missile_multi_target = 0;
-        _wpn->bomb_multi_target = 0;
+        _wpn->homing_bomb_multi_target = 0;
         _wpn->vp_normal = 0;
         _wpn->vp_fire = 1;
         _wpn->vp_megadeth = 2;
@@ -2718,10 +2718,10 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
         int maxTargets = parser.stol(p2, NULL, 0);
         _wpn->missile_multi_target = maxTargets > 0 ? maxTargets : 0;
     }
-    else if ( !StriCmp(p1, "bomb_multi_target") )
+    else if ( !StriCmp(p1, "homing_bomb_multi_target") )
     {
         int maxTargets = parser.stol(p2, NULL, 0);
-        _wpn->bomb_multi_target = maxTargets > 0 ? maxTargets : 0;
+        _wpn->homing_bomb_multi_target = maxTargets > 0 ? maxTargets : 0;
     }
     else if ( !StriCmp(p1, "add_energy") )
     {
@@ -2924,6 +2924,10 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     {
         float v = parser.stof(p2, 0);
         _wpn->mortar_inflight_drift = v > 0.0 ? v : 0.0;
+    }
+    else if ( !StriCmp(p1, "mortar_airburst") )
+    {
+        _wpn->mortar_airburst = parser.stol(p2, NULL, 0) != 0 ? 1 : 0;
     }
     else if ( !StriCmp(p1, "mortar_minimap_marker") )
     {

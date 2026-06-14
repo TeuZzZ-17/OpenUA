@@ -715,21 +715,44 @@ void sub_4F68FC(float a3, float a4, float a5, float a6, SDL_Color a7)
     GFX::Engine.raster_func201( Common::Line( sub_4F681C({a3, a4}), sub_4F681C({a5, a6}) )  );
 }
 
+// OpenUA custom: draw active mortar bombardment zones on the opened 2D strategic
+// map only. Rings are NOT gated by fog/view_mask: target selection already honours
+// mortar_requires_radar, and an accepted strike's zone must stay visible even over
+// dark/fogged map. Colour follows the owner's faction colour (classic Resistance
+// colour for the player's own strikes).
+// Helper: draw one circle on the 2D map (world XZ centre + world radius).
+static void yw_DrawMortarMapCircle(float cx, float cz, float radius, int segs)
+{
+    Common::Point prev;
+    bool hasPrev = false;
+
+    for (int i = 0; i <= segs; i++)
+    {
+        float a = C_2PI * (float)i / (float)segs;
+        Common::Point cur = sub_4F681C( { cx + cosf(a) * radius, cz + sinf(a) * radius } );
+
+        if ( hasPrev )
+            GFX::Engine.raster_func201( Common::Line(prev, cur) );
+
+        prev = cur;
+        hasPrev = true;
+    }
+}
+
 void NC_STACK_ypaworld::RenderMortarMapMarkers()
 {
     ExpireMortarMarkers();
 
-    if ( !robo_map.IsOpen() || _mortarMarkers.empty() )
+    if ( !robo_map.IsOpen() )
         return;
 
     if ( robo_map.field_1E0 <= 0.001f || robo_map.field_1E4 <= 0.001f )
         return;
 
-    SDL_Color orange = {255, 120, 0, 255};
-    GFX::Engine.raster_func217(orange);
-
     const int SEGS = 32;
 
+    // Active bombardment zones (confirmed strikes): faction colour (azure for the
+    // player). Double ring so a zone reads as a deliberate strike marker.
     for ( const MortarMarker &marker : _mortarMarkers )
     {
         if ( marker.radius <= 0.01f )
@@ -739,25 +762,127 @@ void NC_STACK_ypaworld::RenderMortarMapMarkers()
         if ( !IsSector(cellId) )
             continue;
 
-        if ( !(robo_map.MapViewMask & SectorAt(cellId).view_mask) )
-            continue;
+        SDL_Color clr = GetColor(marker.owner);
+        GFX::Engine.raster_func217(clr);
 
-        Common::Point prev;
-        bool hasPrev = false;
-
-        for (int i = 0; i <= SEGS; i++)
-        {
-            float a = C_2PI * (float)i / (float)SEGS;
-            Common::Point cur = sub_4F681C( { marker.pos.x + cosf(a) * marker.radius,
-                                              marker.pos.z + sinf(a) * marker.radius } );
-
-            if ( hasPrev )
-                GFX::Engine.raster_func201( Common::Line(prev, cur) );
-
-            prev = cur;
-            hasPrev = true;
-        }
+        yw_DrawMortarMapCircle(marker.pos.x, marker.pos.z, marker.radius, SEGS);
+        yw_DrawMortarMapCircle(marker.pos.x, marker.pos.z, marker.radius * 0.66f, SEGS);
     }
+
+    // White aiming preview: while a mortar is selected, a white ring follows the
+    // cursor on the map. On the confirming click it becomes a coloured (azure)
+    // active marker above and the bombardment starts.
+    if ( _mortarManualGid && _mortarManualRadius > 0.01f )
+    {
+        SDL_Color white = {255, 255, 255, 255};
+        GFX::Engine.raster_func217(white);
+
+        yw_DrawMortarMapCircle(_cellMouseIsectPos.x, _cellMouseIsectPos.z, _mortarManualRadius, SEGS);
+        yw_DrawMortarMapCircle(_cellMouseIsectPos.x, _cellMouseIsectPos.z, _mortarManualRadius * 0.66f, SEGS);
+    }
+}
+
+// OpenUA custom: ultra-simple manual mortar control on the 2D strategic map.
+// Flow (no extra key, no energy cost):
+//   1. Player clicks one of their own manual-capable mortar platforms -> selected.
+//   2. Player clicks a target area (empty cell or a visible enemy) -> that single
+//      mortar starts a bombardment there if the strike is valid.
+// Returns true when the click was consumed (so no first-person entry / RTS order
+// is generated for it). Single-player only.
+bool NC_STACK_ypaworld::HandleMortarMapClick()
+{
+    if ( _isNetGame || !_userRobo )
+        return false;
+
+    int playerOwner = _userRobo->_owner;
+
+    // A mortar is already selected: this click chooses the target area.
+    if ( _mortarManualGid )
+    {
+        // Clicking another of our own manual mortars re-selects it instead.
+        if ( (_guiActFlags & 0x20) && _bactOnMouse &&
+             _bactOnMouse->_owner == playerOwner &&
+             _bactOnMouse->IsManualMortarPlatform() )
+        {
+            _mortarManualGid = _bactOnMouse->_gid;
+            _mortarManualRadius = _bactOnMouse->GetMortarBarrageRadius();
+            return true;
+        }
+
+        // Resolve the target point: an empty cell, or a clicked unit's position.
+        vec3d target;
+        bool haveTarget = false;
+
+        if ( _guiActFlags & 0x10 )
+        {
+            target = _cellMouseIsectPos;
+            haveTarget = true;
+        }
+        else if ( (_guiActFlags & 0x20) && _bactOnMouse )
+        {
+            target = _bactOnMouse->_position;
+            haveTarget = true;
+        }
+
+        if ( !haveTarget )
+            return false; // nothing useful under the cursor: leave selection pending
+
+        uint32_t gid = _mortarManualGid;
+
+        // Re-resolve the selected mortar by gid (no dangling pointer risk if it
+        // died between the two clicks).
+        NC_STACK_ypabact *mortar = NULL;
+        for (int y = 0; y < _mapSize.y && !mortar; y++)
+        {
+            for (int x = 0; x < _mapSize.x && !mortar; x++)
+            {
+                Common::Point cellId(x, y);
+                if ( !IsSector(cellId) )
+                    continue;
+
+                for (NC_STACK_ypabact *unit : SectorAt(cellId).unitsList)
+                {
+                    if ( unit && unit->_gid == gid && unit->_owner == playerOwner )
+                    {
+                        mortar = unit;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if ( !mortar )
+        {
+            // The selected mortar is gone: clear the selection/preview.
+            _mortarManualGid = 0;
+            _mortarManualRadius = 0.0f;
+            return true;
+        }
+
+        int wid = 0;
+        if ( mortar->CanManualMortar(target, &wid) && mortar->StartMortarBarrage(target) )
+        {
+            // Strike accepted: clear selection and hide the white preview ring.
+            _mortarManualGid = 0;
+            _mortarManualRadius = 0.0f;
+        }
+        // Else (e.g. on cooldown / out of range): keep the selection + white preview
+        // so the player can simply click again / wait, instead of re-selecting.
+
+        return true; // consume the target click
+    }
+
+    // No mortar selected yet: clicking one of our manual mortars selects it.
+    if ( (_guiActFlags & 0x20) && _bactOnMouse &&
+         _bactOnMouse->_owner == playerOwner &&
+         _bactOnMouse->IsManualMortarPlatform() )
+    {
+        _mortarManualGid = _bactOnMouse->_gid;
+        _mortarManualRadius = _bactOnMouse->GetMortarBarrageRadius();
+        return true; // consume: no first-person / RTS select on a mortar platform
+    }
+
+    return false; // not a mortar interaction: keep vanilla behaviour
 }
 
 bool GetPlayerRoboAIBehaviorMapTarget(NC_STACK_ypaworld *yw, vec3d *target)
@@ -4793,6 +4918,11 @@ void sb_0x4c66f8__sub0(NC_STACK_ypaworld *yw)
 void sb_0x4c66f8(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact1, NC_STACK_ypabact *bact2)
 {
     if ( !yw->CanControlUnitInSpectatorMode(bact1) )
+        return;
+
+    // OpenUA custom: never take control of a mortar platform. Bail out before the
+    // current unit's viewer/input is dropped, so the player is not left viewer-less.
+    if ( bact1 && bact1->IsMortarPlatform() )
         return;
 
     if ( bact1 != bact2 )
@@ -11469,6 +11599,9 @@ void NC_STACK_ypaworld::ypaworld_func64__sub21__sub5(int arg)
         break;
 
     case World::DOACTION_19:
+        // OpenUA custom: refuse to cycle the viewer into a mortar platform.
+        if ( _bactOnMouse && _bactOnMouse->IsMortarPlatform() )
+            break;
         _viewerBact->setBACT_viewer(false);
         _viewerBact->setBACT_inputting(false);
         _bactOnMouse->setBACT_viewer(true);
@@ -11494,6 +11627,20 @@ void NC_STACK_ypaworld::ypaworld_func64__sub21(TInputState *arg)
              IsValidSpectatorFollowTarget(_bactOnMouse) )
         {
             SetSpectatorFollowTarget(_bactOnMouse);
+            arg->ClickInf.flag &= ~TClickBoxInf::FLAG_LM_DOWN;
+            return;
+        }
+
+        // OpenUA custom: manual mortar control on the opened 2D strategic map in
+        // normal command mode (field_1D0 == 1). Build (16) / teleport (32) modes
+        // are left untouched. Consumes the click so no first-person entry or RTS
+        // order is produced for a mortar interaction.
+        if ( !IsSpectatorControlled() &&
+             bzda.field_1D0 == 1 &&
+             (_guiActFlags & 8) &&
+             (arg->ClickInf.flag & TClickBoxInf::FLAG_LM_DOWN) &&
+             HandleMortarMapClick() )
+        {
             arg->ClickInf.flag &= ~TClickBoxInf::FLAG_LM_DOWN;
             return;
         }
@@ -11703,7 +11850,14 @@ void NC_STACK_ypaworld::ypaworld_func64__sub21(TInputState *arg)
             {
                 if ( _guiActFlags & 0x20 )
                 {
-                    if ( arg->KbdLastDown == Input::KC_F7 && (arg->ClickInf.flag & TClickBoxInf::FLAG_RM_HOLD) )
+                    // OpenUA custom: mortar platforms cannot be possessed, so show no
+                    // "take control" cursor/tooltip when hovering one (it would wrongly
+                    // suggest the player can enter it).
+                    if ( _bactOnMouse->IsMortarPlatform() )
+                    {
+                        // leave mousePointer at its neutral value: no control prompt
+                    }
+                    else if ( arg->KbdLastDown == Input::KC_F7 && (arg->ClickInf.flag & TClickBoxInf::FLAG_RM_HOLD) )
                     {
                         doAction = World::DOACTION_19;
                         mousePointer = 8;
@@ -11833,9 +11987,13 @@ void NC_STACK_ypaworld::ypaworld_func64__sub21(TInputState *arg)
 
             if ( !IsSpectatorControlled() && ypaworld_func64__sub21__sub6(&arg->ClickInf) )
             {
-                v18 = World::DOACTION_5;
-                mousePointer = 8;
-                arg->ClickInf.flag |= TClickBoxInf::FLAG_LM_DOWN;
+                // OpenUA custom: a double-click must never possess a mortar platform.
+                if ( !_bactOnMouse || !_bactOnMouse->IsMortarPlatform() )
+                {
+                    v18 = World::DOACTION_5;
+                    mousePointer = 8;
+                    arg->ClickInf.flag |= TClickBoxInf::FLAG_LM_DOWN;
+                }
             }
 
             if ( arg->ClickInf.flag & TClickBoxInf::FLAG_LM_DOWN )

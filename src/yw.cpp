@@ -7293,6 +7293,11 @@ void NC_STACK_ypaworld::setYW_userVehicle(NC_STACK_ypabact *bact)
     if ( !CanControlUnitInSpectatorMode(bact) )
         return;
 
+    // OpenUA custom: never make a mortar platform the player-controlled vehicle;
+    // mortars are commanded only from the 2D strategic map.
+    if ( bact && bact->IsMortarPlatform() )
+        return;
+
     if ( bact != _userUnit )
     {
         NC_STACK_ypabact *oldpBact = _userUnit;

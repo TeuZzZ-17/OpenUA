@@ -2215,11 +2215,11 @@ public:
     void debug_draw_coll_spheres();
     void DebugAddAoeRing(const vec3d &pos, float radius, uint8_t r, uint8_t g, uint8_t b);
 
-    // OpenUA custom: mortar bombardment markers + manual radar-guided call.
+    // OpenUA custom: mortar bombardment markers + manual map-click control.
     void AddMortarMarker(const vec3d &pos, float radius, int owner, int lingerMs);
     void ExpireMortarMarkers();
     void RenderMortarMapMarkers();
-    bool TryManualMortarCall(const vec3d &targetPos);
+    bool HandleMortarMapClick(); // 2D-map: select a mortar, then click a target zone
 
     void ProfileCalcValues();
     
@@ -2638,6 +2638,14 @@ public:
         uint8_t owner       = 0;
     };
     std::vector<MortarMarker> _mortarMarkers;
+
+    // OpenUA custom: gid of the mortar the player selected on the 2D map for a
+    // manual strike (0 = none). Stored by gid, not pointer, so a unit dying
+    // between the select-click and the target-click can never dangle.
+    uint32_t _mortarManualGid = 0;
+    // Bombardment radius of the selected mortar, cached for the white aiming
+    // preview ring that follows the cursor until the strike is confirmed.
+    float _mortarManualRadius = 0.0f;
 
     int32_t _polysCount = 0;
     int32_t _polysDraw = 0;

@@ -443,6 +443,9 @@ public:
     void UpdateMortar(update_msg *arg); // OpenUA custom: radar-guided mortar barrage AI
     bool StartMortarBarrage(const vec3d &targetCenter); // OpenUA custom: begin a barrage at a point
     bool CanManualMortar(const vec3d &targetPos, int *outWeaponId); // OpenUA custom: manual-call readiness
+    bool IsMortarPlatform(); // OpenUA custom: true if any weapon slot is a mortar (blocks first-person entry)
+    bool IsManualMortarPlatform(); // OpenUA custom: mortar platform that opted into manual map-click control
+    float GetMortarBarrageRadius(); // OpenUA custom: bombardment zone radius of this unit's mortar (0 if none)
     void UpdateSeekAndExplode(update_msg *arg);
     bool ApplySeekAndExplodeRammingGuidance(bool clearAvoidanceFlags);
     void UpdateDamageFX(update_msg *arg);
@@ -877,8 +880,11 @@ public:
     bool _proximity_defense_at_death_done;
     // OpenUA custom: mortar barrage runtime state (transient, not saved per instance)
     bool _mortar_barrage_active = false;
-    int _mortar_barrage_total_shots = 0;
-    int _mortar_barrage_shots_fired = 0;
+    // Shots left in the CURRENT firing cycle. A cycle's shots are a shared budget:
+    // redirecting the barrage (manual or auto) spends from it and never refills it.
+    // Only the cooldown (after the budget is spent) refills it. This stops the
+    // "infinite barrage" exploit of re-aiming to dodge the cooldown.
+    int _mortar_shots_remaining = 0;
     int _mortar_next_shot_time = 0;
     int _mortar_next_activation_time = 0;
     int _mortar_next_scan_time = 0;

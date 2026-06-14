@@ -200,6 +200,8 @@ int NC_STACK_ypaworld::LevelCommonLoader(TLevelDescription *mapp, int levelID, i
     _cellOnMouse = 0;
     _bactOnMouse = NULL;
     _bactPrevClicked = 0;
+    _mortarManualGid = 0;
+    _mortarManualRadius = 0.0f;
     _viewerBact = NULL;
     _userRobo = NULL;
     _userUnit = NULL;
@@ -6903,14 +6905,9 @@ void NC_STACK_ypaworld::debug_info_draw(TInputState *inpt)
     if ( _showCollDebug )
         debug_draw_coll_spheres();
 
-    // OpenUA custom: manual mortar bombardment call (single-player only).
-    // Provisional hardcoded trigger key (T), mirroring the F9/F10 direct key
-    // checks so the persistent input-binding tables stay untouched. It targets the
-    // cell the player currently has selected (tactical map cursor or 3D cursor).
-    if ( inpt && inpt->KbdLastHit == Input::KC_T && !_isNetGame && _cellOnMouse )
-        TryManualMortarCall(_cellMouseIsectPos);
-
     // OpenUA custom: keep strategic-map mortar markers from lingering after expiry.
+    // Manual mortar control is handled entirely by 2D-map clicks (no key trigger);
+    // see NC_STACK_ypaworld::HandleMortarMapClick().
     ExpireMortarMarkers();
 }
 
@@ -7298,72 +7295,6 @@ void NC_STACK_ypaworld::ExpireMortarMarkers()
         else
             i++;
     }
-}
-
-// OpenUA custom: manual radar-guided bombardment call. Picks the single closest
-// ready allied mortar that can hit targetPos, charges its owner's host station
-// energy (if any), and starts exactly one barrage. Single-player only.
-bool NC_STACK_ypaworld::TryManualMortarCall(const vec3d &targetPos)
-{
-    if ( _isNetGame )   // avoid unsynchronised network barrages
-        return false;
-
-    if ( !_userRobo )
-        return false;
-
-    int playerOwner = _userRobo->_owner;
-
-    NC_STACK_ypabact *best = NULL;
-    int bestWeaponId = 0;
-    float bestDistSq = 0.0f;
-
-    for (int y = 0; y < _mapSize.y; y++)
-    {
-        for (int x = 0; x < _mapSize.x; x++)
-        {
-            Common::Point cellId(x, y);
-            if ( !IsSector(cellId) )
-                continue;
-
-            cellArea &cell = SectorAt(cellId);
-            for (NC_STACK_ypabact *unit : cell.unitsList)
-            {
-                if ( !unit || unit->_owner != playerOwner )
-                    continue;
-
-                int wid = 0;
-                if ( !unit->CanManualMortar(targetPos, &wid) )
-                    continue;
-
-                float distSq = (unit->_position.XZ() - targetPos.XZ()).square();
-                if ( !best || distSq < bestDistSq )
-                {
-                    best = unit;
-                    bestWeaponId = wid;
-                    bestDistSq = distSq;
-                }
-            }
-        }
-    }
-
-    if ( !best )
-        return false;
-
-    int cost = 0;
-    if ( bestWeaponId > 0 && (size_t)bestWeaponId < GetWeaponsProtos().size() )
-        cost = GetWeaponsProtos().at(bestWeaponId).mortar_manual_energy_cost;
-
-    if ( cost > 0 && _userRobo->_energy < cost )
-        return false; // owner cannot pay the strike
-
-    if ( !best->StartMortarBarrage(targetPos) )
-        return false;
-
-    // Charge energy only once the strike is actually accepted/started.
-    if ( cost > 0 )
-        _userRobo->_energy -= cost;
-
-    return true;
 }
 
 void NC_STACK_ypaworld::HistoryAktCreate(NC_STACK_ypabact *bact)
