@@ -1134,6 +1134,13 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _proximity_defense_next_shot_time = 0;
     _proximity_defense_next_activation_time = 0;
     _proximity_defense_at_death_done = false;
+    _mortar_barrage_active = false;
+    _mortar_barrage_total_shots = 0;
+    _mortar_barrage_shots_fired = 0;
+    _mortar_next_shot_time = 0;
+    _mortar_next_activation_time = 0;
+    _mortar_next_scan_time = 0;
+    _mortar_target_center = vec3d(0.0, 0.0, 0.0);
     _seek_and_explode = 0;
     _seek_and_explode_weapon = 0;
     _seek_and_explode_trigger_radius = 0.0;
@@ -1280,6 +1287,13 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _proximity_defense_next_shot_time = 0;
     _proximity_defense_next_activation_time = 0;
     _proximity_defense_at_death_done = false;
+    _mortar_barrage_active = false;
+    _mortar_barrage_total_shots = 0;
+    _mortar_barrage_shots_fired = 0;
+    _mortar_next_shot_time = 0;
+    _mortar_next_activation_time = 0;
+    _mortar_next_scan_time = 0;
+    _mortar_target_center = vec3d(0.0, 0.0, 0.0);
     _seek_and_explode = 0;
     _seek_and_explode_weapon = 0;
     _seek_and_explode_trigger_radius = 0.0;
@@ -2160,6 +2174,7 @@ void NC_STACK_ypabact::Update(update_msg *arg)
     UpdateDecorationFX(arg);
     UpdateCarrierSpawn(arg);
     UpdateProximityDefense(arg);
+    UpdateMortar(arg);
     AI_layer1(arg);
     UpdateAoePush(arg);
     UpdateSeekAndExplode(arg);
@@ -6155,6 +6170,474 @@ void NC_STACK_ypabact::UpdateProximityDefense(update_msg *)
     _proximity_defense_next_activation_time = _clock + interval;
 }
 
+// ===== OpenUA custom: radar-guided mortar barrage =========================
+
+// Resolve the mortar weapon id for this unit by scanning its main and extra
+// weapon slots. Returns 0 when the unit has no "model = mortar" weapon.
+static int ypabact_GetMortarWeaponId(NC_STACK_ypabact *unit)
+{
+    if ( !unit || !unit->getBACT_pWorld() )
+        return 0;
+
+    std::vector<World::TWeapProto> &weapons = unit->getBACT_pWorld()->GetWeaponsProtos();
+
+    int candidates[4] = { unit->_weapon, unit->_extra_weapons[0], unit->_extra_weapons[1], unit->_extra_weapons[2] };
+
+    for (int i = 0; i < 4; i++)
+    {
+        int id = candidates[i];
+        if ( id > 0 && (size_t)id < weapons.size() && weapons.at(id).IsMortar() )
+            return id;
+    }
+
+    return 0;
+}
+
+static bool ypabact_CanUseMortar(NC_STACK_ypabact *unit)
+{
+    if ( !unit || !unit->getBACT_pWorld() )
+        return false;
+
+    if ( unit->_owner == World::OWNER_0 )
+        return false;
+
+    if ( unit->_bact_type == BACT_TYPES_MISSLE )
+        return false;
+
+    if ( unit->_status == BACT_STATUS_DEAD ||
+         unit->_status == BACT_STATUS_CREATE ||
+         unit->_status == BACT_STATUS_BEAM )
+        return false;
+
+    if ( unit->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2 | BACT_STFLAG_NORENDER) )
+        return false;
+
+    // Dummy attachments and spectator helpers never auto-fire mortars.
+    if ( unit->_isDummy )
+        return false;
+
+    if ( unit->getBACT_pWorld()->IsSpectatorBact(unit) )
+        return false;
+
+    return true;
+}
+
+// A candidate is a valid mortar target only if it is a real, living enemy actor.
+static bool ypabact_IsMortarEnemy(NC_STACK_ypabact *unit, NC_STACK_ypabact *cand)
+{
+    if ( !cand || cand == unit )
+        return false;
+
+    if ( cand->_bact_type == BACT_TYPES_MISSLE )
+        return false;
+
+    if ( cand->_status == BACT_STATUS_DEAD ||
+         cand->_status == BACT_STATUS_CREATE ||
+         cand->_status == BACT_STATUS_BEAM )
+        return false;
+
+    if ( cand->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2 | BACT_STFLAG_NORENDER | BACT_STFLAG_CLEAN) )
+        return false;
+
+    if ( cand->_owner == World::OWNER_0 || cand->_owner == unit->_owner )
+        return false;
+
+    if ( cand->_isDummy ) // dummy attachments must never be preferred targets
+        return false;
+
+    NC_STACK_ypaworld *world = unit->getBACT_pWorld();
+    if ( world && world->IsSpectatorBact(cand) )
+        return false;
+
+    return true;
+}
+
+// Count valid enemies within barrageRadius (horizontal) around a target center.
+static int ypabact_CountMortarEnemiesInZone(NC_STACK_ypabact *unit, const vec3d &center, float barrageRadius)
+{
+    NC_STACK_ypaworld *world = unit->getBACT_pWorld();
+    if ( !world || barrageRadius <= 0.0 )
+        return 0;
+
+    float radiusSq = barrageRadius * barrageRadius;
+    int sectorRadius = (int)(barrageRadius / World::CVSectorLength) + 2;
+    Common::Point centerCell = World::PositionToSectorID(center);
+
+    int found = 0;
+    for (int y = centerCell.y - sectorRadius; y <= centerCell.y + sectorRadius; y++)
+    {
+        for (int x = centerCell.x - sectorRadius; x <= centerCell.x + sectorRadius; x++)
+        {
+            Common::Point cellId(x, y);
+            if ( !world->IsSector(cellId) )
+                continue;
+
+            cellArea &cell = world->SectorAt(cellId);
+            for (NC_STACK_ypabact *cand : cell.unitsList)
+            {
+                if ( !ypabact_IsMortarEnemy(unit, cand) )
+                    continue;
+                if ( (cand->_position.XZ() - center.XZ()).square() <= radiusSq )
+                    found++;
+            }
+        }
+    }
+
+    return found;
+}
+
+// V1 target selection: pick the nearest valid enemy within [minRange, effRange]
+// and use its position as the barrage center. effRange is the smaller of the
+// firing limit (mortar_max_range, or scan radius as fallback) and the scan radius.
+static bool ypabact_FindMortarTargetZone(NC_STACK_ypabact *unit, const World::TWeapProto &wproto, vec3d *out)
+{
+    NC_STACK_ypaworld *world = unit->getBACT_pWorld();
+    if ( !world )
+        return false;
+
+    float maxRange = wproto.mortar_max_range;
+    if ( maxRange <= 0.0 )
+        maxRange = wproto.mortar_scan_radius;
+    if ( maxRange <= 0.0 )
+        return false; // both unset: mortar cannot auto-fire
+
+    float effRange = maxRange;
+    if ( wproto.mortar_scan_radius > 0.0 && wproto.mortar_scan_radius < effRange )
+        effRange = wproto.mortar_scan_radius;
+
+    float minRange = wproto.mortar_min_range > 0.0 ? wproto.mortar_min_range : 0.0;
+    float effRangeSq = effRange * effRange;
+    float minRangeSq = minRange * minRange;
+
+    int sectorRadius = (int)(effRange / World::CVSectorLength) + 2;
+    Common::Point center = World::PositionToSectorID(unit->_position);
+
+    NC_STACK_ypabact *best = NULL;
+    float bestDistSq = 0.0;
+
+    for (int y = center.y - sectorRadius; y <= center.y + sectorRadius; y++)
+    {
+        for (int x = center.x - sectorRadius; x <= center.x + sectorRadius; x++)
+        {
+            Common::Point cellId(x, y);
+            if ( !world->IsSector(cellId) )
+                continue;
+
+            cellArea &cell = world->SectorAt(cellId);
+
+            // Radar requirement: the target sector must be visible to our faction.
+            if ( wproto.mortar_requires_radar && !cell.IsCanSee(unit->_owner) )
+                continue;
+
+            for (NC_STACK_ypabact *cand : cell.unitsList)
+            {
+                if ( !ypabact_IsMortarEnemy(unit, cand) )
+                    continue;
+
+                float distSq = (cand->_position.XZ() - unit->_position.XZ()).square();
+                if ( distSq < minRangeSq || distSq > effRangeSq )
+                    continue;
+
+                if ( !best || distSq < bestDistSq )
+                {
+                    best = cand;
+                    bestDistSq = distSq;
+                }
+            }
+        }
+    }
+
+    if ( !best )
+        return false;
+
+    vec3d targetCenter = best->_position;
+
+    if ( wproto.mortar_requires_enemy_in_zone && wproto.mortar_barrage_radius > 0.0 )
+    {
+        if ( ypabact_CountMortarEnemiesInZone(unit, targetCenter, wproto.mortar_barrage_radius) <= 0 )
+            return false;
+    }
+
+    *out = targetCenter;
+    return true;
+}
+
+
+// Give gun/flak mortars a visible firing pose. The first implementation spawned
+// shells from the unit center without any turret/fire animation; this keeps the
+// ballistic system but makes the launcher face upward toward the landing zone and
+// briefly enter the FIRE visual state.
+static void ypabact_AimMortarLauncherVisual(NC_STACK_ypabact *unit, const vec3d &landing)
+{
+    if ( !unit || unit->_bact_type != BACT_TYPES_GUN )
+        return;
+
+    vec3d aim = landing - unit->_position;
+
+    // +Y is down in this engine, so subtracting Y means "raise the barrel".
+    float horiz = sqrtf(aim.x * aim.x + aim.z * aim.z);
+    float lift = std::max(900.0f, horiz * 0.35f);
+    aim.y -= lift;
+
+    if ( aim.normalise() <= 0.001f )
+        return;
+
+    unit->_rotation.SetZ(aim);
+
+    vec3d x = vec3d::OY(-1.0) * aim;
+    if ( x.normalise() > 0.001f )
+    {
+        unit->_rotation.SetX(x);
+        unit->_rotation.SetY(aim * x);
+    }
+
+    NC_STACK_ypagun *gun = dynamic_cast<NC_STACK_ypagun *>(unit);
+    if ( gun )
+        gun->_gunFireCount = std::max(gun->_gunFireTime, 250);
+
+    setState_msg st;
+    st.unsetFlags = 0;
+    st.setFlags = BACT_STFLAG_FIRE;
+    st.newStatus = BACT_STATUS_NOPE;
+    unit->SetState(&st);
+}
+
+// Fire a single ballistic mortar shell at the target zone (with per-shell spread).
+// The shell is tracked in the firing unit's own missile list with the unit as
+// emitter, exactly like a normal fired missile, so Die()'s reparent/cleanup keeps
+// pointers valid.
+static bool ypabact_FireMortarShell(NC_STACK_ypabact *unit, int weaponId, const World::TWeapProto &wproto, const vec3d &targetCenter)
+{
+    NC_STACK_ypaworld *world = unit->getBACT_pWorld();
+    if ( !world || weaponId <= 0 || (size_t)weaponId >= world->GetWeaponsProtos().size() )
+        return false;
+
+    // Per-shell landing point: uniform random scatter inside spread radius.
+    vec3d landing = targetCenter;
+    if ( wproto.mortar_spread_radius > 0.0 )
+    {
+        float ang = ((float)rand() / (float)RAND_MAX) * 2.0 * C_PI;
+        float r   = sqrt((float)rand() / (float)RAND_MAX) * wproto.mortar_spread_radius;
+        landing.x += cos(ang) * r;
+        landing.z += sin(ang) * r;
+    }
+
+    ypabact_AimMortarLauncherVisual(unit, landing);
+
+    vec3d launchPos = unit->_position + unit->_rotation.Transpose().Transform(unit->_fire_pos);
+    if ( (launchPos - unit->_position).length() > 1200.0f )
+        launchPos = unit->_position; // bad script safety: never launch from a wild offset
+
+    ypaworld_arg146 arg147;
+    arg147.vehicle_id = weaponId;
+    arg147.pos = launchPos;
+
+    NC_STACK_ypamissile *shell = world->ypaworld_func147(&arg147);
+    if ( !shell )
+        return false;
+
+    shell->SetLauncherBact(unit);
+    shell->_owner = unit->_owner;
+    shell->_host_station = unit->_host_station;
+    shell->SetStartHeight(launchPos.y);
+
+    // Consistent downward impulse magnitude when the shell lands.
+    shell->_fly_dir_length = wproto.start_speed;
+
+    // Optional per-shell in-flight drift direction (fades to zero at landing).
+    vec3d driftVec(0.0, 0.0, 0.0);
+    if ( wproto.mortar_inflight_drift > 0.0 )
+    {
+        float ang = ((float)rand() / (float)RAND_MAX) * 2.0 * C_PI;
+        driftVec.x = cos(ang) * wproto.mortar_inflight_drift;
+        driftVec.z = sin(ang) * wproto.mortar_inflight_drift;
+    }
+
+    shell->SetupMortarShell(launchPos, landing, wproto.mortar_flight_time, wproto.mortar_arc_height, driftVec);
+
+    shell->_kidRef.Detach();
+    shell->_parent = NULL;
+    unit->_missiles_list.push_back(shell);
+
+    if ( wproto.vp_launch > 0 )
+        world->SpawnTransientVP(wproto.vp_launch, shell->_position, shell->_rotation, 1000);
+
+    SFXEngine::SFXe.startSound(&shell->_soundcarrier, 1);
+
+    // Make sure the shell outlives its scheduled flight time.
+    int flight = wproto.mortar_flight_time > 0 ? wproto.mortar_flight_time : 2500;
+    if ( shell->GetLifeTime() < flight + 1000 )
+        shell->SetLifeTime(flight + 1000);
+
+    // OpenUA custom: register/refresh the bombardment marker for this barrage zone.
+    // Each shell refreshes it so the ring stays up until the last shell has landed.
+    if ( wproto.mortar_minimap_marker && wproto.mortar_barrage_radius > 0.0 )
+        world->AddMortarMarker(targetCenter, wproto.mortar_barrage_radius, unit->_owner, flight + 2000);
+
+    return true;
+}
+
+void NC_STACK_ypabact::UpdateMortar(update_msg *)
+{
+    if ( !_world )
+        return;
+
+    // V1 is single-player/local only; unsynchronised network projectiles are unsafe.
+    if ( _world->_isNetGame )
+    {
+        _mortar_barrage_active = false;
+        return;
+    }
+
+    int weaponId = ypabact_GetMortarWeaponId(this);
+    if ( weaponId <= 0 || !ypabact_CanUseMortar(this) )
+    {
+        _mortar_barrage_active = false;
+        return;
+    }
+
+    World::TWeapProto &wproto = _world->GetWeaponsProtos().at(weaponId);
+
+    int shots = wproto.mortar_barrage_shots;
+    if ( shots <= 0 )
+    {
+        _mortar_barrage_active = false;
+        return;
+    }
+
+    int delay = wproto.mortar_barrage_shot_delay > 0 ? wproto.mortar_barrage_shot_delay : 0;
+
+    // Active barrage: fire exactly one shell per frame, respecting the shot delay.
+    if ( _mortar_barrage_active )
+    {
+        if ( _clock < _mortar_next_shot_time )
+            return;
+
+        ypabact_FireMortarShell(this, weaponId, wproto, _mortar_target_center);
+        _mortar_barrage_shots_fired++;
+
+        if ( _mortar_barrage_shots_fired >= _mortar_barrage_total_shots )
+            _mortar_barrage_active = false;
+        else
+            _mortar_next_shot_time = _clock + delay;
+
+        return;
+    }
+
+    // Cooldown gate between barrages.
+    if ( _clock < _mortar_next_activation_time )
+        return;
+
+    // Throttle the (potentially large-radius) target scan so it never runs every
+    // frame while the mortar is ready but has no valid target in range.
+    if ( _clock < _mortar_next_scan_time )
+        return;
+    _mortar_next_scan_time = _clock + 500;
+
+    vec3d targetCenter;
+    if ( !ypabact_FindMortarTargetZone(this, wproto, &targetCenter) )
+        return;
+
+    StartMortarBarrage(targetCenter);
+}
+
+// Begin a barrage aimed at targetCenter. Shared by the automatic AI and the manual
+// call. Sets the cooldown from barrage start (so the mortar can never fire every
+// frame) and fires the first shell immediately. Returns false if not eligible.
+bool NC_STACK_ypabact::StartMortarBarrage(const vec3d &targetCenter)
+{
+    if ( !_world )
+        return false;
+
+    int weaponId = ypabact_GetMortarWeaponId(this);
+    if ( weaponId <= 0 || !ypabact_CanUseMortar(this) )
+        return false;
+
+    World::TWeapProto &wproto = _world->GetWeaponsProtos().at(weaponId);
+
+    int shots = wproto.mortar_barrage_shots;
+    if ( shots <= 0 )
+        return false;
+
+    int delay = wproto.mortar_barrage_shot_delay > 0 ? wproto.mortar_barrage_shot_delay : 0;
+    int cooldown = wproto.mortar_barrage_cooldown > 0 ? wproto.mortar_barrage_cooldown : 10000;
+
+    _mortar_barrage_active = true;
+    _mortar_barrage_total_shots = shots;
+    _mortar_barrage_shots_fired = 0;
+    _mortar_target_center = targetCenter;
+    _mortar_next_activation_time = _clock + cooldown;
+
+    ypabact_FireMortarShell(this, weaponId, wproto, targetCenter);
+    _mortar_barrage_shots_fired = 1;
+
+    if ( _mortar_barrage_shots_fired >= shots )
+        _mortar_barrage_active = false;
+    else
+        _mortar_next_shot_time = _clock + delay;
+
+    return true;
+}
+
+// Check whether this unit can answer a manual bombardment call against targetPos.
+// Validates ownership-agnostic readiness, manual-call opt-in, cooldown, range,
+// radar visibility and enemy-in-zone, exactly like the automatic path.
+bool NC_STACK_ypabact::CanManualMortar(const vec3d &targetPos, int *outWeaponId)
+{
+    if ( !_world || _world->_isNetGame )
+        return false;
+
+    int weaponId = ypabact_GetMortarWeaponId(this);
+    if ( weaponId <= 0 || !ypabact_CanUseMortar(this) )
+        return false;
+
+    World::TWeapProto &wproto = _world->GetWeaponsProtos().at(weaponId);
+
+    if ( !wproto.mortar_manual_call )
+        return false;
+
+    if ( wproto.mortar_barrage_shots <= 0 )
+        return false;
+
+    // Must be idle and off cooldown.
+    if ( _mortar_barrage_active )
+        return false;
+    if ( _clock < _mortar_next_activation_time )
+        return false;
+
+    // Range from this unit to the requested target point.
+    float maxRange = wproto.mortar_max_range;
+    if ( maxRange <= 0.0 )
+        maxRange = wproto.mortar_scan_radius;
+    if ( maxRange <= 0.0 )
+        return false;
+
+    float minRange = wproto.mortar_min_range > 0.0 ? wproto.mortar_min_range : 0.0;
+    float distSq = (targetPos.XZ() - _position.XZ()).square();
+    if ( distSq < minRange * minRange || distSq > maxRange * maxRange )
+        return false;
+
+    // Radar: the target sector must be visible to our faction.
+    if ( wproto.mortar_requires_radar )
+    {
+        Common::Point cellId = World::PositionToSectorID(targetPos);
+        if ( !_world->IsSector(cellId) || !_world->SectorAt(cellId).IsCanSee(_owner) )
+            return false;
+    }
+
+    // Enemy presence inside the bombardment zone.
+    if ( wproto.mortar_requires_enemy_in_zone && wproto.mortar_barrage_radius > 0.0 )
+    {
+        if ( ypabact_CountMortarEnemiesInZone(this, targetPos, wproto.mortar_barrage_radius) <= 0 )
+            return false;
+    }
+
+    if ( outWeaponId )
+        *outWeaponId = weaponId;
+
+    return true;
+}
+
 static NC_STACK_ypabact *ypabact_GetSeekAndExplodePayloadListOwner(NC_STACK_ypabact *unit)
 {
     if ( unit->_parent && unit->_parent->_status != BACT_STATUS_DEAD )
@@ -6305,6 +6788,11 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
         return 0;
 
     World::TWeapProto &wproto = _world->GetWeaponsProtos().at(selectedWeapon);
+
+    // OpenUA custom: mortar weapons are driven exclusively by UpdateMortar()'s
+    // barrage AI. Never fire them through the normal direct/missile path.
+    if ( wproto.IsMortar() )
+        return 0;
 
     if ( _salve_counter < wproto.salve_shots )
         _salve_counter += 1;
@@ -8087,6 +8575,13 @@ void NC_STACK_ypabact::Renew()
     _proximity_defense_next_shot_time = 0;
     _proximity_defense_next_activation_time = 0;
     _proximity_defense_at_death_done = false;
+    _mortar_barrage_active = false;
+    _mortar_barrage_total_shots = 0;
+    _mortar_barrage_shots_fired = 0;
+    _mortar_next_shot_time = 0;
+    _mortar_next_activation_time = 0;
+    _mortar_next_scan_time = 0;
+    _mortar_target_center = vec3d(0.0, 0.0, 0.0);
     _seek_and_explode = 0;
     _seek_and_explode_weapon = 0;
     _seek_and_explode_trigger_radius = 0.0;

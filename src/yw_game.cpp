@@ -6902,6 +6902,17 @@ void NC_STACK_ypaworld::debug_info_draw(TInputState *inpt)
 
     if ( _showCollDebug )
         debug_draw_coll_spheres();
+
+    // OpenUA custom: manual mortar bombardment call (single-player only).
+    // Provisional hardcoded trigger key (T), mirroring the F9/F10 direct key
+    // checks so the persistent input-binding tables stay untouched. It targets the
+    // cell the player currently has selected (tactical map cursor or 3D cursor).
+    if ( inpt && inpt->KbdLastHit == Input::KC_T && !_isNetGame && _cellOnMouse )
+        TryManualMortarCall(_cellMouseIsectPos);
+
+    // OpenUA custom: prune active mortar markers only. Actual warning rings are
+    // drawn in the minimap/radar UI, not in the 3D world view.
+    RenderMortarMarkers();
 }
 
 static bool yw_DebugIsLiveBact(NC_STACK_ypabact *unit)
@@ -7236,6 +7247,121 @@ void NC_STACK_ypaworld::DebugAddAoeRing(const vec3d &pos, float radius, uint8_t 
     _debugAoeRings.push_back(ring);
     if ( _debugAoeRings.size() > 256 )
         _debugAoeRings.erase(_debugAoeRings.begin());
+}
+
+// OpenUA custom: register/refresh a mortar bombardment marker. Multiple shells of
+// the same barrage merge into a single steady ring (refreshing its expiry).
+void NC_STACK_ypaworld::AddMortarMarker(const vec3d &pos, float radius, int owner, int lingerMs)
+{
+    if ( radius < 0.01f )
+        return;
+
+    int32_t expire = _timeStamp + (int32_t)((int64_t)lingerMs * 1024 / 1000); // 1024 ticks = 1s
+
+    for (MortarMarker &m : _mortarMarkers)
+    {
+        if ( m.owner == (uint8_t)owner && (m.pos.XZ() - pos.XZ()).length() <= radius )
+        {
+            m.pos = pos;
+            m.radius = radius;
+            if ( expire > m.expireStamp )
+                m.expireStamp = expire;
+            return;
+        }
+    }
+
+    MortarMarker marker;
+    marker.pos = pos;
+    marker.radius = radius;
+    marker.owner = (uint8_t)owner;
+    marker.expireStamp = expire;
+    _mortarMarkers.push_back(marker);
+
+    if ( _mortarMarkers.size() > 64 )
+        _mortarMarkers.erase(_mortarMarkers.begin());
+}
+
+// OpenUA custom: keep the active mortar marker list clean.
+// Rendering is intentionally NOT done here: Matteo wanted the bombardment area
+// on the 2D minimap/radar only, not as an always-on 3D ground ring.
+void NC_STACK_ypaworld::RenderMortarMarkers()
+{
+    for (size_t i = 0; i < _mortarMarkers.size(); )
+    {
+        if ( _timeStamp >= _mortarMarkers[i].expireStamp )
+        {
+            _mortarMarkers[i] = _mortarMarkers.back();
+            _mortarMarkers.pop_back();
+        }
+        else
+            i++;
+    }
+}
+
+// OpenUA custom: manual radar-guided bombardment call. Picks the single closest
+// ready allied mortar that can hit targetPos, charges its owner's host station
+// energy (if any), and starts exactly one barrage. Single-player only.
+bool NC_STACK_ypaworld::TryManualMortarCall(const vec3d &targetPos)
+{
+    if ( _isNetGame )   // avoid unsynchronised network barrages
+        return false;
+
+    if ( !_userRobo )
+        return false;
+
+    int playerOwner = _userRobo->_owner;
+
+    NC_STACK_ypabact *best = NULL;
+    int bestWeaponId = 0;
+    float bestDistSq = 0.0f;
+
+    for (int y = 0; y < _mapSize.y; y++)
+    {
+        for (int x = 0; x < _mapSize.x; x++)
+        {
+            Common::Point cellId(x, y);
+            if ( !IsSector(cellId) )
+                continue;
+
+            cellArea &cell = SectorAt(cellId);
+            for (NC_STACK_ypabact *unit : cell.unitsList)
+            {
+                if ( !unit || unit->_owner != playerOwner )
+                    continue;
+
+                int wid = 0;
+                if ( !unit->CanManualMortar(targetPos, &wid) )
+                    continue;
+
+                float distSq = (unit->_position.XZ() - targetPos.XZ()).square();
+                if ( !best || distSq < bestDistSq )
+                {
+                    best = unit;
+                    bestWeaponId = wid;
+                    bestDistSq = distSq;
+                }
+            }
+        }
+    }
+
+    if ( !best )
+        return false;
+
+    int cost = 0;
+    if ( bestWeaponId > 0 && (size_t)bestWeaponId < GetWeaponsProtos().size() )
+        cost = GetWeaponsProtos().at(bestWeaponId).mortar_manual_energy_cost;
+
+    if ( cost > 0 && _userRobo->_energy < cost )
+        return false; // owner cannot pay the strike
+
+    if ( !best->StartMortarBarrage(targetPos) )
+        return false;
+
+    // Charge energy only once the strike is actually accepted/started.
+    if ( cost > 0 )
+        _userRobo->_energy -= cost;
+
+    return true;
 }
 
 void NC_STACK_ypaworld::HistoryAktCreate(NC_STACK_ypabact *bact)

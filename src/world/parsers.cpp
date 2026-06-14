@@ -2387,6 +2387,8 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
             _wpn->_weaponFlags = TWeapProto::WEAPON_FLAGS_MISSILE;
         else if ( !StriCmp(p2, "homing_bomb") )
             _wpn->_weaponFlags = TWeapProto::WEAPON_FLAGS_HOMING_BOMB;
+        else if ( !StriCmp(p2, "mortar") )
+            _wpn->_weaponFlags = TWeapProto::WEAPON_FLAGS_MORTAR;
         else if ( !StriCmp(p2, "bomb") || !StriCmp(p2, "special") )
             _wpn->_weaponFlags = TWeapProto::WEAPON_FLAGS_BOMB;
         else
@@ -2857,6 +2859,79 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
         }
         else
             return ScriptParser::RESULT_BAD_DATA;
+    }
+    else if ( !StriCmp(p1, "mortar_scan_radius") )
+    {
+        float v = parser.stof(p2, 0);
+        _wpn->mortar_scan_radius = v > 0.0 ? v : 0.0;
+    }
+    else if ( !StriCmp(p1, "mortar_min_range") )
+    {
+        float v = parser.stof(p2, 0);
+        _wpn->mortar_min_range = v > 0.0 ? v : 0.0;
+    }
+    else if ( !StriCmp(p1, "mortar_max_range") )
+    {
+        float v = parser.stof(p2, 0);
+        _wpn->mortar_max_range = v > 0.0 ? v : 0.0;
+    }
+    else if ( !StriCmp(p1, "mortar_requires_radar") )
+    {
+        _wpn->mortar_requires_radar = parser.stol(p2, NULL, 0) != 0 ? 1 : 0;
+    }
+    else if ( !StriCmp(p1, "mortar_requires_enemy_in_zone") )
+    {
+        _wpn->mortar_requires_enemy_in_zone = parser.stol(p2, NULL, 0) != 0 ? 1 : 0;
+    }
+    else if ( !StriCmp(p1, "mortar_barrage_radius") )
+    {
+        float v = parser.stof(p2, 0);
+        _wpn->mortar_barrage_radius = v > 0.0 ? v : 0.0;
+    }
+    else if ( !StriCmp(p1, "mortar_barrage_shots") )
+    {
+        int v = parser.stol(p2, NULL, 0);
+        _wpn->mortar_barrage_shots = v > 0 ? v : 0;
+    }
+    else if ( !StriCmp(p1, "mortar_barrage_shot_delay") )
+    {
+        _wpn->mortar_barrage_shot_delay = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "mortar_barrage_cooldown") )
+    {
+        _wpn->mortar_barrage_cooldown = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "mortar_arc_height") )
+    {
+        float v = parser.stof(p2, 0);
+        _wpn->mortar_arc_height = v > 0.0 ? v : 0.0;
+    }
+    else if ( !StriCmp(p1, "mortar_flight_time") )
+    {
+        _wpn->mortar_flight_time = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "mortar_spread_radius") )
+    {
+        float v = parser.stof(p2, 0);
+        _wpn->mortar_spread_radius = v > 0.0 ? v : 0.0;
+    }
+    else if ( !StriCmp(p1, "mortar_inflight_drift") )
+    {
+        float v = parser.stof(p2, 0);
+        _wpn->mortar_inflight_drift = v > 0.0 ? v : 0.0;
+    }
+    else if ( !StriCmp(p1, "mortar_minimap_marker") )
+    {
+        _wpn->mortar_minimap_marker = parser.stol(p2, NULL, 0) != 0 ? 1 : 0;
+    }
+    else if ( !StriCmp(p1, "mortar_manual_call") )
+    {
+        _wpn->mortar_manual_call = parser.stol(p2, NULL, 0) != 0 ? 1 : 0;
+    }
+    else if ( !StriCmp(p1, "mortar_manual_energy_cost") )
+    {
+        int v = parser.stol(p2, NULL, 0);
+        _wpn->mortar_manual_energy_cost = v > 0 ? v : 0;
     }
     else if ( !StriCmp(p1, "begin_chain_fx") )
     {

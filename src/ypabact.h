@@ -440,6 +440,9 @@ public:
     virtual void BeforeSoundCarrierUpdate();
     void UpdateCarrierSpawn(update_msg *arg);
     void UpdateProximityDefense(update_msg *arg);
+    void UpdateMortar(update_msg *arg); // OpenUA custom: radar-guided mortar barrage AI
+    bool StartMortarBarrage(const vec3d &targetCenter); // OpenUA custom: begin a barrage at a point
+    bool CanManualMortar(const vec3d &targetPos, int *outWeaponId); // OpenUA custom: manual-call readiness
     void UpdateSeekAndExplode(update_msg *arg);
     bool ApplySeekAndExplodeRammingGuidance(bool clearAvoidanceFlags);
     void UpdateDamageFX(update_msg *arg);
@@ -872,6 +875,14 @@ public:
     int _proximity_defense_next_shot_time;
     int _proximity_defense_next_activation_time;
     bool _proximity_defense_at_death_done;
+    // OpenUA custom: mortar barrage runtime state (transient, not saved per instance)
+    bool _mortar_barrage_active = false;
+    int _mortar_barrage_total_shots = 0;
+    int _mortar_barrage_shots_fired = 0;
+    int _mortar_next_shot_time = 0;
+    int _mortar_next_activation_time = 0;
+    int _mortar_next_scan_time = 0;
+    vec3d _mortar_target_center;
     int _seek_and_explode;
     int _seek_and_explode_weapon;
     float _seek_and_explode_trigger_radius;
