@@ -474,13 +474,15 @@ struct TWeapProto
         WEAPON_FLAG_OBSAVOID = 8,
         WEAPON_FLAG_GRENADE = 16,
         WEAPON_FLAG_HOMING_BOMB = 32,
+        WEAPON_FLAG_MORTAR = 64, // OpenUA custom: radar-guided ballistic barrage
 
         WEAPON_FLAGS_BOMB = WEAPON_FLAG_PROJECTILE,
         WEAPON_FLAGS_ROCKET = WEAPON_FLAG_PROJECTILE | WEAPON_FLAG_DIRECT,
         WEAPON_FLAGS_MISSILE = WEAPON_FLAG_PROJECTILE | WEAPON_FLAG_DIRECT | WEAPON_FLAG_TARGETED,
         WEAPON_FLAGS_OBSAVOID = WEAPON_FLAG_PROJECTILE | WEAPON_FLAG_DIRECT | WEAPON_FLAG_OBSAVOID,
         WEAPON_FLAGS_GRENADE = WEAPON_FLAG_PROJECTILE | WEAPON_FLAG_GRENADE,
-        WEAPON_FLAGS_HOMING_BOMB = WEAPON_FLAG_PROJECTILE | WEAPON_FLAG_HOMING_BOMB
+        WEAPON_FLAGS_HOMING_BOMB = WEAPON_FLAG_PROJECTILE | WEAPON_FLAG_HOMING_BOMB,
+        WEAPON_FLAGS_MORTAR = WEAPON_FLAG_PROJECTILE | WEAPON_FLAG_MORTAR
     };
 
     int8_t unitID = 0;
@@ -490,6 +492,12 @@ struct TWeapProto
     bool IsHomingBomb() const
     {
         return _weaponFlags == WEAPON_FLAGS_HOMING_BOMB;
+    }
+
+    // OpenUA custom: true only for weapons declared as "model = mortar".
+    bool IsMortar() const
+    {
+        return (_weaponFlags & WEAPON_FLAG_MORTAR) != 0;
     }
 
     bool IsBombLike() const
@@ -568,10 +576,29 @@ struct TWeapProto
     float vwr_radius = 0.0;
     float vwr_overeof = 0.0;
     float start_speed = 0.0;
+    // OpenUA custom: dedicated mortar barrage weapon ("model = mortar").
+    // All defaults are vanilla-safe: with mortar_barrage_shots <= 0 / no ranges,
+    // a mortar weapon simply never auto-fires.
+    float mortar_scan_radius = 0.0;        // max auto-scan radius around the firing unit (0 = disabled)
+    float mortar_min_range = 0.0;          // min distance from mortar to target zone
+    float mortar_max_range = 0.0;          // max distance; if <=0 falls back to mortar_scan_radius
+    int   mortar_requires_radar = 1;       // 1 = target sector must be visible to the owner faction
+    int   mortar_requires_enemy_in_zone = 1; // 1 = at least one enemy inside barrage radius
+    float mortar_barrage_radius = 0.0;     // bombardment zone radius (enemy-in-zone / marker size)
+    int   mortar_barrage_shots = 0;        // shells per barrage (<=0 = no barrage)
+    int   mortar_barrage_shot_delay = 250; // ms between shells in the same barrage
+    int   mortar_barrage_cooldown = 10000; // ms cooldown after a barrage starts
+    float mortar_arc_height = 2500.0;      // extra ballistic arc height (engine units)
+    int   mortar_flight_time = 2500;       // ms from launch to impact (<=0 => 2500 default)
+    float mortar_spread_radius = 0.0;      // per-shell random landing scatter radius
+    float mortar_inflight_drift = 0.0;     // optional small horizontal drift during flight
+    int   mortar_minimap_marker = 0;       // 1 = show bombardment marker (Phase 2, parsed only)
+    int   mortar_manual_call = 0;          // 1 = allow manual call (Phase 2, parsed only)
+    int   mortar_manual_energy_cost = 0;   // energy paid on a successful manual strike (Phase 2)
     NC_STACK_skeleton *wireframe = NULL;
     IDVList initParams;
     std::vector<TChainFXConfig> chain_fx;
-    
+
     ~TWeapProto();
 };
 

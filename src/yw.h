@@ -2214,6 +2214,12 @@ public:
     void debug_count_units();
     void debug_draw_coll_spheres();
     void DebugAddAoeRing(const vec3d &pos, float radius, uint8_t r, uint8_t g, uint8_t b);
+
+    // OpenUA custom: mortar bombardment markers + manual radar-guided call.
+    void AddMortarMarker(const vec3d &pos, float radius, int owner, int lingerMs);
+    void RenderMortarMarkers();
+    bool TryManualMortarCall(const vec3d &targetPos);
+
     void ProfileCalcValues();
     
     
@@ -2619,6 +2625,18 @@ public:
         int32_t expireStamp = 0;
     };
     std::vector<DebugAoeRing> _debugAoeRings;
+
+    // OpenUA custom: active mortar bombardment markers (world-space warning rings).
+    // Independent of the F10 overlay; shown while a barrage is active and a short
+    // time after the last shell lands, then auto-expire.
+    struct MortarMarker
+    {
+        vec3d   pos;
+        float   radius      = 0.0f;
+        int32_t expireStamp = 0;
+        uint8_t owner       = 0;
+    };
+    std::vector<MortarMarker> _mortarMarkers;
 
     int32_t _polysCount = 0;
     int32_t _polysDraw = 0;

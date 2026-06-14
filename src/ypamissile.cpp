@@ -1376,6 +1376,14 @@ void NC_STACK_ypamissile::SteerHomingBombDirection(float dtime)
 
 void NC_STACK_ypamissile::AI_layer3(update_msg *arg)
 {
+    // OpenUA custom: mortar shells use a fully isolated ballistic path so normal
+    // missile/bomb behavior is left completely unchanged.
+    if ( _isMortarProjectile )
+    {
+        UpdateMortarBallistic(arg);
+        return;
+    }
+
     _world->ypaworld_func145(this);
 
     float v40 = _target_vec.length();
@@ -1641,6 +1649,139 @@ void NC_STACK_ypamissile::User_layer(update_msg *arg)
         ResetViewing();
 }
 
+void NC_STACK_ypamissile::SetupMortarShell(const vec3d &startPos, const vec3d &targetPos,
+                                           int flightTime, float arcHeight, const vec3d &driftVec)
+{
+    _isMortarProjectile = true;
+    _mortarStartPos     = startPos;
+    _mortarTargetPos    = targetPos;
+    _mortarDriftVec     = driftVec;
+    _mortarArcHeight    = arcHeight;
+    _mortarFlightTime   = flightTime > 0 ? flightTime : 2500;
+    _mortarElapsed      = 0;
+
+    _position = startPos;
+    _old_pos  = startPos;
+
+    // Mortar shells never home; they fly a fixed parametric arc.
+    _primTtype = BACT_TGT_TYPE_DRCT;
+
+    // Initial facing toward the target zone (purely cosmetic; refreshed each frame).
+    vec3d dir = targetPos - startPos;
+    if ( dir.normalise() > 0.001 )
+    {
+        _fly_dir = dir;
+        _rotation.SetZ(_fly_dir);
+        vec3d x = vec3d::OY(-1.0) * _fly_dir; // cross product (engine: vec3d operator* = cross)
+        if ( x.normalise() > 0.001 )
+        {
+            _rotation.SetX(x);
+            _rotation.SetY(_fly_dir * x);
+        }
+    }
+}
+
+void NC_STACK_ypamissile::UpdateMortarBallistic(update_msg *arg)
+{
+    if ( _status != BACT_STATUS_NORMAL )
+        return;
+
+    _mortarElapsed += arg->frameTime;
+
+    int flightTime = _mortarFlightTime > 0 ? _mortarFlightTime : 2500;
+
+    float t = (float)_mortarElapsed / (float)flightTime;
+    bool impactNow = false;
+    if ( t >= 1.0f )
+    {
+        t = 1.0f;
+        impactNow = true;
+    }
+
+    vec3d prevPos = _position;
+
+    // Horizontal interpolation start -> target.
+    vec3d pos;
+    pos.x = _mortarStartPos.x + (_mortarTargetPos.x - _mortarStartPos.x) * t;
+    pos.z = _mortarStartPos.z + (_mortarTargetPos.z - _mortarStartPos.z) * t;
+
+    // Vertical: straight-line baseline + parabolic arc.
+    // Engine convention: +Y is DOWN, so "up" means subtracting from Y.
+    float baseY = _mortarStartPos.y + (_mortarTargetPos.y - _mortarStartPos.y) * t;
+    float arc   = _mortarArcHeight * 4.0f * t * (1.0f - t); // peak == arc_height at t = 0.5
+    pos.y = baseY - arc;
+
+    // Optional in-flight drift that fades to zero at launch and at landing,
+    // so the shell still lands on its chosen point.
+    if ( _mortarDriftVec.x != 0.0 || _mortarDriftVec.z != 0.0 )
+    {
+        float driftFactor = sin(t * C_PI);
+        pos.x += _mortarDriftVec.x * driftFactor;
+        pos.z += _mortarDriftVec.z * driftFactor;
+    }
+
+    _old_pos  = prevPos;
+    _position = pos;
+
+    // Orient the model along its current travel direction (visual only).
+    vec3d vel = _position - prevPos;
+    if ( vel.normalise() > 0.001 )
+    {
+        _fly_dir = vel;
+        _rotation.SetZ(_fly_dir);
+        vec3d x = vec3d::OY(-1.0) * _fly_dir;
+        if ( x.normalise() > 0.001 )
+        {
+            _rotation.SetX(x);
+            _rotation.SetY(_fly_dir * x);
+        }
+    }
+
+    CorrectPositionInLevelBox(NULL);
+
+    if ( !impactNow )
+        return;
+
+    // Timed impact: reuse the exact same path a normal bomb uses on contact,
+    // so AoE damage/push, building/sector damage, VP dead/megadeth, chain FX and
+    // F10 debug rings all fire normally. Guarded so it can only happen once
+    // (status flips to DEAD below and the NORMAL check at the top blocks re-entry).
+    bool applySectorDamage = (!(_mislFlags & FLAG_MISL_IGNOREBUILDS) ||
+                              (_pSector && _pSector->PurposeType == cellArea::PT_NONE)) &&
+                             (_world->_userRobo->_owner == _owner || !_world->_isNetGame);
+    vec3d directDamagePos = _position;
+
+    if ( applySectorDamage )
+    {
+        RememberDirectHitBuildingAt(directDamagePos);
+        RememberDirectHitSectorAt(directDamagePos);
+    }
+
+    Impact();
+
+    _status = BACT_STATUS_DEAD;
+
+    setState_msg arg78;
+    arg78.setFlags   = BACT_STFLAG_DEATH2;
+    arg78.unsetFlags = 0;
+    arg78.newStatus  = BACT_STATUS_NOPE;
+
+    SetState(&arg78);
+
+    if ( applySectorDamage )
+    {
+        yw_arg129 v25;
+        v25.pos.x    = directDamagePos.x;
+        v25.pos.z    = directDamagePos.z;
+        v25.field_10 = _energy;
+        v25.unit     = _mislEmitter;
+
+        ChangeSectorEnergy(&v25);
+    }
+
+    ResetViewing();
+}
+
 void NC_STACK_ypamissile::Move(move_msg *arg)
 {
     _old_pos = _position;
@@ -1701,6 +1842,15 @@ void NC_STACK_ypamissile::Renew()
     _mislLastAttachedPosition = vec3d(0.0, 0.0, 0.0);
     SFXEngine::SFXe.StopCarrier(&_mislClusterSoundCarrier);
     _mislClusterSoundCarrier.Clear();
+
+    // OpenUA custom: clear mortar shell state on recycle.
+    _isMortarProjectile = false;
+    _mortarStartPos  = vec3d(0.0, 0.0, 0.0);
+    _mortarTargetPos = vec3d(0.0, 0.0, 0.0);
+    _mortarDriftVec  = vec3d(0.0, 0.0, 0.0);
+    _mortarElapsed    = 0;
+    _mortarFlightTime = 0;
+    _mortarArcHeight  = 0.0;
 
     setBACT_yourLastSeconds(3000);
 }

@@ -46,6 +46,12 @@ public:
     
     virtual void ResetViewing(); // Detach camera
     virtual void Impact(); // Apply impulse to all in sector
+
+    // OpenUA custom mortar shell: arm this projectile as a ballistic barrage shell.
+    // Once armed it follows a parametric arc (start->target) and force-impacts when
+    // its flight timer expires, reusing the normal Impact()/AoE/FX path.
+    void SetupMortarShell(const vec3d &startPos, const vec3d &targetPos,
+                          int flightTime, float arcHeight, const vec3d &driftVec);
     virtual void DetonateAtContact(NC_STACK_ypabact *directHit);
     virtual void DetonateSeekAndExplodePayload(NC_STACK_ypabact *directHit);
     virtual void AlignMissile(float dtime = 0.0);
@@ -144,6 +150,7 @@ protected:
     void ApplyAttachedDirectHitDamage();
     void SteerHomingBombDirection(float dtime);
     bool TryClusterSplit();
+    void UpdateMortarBallistic(update_msg *arg); // OpenUA custom: ballistic shell flight + timed impact
 
     struct TBuildingHitRef
     {
@@ -192,6 +199,15 @@ protected:
     float _mislRadiusTank   = 0.0;
     float _mislRadiusFlyer  = 0.0;
     float _mislRadiusRobo   = 0.0;
+
+    // OpenUA custom mortar shell state (only meaningful when _isMortarProjectile).
+    bool  _isMortarProjectile = false;
+    vec3d _mortarStartPos;
+    vec3d _mortarTargetPos;
+    vec3d _mortarDriftVec;
+    int   _mortarElapsed    = 0;
+    int   _mortarFlightTime = 0;
+    float _mortarArcHeight  = 0.0;
 };
 
 #endif // YMISSILE_H_INCLUDED

@@ -2180,7 +2180,7 @@ void NC_STACK_ypaworld::ypaworld_func150(yw_arg150 *arg)
         {
             for ( NC_STACK_ypabact* &sect_bacts : _cells(v29, v12).unitsList )
             {
-                if ( sect_bacts != arg->unit && sect_bacts->_status != BACT_STATUS_DEAD )
+                if ( sect_bacts != arg->unit && sect_bacts->_status != BACT_STATUS_DEAD && !sect_bacts->_isDummy )
                 {
                     if ( !(arg->unit == _userUnit && _playerInHSGun) || sect_bacts != _userRobo )
                     {
