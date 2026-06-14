@@ -6362,6 +6362,49 @@ static bool ypabact_FindMortarTargetZone(NC_STACK_ypabact *unit, const World::TW
     return true;
 }
 
+<<<<<<< HEAD
+=======
+
+// Give gun/flak mortars a visible firing pose. The first implementation spawned
+// shells from the unit center without any turret/fire animation; this keeps the
+// ballistic system but makes the launcher face upward toward the landing zone and
+// briefly enter the FIRE visual state.
+static void ypabact_AimMortarLauncherVisual(NC_STACK_ypabact *unit, const vec3d &landing)
+{
+    if ( !unit || unit->_bact_type != BACT_TYPES_GUN )
+        return;
+
+    vec3d aim = landing - unit->_position;
+
+    // +Y is down in this engine, so subtracting Y means "raise the barrel".
+    float horiz = sqrtf(aim.x * aim.x + aim.z * aim.z);
+    float lift = std::max(900.0f, horiz * 0.35f);
+    aim.y -= lift;
+
+    if ( aim.normalise() <= 0.001f )
+        return;
+
+    unit->_rotation.SetZ(aim);
+
+    vec3d x = vec3d::OY(-1.0) * aim;
+    if ( x.normalise() > 0.001f )
+    {
+        unit->_rotation.SetX(x);
+        unit->_rotation.SetY(aim * x);
+    }
+
+    NC_STACK_ypagun *gun = dynamic_cast<NC_STACK_ypagun *>(unit);
+    if ( gun )
+        gun->_gunFireCount = std::max(gun->_gunFireTime, 250);
+
+    setState_msg st;
+    st.unsetFlags = 0;
+    st.setFlags = BACT_STFLAG_FIRE;
+    st.newStatus = BACT_STATUS_NOPE;
+    unit->SetState(&st);
+}
+
+>>>>>>> 6eb9594711bd588515400041b0d3f1e8efcac3a0
 // Fire a single ballistic mortar shell at the target zone (with per-shell spread).
 // The shell is tracked in the firing unit's own missile list with the unit as
 // emitter, exactly like a normal fired missile, so Die()'s reparent/cleanup keeps
@@ -6382,7 +6425,15 @@ static bool ypabact_FireMortarShell(NC_STACK_ypabact *unit, int weaponId, const 
         landing.z += sin(ang) * r;
     }
 
+<<<<<<< HEAD
     vec3d launchPos = unit->_position;
+=======
+    ypabact_AimMortarLauncherVisual(unit, landing);
+
+    vec3d launchPos = unit->_position + unit->_rotation.Transpose().Transform(unit->_fire_pos);
+    if ( (launchPos - unit->_position).length() > 1200.0f )
+        launchPos = unit->_position; // bad script safety: never launch from a wild offset
+>>>>>>> 6eb9594711bd588515400041b0d3f1e8efcac3a0
 
     ypaworld_arg146 arg147;
     arg147.vehicle_id = weaponId;
