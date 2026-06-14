@@ -2213,6 +2213,7 @@ public:
     void debug_info_draw(TInputState *inpt);
     void debug_count_units();
     void debug_draw_coll_spheres();
+    void DebugAddAoeRing(const vec3d &pos, float radius, uint8_t r, uint8_t g, uint8_t b);
     void ProfileCalcValues();
     
     
@@ -2605,7 +2606,20 @@ public:
     
     int8_t _showDebugMode = 0; // debug info draw modes
     bool _showCollDebug = false; // F10: draw collision sphere overlay
-    
+
+    // F10 debug: transient AoE impact rings. Recorded on weapon detonation,
+    // fade out after a short time. Only populated while _showCollDebug is on.
+    struct DebugAoeRing
+    {
+        vec3d   pos;
+        float   radius      = 0.0f;
+        uint8_t r           = 255;
+        uint8_t g           = 255;
+        uint8_t b           = 255;
+        int32_t expireStamp = 0;
+    };
+    std::vector<DebugAoeRing> _debugAoeRings;
+
     int32_t _polysCount = 0;
     int32_t _polysDraw = 0;
     uint16_t _FPS = 0;

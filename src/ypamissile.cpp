@@ -1849,6 +1849,14 @@ void NC_STACK_ypamissile::Impact()
     ApplyBuildingAreaDamage();
     ApplySectorAreaDamage();
 
+    // F10 debug overlay: record transient AoE rings at the impact point (no gameplay effect).
+    if ( _world && _world->_showCollDebug )
+    {
+        _world->DebugAddAoeRing(_position, _mislAoeUnitRadius,     255, 140, 0);   // unit AoE: orange
+        _world->DebugAddAoeRing(_position, _mislAoeBuildingRadius, 200, 80, 220);  // building AoE: purple
+        _world->DebugAddAoeRing(_position, _mislAoeSectorRadius,    80, 200, 220); // sector AoE: light cyan
+    }
+
     _mislDirectHitUnits.clear();
     _mislDirectHitBuildings.clear();
     _mislDirectHitSectors.clear();

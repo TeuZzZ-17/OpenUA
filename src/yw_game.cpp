@@ -1,7 +1,11 @@
 #include <inttypes.h>
 #include <string.h>
 #include <math.h>
+#include <stdio.h>
 #include <fstream>
+#include <vector>
+#include <functional>
+#include <set>
 #include "env.h"
 #include "includes.h"
 #include "yw_internal.h"
@@ -6892,14 +6896,70 @@ void NC_STACK_ypaworld::debug_info_draw(TInputState *inpt)
         }
     }
 
-if ( inpt && inpt->KbdLastHit == Input::KC_F10 )
-{
-    _showCollDebug = !_showCollDebug;
-    ypa_log_out("Collision debug overlay: %s\n", _showCollDebug ? "ON" : "OFF");
-}
+    // F10 collision debug overlay: direct key check, no RMB/easy-cheat helper.
+    if ( inpt && inpt->KbdLastHit == Input::KC_F10 )
+        _showCollDebug = !_showCollDebug;
 
     if ( _showCollDebug )
         debug_draw_coll_spheres();
+}
+
+static bool yw_DebugIsLiveBact(NC_STACK_ypabact *unit)
+{
+    return unit &&
+           !unit->_kidRef.IsListType(World::BLIST_CACHE) &&
+           unit->_status != BACT_STATUS_NOPE &&
+           unit->_status != BACT_STATUS_DEAD &&
+           unit->_status != BACT_STATUS_CREATE &&
+           unit->_status != BACT_STATUS_BEAM &&
+           !(unit->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2));
+}
+
+static void yw_DebugVisitLiveBacts(World::RefBactList &bactList, std::function<void(NC_STACK_ypabact *)> visitor)
+{
+    std::set<NC_STACK_ypabact *> visited;
+
+    std::function<void(World::MissileList &)> visitMissiles;
+    std::function<void(World::RefBactList &)> visitBacts = [&](World::RefBactList &list)
+    {
+        for (NC_STACK_ypabact *unit : list)
+        {
+            if ( !yw_DebugIsLiveBact(unit) || !visited.insert(unit).second )
+                continue;
+
+            visitor(unit);
+            visitBacts(unit->_kidList);
+            visitMissiles(unit->_missiles_list);
+        }
+    };
+
+    visitMissiles = [&](World::MissileList &list)
+    {
+        for (NC_STACK_ypamissile *missile : list)
+        {
+            if ( !yw_DebugIsLiveBact(missile) || !visited.insert(missile).second )
+                continue;
+
+            visitor(missile);
+            visitBacts(missile->_kidList);
+            visitMissiles(missile->_missiles_list);
+        }
+    };
+
+    visitBacts(bactList);
+}
+
+static bool yw_DebugRadiusValid(float radius)
+{
+    return radius > 0.01f && radius < 100000.0f;
+}
+
+static bool yw_DebugIsCurrentControlledBact(NC_STACK_ypaworld *world, NC_STACK_ypabact *unit)
+{
+    return world &&
+           unit &&
+           (unit == world->_userUnit ||
+            (unit == world->_viewerBact && unit->getBACT_inputting()));
 }
 
 void NC_STACK_ypaworld::debug_draw_coll_spheres()
@@ -6909,43 +6969,52 @@ void NC_STACK_ypaworld::debug_draw_coll_spheres()
     int screenH = GFX::Engine.GetScreenH();
 
     TF::TForm3D *view = TF::Engine.GetViewPoint();
+    if (!view)
+        return;
+
     const mat4x4f &Proj = GFX::Engine.GetProjectionMatrix();
     float nearZ = GFX::Engine.GetProjectionNear();
 
-    // Project world pos to screen pixel. Returns false if behind camera.
     auto project = [&](const vec3d &worldPos, int &sx, int &sy) -> bool {
         vec3d cam = view->CalcSclRot.Transform(worldPos - view->CalcPos);
-        if (cam.z < nearZ) return false;
-        vec3d p  = Proj.Transform(cam);
-        float w  = Proj.CalcW(cam);
-        if (w <= 0.001f) return false;
+        if (cam.z < nearZ)
+            return false;
+        vec3d p = Proj.Transform(cam);
+        float w = Proj.CalcW(cam);
+        if (w <= 0.001f)
+            return false;
         sx = (int)((p.x / w * 0.5f + 0.5f) * screenW);
         sy = (int)((1.0f - (p.y / w * 0.5f + 0.5f)) * screenH);
-        return true;
+        return sx >= -64 && sx <= screenW + 64 && sy >= -64 && sy <= screenH + 64;
     };
 
-    // Draw one great-circle ring (axis 0=XY, 1=XZ, 2=YZ).
     const int SEGS = 12;
-    auto drawRing = [&](const vec3d &center, float radius, int axis,
-                        uint8_t r, uint8_t g, uint8_t b)
-    {
+    auto drawRing = [&](const vec3d &center, float radius, int axis, uint8_t r, uint8_t g, uint8_t b) {
+        if (radius < 0.01f)
+            return;
+
         int px0 = 0, py0 = 0;
         bool hasPrev = false;
         for (int i = 0; i <= SEGS; i++)
         {
-            float a  = 2.0f * M_PI * i / SEGS;
+            float a = 2.0f * M_PI * i / SEGS;
             float ca = cosf(a) * radius;
             float sa = sinf(a) * radius;
             vec3d p;
-            if      (axis == 0) p = center + vec3d(ca, sa, 0.0);
-            else if (axis == 1) p = center + vec3d(ca, 0.0, sa);
-            else                p = center + vec3d(0.0, ca, sa);
-            int sx, sy;
+            if (axis == 0)
+                p = center + vec3d(ca, sa, 0.0);
+            else if (axis == 1)
+                p = center + vec3d(ca, 0.0, sa);
+            else
+                p = center + vec3d(0.0, ca, sa);
+
+            int sx = 0, sy = 0;
             if (project(p, sx, sy))
             {
                 if (hasPrev)
                     GFX::GFXEngine::DrawLine(scr, Common::Line(px0, py0, sx, sy), r, g, b);
-                px0 = sx; py0 = sy;
+                px0 = sx;
+                py0 = sy;
                 hasPrev = true;
             }
             else
@@ -6955,42 +7024,219 @@ void NC_STACK_ypaworld::debug_draw_coll_spheres()
         }
     };
 
-    vec3d camPos = view->CalcPos;
-    const float MAX_DIST = 3500.0f;
+    // Single horizontal (XZ) ground ring. Used for large gameplay range radii so the
+    // screen does not get cluttered with full wire spheres for every effect.
+    auto drawFlatRing = [&](const vec3d &center, float radius, uint8_t r, uint8_t g, uint8_t b) {
+        if (radius < 0.01f)
+            return;
 
+        int px0 = 0, py0 = 0;
+        bool hasPrev = false;
+        for (int i = 0; i <= SEGS; i++)
+        {
+            float a = 2.0f * M_PI * i / SEGS;
+            vec3d p = center + vec3d(cosf(a) * radius, 0.0, sinf(a) * radius);
+            int sx = 0, sy = 0;
+            if (project(p, sx, sy))
+            {
+                if (hasPrev)
+                    GFX::GFXEngine::DrawLine(scr, Common::Line(px0, py0, sx, sy), r, g, b);
+                px0 = sx;
+                py0 = sy;
+                hasPrev = true;
+            }
+            else
+            {
+                hasPrev = false;
+            }
+        }
+    };
+
+    // Optional near-object labels. There is deliberately no top-left fallback.
+    CmdStream labels;
+    labels.reserve(4096);
+    FontUA::select_tileset(&labels, 15);
+    int labelCount = 0;
+    const int MAX_LABELS = 40;
+    auto drawLabel = [&](const vec3d &worldPos, const char *txt, uint8_t r, uint8_t g, uint8_t b) {
+        if (labelCount >= MAX_LABELS)
+            return;
+
+        int sx = 0, sy = 0;
+        if (!project(worldPos, sx, sy))
+            return;
+
+        // Keep labels away from the HUD/top-left/top bars. If it cannot be near the object cleanly, skip it.
+        if (sx < 80 || sx > screenW - 180 || sy < 80 || sy > screenH - 80)
+            return;
+
+        FontUA::set_xpos(&labels, sx + 6);
+        FontUA::set_ypos(&labels, sy - 6);
+        // op19: add_txt (op18) outputs at x_out_txt/y_out_txt, NOT at x_out/y_out.
+        // Without this copy those stay at 0,0 and every label lands top-left over the HUD.
+        FontUA::copy_position(&labels);
+        FontUA::set_txtColor(&labels, r, g, b);
+        FontUA::add_txt(&labels, 220, 1, txt);
+        labelCount++;
+    };
+
+    std::vector<NC_STACK_ypabact *> objs;
+    objs.reserve(512);
+
+    auto addObj = [&](NC_STACK_ypabact *unit) {
+        if (!unit)
+            return;
+        if (unit->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2 | BACT_STFLAG_CLEAN))
+            return;
+        for (NC_STACK_ypabact *old : objs)
+            if (old == unit)
+                return;
+        objs.push_back(unit);
+    };
+
+    // _unitsList contains major/root BACTs. Cell lists contain live sector occupants, including many normal units/projectiles.
     for (NC_STACK_ypabact *unit : _unitsList)
+        addObj(unit);
+
+    for (cellArea &cell : _cells)
     {
-        if ((unit->_position - camPos).length() > MAX_DIST)
+        for (NC_STACK_ypabact *unit : cell.unitsList.safe_iter())
+            addObj(unit);
+    }
+
+    vec3d camPos = view->CalcPos;
+    const float RING_MAX_DIST = 8000.0f;
+    const float LABEL_MAX_DIST = 3000.0f;
+
+    for (NC_STACK_ypabact *unit : objs)
+    {
+        float dist = (unit->_position - camPos).length();
+        if (dist > RING_MAX_DIST)
             continue;
 
+        bool isSelfControlled = (unit == _userUnit || unit == _viewerBact || unit->getBACT_inputting());
         vec3d pos = unit->_position;
 
-        // Broad-phase radius: red
-        float R = unit->_radius;
-        drawRing(pos, R, 0, 220, 60, 60);
-        drawRing(pos, R, 1, 220, 60, 60);
-        drawRing(pos, R, 2, 220, 60, 60);
+        // Red broad/fallback radius. Skip only the self radius to avoid cockpit cross lines.
+        if (!isSelfControlled)
+        {
+            float R = unit->_radius;
+            if (R > 0.01f)
+            {
+                drawRing(pos, R, 0, 220, 60, 60);
+                drawRing(pos, R, 1, 220, 60, 60);
+                drawRing(pos, R, 2, 220, 60, 60);
 
-        // Compound spheres: green
+                if (dist <= LABEL_MAX_DIST)
+                {
+                    char buf[64];
+                    snprintf(buf, sizeof(buf), "radius=%.0f", R);
+                    drawLabel(pos + vec3d::OY(R + 15.0f), buf, 220, 60, 60);
+                }
+            }
+        }
+
+        // Green compound collision spheres.
         World::rbcolls *colls = unit->getBACT_collNodes();
         if (colls)
         {
             mat3x3 rotT = unit->_rotation.Transpose();
+            int slot = 0;
+            bool isRobo = unit->_bact_type == BACT_TYPES_ROBO;
             for (const World::TRoboColl &cs : colls->roboColls)
             {
-                if (cs.robo_coll_radius < 0.01f) continue;
+                if (cs.robo_coll_radius < 0.01f)
+                {
+                    slot++;
+                    continue;
+                }
+
                 vec3d sphWorld = pos + rotT.Transform(cs.coll_pos);
                 drawRing(sphWorld, cs.robo_coll_radius, 0, 60, 220, 60);
                 drawRing(sphWorld, cs.robo_coll_radius, 1, 60, 220, 60);
                 drawRing(sphWorld, cs.robo_coll_radius, 2, 60, 220, 60);
+
+                if (dist <= LABEL_MAX_DIST)
+                {
+                    char buf[160];
+                    snprintf(buf, sizeof(buf), "%s[%d] r=%.0f x=%.0f y=%.0f z=%.0f",
+                             isRobo ? "robo_coll" : "coll",
+                             slot,
+                             cs.robo_coll_radius,
+                             cs.coll_pos.x,
+                             cs.coll_pos.y,
+                             cs.coll_pos.z);
+                    drawLabel(sphWorld + vec3d::OY(cs.robo_coll_radius + 15.0f), buf, 60, 220, 60);
+                }
+                slot++;
             }
         }
+
+        // --- GAMEPLAY RANGE RADII (single horizontal ring, distinct colors) ---
+        // Drawn flat to keep the overlay readable. Each only appears if its value is set.
+
+        // Blue = power_radius (mobile/static power influence). Read from the vehicle proto.
+        if ( unit->_bact_type != BACT_TYPES_MISSLE &&
+             unit->_bact_type != BACT_TYPES_ROBO &&
+             unit->_bact_type != BACT_TYPES_GUN &&
+             (size_t)unit->_vehicleID < _vhclProtos.size() )
+        {
+            const World::TVhclProto &proto = _vhclProtos[unit->_vehicleID];
+            if ( proto.power > 0 && proto.power_radius > 0.01f )
+                drawFlatRing(pos, proto.power_radius, 60, 120, 230);
+        }
+
+        // Yellow = spawn trigger radius.
+        if ( unit->_spawn_trigger_radius > 0.01f )
+            drawFlatRing(pos, unit->_spawn_trigger_radius, 230, 220, 60);
+
+        // Magenta = proximity defense trigger radius.
+        if ( unit->_proximity_defense_trigger_radius > 0.01f )
+            drawFlatRing(pos, unit->_proximity_defense_trigger_radius, 230, 60, 200);
+
+        // Cyan = seek-and-explode trigger radius.
+        if ( unit->_seek_and_explode_trigger_radius > 0.01f )
+            drawFlatRing(pos, unit->_seek_and_explode_trigger_radius, 60, 220, 220);
     }
+
+    // --- TRANSIENT AoE IMPACT RINGS (recorded at detonation, fade out by timestamp) ---
+    for (size_t i = 0; i < _debugAoeRings.size(); )
+    {
+        DebugAoeRing &ring = _debugAoeRings[i];
+        if (_timeStamp >= ring.expireStamp)
+        {
+            _debugAoeRings[i] = _debugAoeRings.back();
+            _debugAoeRings.pop_back();
+            continue;
+        }
+        if ((ring.pos - camPos).length() <= RING_MAX_DIST)
+            drawFlatRing(ring.pos, ring.radius, ring.r, ring.g, ring.b);
+        i++;
+    }
+
+    FontUA::reset_tileset(&labels, 15);
+    FontUA::set_end(&labels);
+    GFX::Engine.ProcessDrawSeq(labels);
 }
 
+void NC_STACK_ypaworld::DebugAddAoeRing(const vec3d &pos, float radius, uint8_t r, uint8_t g, uint8_t b)
+{
+    // Only record while the F10 overlay is active, so there is zero cost when off.
+    if ( !_showCollDebug || radius < 0.01f )
+        return;
 
+    DebugAoeRing ring;
+    ring.pos = pos;
+    ring.radius = radius;
+    ring.r = r;
+    ring.g = g;
+    ring.b = b;
+    ring.expireStamp = _timeStamp + 1536; // ~1.5s (1024 ticks = 1s)
 
-
+    _debugAoeRings.push_back(ring);
+    if ( _debugAoeRings.size() > 256 )
+        _debugAoeRings.erase(_debugAoeRings.begin());
+}
 
 void NC_STACK_ypaworld::HistoryAktCreate(NC_STACK_ypabact *bact)
 {
