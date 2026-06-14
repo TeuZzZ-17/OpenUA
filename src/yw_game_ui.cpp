@@ -715,6 +715,51 @@ void sub_4F68FC(float a3, float a4, float a5, float a6, SDL_Color a7)
     GFX::Engine.raster_func201( Common::Line( sub_4F681C({a3, a4}), sub_4F681C({a5, a6}) )  );
 }
 
+void NC_STACK_ypaworld::RenderMortarMapMarkers()
+{
+    ExpireMortarMarkers();
+
+    if ( !robo_map.IsOpen() || _mortarMarkers.empty() )
+        return;
+
+    if ( robo_map.field_1E0 <= 0.001f || robo_map.field_1E4 <= 0.001f )
+        return;
+
+    SDL_Color orange = {255, 120, 0, 255};
+    GFX::Engine.raster_func217(orange);
+
+    const int SEGS = 32;
+
+    for ( const MortarMarker &marker : _mortarMarkers )
+    {
+        if ( marker.radius <= 0.01f )
+            continue;
+
+        Common::Point cellId = World::PositionToSectorID(marker.pos);
+        if ( !IsSector(cellId) )
+            continue;
+
+        if ( !(robo_map.MapViewMask & SectorAt(cellId).view_mask) )
+            continue;
+
+        Common::Point prev;
+        bool hasPrev = false;
+
+        for (int i = 0; i <= SEGS; i++)
+        {
+            float a = C_2PI * (float)i / (float)SEGS;
+            Common::Point cur = sub_4F681C( { marker.pos.x + cosf(a) * marker.radius,
+                                              marker.pos.z + sinf(a) * marker.radius } );
+
+            if ( hasPrev )
+                GFX::Engine.raster_func201( Common::Line(prev, cur) );
+
+            prev = cur;
+            hasPrev = true;
+        }
+    }
+}
+
 bool GetPlayerRoboAIBehaviorMapTarget(NC_STACK_ypaworld *yw, vec3d *target)
 {
     if ( !yw || !yw->_userRobo || !target )
@@ -2013,6 +2058,7 @@ void sb_0x4f8f64(NC_STACK_ypaworld *yw)
     FontUA::select_tileset(&robo_map.t1_cmdbuf_3, setid);
 
     sb_0x4f8f64__sub1(yw);
+    yw->RenderMortarMapMarkers();
 
     for (int v42 = v38; v42 <= vii; v42++)
     {

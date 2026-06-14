@@ -6910,8 +6910,8 @@ void NC_STACK_ypaworld::debug_info_draw(TInputState *inpt)
     if ( inpt && inpt->KbdLastHit == Input::KC_T && !_isNetGame && _cellOnMouse )
         TryManualMortarCall(_cellMouseIsectPos);
 
-    // OpenUA custom: always render active bombardment markers (independent of F10).
-    RenderMortarMarkers();
+    // OpenUA custom: keep strategic-map mortar markers from lingering after expiry.
+    ExpireMortarMarkers();
 }
 
 static bool yw_DebugIsLiveBact(NC_STACK_ypabact *unit)
@@ -7255,6 +7255,11 @@ void NC_STACK_ypaworld::AddMortarMarker(const vec3d &pos, float radius, int owne
     if ( radius < 0.01f )
         return;
 
+    ExpireMortarMarkers();
+
+    if ( lingerMs < 0 )
+        lingerMs = 0;
+
     int32_t expire = _timeStamp + (int32_t)((int64_t)lingerMs * 1024 / 1000); // 1024 ticks = 1s
 
     for (MortarMarker &m : _mortarMarkers)
@@ -7280,12 +7285,9 @@ void NC_STACK_ypaworld::AddMortarMarker(const vec3d &pos, float radius, int owne
         _mortarMarkers.erase(_mortarMarkers.begin());
 }
 
-// OpenUA custom: draw active bombardment markers as ground rings (warning color).
-// Self-contained projection + line drawing, mirroring debug_draw_coll_spheres but
-// always-on (not gated by the F10 overlay).
-void NC_STACK_ypaworld::RenderMortarMarkers()
+// OpenUA custom: expire old bombardment markers without drawing them in the 3D world.
+void NC_STACK_ypaworld::ExpireMortarMarkers()
 {
-    // Expire old markers first (cheap, runs every frame even when empty).
     for (size_t i = 0; i < _mortarMarkers.size(); )
     {
         if ( _timeStamp >= _mortarMarkers[i].expireStamp )
@@ -7295,63 +7297,6 @@ void NC_STACK_ypaworld::RenderMortarMarkers()
         }
         else
             i++;
-    }
-
-    if ( _mortarMarkers.empty() )
-        return;
-
-    SDL_Surface *scr = GFX::Engine.Screen();
-    int screenW = GFX::Engine.GetScreenW();
-    int screenH = GFX::Engine.GetScreenH();
-
-    TF::TForm3D *view = TF::Engine.GetViewPoint();
-    if ( !view )
-        return;
-
-    const mat4x4f &Proj = GFX::Engine.GetProjectionMatrix();
-    float nearZ = GFX::Engine.GetProjectionNear();
-
-    auto project = [&](const vec3d &worldPos, int &sx, int &sy) -> bool {
-        vec3d cam = view->CalcSclRot.Transform(worldPos - view->CalcPos);
-        if (cam.z < nearZ)
-            return false;
-        vec3d p = Proj.Transform(cam);
-        float w = Proj.CalcW(cam);
-        if (w <= 0.001f)
-            return false;
-        sx = (int)((p.x / w * 0.5f + 0.5f) * screenW);
-        sy = (int)((1.0f - (p.y / w * 0.5f + 0.5f)) * screenH);
-        return sx >= -4096 && sx <= screenW + 4096 && sy >= -4096 && sy <= screenH + 4096;
-    };
-
-    const int SEGS = 24;
-    auto drawFlatRing = [&](const vec3d &center, float radius, uint8_t r, uint8_t g, uint8_t b) {
-        if (radius < 0.01f)
-            return;
-        int px0 = 0, py0 = 0;
-        bool hasPrev = false;
-        for (int i = 0; i <= SEGS; i++)
-        {
-            float a = 2.0f * M_PI * i / SEGS;
-            vec3d p = center + vec3d(cosf(a) * radius, 0.0, sinf(a) * radius);
-            int sx = 0, sy = 0;
-            if (project(p, sx, sy))
-            {
-                if (hasPrev)
-                    GFX::GFXEngine::DrawLine(scr, Common::Line(px0, py0, sx, sy), r, g, b);
-                px0 = sx;
-                py0 = sy;
-                hasPrev = true;
-            }
-            else
-                hasPrev = false;
-        }
-    };
-
-    for (const MortarMarker &m : _mortarMarkers)
-    {
-        drawFlatRing(m.pos, m.radius,         255, 90,  0); // outer: orange-red
-        drawFlatRing(m.pos, m.radius * 0.66f, 255, 160, 0); // inner: amber
     }
 }
 

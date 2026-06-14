@@ -738,7 +738,48 @@ void NC_STACK_ypamissile::ApplyDirectHitToBact(NC_STACK_ypabact *bct)
 
     bct->_status_flg &= ~BACT_STFLAG_LAND;
     RememberDirectHitUnit(bct);
+    ApplyDirectPushToBact(bct);
     ApplyDamageToBact(bct, _energy);
+}
+
+void NC_STACK_ypamissile::ApplyDirectPushToBact(NC_STACK_ypabact *bct)
+{
+    if ( !bct || _mislDirectPush <= 0 )
+        return;
+
+    bool allowFriendly = getBACT_viewer();
+
+    if ( _mislEmitter && _mislEmitter->getBACT_inputting() )
+        allowFriendly = true;
+
+    // Reuse the same safety filter as aoe_unit_push: no missiles, no Robo/Host
+    // Station push, no final death wrecks, no shielded robo guns/friendly fire
+    // unless the normal player/viewer path allows it.
+    if ( GetAreaPushSkipReason(bct, allowFriendly) )
+        return;
+
+    // Single-target version of aoe_unit_push. Prefer a true radial direction away
+    // from the impact point; fall back to projectile travel direction for exact
+    // center hits, then to old->current movement, then a harmless axis.
+    vec3d pushDir = bct->_position - _position;
+    float distance = pushDir.length();
+
+    if ( distance > 1.0f )
+    {
+        pushDir /= distance;
+    }
+    else
+    {
+        pushDir = _fly_dir;
+        if ( pushDir.normalise() <= 0.001f )
+        {
+            pushDir = _position - _old_pos;
+            if ( pushDir.normalise() <= 0.001f )
+                pushDir = vec3d(1.0f, 0.0f, 0.0f);
+        }
+    }
+
+    bct->AddAoePush(pushDir, (float)_mislDirectPush);
 }
 
 const char *NC_STACK_ypamissile::GetAreaDamageSkipReason(NC_STACK_ypabact *bct, bool allowFriendly) const
@@ -1090,7 +1131,7 @@ void NC_STACK_ypamissile::ApplyAreaDamage()
                 // class-dependent chaos of touching _fly_dir (some classes never
                 // integrate velocity while idle). Result: tanks, flyers and UFOs all
                 // get the SAME smooth push, independent of mass and ground/air state.
-                if ( doAoePush && !pushSkip )
+                if ( doAoePush && !pushSkip && !(_mislDirectPush > 0 && IsDirectHitUnit(bct)) )
                 {
                     // Radial 3D direction away from the blast, with a safe fallback
                     // when the unit sits exactly at the blast center.
@@ -1742,10 +1783,10 @@ void NC_STACK_ypamissile::UpdateMortarBallistic(update_msg *arg)
     if ( !impactNow )
         return;
 
-    // Timed impact: reuse the exact same path a normal bomb uses on contact,
-    // so AoE damage/push, building/sector damage, VP dead/megadeth, chain FX and
-    // F10 debug rings all fire normally. Guarded so it can only happen once
-    // (status flips to DEAD below and the NORMAL check at the top blocks re-entry).
+    // Timed impact: reuse the same path a normal bomb uses on contact for AoE
+    // damage/push, building/sector damage, VP dead/megadeth and chain FX. Mortar
+    // F10 AoE rings are suppressed in Impact() so they do not look like target
+    // markers in the 3D view.
     bool applySectorDamage = (!(_mislFlags & FLAG_MISL_IGNOREBUILDS) ||
                               (_pSector && _pSector->PurposeType == cellArea::PT_NONE)) &&
                              (_world->_userRobo->_owner == _owner || !_world->_isNetGame);
@@ -1833,6 +1874,7 @@ void NC_STACK_ypamissile::Renew()
     _mislFlags  = 0;
     _mislDelayTime = 0;
     _mislAoeFalloff = 0;
+    _mislDirectPush = 0;
     _mislClusterAge = 0;
     _mislClusterDone = false;
     _mislClusterChild = false;
@@ -2000,7 +2042,7 @@ void NC_STACK_ypamissile::Impact()
     ApplySectorAreaDamage();
 
     // F10 debug overlay: record transient AoE rings at the impact point (no gameplay effect).
-    if ( _world && _world->_showCollDebug )
+    if ( _world && _world->_showCollDebug && !_isMortarProjectile )
     {
         _world->DebugAddAoeRing(_position, _mislAoeUnitRadius,     255, 140, 0);   // unit AoE: orange
         _world->DebugAddAoeRing(_position, _mislAoeBuildingRadius, 200, 80, 220);  // building AoE: purple
@@ -2206,6 +2248,11 @@ void NC_STACK_ypamissile::SetAreaDamage(float unitRadius, int unitEnergy, float 
 void NC_STACK_ypamissile::SetAoeUnitPush(int push)
 {
     _mislAoeUnitPush = push;
+}
+
+void NC_STACK_ypamissile::SetDirectPush(int push)
+{
+    _mislDirectPush = push;
 }
 
 void NC_STACK_ypamissile::SetRadiusHeli(float rad)

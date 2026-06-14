@@ -6222,6 +6222,153 @@ static bool ypabact_CanUseMortar(NC_STACK_ypabact *unit)
     return true;
 }
 
+static vec3d ypabact_GetMortarVisualAimPoint(NC_STACK_ypabact *unit, const World::TWeapProto &wproto, const vec3d &targetCenter)
+{
+    vec3d aimPoint = targetCenter;
+
+    if ( unit && wproto.mortar_arc_height > 0.0f )
+    {
+        // Engine convention: +Y is down, so visual artillery elevation aims at a
+        // point above the launcher by subtracting from Y.
+        float elevatedY = unit->_position.y - (wproto.mortar_arc_height * 0.5f);
+        if ( aimPoint.y > elevatedY )
+            aimPoint.y = elevatedY;
+    }
+
+    return aimPoint;
+}
+
+static float ypabact_ClampMortarAimDelta(float delta, float maxRot)
+{
+    if ( maxRot <= 0.0f )
+        return delta;
+
+    if ( delta > maxRot )
+        return maxRot;
+
+    if ( delta < -maxRot )
+        return -maxRot;
+
+    return delta;
+}
+
+static void ypabact_AimMortarLauncherVisual(NC_STACK_ypabact *unit, const World::TWeapProto &wproto,
+                                            const vec3d &targetCenter, int frameTime, bool instant)
+{
+    NC_STACK_ypagun *gun = dynamic_cast<NC_STACK_ypagun *>(unit);
+    if ( !gun || gun->_isDummy )
+        return;
+
+    if ( gun->_gunBasis.length() <= 0.001f || gun->_gunRott.length() <= 0.001f )
+        return;
+
+    vec3d aimPoint = ypabact_GetMortarVisualAimPoint(unit, wproto, targetCenter);
+    vec3d vTgt = aimPoint - unit->_position;
+    float dist = vTgt.length();
+    if ( dist <= 0.001f )
+        return;
+
+    vTgt /= dist;
+
+    unit->_target_vec = targetCenter - unit->_position;
+    unit->_target_dir = vTgt;
+
+    float maxRot = instant ? 0.0f : unit->_maxrot * ((float)frameTime / 1000.0f);
+
+    float xzAngle = 0.0f;
+    float xzWanted = 0.0f;
+    vec3d lx = gun->_gunRott * gun->_gunBasis;
+
+    vec2d xzRot( unit->_rotation.AxisX().dot(lx),
+                 unit->_rotation.AxisX().dot(gun->_gunBasis) );
+
+    if ( xzRot.normalise() > 0.001f )
+        xzAngle = xzRot.xyAngle();
+
+    vec2d xzWant( vTgt.dot(gun->_gunBasis),
+                  vTgt.dot(-lx) );
+
+    if ( xzWant.normalise() > 0.001f )
+        xzWanted = xzWant.xyAngle();
+    else
+        xzWanted = xzAngle;
+
+    if ( gun->_gunMaxSide <= 3.1f )
+    {
+        if ( xzWanted < -gun->_gunMaxSide )
+            xzWanted = -gun->_gunMaxSide;
+
+        if ( xzWanted > gun->_gunMaxSide )
+            xzWanted = gun->_gunMaxSide;
+    }
+
+    float xzDelta = xzWanted - xzAngle;
+
+    if ( gun->_gunMaxSide > 3.1f )
+    {
+        if ( fabs(xzDelta) > C_PI )
+        {
+            if ( xzDelta < -C_PI )
+                xzDelta += C_2PI;
+
+            if ( xzDelta > C_PI )
+                xzDelta -= C_2PI;
+        }
+    }
+
+    xzDelta = ypabact_ClampMortarAimDelta(xzDelta, maxRot);
+
+    if ( fabs(xzDelta) > 0.001f )
+        unit->_rotation *= mat3x3(gun->_gunRott, xzDelta);
+
+    vec3d invRed = -gun->_gunRott;
+    float yAngle = clp_asin( invRed.dot(unit->_rotation.AxisZ()) );
+    float yWant = clp_asin( invRed.dot(vTgt) );
+
+    if ( yWant > gun->_gunMaxUp )
+        yWant = gun->_gunMaxUp;
+
+    if ( yWant < -gun->_gunMaxDown )
+        yWant = -gun->_gunMaxDown;
+
+    float yDelta = yWant - yAngle;
+    yDelta = ypabact_ClampMortarAimDelta(yDelta, maxRot);
+
+    if ( fabs(yDelta) > 0.001f )
+        unit->_rotation = mat3x3::RotateX(instant ? yDelta : yDelta * 0.3f) * unit->_rotation;
+
+    unit->_viewer_rotation = unit->_rotation;
+}
+
+static vec3d ypabact_GetMortarLaunchPosition(NC_STACK_ypabact *unit)
+{
+    if ( !unit )
+        return vec3d(0.0, 0.0, 0.0);
+
+    return unit->_position + unit->_rotation.Transpose().Transform(unit->_fire_pos);
+}
+
+static void ypabact_TriggerMortarFireVisual(NC_STACK_ypabact *unit)
+{
+    NC_STACK_ypagun *gun = dynamic_cast<NC_STACK_ypagun *>(unit);
+    if ( !gun || gun->_isDummy )
+        return;
+
+    int fireTime = gun->_gunFireTime > 0 ? gun->_gunFireTime : 100;
+    if ( gun->_gunFireCount < fireTime )
+        gun->_gunFireCount = fireTime;
+
+    if ( !(unit->_status_flg & BACT_STFLAG_FIRE) )
+    {
+        setState_msg state;
+        state.unsetFlags = 0;
+        state.newStatus = BACT_STATUS_NOPE;
+        state.setFlags = BACT_STFLAG_FIRE;
+
+        unit->SetState(&state);
+    }
+}
+
 // A candidate is a valid mortar target only if it is a real, living enemy actor.
 static bool ypabact_IsMortarEnemy(NC_STACK_ypabact *unit, NC_STACK_ypabact *cand)
 {
@@ -6382,7 +6529,10 @@ static bool ypabact_FireMortarShell(NC_STACK_ypabact *unit, int weaponId, const 
         landing.z += sin(ang) * r;
     }
 
-    vec3d launchPos = unit->_position;
+    ypabact_AimMortarLauncherVisual(unit, wproto, targetCenter, 0, true);
+    ypabact_TriggerMortarFireVisual(unit);
+
+    vec3d launchPos = ypabact_GetMortarLaunchPosition(unit);
 
     ypaworld_arg146 arg147;
     arg147.vehicle_id = weaponId;
@@ -6433,7 +6583,7 @@ static bool ypabact_FireMortarShell(NC_STACK_ypabact *unit, int weaponId, const 
     return true;
 }
 
-void NC_STACK_ypabact::UpdateMortar(update_msg *)
+void NC_STACK_ypabact::UpdateMortar(update_msg *arg)
 {
     if ( !_world )
         return;
@@ -6466,6 +6616,8 @@ void NC_STACK_ypabact::UpdateMortar(update_msg *)
     // Active barrage: fire exactly one shell per frame, respecting the shot delay.
     if ( _mortar_barrage_active )
     {
+        ypabact_AimMortarLauncherVisual(this, wproto, _mortar_target_center, arg ? arg->frameTime : 0, false);
+
         if ( _clock < _mortar_next_shot_time )
             return;
 
@@ -6524,6 +6676,7 @@ bool NC_STACK_ypabact::StartMortarBarrage(const vec3d &targetCenter)
     _mortar_target_center = targetCenter;
     _mortar_next_activation_time = _clock + cooldown;
 
+    ypabact_AimMortarLauncherVisual(this, wproto, targetCenter, 0, true);
     ypabact_FireMortarShell(this, weaponId, wproto, targetCenter);
     _mortar_barrage_shots_fired = 1;
 

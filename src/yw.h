@@ -2217,7 +2217,8 @@ public:
 
     // OpenUA custom: mortar bombardment markers + manual radar-guided call.
     void AddMortarMarker(const vec3d &pos, float radius, int owner, int lingerMs);
-    void RenderMortarMarkers();
+    void ExpireMortarMarkers();
+    void RenderMortarMapMarkers();
     bool TryManualMortarCall(const vec3d &targetPos);
 
     void ProfileCalcValues();
@@ -2626,7 +2627,7 @@ public:
     };
     std::vector<DebugAoeRing> _debugAoeRings;
 
-    // OpenUA custom: active mortar bombardment markers (world-space warning rings).
+    // OpenUA custom: active mortar bombardment markers for the opened strategic map.
     // Independent of the F10 overlay; shown while a barrage is active and a short
     // time after the last shell lands, then auto-expire.
     struct MortarMarker

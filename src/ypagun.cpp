@@ -190,7 +190,7 @@ void NC_STACK_ypagun::AI_layer3(update_msg *arg)
             }
         }
 
-        if ( _gunType == GUN_TYPE_REAL && _gunFireCount > 0 )
+        if ( _gunFireCount > 0 )
         {
             _gunFireCount -= arg->frameTime;
 
@@ -209,7 +209,7 @@ void NC_STACK_ypagun::AI_layer3(update_msg *arg)
 
         if ( _secndTtype != BACT_TGT_TYPE_UNIT )
         {
-            if ( !_secndTtype && _gunType == GUN_TYPE_PROTO )
+            if ( !_secndTtype && _gunType == GUN_TYPE_PROTO && _gunFireCount <= 0 )
             {
                 if ( _status_flg & BACT_STFLAG_FIRE )
                 {

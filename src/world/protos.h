@@ -538,6 +538,10 @@ struct TWeapProto
     int aoe_sector_energy = 0;
     int aoe_falloff = 0;
     int aoe_unit_push = 0;
+    // OpenUA custom: direct-hit single-target knockback. Same movement model as aoe_unit_push,
+    // but only for the primary/direct-hit unit. If both push and aoe_unit_push are set,
+    // the direct-hit unit receives only push; nearby units receive aoe_unit_push.
+    int push = 0;
 //    int field_87C = 0;
     int life_time = 0;
     int life_time_nt = 0;
