@@ -715,89 +715,6 @@ void sub_4F68FC(float a3, float a4, float a5, float a6, SDL_Color a7)
     GFX::Engine.raster_func201( Common::Line( sub_4F681C({a3, a4}), sub_4F681C({a5, a6}) )  );
 }
 
-
-// OpenUA custom: render active mortar bombardment markers as 2D orange rings on
-// the current minimap/radar projection. This intentionally uses sub_4F681C(),
-// so it follows the same panning/zooming/rotation as the existing radar/map.
-void NC_STACK_ypaworld::RenderMortarMarkersOnMinimap()
-{
-    // Expire old markers here too, so the UI path is self-cleaning even if the
-    // debug-info path did not run this frame.
-    for (size_t i = 0; i < _mortarMarkers.size(); )
-    {
-        if ( _timeStamp >= _mortarMarkers[i].expireStamp )
-        {
-            _mortarMarkers[i] = _mortarMarkers.back();
-            _mortarMarkers.pop_back();
-        }
-        else
-            i++;
-    }
-
-    if ( _mortarMarkers.empty() )
-        return;
-
-    SDL_Surface *scr = GFX::Engine.Screen();
-    if ( !scr )
-        return;
-
-    const int left   = robo_map.field_200;
-    const int top    = robo_map.field_204;
-    const int right  = robo_map.field_200 + robo_map.field_1F8 - 1;
-    const int bottom = robo_map.field_204 + robo_map.field_1FC - 1;
-
-    if ( right <= left || bottom <= top )
-        return;
-
-    auto inMap = [&](const Common::Point &p) -> bool {
-        return p.x >= left && p.x <= right && p.y >= top && p.y <= bottom;
-    };
-
-    auto drawMapRing = [&](const vec3d &center, float radius, uint8_t r, uint8_t g, uint8_t b) {
-        if ( radius < 0.01f )
-            return;
-
-        const int SEGS = 40;
-        Common::Point prev;
-        bool hasPrev = false;
-
-        for (int i = 0; i <= SEGS; i++)
-        {
-            float a = 2.0f * C_PI * (float)i / (float)SEGS;
-            vec2d worldPt(center.x + cosf(a) * radius,
-                          center.z + sinf(a) * radius);
-            Common::Point pt = sub_4F681C(worldPt);
-
-            if ( inMap(pt) )
-            {
-                if ( hasPrev )
-                    GFX::GFXEngine::DrawLine(scr, Common::Line(prev.x, prev.y, pt.x, pt.y), r, g, b);
-                prev = pt;
-                hasPrev = true;
-            }
-            else
-            {
-                hasPrev = false;
-            }
-        }
-    };
-
-    for (const MortarMarker &m : _mortarMarkers)
-    {
-        Common::Point markerCell = World::PositionToSectorID(m.pos);
-        if ( !IsSector(markerCell) )
-            continue;
-
-        // Respect the current map/radar visibility mask. If the sector is not
-        // visible in this map mode, do not leak the warning marker either.
-        if ( !(robo_map.MapViewMask & SectorAt(markerCell).view_mask) )
-            continue;
-
-        drawMapRing(m.pos, m.radius,         255, 90,  0);
-        drawMapRing(m.pos, m.radius * 0.66f, 255, 160, 0);
-    }
-}
-
 bool GetPlayerRoboAIBehaviorMapTarget(NC_STACK_ypaworld *yw, vec3d *target)
 {
     if ( !yw || !yw->_userRobo || !target )
@@ -2184,9 +2101,6 @@ void sb_0x4f8f64(NC_STACK_ypaworld *yw)
     FontUA::set_end(&robo_map.t1_cmdbuf_3);
 
     GFX::Engine.ProcessDrawSeq(robo_map.t1_cmdbuf_3);
-
-    // OpenUA custom: draw mortar bombardment warnings on the open strategic map.
-    yw->RenderMortarMarkersOnMinimap();
 }
 
 void sub_4C157C(NC_STACK_ypaworld *yw)
@@ -10433,9 +10347,6 @@ void sb_0x4d7c08__sub0__sub4__sub2__sub0(NC_STACK_ypaworld *yw)
     FontUA::set_end(&buf);
 
     GFX::Engine.ProcessDrawSeq(buf);
-
-    // OpenUA custom: draw mortar bombardment warnings on the small 2D radar.
-    yw->RenderMortarMarkersOnMinimap();
 }
 
 void yw_RenderHUDRadare(NC_STACK_ypaworld *yw)

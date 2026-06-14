@@ -1135,7 +1135,7 @@ void NC_STACK_ypamissile::ApplyBuildingAreaDamage()
     if ( _mislFlags & FLAG_MISL_IGNOREBUILDS )
         return;
 
-    if ( _world->_isNetGame && (!_world->_userRobo || _world->_userRobo->_owner != _owner) )
+    if ( _world->_isNetGame && _world->_userRobo->_owner != _owner )
         return;
 
     Common::Point impactCell = World::PositionToSectorID(_position);
@@ -1197,7 +1197,7 @@ void NC_STACK_ypamissile::ApplySectorAreaDamage()
     if ( _mislFlags & FLAG_MISL_IGNOREBUILDS )
         return;
 
-    if ( _world->_isNetGame && (!_world->_userRobo || _world->_userRobo->_owner != _owner) )
+    if ( _world->_isNetGame && _world->_userRobo->_owner != _owner )
         return;
 
     Common::Point impactCell = World::PositionToSectorID(_position);
@@ -1649,37 +1649,6 @@ void NC_STACK_ypamissile::User_layer(update_msg *arg)
         ResetViewing();
 }
 
-<<<<<<< HEAD
-=======
-
-static bool ypamissile_UpdateCurrentSectorSafe(NC_STACK_ypamissile *missile)
-{
-    if ( !missile )
-        return false;
-
-    NC_STACK_ypaworld *world = missile->getBACT_pWorld();
-    if ( !world )
-        return false;
-
-    yw_130arg sect;
-    sect.pos_x = missile->_position.x;
-    sect.pos_z = missile->_position.z;
-
-    if ( !world->GetSectorInfo(&sect) || !sect.pcell )
-        return false;
-
-    if ( missile->_pSector != sect.pcell )
-    {
-        missile->_cellRef.Detach();
-        missile->_cellRef = sect.pcell->unitsList.push_back(missile);
-    }
-
-    missile->_pSector = sect.pcell;
-    missile->_cellId = sect.CellId;
-    return true;
-}
-
->>>>>>> 6eb9594711bd588515400041b0d3f1e8efcac3a0
 void NC_STACK_ypamissile::SetupMortarShell(const vec3d &startPos, const vec3d &targetPos,
                                            int flightTime, float arcHeight, const vec3d &driftVec)
 {
@@ -1714,11 +1683,7 @@ void NC_STACK_ypamissile::SetupMortarShell(const vec3d &startPos, const vec3d &t
 
 void NC_STACK_ypamissile::UpdateMortarBallistic(update_msg *arg)
 {
-<<<<<<< HEAD
     if ( _status != BACT_STATUS_NORMAL )
-=======
-    if ( _status != BACT_STATUS_NORMAL || !_world )
->>>>>>> 6eb9594711bd588515400041b0d3f1e8efcac3a0
         return;
 
     _mortarElapsed += arg->frameTime;
@@ -1774,20 +1739,6 @@ void NC_STACK_ypamissile::UpdateMortarBallistic(update_msg *arg)
 
     CorrectPositionInLevelBox(NULL);
 
-<<<<<<< HEAD
-=======
-    if ( !ypamissile_UpdateCurrentSectorSafe(this) )
-    {
-        setState_msg dead;
-        dead.setFlags = 0;
-        dead.unsetFlags = 0;
-        dead.newStatus = BACT_STATUS_DEAD;
-        SetState(&dead);
-        ResetViewing();
-        return;
-    }
-
->>>>>>> 6eb9594711bd588515400041b0d3f1e8efcac3a0
     if ( !impactNow )
         return;
 
@@ -1795,18 +1746,9 @@ void NC_STACK_ypamissile::UpdateMortarBallistic(update_msg *arg)
     // so AoE damage/push, building/sector damage, VP dead/megadeth, chain FX and
     // F10 debug rings all fire normally. Guarded so it can only happen once
     // (status flips to DEAD below and the NORMAL check at the top blocks re-entry).
-<<<<<<< HEAD
     bool applySectorDamage = (!(_mislFlags & FLAG_MISL_IGNOREBUILDS) ||
                               (_pSector && _pSector->PurposeType == cellArea::PT_NONE)) &&
                              (_world->_userRobo->_owner == _owner || !_world->_isNetGame);
-=======
-    bool ownerCanApplySectorDamage = !_world->_isNetGame ||
-                                      (_world->_userRobo && _world->_userRobo->_owner == _owner);
-    bool applySectorDamage = _pSector &&
-                             (!(_mislFlags & FLAG_MISL_IGNOREBUILDS) ||
-                              _pSector->PurposeType == cellArea::PT_NONE) &&
-                             ownerCanApplySectorDamage;
->>>>>>> 6eb9594711bd588515400041b0d3f1e8efcac3a0
     vec3d directDamagePos = _position;
 
     if ( applySectorDamage )
@@ -2013,13 +1955,7 @@ void NC_STACK_ypamissile::Impact()
     /* FIXME:
        Needs to check all near sectors too if effective radius affect it*/
 
-    if ( !_pSector && !ypamissile_UpdateCurrentSectorSafe(this) )
-        return;
-
-    if ( !_pSector )
-        return;
-
-    for( NC_STACK_ypabact* bct : _pSector->unitsList.safe_iter() )
+    for( NC_STACK_ypabact* &bct : _pSector->unitsList )
     {
         if ( bct->_bact_type != BACT_TYPES_MISSLE && bct->_bact_type != BACT_TYPES_ROBO && bct->_bact_type != BACT_TYPES_TANK && bct->_bact_type != BACT_TYPES_CAR && bct->_bact_type != BACT_TYPES_GUN && bct->_bact_type != BACT_TYPES_HOVER && !(bct->_status_flg & BACT_STFLAG_DEATH2) )
         {
