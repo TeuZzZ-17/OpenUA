@@ -50,7 +50,7 @@ static float ypabact_GetDamagedThreshold(const NC_STACK_ypabact *bact)
 
 bool NC_STACK_ypabact::ShouldHideFromStrategicUI() const
 {
-    if ( _isUnitGunChild )
+    if ( _isUnitGunChild || _isDummy )
         return true;
 
     if ( _bact_type != BACT_TYPES_GUN )
@@ -1143,6 +1143,11 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _unitGunsSpawned = false;
     _unitGunsHaveParentRotation = false;
     _isUnitGunChild = false;
+    _unitDummiesParentRotation = mat3x3::Ident();
+    _unitDummiesSpawned = false;
+    _unitDummiesHaveParentRotation = false;
+    _isDummy = false;
+    _collNodes = World::rbcolls();
     _heading_speed = 0.0;
     _killer = NULL;
     _killer_owner = 0;
@@ -1285,6 +1290,12 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _unitGunsSpawned = false;
     _unitGunsHaveParentRotation = false;
     _isUnitGunChild = false;
+    _unitDummies.clear();
+    _unitDummiesParentRotation = mat3x3::Ident();
+    _unitDummiesSpawned = false;
+    _unitDummiesHaveParentRotation = false;
+    _isDummy = false;
+    _collNodes = World::rbcolls();
     _adist_sector = 800.0;
     _adist_bact = 650.0;
     _sdist_sector = 200.0;
@@ -1432,6 +1443,7 @@ size_t NC_STACK_ypabact::Deinit()
     _kidRef.Detach();
 
     CleanupUnitGuns(true);
+    CleanupUnitDummies(true);
 
     while (!_kidList.empty())
         _kidList.front()->Delete();
@@ -1609,6 +1621,241 @@ void NC_STACK_ypabact::UpdateUnitGuns(update_msg *)
             }
         }
     }
+}
+
+
+// ================= OpenUA custom: modular dummy attachments =================
+// Mirrors the unit-gun child machinery (SetUnitGuns/UpdateUnitGuns/...), but
+// each slot references a full model = dummy prototype, the child is marked
+// _isDummy (fully inert) and never aims/fires, and a per-slot visual scale and
+// protect flag are supported. Reusing the unit-gun child path gives us spawn,
+// transform-following, UI/minimap/squad hiding and parent cleanup for free.
+
+void NC_STACK_ypabact::SetUnitDummies(const std::vector<World::TUnitDummy> &dummies)
+{
+    CleanupUnitDummies(true);
+
+    _unitDummies = dummies;
+
+    for (World::TUnitDummy &dmy : _unitDummies)
+        dmy.dummy_obj = NULL;
+
+    _unitDummiesParentRotation = mat3x3::Ident();
+    _unitDummiesSpawned = _unitDummies.empty();
+    _unitDummiesHaveParentRotation = false;
+}
+
+void NC_STACK_ypabact::CleanupUnitDummies(bool releaseDummies, bool parentDying)
+{
+    for (World::TUnitDummy &dmy : _unitDummies)
+    {
+        NC_STACK_ypabact *dummyObj = dmy.dummy_obj;
+        dmy.dummy_obj = NULL;
+
+        if ( !dummyObj )
+            continue;
+
+        NC_STACK_ypabact *fallback = parentDying ? _world->_userRobo : this;
+        ypabact_SafeDetachControlFrom(dummyObj, fallback);
+
+        if ( !dummyObj->IsDestroyed() && !(dummyObj->_status_flg & BACT_STFLAG_DEATH1) )
+        {
+            dummyObj->_killer = _killer;
+            dummyObj->Die();
+        }
+
+        if ( releaseDummies )
+            dummyObj->Release();
+    }
+
+    _unitDummiesSpawned = false;
+    _unitDummiesHaveParentRotation = false;
+}
+
+void NC_STACK_ypabact::ClearUnitDummyPointer(NC_STACK_ypabact *dummyObj)
+{
+    for (World::TUnitDummy &dmy : _unitDummies)
+    {
+        if ( dmy.dummy_obj == dummyObj )
+            dmy.dummy_obj = NULL;
+    }
+}
+
+void NC_STACK_ypabact::UpdateUnitDummies(update_msg *)
+{
+    if ( _unitDummies.empty() || _isUnitGunChild || _isDummy || !_world )
+        return;
+
+    if ( _status == BACT_STATUS_DEAD || (_status_flg & BACT_STFLAG_DEATH1) )
+    {
+        CleanupUnitDummies(true);
+        return;
+    }
+
+    mat3x3 parentRotation = _rotation.Transpose();
+    mat3x3 parentRotationDelta = mat3x3::Ident();
+    bool applyParentRotationDelta = false;
+
+    if ( !_unitDummiesHaveParentRotation )
+    {
+        _unitDummiesParentRotation = parentRotation;
+        _unitDummiesHaveParentRotation = true;
+    }
+    else
+    {
+        parentRotationDelta = parentRotation * _unitDummiesParentRotation.Transpose();
+        applyParentRotationDelta = true;
+        _unitDummiesParentRotation = parentRotation;
+    }
+
+    if ( !_unitDummiesSpawned )
+    {
+        _unitDummiesSpawned = true;
+
+        const std::vector<World::TVhclProto> &protos = _world->GetVhclProtos();
+
+        for (World::TUnitDummy &dmy : _unitDummies)
+        {
+            if ( dmy.vehicle_id <= 0 || (size_t)dmy.vehicle_id >= protos.size() )
+            {
+                if ( dmy.vehicle_id != 0 )
+                    ypa_log_out("Dummy attachment: invalid unit_dummy_vehicle %d, slot skipped\n", dmy.vehicle_id);
+                continue;
+            }
+
+            if ( !protos[dmy.vehicle_id].is_dummy )
+            {
+                ypa_log_out("Dummy attachment: prototype %d is not model = dummy, slot skipped\n", dmy.vehicle_id);
+                continue;
+            }
+
+            ypaworld_arg146 dmyReq;
+            dmyReq.vehicle_id = dmy.vehicle_id;
+            dmyReq.pos = _position + _rotation.Transpose().Transform(dmy.pos);
+            dmyReq.skip_unit_guns = true;
+
+            NC_STACK_ypabact *dummyObj = _world->ypaworld_func146(&dmyReq);
+            dmy.dummy_obj = dummyObj;
+
+            if ( dummyObj )
+            {
+                dummyObj->_isDummy = true;
+
+                if ( NC_STACK_ypagun *attachedDummy = dynamic_cast<NC_STACK_ypagun *>(dummyObj) )
+                {
+                    attachedDummy->ypagun_func128(_rotation.Transpose().Transform(dmy.dir), false);
+                    attachedDummy->setGUN_fireType(NC_STACK_ypagun::GUN_TYPE_DUMMY);
+                }
+
+                dummyObj->_owner = _owner;
+                dummyObj->_commandID = dword_5B1128++;
+                dummyObj->_host_station = NULL;
+                dummyObj->_aggr = 0;
+                dummyObj->_isUnitGunChild = true; // hide from strategic UI/minimap/squad
+                dummyObj->setBACT_bactCollisions(false); // decorative module: no unit-vs-unit shove
+
+                if ( _world->_isNetGame )
+                {
+                    dummyObj->_gid |= dummyObj->_owner << 24;
+                    dummyObj->_commandID |= dummyObj->_owner << 24;
+                }
+
+                AddSubject(dummyObj);
+
+                setState_msg createState;
+                createState.setFlags = 0;
+                createState.unsetFlags = 0;
+                createState.newStatus = BACT_STATUS_CREATE;
+                dummyObj->SetState(&createState);
+                dummyObj->_scale_time = dummyObj->_energy_max * 0.2;
+            }
+            else
+            {
+                ypa_log_out("Unable to create Unit-Dummy\n");
+            }
+        }
+    }
+
+    for (World::TUnitDummy &dmy : _unitDummies)
+    {
+        NC_STACK_ypabact *dummyObj = dmy.dummy_obj;
+
+        if ( !dummyObj )
+            continue;
+
+        if ( dummyObj->IsDestroyed() || (dummyObj->_status_flg & BACT_STFLAG_DEATH1) )
+        {
+            dmy.dummy_obj = NULL;
+            continue;
+        }
+
+        bact_arg80 posArg;
+        posArg.pos = _position + _rotation.Transpose().Transform(dmy.pos);
+        posArg.field_C = 4;
+
+        dummyObj->_owner = _owner;
+        dummyObj->SetPosition(&posArg);
+
+        if ( applyParentRotationDelta )
+        {
+            if ( NC_STACK_ypagun *attachedDummy = dynamic_cast<NC_STACK_ypagun *>(dummyObj) )
+            {
+                attachedDummy->_rotation.SetX(parentRotationDelta.Transform(attachedDummy->_rotation.AxisX()));
+                attachedDummy->_rotation.SetY(parentRotationDelta.Transform(attachedDummy->_rotation.AxisY()));
+                attachedDummy->_rotation.SetZ(parentRotationDelta.Transform(attachedDummy->_rotation.AxisZ()));
+                attachedDummy->_gunBasis = parentRotationDelta.Transform(attachedDummy->_gunBasis);
+                attachedDummy->_gunRott = parentRotationDelta.Transform(attachedDummy->_gunRott);
+            }
+        }
+
+        // Keep the first-person/extra-view camera aligned with the dummy's real
+        // facing (unit_dummy_dir_* + parent following). The gun class normally
+        // does this in User_layer, which is disabled for dummies, so sync here.
+        dummyObj->_viewer_rotation = dummyObj->_rotation;
+    }
+}
+
+// Pick the active protective dummy to absorb an incoming hit. Prefer the one
+// closest to the attacker; fall back to the first active protective dummy.
+NC_STACK_ypabact *NC_STACK_ypabact::SelectProtectiveDummy(NC_STACK_ypabact *attacker)
+{
+    NC_STACK_ypabact *best = NULL;
+    NC_STACK_ypabact *firstActive = NULL;
+    float bestDist = 0.0;
+    bool haveAttacker = (attacker != NULL);
+    vec3d srcPos;
+
+    if ( haveAttacker )
+        srcPos = attacker->_position;
+
+    for (World::TUnitDummy &dmy : _unitDummies)
+    {
+        if ( !dmy.protect )
+            continue;
+
+        NC_STACK_ypabact *dummyObj = dmy.dummy_obj;
+        if ( !dummyObj ||
+             dummyObj->IsDestroyed() ||
+             (dummyObj->_status_flg & BACT_STFLAG_DEATH1) ||
+             dummyObj->_status == BACT_STATUS_DEAD ||
+             dummyObj->_energy <= 0 )
+            continue;
+
+        if ( !firstActive )
+            firstActive = dummyObj;
+
+        if ( haveAttacker )
+        {
+            float d = (dummyObj->_position - srcPos).length();
+            if ( !best || d < bestDist )
+            {
+                best = dummyObj;
+                bestDist = d;
+            }
+        }
+    }
+
+    return (haveAttacker && best) ? best : firstActive;
 }
 
 
@@ -1917,6 +2164,7 @@ void NC_STACK_ypabact::Update(update_msg *arg)
     UpdateAoePush(arg);
     UpdateSeekAndExplode(arg);
     UpdateUnitGuns(arg);
+    UpdateUnitDummies(arg);
 
     for( NC_STACK_ypamissile *misl : Utils::IterateListCopy<NC_STACK_ypamissile *>(_missiles_list))
         misl->Update(arg);
@@ -4612,7 +4860,8 @@ void NC_STACK_ypabact::Die()
     ClearActiveDebuff();
     _carrier_spawned_gids.clear();
     CleanupUnitGuns(true, true);
-    
+    CleanupUnitDummies(true, true);
+
     int maxy = _world->getYW_mapSizeY();
     int maxx = _world->getYW_mapSizeX();
 
@@ -4979,6 +5228,7 @@ static bool ypabact_IsValidSeekAndExplodeTarget(NC_STACK_ypabact *unit, NC_STACK
     if ( !unit ||
          !target ||
          unit == target ||
+         target->_isDummy ||
          !unit->getBACT_pWorld() ||
          target->getBACT_pWorld() != unit->getBACT_pWorld() ||
          !ypabact_CanUseGameplayStatusMechanics(target) )
@@ -5217,7 +5467,7 @@ static bool ypabact_IsMissileMultiTargetUnitType(NC_STACK_ypabact *target)
 
 static bool ypabact_IsValidMissileMultiTarget(NC_STACK_ypabact *launcher, NC_STACK_ypabact *target)
 {
-    if ( !launcher || !target || launcher == target || !launcher->getBACT_pWorld() )
+    if ( !launcher || !target || launcher == target || target->_isDummy || !launcher->getBACT_pWorld() )
         return false;
 
     if ( target->getBACT_pWorld() != launcher->getBACT_pWorld() )
@@ -6510,7 +6760,42 @@ void NC_STACK_ypabact::ModifyEnergy(bact_arg84 *arg)
     bool isNetGame = false;
     if (_world && _world->_isNetGame)
         isNetGame = true;
-    
+
+    // ---- OpenUA: protective dummy damage absorption (single-player only) ----
+    // Route incoming damage to an active protective dummy module before it
+    // reaches the parent. If the dummy survives, the parent takes nothing; if
+    // the hit destroys the dummy, only the leftover passes through. Net games
+    // keep vanilla routing to avoid desync.
+    if ( arg->energy < 0 && !_isDummy && !isNetGame && !_unitDummies.empty() )
+    {
+        NC_STACK_ypabact *prot = SelectProtectiveDummy(arg->unit);
+        if ( prot && prot != this )
+        {
+            int incoming = -arg->energy;   // positive damage amount
+            int dummyHP  = prot->_energy;  // remaining dummy health
+
+            if ( incoming <= dummyHP )
+            {
+                // Dummy absorbs the whole hit; parent untouched.
+                bact_arg84 dmgArg;
+                dmgArg.energy = arg->energy;
+                dmgArg.unit   = arg->unit;
+                prot->ModifyEnergy(&dmgArg);
+                return;
+            }
+
+            // Dummy is destroyed; only the leftover damage passes to the parent.
+            bact_arg84 dmgArg;
+            dmgArg.energy = -dummyHP;
+            dmgArg.unit   = arg->unit;
+            prot->ModifyEnergy(&dmgArg);
+
+            arg->energy += dummyHP;        // reduce parent damage by absorbed part
+            if ( arg->energy >= 0 )
+                return;
+        }
+    }
+
     bool friendlyFire = false;
     if (!arg->unit || _owner == arg->unit->_owner)
         friendlyFire = true;
@@ -7221,6 +7506,10 @@ NC_STACK_ypabact * NC_STACK_ypabact::GetEnemyCandidateInSector(const cellArea &c
         // Do not target missile or dead
         if ( cel_unit->_bact_type == BACT_TYPES_MISSLE ||
              cel_unit->_status == BACT_STATUS_DEAD )
+            continue;
+
+        // OpenUA: dummy modules are armor/decoration, never independent AI targets
+        if ( cel_unit->_isDummy )
             continue;
 
         // Do not target same fraction unit or owner == 0

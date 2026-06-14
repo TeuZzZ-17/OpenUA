@@ -2212,6 +2212,7 @@ public:
     
     void debug_info_draw(TInputState *inpt);
     void debug_count_units();
+    void debug_draw_coll_spheres();
     void ProfileCalcValues();
     
     
@@ -2603,6 +2604,7 @@ public:
     update_msg _updateMessage;
     
     int8_t _showDebugMode = 0; // debug info draw modes
+    bool _showCollDebug = false; // F10: draw collision sphere overlay
     
     int32_t _polysCount = 0;
     int32_t _polysDraw = 0;

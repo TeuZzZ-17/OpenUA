@@ -140,6 +140,8 @@ struct TVhclSound
 
 constexpr int DAMAGED_FX_SLOT_COUNT = 8;
 constexpr size_t ROBO_GUN_MAX_COUNT = 20;
+constexpr size_t UNIT_DUMMY_MAX_COUNT = 20; // OpenUA: max dummy attachment slots per parent vehicle
+constexpr size_t UNIT_COLL_MAX_COUNT = 32;  // OpenUA: max compound collision spheres per vehicle
 
 struct TDamagedFXConfig
 {
@@ -227,6 +229,39 @@ struct TRoboGun
         robo_gun_name = b.robo_gun_name;
         icon = b.icon;
         robo_gun_type = b.robo_gun_type;
+        return *this;
+    }
+};
+
+// OpenUA custom: one modular dummy attachment slot on a parent vehicle.
+// The dummy stats/visuals come from a normal vehicle prototype (model = dummy)
+// referenced by vehicle_id; this struct only describes the mount point/options.
+struct TUnitDummy
+{
+    int vehicle_id = 0;            // unit_dummy_vehicle: proto ID of the dummy module
+    vec3d pos = vec3d(0.0, 0.0, 0.0);   // unit_dummy_pos_*: local offset from parent
+    vec3d dir = vec3d(0.0, 0.0, 1.0);   // unit_dummy_dir_*: local initial orientation
+    int protect = 0;               // unit_dummy_protect: absorb damage before parent
+    int destroy_with_parent = 1;   // unit_dummy_destroy_with_parent
+    int hide_when_destroyed = 1;   // unit_dummy_hide_when_destroyed
+    NC_STACK_ypabact *dummy_obj = NULL; // runtime child instance (not parsed)
+
+    TUnitDummy() {}
+
+    TUnitDummy(const TUnitDummy &b)
+    {
+        operator =(b);
+    }
+
+    TUnitDummy& operator=(const TUnitDummy &b)
+    {
+        vehicle_id = b.vehicle_id;
+        pos = b.pos;
+        dir = b.dir;
+        protect = b.protect;
+        destroy_with_parent = b.destroy_with_parent;
+        hide_when_destroyed = b.hide_when_destroyed;
+        dummy_obj = b.dummy_obj;
         return *this;
     }
 };
@@ -411,6 +446,11 @@ struct TVhclProto
     
     TRoboProto *RoboProto = NULL;
     std::vector<TRoboGun> unit_guns;
+
+    int is_dummy = 0;                       // OpenUA: model = dummy (attachable module proto)
+    std::vector<TUnitDummy> unit_dummies;   // OpenUA: dummy attachment slots (parent side)
+
+    rbcolls coll;                           // OpenUA: universal compound collision spheres (coll_*)
 
     ~TVhclProto();
 };

@@ -6891,6 +6891,101 @@ void NC_STACK_ypaworld::debug_info_draw(TInputState *inpt)
                 _showDebugMode++;
         }
     }
+
+if ( inpt && inpt->KbdLastHit == Input::KC_F10 )
+{
+    _showCollDebug = !_showCollDebug;
+    ypa_log_out("Collision debug overlay: %s\n", _showCollDebug ? "ON" : "OFF");
+}
+
+    if ( _showCollDebug )
+        debug_draw_coll_spheres();
+}
+
+void NC_STACK_ypaworld::debug_draw_coll_spheres()
+{
+    SDL_Surface *scr = GFX::Engine.Screen();
+    int screenW = GFX::Engine.GetScreenW();
+    int screenH = GFX::Engine.GetScreenH();
+
+    TF::TForm3D *view = TF::Engine.GetViewPoint();
+    const mat4x4f &Proj = GFX::Engine.GetProjectionMatrix();
+    float nearZ = GFX::Engine.GetProjectionNear();
+
+    // Project world pos to screen pixel. Returns false if behind camera.
+    auto project = [&](const vec3d &worldPos, int &sx, int &sy) -> bool {
+        vec3d cam = view->CalcSclRot.Transform(worldPos - view->CalcPos);
+        if (cam.z < nearZ) return false;
+        vec3d p  = Proj.Transform(cam);
+        float w  = Proj.CalcW(cam);
+        if (w <= 0.001f) return false;
+        sx = (int)((p.x / w * 0.5f + 0.5f) * screenW);
+        sy = (int)((1.0f - (p.y / w * 0.5f + 0.5f)) * screenH);
+        return true;
+    };
+
+    // Draw one great-circle ring (axis 0=XY, 1=XZ, 2=YZ).
+    const int SEGS = 12;
+    auto drawRing = [&](const vec3d &center, float radius, int axis,
+                        uint8_t r, uint8_t g, uint8_t b)
+    {
+        int px0 = 0, py0 = 0;
+        bool hasPrev = false;
+        for (int i = 0; i <= SEGS; i++)
+        {
+            float a  = 2.0f * M_PI * i / SEGS;
+            float ca = cosf(a) * radius;
+            float sa = sinf(a) * radius;
+            vec3d p;
+            if      (axis == 0) p = center + vec3d(ca, sa, 0.0);
+            else if (axis == 1) p = center + vec3d(ca, 0.0, sa);
+            else                p = center + vec3d(0.0, ca, sa);
+            int sx, sy;
+            if (project(p, sx, sy))
+            {
+                if (hasPrev)
+                    GFX::GFXEngine::DrawLine(scr, Common::Line(px0, py0, sx, sy), r, g, b);
+                px0 = sx; py0 = sy;
+                hasPrev = true;
+            }
+            else
+            {
+                hasPrev = false;
+            }
+        }
+    };
+
+    vec3d camPos = view->CalcPos;
+    const float MAX_DIST = 3500.0f;
+
+    for (NC_STACK_ypabact *unit : _unitsList)
+    {
+        if ((unit->_position - camPos).length() > MAX_DIST)
+            continue;
+
+        vec3d pos = unit->_position;
+
+        // Broad-phase radius: red
+        float R = unit->_radius;
+        drawRing(pos, R, 0, 220, 60, 60);
+        drawRing(pos, R, 1, 220, 60, 60);
+        drawRing(pos, R, 2, 220, 60, 60);
+
+        // Compound spheres: green
+        World::rbcolls *colls = unit->getBACT_collNodes();
+        if (colls)
+        {
+            mat3x3 rotT = unit->_rotation.Transpose();
+            for (const World::TRoboColl &cs : colls->roboColls)
+            {
+                if (cs.robo_coll_radius < 0.01f) continue;
+                vec3d sphWorld = pos + rotT.Transform(cs.coll_pos);
+                drawRing(sphWorld, cs.robo_coll_radius, 0, 60, 220, 60);
+                drawRing(sphWorld, cs.robo_coll_radius, 1, 60, 220, 60);
+                drawRing(sphWorld, cs.robo_coll_radius, 2, 60, 220, 60);
+            }
+        }
+    }
 }
 
 

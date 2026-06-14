@@ -580,8 +580,8 @@ public:
     { return _aggr; }
     
     virtual World::rbcolls *getBACT_collNodes()
-    { return NULL; }
-    
+    { return _collNodes.roboColls.empty() ? NULL : &_collNodes; } // OpenUA: universal compound spheres
+
     virtual bool getBACT_extraViewer() const
     { return (_oflags & BACT_OFLAG_EXTRAVIEW) != 0; }    
     
@@ -609,6 +609,13 @@ public:
     void UpdateUnitGuns(update_msg *arg);
     void CleanupUnitGuns(bool releaseGuns, bool parentDying = false);
     void ClearUnitGunPointer(NC_STACK_ypabact *gun);
+
+    // OpenUA custom: modular dummy attachments (mirrors the unit-gun machinery)
+    void SetUnitDummies(const std::vector<World::TUnitDummy> &dummies);
+    void UpdateUnitDummies(update_msg *arg);
+    void CleanupUnitDummies(bool releaseDummies, bool parentDying = false);
+    void ClearUnitDummyPointer(NC_STACK_ypabact *dummy);
+    NC_STACK_ypabact *SelectProtectiveDummy(NC_STACK_ypabact *attacker);
 
     void DeleteAttacker(NC_STACK_ypabact *bact, int tgtType);
     void AddAttacker(NC_STACK_ypabact *bact, int tgtType);
@@ -875,6 +882,14 @@ public:
     bool _unitGunsSpawned;
     bool _unitGunsHaveParentRotation;
     bool _isUnitGunChild;
+    // OpenUA custom: dummy modular attachments
+    std::vector<World::TUnitDummy> _unitDummies;
+    mat3x3 _unitDummiesParentRotation;
+    bool _unitDummiesSpawned;
+    bool _unitDummiesHaveParentRotation;
+    bool _isDummy;
+    // OpenUA custom: universal compound collision spheres for non-robo vehicles
+    World::rbcolls _collNodes;
     float _heading_speed;
     NC_STACK_ypabact *_killer;
     int16_t _killer_owner;

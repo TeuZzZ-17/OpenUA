@@ -137,6 +137,38 @@ bool NC_STACK_ypagun::CheckPedestal()
 
 void NC_STACK_ypagun::AI_layer3(update_msg *arg)
 {
+    if ( _isDummy )
+    {
+        // OpenUA: dummy attachment is fully inert. Only advance the create
+        // (genesis scale-in) and death timelines; never aim, fire, acquire
+        // targets, or run the pedestal check (that would kill an airborne
+        // module). Position/orientation are driven by the parent each frame.
+        switch ( _status )
+        {
+        case BACT_STATUS_DEAD:
+            DeadTimeUpdate(arg);
+            break;
+
+        case BACT_STATUS_CREATE:
+            _scale_time -= arg->frameTime;
+
+            if ( _scale_time <= 0 )
+            {
+                setState_msg arg78;
+                arg78.newStatus = BACT_STATUS_NORMAL;
+                arg78.setFlags = 0;
+                arg78.unsetFlags = 0;
+
+                SetState(&arg78);
+            }
+            break;
+
+        default:
+            break;
+        }
+        return;
+    }
+
     float fTime = arg->frameTime / 1000.0;
 
     switch ( _status )
@@ -341,6 +373,14 @@ void NC_STACK_ypagun::AI_layer3(update_msg *arg)
 
 void NC_STACK_ypagun::User_layer(update_msg *arg)
 {
+    if ( _isDummy )
+    {
+        // OpenUA: a dummy is never player-controlled; stay inert.
+        if ( _status == BACT_STATUS_DEAD )
+            DeadTimeUpdate(arg);
+        return;
+    }
+
     float fTime = arg->frameTime / 1000.0;
 
     if ( _status == BACT_STATUS_NORMAL )
@@ -567,6 +607,9 @@ void NC_STACK_ypagun::Die()
 
         if ( (_gunFlags & GUN_FLAGS_ROBO) && _parent )
             _parent->ClearUnitGunPointer(this);
+
+        if ( _isDummy && _parent )
+            _parent->ClearUnitDummyPointer(this);
     }
 }
 

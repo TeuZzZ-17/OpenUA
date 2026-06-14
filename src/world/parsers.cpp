@@ -918,6 +918,22 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
         return &_vhcl->unit_guns.at(_unitGunID);
     };
 
+    auto getUnitDummy = [this]() -> TUnitDummy *
+    {
+        if ( _unitDummyID < 0 || (size_t)_unitDummyID >= _vhcl->unit_dummies.size() )
+            return NULL;
+
+        return &_vhcl->unit_dummies.at(_unitDummyID);
+    };
+
+    auto getColl = [this]() -> TRoboColl *
+    {
+        if ( _collID < 0 || (size_t)_collID >= _vhcl->coll.roboColls.size() )
+            return NULL;
+
+        return &_vhcl->coll.roboColls.at(_collID);
+    };
+
     if ( !StriCmp(p1, "end") )
     {
         if ( _vhcl->model_id == BACT_TYPES_ROBO )
@@ -986,6 +1002,14 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
         {
             _vhcl->model_id = BACT_TYPES_FLYER;
             _vhcl->initParams.Add(NC_STACK_ypaflyer::FLY_ATT_TYPE, (int32_t)0);
+        }
+        else if ( !StriCmp(p2, "dummy") )
+        {
+            // OpenUA custom: dummy modular attachment prototype.
+            // Reuse the (immobile, attachable) gun runtime class as the visual
+            // carrier; the is_dummy flag makes the runtime object fully inert.
+            _vhcl->model_id = BACT_TYPES_GUN;
+            _vhcl->is_dummy = 1;
         }
         else
         {
@@ -1846,6 +1870,84 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
         if (TRoboGun *gun = getUnitGun())
             gun->robo_gun_name = p2;
     }
+    // ---- OpenUA custom: modular dummy attachments (parent side) ----
+    else if ( !StriCmp(p1, "unit_num_dummies") )
+    {
+        int cnt = parser.stol(p2, NULL, 0);
+
+        if ( cnt < 0 )
+            cnt = 0;
+        else if ( cnt > (int)UNIT_DUMMY_MAX_COUNT )
+            cnt = UNIT_DUMMY_MAX_COUNT;
+
+        _vhcl->unit_dummies.resize(cnt);
+
+        if ( _unitDummyID >= cnt )
+            _unitDummyID = cnt - 1;
+    }
+    else if ( !StriCmp(p1, "unit_act_dummy") )
+    {
+        _unitDummyID = parser.stol(p2, NULL, 0);
+
+        if ( _unitDummyID < 0 )
+            _unitDummyID = 0;
+
+        if ( _unitDummyID >= (int)UNIT_DUMMY_MAX_COUNT )
+            _unitDummyID = UNIT_DUMMY_MAX_COUNT - 1;
+
+        if ( (size_t)_unitDummyID >= _vhcl->unit_dummies.size() )
+            _vhcl->unit_dummies.resize(_unitDummyID + 1);
+    }
+    else if ( !StriCmp(p1, "unit_dummy_vehicle") )
+    {
+        if (TUnitDummy *dmy = getUnitDummy())
+            dmy->vehicle_id = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "unit_dummy_pos_x") )
+    {
+        if (TUnitDummy *dmy = getUnitDummy())
+            dmy->pos.x = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "unit_dummy_pos_y") )
+    {
+        if (TUnitDummy *dmy = getUnitDummy())
+            dmy->pos.y = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "unit_dummy_pos_z") )
+    {
+        if (TUnitDummy *dmy = getUnitDummy())
+            dmy->pos.z = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "unit_dummy_dir_x") )
+    {
+        if (TUnitDummy *dmy = getUnitDummy())
+            dmy->dir.x = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "unit_dummy_dir_y") )
+    {
+        if (TUnitDummy *dmy = getUnitDummy())
+            dmy->dir.y = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "unit_dummy_dir_z") )
+    {
+        if (TUnitDummy *dmy = getUnitDummy())
+            dmy->dir.z = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "unit_dummy_protect") )
+    {
+        if (TUnitDummy *dmy = getUnitDummy())
+            dmy->protect = parser.stol(p2, NULL, 0) ? 1 : 0;
+    }
+    else if ( !StriCmp(p1, "unit_dummy_destroy_with_parent") )
+    {
+        if (TUnitDummy *dmy = getUnitDummy())
+            dmy->destroy_with_parent = parser.stol(p2, NULL, 0) ? 1 : 0;
+    }
+    else if ( !StriCmp(p1, "unit_dummy_hide_when_destroyed") )
+    {
+        if (TUnitDummy *dmy = getUnitDummy())
+            dmy->hide_when_destroyed = parser.stol(p2, NULL, 0) ? 1 : 0;
+    }
     else if ( !StriCmp(p1, "robo_dock_x") )
     {
         robo->dock.x = parser.stof(p2, 0);
@@ -1857,6 +1959,56 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     else if ( !StriCmp(p1, "robo_dock_z") )
     {
         robo->dock.z = parser.stof(p2, 0);
+    }
+    // ---- OpenUA custom: universal compound collision spheres (any vehicle) ----
+    // robo_coll_* below stays untouched for Robo/Host Station; coll_* writes into
+    // the vehicle prototype's own compound-sphere set (bounds-checked).
+    else if ( !StriCmp(p1, "coll_num") )
+    {
+        int cnt = parser.stol(p2, NULL, 0);
+
+        if ( cnt < 0 )
+            cnt = 0;
+        else if ( cnt > (int)UNIT_COLL_MAX_COUNT )
+            cnt = UNIT_COLL_MAX_COUNT;
+
+        _vhcl->coll.roboColls.resize(cnt);
+
+        if ( _collID >= cnt )
+            _collID = cnt - 1;
+    }
+    else if ( !StriCmp(p1, "coll_act") )
+    {
+        _collID = parser.stol(p2, NULL, 0);
+
+        if ( _collID < 0 )
+            _collID = 0;
+
+        if ( _collID >= (int)UNIT_COLL_MAX_COUNT )
+            _collID = UNIT_COLL_MAX_COUNT - 1;
+
+        if ( (size_t)_collID >= _vhcl->coll.roboColls.size() )
+            _vhcl->coll.roboColls.resize(_collID + 1);
+    }
+    else if ( !StriCmp(p1, "coll_radius") )
+    {
+        if (TRoboColl *c = getColl())
+            c->robo_coll_radius = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "coll_x") )
+    {
+        if (TRoboColl *c = getColl())
+            c->coll_pos.x = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "coll_y") )
+    {
+        if (TRoboColl *c = getColl())
+            c->coll_pos.y = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "coll_z") )
+    {
+        if (TRoboColl *c = getColl())
+            c->coll_pos.z = parser.stof(p2, 0);
     }
     else if ( !StriCmp(p1, "robo_coll_num") )
     {
@@ -1957,6 +2109,7 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _roboTmp = TRoboProto();
         _gunID = -1;
         _unitGunID = -1;
+        _unitDummyID = -1;
         _collID = -1;
         _vhclID = parser.stol(opt, NULL, 0);
         _vhcl = &_o._vhclProtos.at(_vhclID);
@@ -2091,6 +2244,7 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
     {
         _gunID = -1;
         _unitGunID = -1;
+        _unitDummyID = -1;
         _collID = -1;
         _vhclID = parser.stol(opt, NULL, 0);
         _vhcl = &_o._vhclProtos.at(_vhclID);

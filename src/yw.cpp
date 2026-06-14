@@ -1503,6 +1503,24 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_height = vhcl.height;
         bacto->_radius = vhcl.radius;
         bacto->_viewer_radius = vhcl.vwr_radius;
+
+        // OpenUA: universal compound collision spheres. If the prototype defines
+        // coll_* spheres, copy them so getBACT_collNodes() exposes them to the
+        // existing narrow-phase collision/hit tests (same path Robo uses). The
+        // broad-phase radius is never shrunk; it is only grown to cover spheres
+        // that stick out beyond the authored radius. Robo/Host Station keep their
+        // own _roboColls path, so vhcl.coll is empty for them (no change).
+        bacto->_collNodes = vhcl.coll;
+        for (const World::TRoboColl &cs : bacto->_collNodes.roboColls)
+        {
+            if ( cs.robo_coll_radius > 0.01 )
+            {
+                float ext = cs.coll_pos.length() + cs.robo_coll_radius;
+                if ( ext > bacto->_radius )
+                    bacto->_radius = ext;
+            }
+        }
+
         bacto->_overeof = vhcl.overeof;
         bacto->_viewer_overeof = vhcl.vwr_overeof;
         bacto->_airconst = vhcl.airconst;
@@ -1516,6 +1534,7 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_gun_power = vhcl.gun_power;
         bacto->_pitch_max = vhcl.max_pitch;
         bacto->_vehicleID = vhcl_id->vehicle_id;
+        bacto->_isDummy = vhcl.is_dummy != 0; // OpenUA: model = dummy -> inert module
         bacto->_weapon = vhcl.weapon;
         bacto->_extra_weapons = vhcl.extra_weapons;
         bacto->_weapon_switch_mode = vhcl.weapon_switch_mode;
@@ -1633,6 +1652,7 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_seek_and_explode_trigger_radius = vhcl.seek_and_explode_trigger_radius > 0.0 ? vhcl.seek_and_explode_trigger_radius : 0.0;
         bacto->_seek_and_explode_triggered = false;
         bacto->SetUnitGuns(vhcl_id->skip_unit_guns ? std::vector<World::TRoboGun>() : vhcl.unit_guns);
+        bacto->SetUnitDummies(vhcl_id->skip_unit_guns ? std::vector<World::TUnitDummy>() : vhcl.unit_dummies);
 
         bacto->_destroyFX = vhcl.dest_fx;
         bacto->_extDestroyFX = vhcl.ExtDestroyFX;
