@@ -11992,17 +11992,34 @@ void NC_STACK_ypaworld::ypaworld_func64__sub21(TInputState *arg)
                 tooltip = 0;
             }
 
-            // OpenUA custom: hovering one of our own mortar platforms must not show the
-            // "select/enter" (+) mouse cursor — it can't be possessed. Map-clicks on it
-            // are handled by HandleMortarMapClick; here we only suppress the misleading
-            // cursor/tooltip. (The blue "your unit" marker overlay is unaffected.)
-            if ( !IsSpectatorControlled() &&
-                 (_guiActFlags & 0x20) && _bactOnMouse &&
-                 _bactOnMouse->_owner == _userRobo->_owner &&
-                 _bactOnMouse->IsMortarPlatform() )
+            // OpenUA custom: mortar cursor feedback.
+            //  - In the 3D world, hovering one of our mortars shows the "can't enter"
+            //    cursor (it can't be possessed).
+            //  - On the strategic map it must instead read as USABLE: a "target here"
+            //    cursor while aiming a selected mortar, and a "selectable" cursor when
+            //    hovering one. (The blue "your unit" marker overlay is unaffected.)
+            if ( !IsSpectatorControlled() )
             {
-                mousePointer = 1;
-                tooltip = 0;
+                bool onMap = (_guiActFlags & 8) != 0;
+                bool hoverOwnMortar = (_guiActFlags & 0x20) && _bactOnMouse &&
+                                      _bactOnMouse->_owner == _userRobo->_owner &&
+                                      _bactOnMouse->IsMortarPlatform();
+
+                if ( onMap && _mortarManualGid )
+                {
+                    mousePointer = 3;   // aiming the bombardment zone: "target here"
+                    tooltip = 0;
+                }
+                else if ( onMap && hoverOwnMortar )
+                {
+                    mousePointer = 2;   // hovering our mortar on the map: "selectable"
+                    tooltip = 0;
+                }
+                else if ( !onMap && hoverOwnMortar )
+                {
+                    mousePointer = 1;   // 3D world: can't be entered
+                    tooltip = 0;
+                }
             }
 
             _doAction = ypaworld_func64__sub21__sub4(arg, doAction);

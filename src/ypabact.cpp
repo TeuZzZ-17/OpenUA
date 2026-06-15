@@ -6203,18 +6203,13 @@ bool NC_STACK_ypabact::IsMortarPlatform()
     return ypabact_GetMortarWeaponId(this) > 0;
 }
 
-// OpenUA custom: true if this is a mortar platform that opted into manual
-// map-click control (mortar_manual_call = 1 on its mortar weapon).
+// OpenUA custom: true if this is a mortar platform usable via manual map-click.
+// Manual map-click control is always enabled for mortars (there is no opt-in flag),
+// so this is equivalent to IsMortarPlatform(); kept as a named, intent-revealing
+// check at the manual-control call sites.
 bool NC_STACK_ypabact::IsManualMortarPlatform()
 {
-    if ( !_world )
-        return false;
-
-    int weaponId = ypabact_GetMortarWeaponId(this);
-    if ( weaponId <= 0 )
-        return false;
-
-    return _world->GetWeaponsProtos().at(weaponId).mortar_manual_call != 0;
+    return IsMortarPlatform();
 }
 
 // OpenUA custom: bombardment zone radius of this unit's mortar weapon (0 if none).
@@ -6446,44 +6441,15 @@ static bool ypabact_IsMortarEnemy(NC_STACK_ypabact *unit, NC_STACK_ypabact *cand
     return true;
 }
 
-// Count valid enemies within barrageRadius (horizontal) around a target center.
-static int ypabact_CountMortarEnemiesInZone(NC_STACK_ypabact *unit, const vec3d &center, float barrageRadius)
-{
-    NC_STACK_ypaworld *world = unit->getBACT_pWorld();
-    if ( !world || barrageRadius <= 0.0 )
-        return 0;
-
-    float radiusSq = barrageRadius * barrageRadius;
-    int sectorRadius = (int)(barrageRadius / World::CVSectorLength) + 2;
-    Common::Point centerCell = World::PositionToSectorID(center);
-
-    int found = 0;
-    for (int y = centerCell.y - sectorRadius; y <= centerCell.y + sectorRadius; y++)
-    {
-        for (int x = centerCell.x - sectorRadius; x <= centerCell.x + sectorRadius; x++)
-        {
-            Common::Point cellId(x, y);
-            if ( !world->IsSector(cellId) )
-                continue;
-
-            cellArea &cell = world->SectorAt(cellId);
-            for (NC_STACK_ypabact *cand : cell.unitsList)
-            {
-                if ( !ypabact_IsMortarEnemy(unit, cand) )
-                    continue;
-                if ( (cand->_position.XZ() - center.XZ()).square() <= radiusSq )
-                    found++;
-            }
-        }
-    }
-
-    return found;
-}
-
-// V1 target selection: pick the nearest valid enemy within [minRange, effRange]
-// and use its position as the barrage center. effRange is the smaller of the
-// firing limit (mortar_max_range, or scan radius as fallback) and the scan radius.
-static bool ypabact_FindMortarTargetZone(NC_STACK_ypabact *unit, const World::TWeapProto &wproto, vec3d *out)
+// V1 target selection: pick the nearest valid enemy within [minRange, effRange] and
+// use its position as the barrage center. effRange is the smaller of the firing limit
+// (mortar_max_range, or scan radius as fallback) and the scan radius.
+//
+// onlyHostStation: when true, only enemy Host Stations (robo) are considered (used for
+// the mortar_prefer_host_station priority pass). The radar requirement is always
+// honoured in both passes: priority only chooses among radar-visible enemies.
+static bool ypabact_ScanMortarTarget(NC_STACK_ypabact *unit, const World::TWeapProto &wproto,
+                                     bool onlyHostStation, vec3d *out)
 {
     NC_STACK_ypaworld *world = unit->getBACT_pWorld();
     if ( !world )
@@ -6520,12 +6486,16 @@ static bool ypabact_FindMortarTargetZone(NC_STACK_ypabact *unit, const World::TW
             cellArea &cell = world->SectorAt(cellId);
 
             // Radar requirement: the target sector must be visible to our faction.
+            // Always enforced, including the Host-Station priority pass.
             if ( wproto.mortar_requires_radar && !cell.IsCanSee(unit->_owner) )
                 continue;
 
             for (NC_STACK_ypabact *cand : cell.unitsList)
             {
                 if ( !ypabact_IsMortarEnemy(unit, cand) )
+                    continue;
+
+                if ( onlyHostStation && cand->_bact_type != BACT_TYPES_ROBO )
                     continue;
 
                 float distSq = (cand->_position.XZ() - unit->_position.XZ()).square();
@@ -6544,16 +6514,19 @@ static bool ypabact_FindMortarTargetZone(NC_STACK_ypabact *unit, const World::TW
     if ( !best )
         return false;
 
-    vec3d targetCenter = best->_position;
-
-    if ( wproto.mortar_requires_enemy_in_zone && wproto.mortar_barrage_radius > 0.0 )
-    {
-        if ( ypabact_CountMortarEnemiesInZone(unit, targetCenter, wproto.mortar_barrage_radius) <= 0 )
-            return false;
-    }
-
-    *out = targetCenter;
+    *out = best->_position;
     return true;
+}
+
+static bool ypabact_FindMortarTargetZone(NC_STACK_ypabact *unit, const World::TWeapProto &wproto, vec3d *out)
+{
+    // Priority pass: among radar-visible enemies, prefer an enemy Host Station (robo)
+    // (mortar_prefer_host_station). Still honours mortar_requires_radar.
+    if ( wproto.mortar_prefer_host_station && ypabact_ScanMortarTarget(unit, wproto, true, out) )
+        return true;
+
+    // Normal pass: nearest valid enemy, honouring the radar requirement.
+    return ypabact_ScanMortarTarget(unit, wproto, false, out);
 }
 
 // Fire a single ballistic mortar shell at the target zone (with per-shell spread).
@@ -6729,6 +6702,11 @@ void NC_STACK_ypabact::UpdateMortar(update_msg *arg)
         return;
     }
 
+    // Manual-only mode: the auto AI is disabled. Active barrages and queued manual
+    // orders (handled above) still run; we just never auto-acquire a target here.
+    if ( wproto.mortar_manual_mode_only )
+        return;
+
     // Cooldown gate between barrages.
     if ( _clock < _mortar_next_activation_time )
         return;
@@ -6792,12 +6770,11 @@ bool NC_STACK_ypabact::StartMortarBarrage(const vec3d &targetCenter)
 }
 
 // Check whether this unit can ACCEPT a manual bombardment call against targetPos.
-// Returns true when the target is valid (manual-call opt-in, range and radar). It
-// does NOT reject by cooldown/in-progress barrage: instead, *outReadyNow tells the
-// caller whether the strike can fire immediately (redirect an active barrage, or
-// start a fresh one off cooldown) or must be QUEUED until the cooldown elapses.
-// mortar_requires_enemy_in_zone is not enforced: a manual strike is the player's
-// explicit decision.
+// Returns true when the target is valid (range and radar; manual control is always
+// enabled for mortars). It does NOT reject by cooldown/in-progress barrage: instead,
+// *outReadyNow tells the caller whether the strike can fire immediately (redirect an
+// active barrage, or start a fresh one off cooldown) or must be QUEUED until the
+// cooldown elapses.
 bool NC_STACK_ypabact::CanManualMortar(const vec3d &targetPos, int *outWeaponId, bool *outReadyNow)
 {
     if ( outReadyNow )
@@ -6812,8 +6789,7 @@ bool NC_STACK_ypabact::CanManualMortar(const vec3d &targetPos, int *outWeaponId,
 
     World::TWeapProto &wproto = _world->GetWeaponsProtos().at(weaponId);
 
-    if ( !wproto.mortar_manual_call )
-        return false;
+    // Manual map-click control is always available for mortars (no opt-in flag).
 
     if ( wproto.mortar_barrage_shots <= 0 )
         return false;

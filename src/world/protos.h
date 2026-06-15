@@ -587,8 +587,9 @@ struct TWeapProto
     float mortar_min_range = 0.0;          // min distance from mortar to target zone
     float mortar_max_range = 0.0;          // max distance; if <=0 falls back to mortar_scan_radius
     int   mortar_requires_radar = 1;       // 1 = target sector must be visible to the owner faction
-    int   mortar_requires_enemy_in_zone = 1; // 1 = at least one enemy inside barrage radius
-    float mortar_barrage_radius = 0.0;     // bombardment zone radius (enemy-in-zone / marker size)
+    int   mortar_manual_mode_only = 0;     // 1 = disable the auto AI; the mortar only fires via manual map-click
+    int   mortar_prefer_host_station = 0;  // 1 = auto AI prefers an enemy Host Station (robo) among radar-visible enemies (still honours mortar_requires_radar)
+    float mortar_barrage_radius = 0.0;     // bombardment zone radius (marker size)
     int   mortar_barrage_shots = 0;        // shells per barrage (<=0 = no barrage)
     int   mortar_barrage_shot_delay = 250; // ms between shells in the same barrage
     int   mortar_barrage_cooldown = 10000; // ms cooldown after a barrage starts
@@ -598,7 +599,6 @@ struct TWeapProto
     float mortar_inflight_drift = 0.0;     // optional small horizontal drift during flight
     int   mortar_airburst = 1;             // 1 = explode at the timed arc apex/target height (airburst); 0 = land on the real terrain height at the shell's own impact point
     int   mortar_minimap_marker = 0;       // 1 = show bombardment zone on the 2D strategic map
-    int   mortar_manual_call = 0;          // 1 = allow manual 2D-map-click bombardment control
     int   mortar_manual_energy_cost = 0;   // DEPRECATED: still parsed for old scripts, ignored at runtime (manual strikes are free)
     NC_STACK_skeleton *wireframe = NULL;
     IDVList initParams;

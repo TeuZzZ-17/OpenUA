@@ -2884,9 +2884,13 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     {
         _wpn->mortar_requires_radar = parser.stol(p2, NULL, 0) != 0 ? 1 : 0;
     }
-    else if ( !StriCmp(p1, "mortar_requires_enemy_in_zone") )
+    else if ( !StriCmp(p1, "mortar_manual_mode_only") )
     {
-        _wpn->mortar_requires_enemy_in_zone = parser.stol(p2, NULL, 0) != 0 ? 1 : 0;
+        _wpn->mortar_manual_mode_only = parser.stol(p2, NULL, 0) != 0 ? 1 : 0;
+    }
+    else if ( !StriCmp(p1, "mortar_prefer_host_station") )
+    {
+        _wpn->mortar_prefer_host_station = parser.stol(p2, NULL, 0) != 0 ? 1 : 0;
     }
     else if ( !StriCmp(p1, "mortar_barrage_radius") )
     {
@@ -2932,10 +2936,6 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     else if ( !StriCmp(p1, "mortar_minimap_marker") )
     {
         _wpn->mortar_minimap_marker = parser.stol(p2, NULL, 0) != 0 ? 1 : 0;
-    }
-    else if ( !StriCmp(p1, "mortar_manual_call") )
-    {
-        _wpn->mortar_manual_call = parser.stol(p2, NULL, 0) != 0 ? 1 : 0;
     }
     else if ( !StriCmp(p1, "mortar_manual_energy_cost") )
     {
