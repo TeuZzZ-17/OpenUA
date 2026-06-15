@@ -860,14 +860,24 @@ bool NC_STACK_ypaworld::HandleMortarMapClick()
         }
 
         int wid = 0;
-        if ( mortar->CanManualMortar(target, &wid) && mortar->StartMortarBarrage(target) )
+        bool readyNow = false;
+        if ( mortar->CanManualMortar(target, &wid, &readyNow) )
         {
-            // Strike accepted: clear selection and hide the white preview ring.
+            // Target is valid (range + radar + manual-call). Fire now if the mortar
+            // is ready, otherwise queue it: it fires when the cooldown elapses. Either
+            // way the azure zone ring appears (now from the shells, or from the pending
+            // marker drawn by UpdateMortar).
+            if ( readyNow )
+                mortar->StartMortarBarrage(target);
+            else
+                mortar->QueueManualMortar(target);
+
+            // Order accepted: clear selection and hide the white preview ring.
             _mortarManualGid = 0;
             _mortarManualRadius = 0.0f;
         }
-        // Else (e.g. on cooldown / out of range): keep the selection + white preview
-        // so the player can simply click again / wait, instead of re-selecting.
+        // Else (out of range / no radar): invalid target, keep the selection + white
+        // preview so the player can pick a different spot without re-selecting.
 
         return true; // consume the target click
     }
@@ -11979,6 +11989,19 @@ void NC_STACK_ypaworld::ypaworld_func64__sub21(TInputState *arg)
                 else
                     mousePointer = 1;
 
+                tooltip = 0;
+            }
+
+            // OpenUA custom: hovering one of our own mortar platforms must not show the
+            // "select/enter" (+) mouse cursor — it can't be possessed. Map-clicks on it
+            // are handled by HandleMortarMapClick; here we only suppress the misleading
+            // cursor/tooltip. (The blue "your unit" marker overlay is unaffected.)
+            if ( !IsSpectatorControlled() &&
+                 (_guiActFlags & 0x20) && _bactOnMouse &&
+                 _bactOnMouse->_owner == _userRobo->_owner &&
+                 _bactOnMouse->IsMortarPlatform() )
+            {
+                mousePointer = 1;
                 tooltip = 0;
             }
 

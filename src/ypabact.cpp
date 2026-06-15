@@ -1141,6 +1141,8 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _mortar_next_activation_time = 0;
     _mortar_next_scan_time = 0;
     _mortar_target_center = vec3d(0.0, 0.0, 0.0);
+    _mortar_has_pending = false;
+    _mortar_pending_target = vec3d(0.0, 0.0, 0.0);
     _seek_and_explode = 0;
     _seek_and_explode_weapon = 0;
     _seek_and_explode_trigger_radius = 0.0;
@@ -1293,6 +1295,8 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _mortar_next_activation_time = 0;
     _mortar_next_scan_time = 0;
     _mortar_target_center = vec3d(0.0, 0.0, 0.0);
+    _mortar_has_pending = false;
+    _mortar_pending_target = vec3d(0.0, 0.0, 0.0);
     _seek_and_explode = 0;
     _seek_and_explode_weapon = 0;
     _seek_and_explode_trigger_radius = 0.0;
@@ -6707,6 +6711,24 @@ void NC_STACK_ypabact::UpdateMortar(update_msg *arg)
         return;
     }
 
+    // Pending manual order (queued while on cooldown): keep its azure zone ring alive
+    // and fire it the instant the cooldown elapses. It takes priority over auto-scan
+    // but never fires early, so it cannot bypass the cooldown.
+    if ( _mortar_has_pending )
+    {
+        if ( wproto.mortar_minimap_marker && wproto.mortar_barrage_radius > 0.0 )
+            _world->AddMortarMarker(_mortar_pending_target, wproto.mortar_barrage_radius, _owner, 1000);
+
+        if ( _clock >= _mortar_next_activation_time )
+        {
+            vec3d pending = _mortar_pending_target;
+            _mortar_has_pending = false;
+            StartMortarBarrage(pending);
+        }
+
+        return;
+    }
+
     // Cooldown gate between barrages.
     if ( _clock < _mortar_next_activation_time )
         return;
@@ -6769,12 +6791,18 @@ bool NC_STACK_ypabact::StartMortarBarrage(const vec3d &targetCenter)
     return true;
 }
 
-// Check whether this unit can answer a manual bombardment call against targetPos.
-// Validates readiness, manual-call opt-in and range/radar. It does NOT enforce the
-// automatic cooldown, an in-progress barrage or enemy-in-zone: a manual strike is
-// the player's explicit order and may interrupt/redirect the current barrage.
-bool NC_STACK_ypabact::CanManualMortar(const vec3d &targetPos, int *outWeaponId)
+// Check whether this unit can ACCEPT a manual bombardment call against targetPos.
+// Returns true when the target is valid (manual-call opt-in, range and radar). It
+// does NOT reject by cooldown/in-progress barrage: instead, *outReadyNow tells the
+// caller whether the strike can fire immediately (redirect an active barrage, or
+// start a fresh one off cooldown) or must be QUEUED until the cooldown elapses.
+// mortar_requires_enemy_in_zone is not enforced: a manual strike is the player's
+// explicit decision.
+bool NC_STACK_ypabact::CanManualMortar(const vec3d &targetPos, int *outWeaponId, bool *outReadyNow)
 {
+    if ( outReadyNow )
+        *outReadyNow = false;
+
     if ( !_world || _world->_isNetGame )
         return false;
 
@@ -6790,15 +6818,6 @@ bool NC_STACK_ypabact::CanManualMortar(const vec3d &targetPos, int *outWeaponId)
     if ( wproto.mortar_barrage_shots <= 0 )
         return false;
 
-    // Mirror exactly when StartMortarBarrage will succeed: either we can redirect an
-    // active barrage (spending its remaining shared budget), or start a fresh one
-    // (idle and off cooldown). A manual call may interrupt/redirect a running barrage
-    // but NEVER bypasses the cooldown once the shot budget is spent (anti-exploit).
-    bool canRedirect = _mortar_barrage_active && _mortar_shots_remaining > 0;
-    bool canStartNew = !_mortar_barrage_active && _clock >= _mortar_next_activation_time;
-    if ( !canRedirect && !canStartNew )
-        return false;
-
     // Range from this unit to the requested target point.
     float maxRange = wproto.mortar_max_range;
     if ( maxRange <= 0.0 )
@@ -6812,9 +6831,7 @@ bool NC_STACK_ypabact::CanManualMortar(const vec3d &targetPos, int *outWeaponId)
         return false;
 
     // Radar: the target sector must be visible to our faction. This is the only
-    // visibility gate on a manual strike. mortar_requires_enemy_in_zone is NOT
-    // enforced here: a manual bombardment is the player's explicit decision, so a
-    // target area inside valid range (and radar, if required) is always allowed.
+    // visibility gate on a manual strike.
     if ( wproto.mortar_requires_radar )
     {
         Common::Point cellId = World::PositionToSectorID(targetPos);
@@ -6822,10 +6839,30 @@ bool NC_STACK_ypabact::CanManualMortar(const vec3d &targetPos, int *outWeaponId)
             return false;
     }
 
+    // Ready now if we can redirect an active barrage (spending its remaining shared
+    // budget) or start a fresh one (idle and off cooldown). Otherwise the order is
+    // still accepted, but queued: it fires when the cooldown elapses. A manual call
+    // NEVER bypasses the cooldown once the shot budget is spent (anti-exploit).
+    if ( outReadyNow )
+    {
+        bool canRedirect = _mortar_barrage_active && _mortar_shots_remaining > 0;
+        bool canStartNew = !_mortar_barrage_active && _clock >= _mortar_next_activation_time;
+        *outReadyNow = canRedirect || canStartNew;
+    }
+
     if ( outWeaponId )
         *outWeaponId = weaponId;
 
     return true;
+}
+
+// Queue a manual strike to fire once the cooldown elapses (used when the target is
+// valid but the mortar is mid-cooldown). The azure zone ring is shown immediately
+// by UpdateMortar while the order is pending. Never fires early (anti-exploit).
+void NC_STACK_ypabact::QueueManualMortar(const vec3d &targetPos)
+{
+    _mortar_pending_target = targetPos;
+    _mortar_has_pending = true;
 }
 
 static NC_STACK_ypabact *ypabact_GetSeekAndExplodePayloadListOwner(NC_STACK_ypabact *unit)
@@ -8771,6 +8808,8 @@ void NC_STACK_ypabact::Renew()
     _mortar_next_activation_time = 0;
     _mortar_next_scan_time = 0;
     _mortar_target_center = vec3d(0.0, 0.0, 0.0);
+    _mortar_has_pending = false;
+    _mortar_pending_target = vec3d(0.0, 0.0, 0.0);
     _seek_and_explode = 0;
     _seek_and_explode_weapon = 0;
     _seek_and_explode_trigger_radius = 0.0;
