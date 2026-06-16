@@ -7,6 +7,38 @@
 #include "ypagun.h"
 #include "yparobo.h"
 
+// OpenUA custom: mortar guns are artillery pieces. They must be aimed only by
+// UpdateMortar()/ypabact_AimMortarLauncherVisual() at the current barrage zone,
+// not by the vanilla gun AI that tracks nearby visible enemies.
+static bool ypagun_UsesMortarWeapon(NC_STACK_ypagun *gun)
+{
+    if ( !gun || !gun->getBACT_pWorld() )
+        return false;
+
+    std::vector<World::TWeapProto> &weapons = gun->getBACT_pWorld()->GetWeaponsProtos();
+    int candidates[4] = { gun->_weapon, gun->_extra_weapons[0], gun->_extra_weapons[1], gun->_extra_weapons[2] };
+
+    for (int i = 0; i < 4; i++)
+    {
+        int id = candidates[i];
+        if ( id > 0 && (size_t)id < weapons.size() && weapons.at(id).IsMortar() )
+            return true;
+    }
+
+    return false;
+}
+
+static void ypagun_ClearVanillaMortarTrackingTarget(NC_STACK_ypagun *gun)
+{
+    if ( !gun || gun->_secndTtype == BACT_TGT_TYPE_NONE )
+        return;
+
+    setTarget_msg clearTarget;
+    clearTarget.tgt_type = BACT_TGT_TYPE_NONE;
+    clearTarget.priority = 1;
+    gun->SetTarget(&clearTarget);
+}
+
 size_t NC_STACK_ypagun::Init(IDVList &stak)
 {
     if ( !NC_STACK_ypabact::Init(stak) )
@@ -205,6 +237,17 @@ void NC_STACK_ypagun::AI_layer3(update_msg *arg)
 
                 SetState(&arg78);
             }
+        }
+
+        // OpenUA custom: if this gun uses a mortar weapon, do not let the
+        // vanilla flak/gun AI visually track or fire at nearby enemies. Mortar
+        // aiming is handled exclusively by UpdateMortar() while a barrage is
+        // active/pending, so idle mortar turrets keep their artillery posture
+        // instead of "following" units they cannot directly shoot.
+        if ( ypagun_UsesMortarWeapon(this) )
+        {
+            ypagun_ClearVanillaMortarTrackingTarget(this);
+            break;
         }
 
         if ( _secndTtype != BACT_TGT_TYPE_UNIT )
@@ -522,6 +565,12 @@ void NC_STACK_ypagun::User_layer(update_msg *arg)
 
 void NC_STACK_ypagun::FightWithBact(bact_arg75 *arg)
 {
+    // OpenUA custom: mortar guns fire only through the mortar barrage system.
+    // The vanilla close-range gun combat path would make them snap/chase nearby
+    // enemies and can launch direct shots, which looks wrong for artillery.
+    if ( ypagun_UsesMortarWeapon(this) )
+        return;
+
     vec3d vTgt = arg->target.pbact->_position - _position;
 
     float dist = vTgt.length();
