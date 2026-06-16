@@ -627,25 +627,23 @@ struct TWeapProto
     float vwr_overeof = 0.0;
     float start_speed = 0.0;
     // OpenUA custom: dedicated mortar barrage weapon ("model = mortar").
-    // All defaults are vanilla-safe: with mortar_barrage_shots <= 0 / no ranges,
-    // a mortar weapon simply never auto-fires.
-    float mortar_scan_radius = 0.0;        // max auto-scan radius around the firing unit (0 = disabled)
+    // All defaults are vanilla-safe: with mortar_barrage_shots <= 0 / no max range,
+    // a mortar weapon simply never fires.
     float mortar_min_range = 0.0;          // min distance from mortar to target zone
-    float mortar_max_range = 0.0;          // max distance; if <=0 falls back to mortar_scan_radius
+    float mortar_max_range = 0.0;          // max distance for manual fire and automatic target search (<=0 = disabled)
     int   mortar_requires_radar = 1;       // 1 = target sector must be visible to the owner faction
     int   mortar_manual_mode_only = 0;     // 1 = disable the auto AI; the mortar only fires via manual map-click
     int   mortar_prefer_host_station = 0;  // 1 = auto AI prefers an enemy Host Station (robo) among radar-visible enemies (still honours mortar_requires_radar)
     float mortar_barrage_radius = 0.0;     // bombardment zone radius (marker size)
     int   mortar_barrage_shots = 0;        // shells per barrage (<=0 = no barrage)
     int   mortar_barrage_shot_delay = 250; // ms between shells in the same barrage
-    int   mortar_barrage_cooldown = 10000; // ms cooldown after a barrage starts
+    int   mortar_barrage_cooldown = 10000; // ms cooldown after a barrage ends
     float mortar_arc_height = 2500.0;      // extra ballistic arc height (engine units)
     int   mortar_flight_time = 2500;       // ms from launch to impact (<=0 => 2500 default)
     float mortar_spread_radius = 0.0;      // per-shell random landing scatter radius
     float mortar_inflight_drift = 0.0;     // optional small horizontal drift during flight
     int   mortar_airburst = 1;             // 1 = explode at the timed arc apex/target height (airburst); 0 = land on the real terrain height at the shell's own impact point
     int   mortar_minimap_marker = 0;       // 1 = show bombardment zone on the 2D strategic map
-    int   mortar_manual_energy_cost = 0;   // DEPRECATED: still parsed for old scripts, ignored at runtime (manual strikes are free)
     // OpenUA custom: looped beam sound for model = laser (snd_loop_sample/volume/pitch).
     // Loaded lazily on first laser activation; vanilla weapons never touch it.
     TVhclSound snd_loop;

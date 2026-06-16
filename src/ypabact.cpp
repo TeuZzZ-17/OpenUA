@@ -1178,6 +1178,7 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _mortar_target_center = vec3d(0.0, 0.0, 0.0);
     _mortar_has_pending = false;
     _mortar_pending_target = vec3d(0.0, 0.0, 0.0);
+    StopLaser();
     _seek_and_explode = 0;
     _seek_and_explode_weapon = 0;
     _seek_and_explode_trigger_radius = 0.0;
@@ -1333,6 +1334,7 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _mortar_target_center = vec3d(0.0, 0.0, 0.0);
     _mortar_has_pending = false;
     _mortar_pending_target = vec3d(0.0, 0.0, 0.0);
+    StopLaser();
     _seek_and_explode = 0;
     _seek_and_explode_weapon = 0;
     _seek_and_explode_trigger_radius = 0.0;
@@ -6244,8 +6246,9 @@ void NC_STACK_ypabact::UpdateProximityDefense(update_msg *)
 
 // ===== OpenUA custom: radar-guided mortar barrage =========================
 
-// Resolve the mortar weapon id for this unit by scanning its main and extra
-// weapon slots. Returns 0 when the unit has no "model = mortar" weapon.
+// Resolve a mortar weapon id from one unit's own main/extra weapon slots.
+// Mounted unit-guns are handled separately so their child BACT owns the barrage
+// runtime state and the shell launch position.
 static int ypabact_GetMortarWeaponId(NC_STACK_ypabact *unit)
 {
     if ( !unit || !unit->getBACT_pWorld() )
@@ -6265,17 +6268,106 @@ static int ypabact_GetMortarWeaponId(NC_STACK_ypabact *unit)
     return 0;
 }
 
-// OpenUA custom: true if this unit carries a "model = mortar" weapon in any slot.
-// Used to keep mortar platforms map-only (no first-person possession).
+static int ypabact_GetVehicleProtoMortarWeaponId(NC_STACK_ypaworld *world, int vehicleId)
+{
+    if ( !world || vehicleId <= 0 || (size_t)vehicleId >= world->GetVhclProtos().size() )
+        return 0;
+
+    const World::TVhclProto &proto = world->GetVhclProtos().at(vehicleId);
+    std::vector<World::TWeapProto> &weapons = world->GetWeaponsProtos();
+
+    int candidates[4] = { proto.weapon, proto.extra_weapons[0], proto.extra_weapons[1], proto.extra_weapons[2] };
+
+    for (int i = 0; i < 4; i++)
+    {
+        int id = candidates[i];
+        if ( id > 0 && (size_t)id < weapons.size() && weapons.at(id).IsMortar() )
+            return id;
+    }
+
+    return 0;
+}
+
+static NC_STACK_ypabact *ypabact_GetMountedMortarActor(NC_STACK_ypabact *unit, int *outWeaponId = NULL)
+{
+    if ( outWeaponId )
+        *outWeaponId = 0;
+
+    if ( !unit || !unit->getBACT_pWorld() )
+        return NULL;
+
+    for (World::TRoboGun &gun : unit->_unitGuns)
+    {
+        NC_STACK_ypabact *gunObj = gun.gun_obj;
+        if ( !gunObj )
+            continue;
+
+        if ( gunObj->IsDestroyed() ||
+             gunObj->_status == BACT_STATUS_DEAD ||
+             gunObj->_status == BACT_STATUS_CREATE ||
+             (gunObj->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2 | BACT_STFLAG_NORENDER)) )
+            continue;
+
+        int weaponId = ypabact_GetMortarWeaponId(gunObj);
+        if ( weaponId > 0 )
+        {
+            if ( outWeaponId )
+                *outWeaponId = weaponId;
+            return gunObj;
+        }
+    }
+
+    return NULL;
+}
+
+static int ypabact_GetMountedMortarWeaponId(NC_STACK_ypabact *unit)
+{
+    if ( !unit || !unit->getBACT_pWorld() )
+        return 0;
+
+    int liveWeaponId = 0;
+    if ( ypabact_GetMountedMortarActor(unit, &liveWeaponId) )
+        return liveWeaponId;
+
+    // Prototype fallback: this lets the parent be recognized as a mortar platform
+    // even before the mounted gun child has finished its create cycle. The live
+    // child still owns actual firing once manual/AI orders are executed.
+    for (const World::TRoboGun &gun : unit->_unitGuns)
+    {
+        int weaponId = ypabact_GetVehicleProtoMortarWeaponId(unit->getBACT_pWorld(), gun.robo_gun_type);
+        if ( weaponId > 0 )
+            return weaponId;
+    }
+
+    return 0;
+}
+
+static NC_STACK_ypabact *ypabact_GetManualMortarActor(NC_STACK_ypabact *unit, int *outWeaponId = NULL)
+{
+    if ( outWeaponId )
+        *outWeaponId = 0;
+
+    int ownWeaponId = ypabact_GetMortarWeaponId(unit);
+    if ( ownWeaponId > 0 )
+    {
+        if ( outWeaponId )
+            *outWeaponId = ownWeaponId;
+        return unit;
+    }
+
+    return ypabact_GetMountedMortarActor(unit, outWeaponId);
+}
+
+// OpenUA custom: true if this unit carries a "model = mortar" weapon in any own
+// slot, or if one of its mounted unit-gun children carries one. Used to keep
+// mortar platforms map-only (no first-person possession).
 bool NC_STACK_ypabact::IsMortarPlatform()
 {
-    return ypabact_GetMortarWeaponId(this) > 0;
+    return ypabact_GetMortarWeaponId(this) > 0 || ypabact_GetMountedMortarWeaponId(this) > 0;
 }
 
 // OpenUA custom: true if this is a mortar platform usable via manual map-click.
-// Manual map-click control is always enabled for mortars (there is no opt-in flag),
-// so this is equivalent to IsMortarPlatform(); kept as a named, intent-revealing
-// check at the manual-control call sites.
+// Manual map-click control is always enabled for mortars (there is no opt-in flag).
 bool NC_STACK_ypabact::IsManualMortarPlatform()
 {
     return IsMortarPlatform();
@@ -6288,11 +6380,19 @@ float NC_STACK_ypabact::GetMortarBarrageRadius()
     if ( !_world )
         return 0.0f;
 
-    int weaponId = ypabact_GetMortarWeaponId(this);
-    if ( weaponId <= 0 )
-        return 0.0f;
+    int weaponId = 0;
+    if ( NC_STACK_ypabact *actor = ypabact_GetManualMortarActor(this, &weaponId) )
+    {
+        (void)actor;
+        if ( weaponId > 0 )
+            return _world->GetWeaponsProtos().at(weaponId).mortar_barrage_radius;
+    }
 
-    return _world->GetWeaponsProtos().at(weaponId).mortar_barrage_radius;
+    weaponId = ypabact_GetMountedMortarWeaponId(this);
+    if ( weaponId > 0 )
+        return _world->GetWeaponsProtos().at(weaponId).mortar_barrage_radius;
+
+    return 0.0f;
 }
 
 static bool ypabact_CanUseMortar(NC_STACK_ypabact *unit)
@@ -6510,9 +6610,8 @@ static bool ypabact_IsMortarEnemy(NC_STACK_ypabact *unit, NC_STACK_ypabact *cand
     return true;
 }
 
-// V1 target selection: pick the nearest valid enemy within [minRange, effRange] and
-// use its position as the barrage center. effRange is the smaller of the firing limit
-// (mortar_max_range, or scan radius as fallback) and the scan radius.
+// V1 target selection: pick the nearest valid enemy within [mortar_min_range,
+// mortar_max_range] and use its position as the barrage center.
 //
 // onlyHostStation: when true, only enemy Host Stations (robo) are considered (used for
 // the mortar_prefer_host_station priority pass). The radar requirement is always
@@ -6526,19 +6625,13 @@ static bool ypabact_ScanMortarTarget(NC_STACK_ypabact *unit, const World::TWeapP
 
     float maxRange = wproto.mortar_max_range;
     if ( maxRange <= 0.0 )
-        maxRange = wproto.mortar_scan_radius;
-    if ( maxRange <= 0.0 )
-        return false; // both unset: mortar cannot auto-fire
-
-    float effRange = maxRange;
-    if ( wproto.mortar_scan_radius > 0.0 && wproto.mortar_scan_radius < effRange )
-        effRange = wproto.mortar_scan_radius;
+        return false; // no max range: mortar cannot auto-fire
 
     float minRange = wproto.mortar_min_range > 0.0 ? wproto.mortar_min_range : 0.0;
-    float effRangeSq = effRange * effRange;
+    float effRangeSq = maxRange * maxRange;
     float minRangeSq = minRange * minRange;
 
-    int sectorRadius = (int)(effRange / World::CVSectorLength) + 2;
+    int sectorRadius = (int)(maxRange / World::CVSectorLength) + 2;
     Common::Point center = World::PositionToSectorID(unit->_position);
 
     NC_STACK_ypabact *best = NULL;
@@ -6697,7 +6790,13 @@ static void ypabact_FireMortarShotAndAdvance(NC_STACK_ypabact *unit, int weaponI
     int delay    = wproto.mortar_barrage_shot_delay > 0 ? wproto.mortar_barrage_shot_delay : 0;
     int cooldown = wproto.mortar_barrage_cooldown  > 0 ? wproto.mortar_barrage_cooldown  : 10000;
 
-    ypabact_FireMortarShell(unit, weaponId, wproto, unit->_mortar_target_center);
+    if ( !ypabact_FireMortarShell(unit, weaponId, wproto, unit->_mortar_target_center) )
+    {
+        // Do not spend barrage budget if the projectile could not be created. Retry
+        // after the normal shot delay instead of silently eating a shell.
+        unit->_mortar_next_shot_time = unit->_clock + delay;
+        return;
+    }
 
     unit->_mortar_shots_remaining--;
 
@@ -6780,8 +6879,8 @@ void NC_STACK_ypabact::UpdateMortar(update_msg *arg)
     if ( _clock < _mortar_next_activation_time )
         return;
 
-    // Throttle the (potentially large-radius) target scan so it never runs every
-    // frame while the mortar is ready but has no valid target in range.
+    // Throttle the mortar_max_range target scan so it never runs every frame while
+    // the mortar is ready but has no valid target in range.
     if ( _clock < _mortar_next_scan_time )
         return;
     _mortar_next_scan_time = _clock + 500;
@@ -6806,7 +6905,14 @@ bool NC_STACK_ypabact::StartMortarBarrage(const vec3d &targetCenter)
         return false;
 
     int weaponId = ypabact_GetMortarWeaponId(this);
-    if ( weaponId <= 0 || !ypabact_CanUseMortar(this) )
+    if ( weaponId <= 0 )
+    {
+        if ( NC_STACK_ypabact *mountedMortar = ypabact_GetMountedMortarActor(this) )
+            return mountedMortar->StartMortarBarrage(targetCenter);
+        return false;
+    }
+
+    if ( !ypabact_CanUseMortar(this) )
         return false;
 
     World::TWeapProto &wproto = _world->GetWeaponsProtos().at(weaponId);
@@ -6853,7 +6959,14 @@ bool NC_STACK_ypabact::CanManualMortar(const vec3d &targetPos, int *outWeaponId,
         return false;
 
     int weaponId = ypabact_GetMortarWeaponId(this);
-    if ( weaponId <= 0 || !ypabact_CanUseMortar(this) )
+    if ( weaponId <= 0 )
+    {
+        if ( NC_STACK_ypabact *mountedMortar = ypabact_GetMountedMortarActor(this) )
+            return mountedMortar->CanManualMortar(targetPos, outWeaponId, outReadyNow);
+        return false;
+    }
+
+    if ( !ypabact_CanUseMortar(this) )
         return false;
 
     World::TWeapProto &wproto = _world->GetWeaponsProtos().at(weaponId);
@@ -6863,10 +6976,9 @@ bool NC_STACK_ypabact::CanManualMortar(const vec3d &targetPos, int *outWeaponId,
     if ( wproto.mortar_barrage_shots <= 0 )
         return false;
 
-    // Range from this unit to the requested target point.
+    // Range from this unit to the requested target point. mortar_max_range is the
+    // single authoritative maximum range for both manual fire and auto-search.
     float maxRange = wproto.mortar_max_range;
-    if ( maxRange <= 0.0 )
-        maxRange = wproto.mortar_scan_radius;
     if ( maxRange <= 0.0 )
         return false;
 
@@ -6906,6 +7018,15 @@ bool NC_STACK_ypabact::CanManualMortar(const vec3d &targetPos, int *outWeaponId,
 // by UpdateMortar while the order is pending. Never fires early (anti-exploit).
 void NC_STACK_ypabact::QueueManualMortar(const vec3d &targetPos)
 {
+    if ( ypabact_GetMortarWeaponId(this) <= 0 )
+    {
+        if ( NC_STACK_ypabact *mountedMortar = ypabact_GetMountedMortarActor(this) )
+        {
+            mountedMortar->QueueManualMortar(targetPos);
+            return;
+        }
+    }
+
     _mortar_pending_target = targetPos;
     _mortar_has_pending = true;
 }
@@ -7023,6 +7144,13 @@ struct TLaserWorldHit
     vec3d damagePos;
 };
 
+struct TLaserUnitHit
+{
+    NC_STACK_ypabact *target = NULL;
+    vec3d hitPoint;
+    float along = 0.0f;
+};
+
 static bool ypabact_LaserGetSectorHit(NC_STACK_ypaworld *world, const vec3d &pos, TLaserWorldHit *outHit)
 {
     if ( !world )
@@ -7084,16 +7212,20 @@ static int ypabact_LaserTickSectorEnergy(const World::TWeapProto &wproto, int co
     return baseEnergy > 0.0f ? (int)ceil(baseEnergy) : 0;
 }
 
-// Hitscan along the forward beam: returns the nearest valid target whose body the beam passes
-// through, within range. Pure forward ray (the beam always fires straight ahead), so it
-// behaves like the player expects even when aiming at empty space.
-static NC_STACK_ypabact *ypabact_LaserHitscan(NC_STACK_ypabact *shooter, const World::TWeapProto &wproto,
-                                              const vec3d &origin,
-                                              const vec3d &dir, float range, vec3d *outHitPoint)
+// Hitscan along the forward beam: returns the nearest valid damage target whose
+// body the beam passes through, within range. This is the final damage trace, so
+// it intentionally includes allies/friendly fire; AI target selection is filtered
+// separately by ypabact_LaserAutoTarget().
+static bool ypabact_LaserHitscan(NC_STACK_ypabact *shooter, const World::TWeapProto &wproto,
+                                 const vec3d &origin, const vec3d &dir, float range,
+                                 TLaserUnitHit *outHit)
 {
+    if ( outHit )
+        *outHit = TLaserUnitHit();
+
     NC_STACK_ypaworld *world = shooter->getBACT_pWorld();
     if ( !world )
-        return NULL;
+        return false;
 
     // Scan the whole square of sectors covering the beam, so off-axis bodies are found.
     int sectorRadius = (int)(range / World::CVSectorLength) + 2;
@@ -7118,17 +7250,19 @@ static NC_STACK_ypabact *ypabact_LaserHitscan(NC_STACK_ypabact *shooter, const W
                     continue;
 
                 vec3d to = bct->_position - origin;
-                float along = to.dot(dir);              // distance projected on the beam
-                vec3d closest = origin + dir * (along > 0.0f ? along : 0.0f);
+                float along = to.dot(dir);
+                if ( along <= 0.0f || along > range )
+                    continue;
+
+                vec3d closest = origin + dir * along;
                 float perp = (bct->_position - closest).length();
 
-                // Forgiving hit thickness: unit size + a base window + an angular term that
-                // widens with distance, so rough aim connects at any range.
+                // Clean hit thickness: unit body radius + weapon radius only. F10
+                // debug displays the weapon radius, so do not add hidden distance
+                // based tolerance here.
                 float weaponRadius = wproto.radius > 0.0f ? wproto.radius : 1.0f;
-                float hitRadius = bct->_radius + weaponRadius + (along > 0.0f ? along : 0.0f) * 0.02f;
+                float hitRadius = bct->_radius + weaponRadius;
 
-                if ( along <= 0.0f || along > range )   // behind muzzle or beyond reach
-                    continue;
                 if ( perp > hitRadius )
                     continue;
 
@@ -7141,10 +7275,17 @@ static NC_STACK_ypabact *ypabact_LaserHitscan(NC_STACK_ypabact *shooter, const W
         }
     }
 
-    if ( best && outHitPoint )
-        *outHitPoint = best->_position;
+    if ( !best )
+        return false;
 
-    return best;
+    if ( outHit )
+    {
+        outHit->target = best;
+        outHit->hitPoint = best->_position;
+        outHit->along = bestAlong;
+    }
+
+    return true;
 }
 
 // AI auto-lock: nearest enemy in a generous forward arc within range. Used for AI-driven
@@ -7387,9 +7528,15 @@ void NC_STACK_ypabact::StopLaser()
         SFXEngine::SFXe.StopCarrier(&_laser_soundcarrier);
 
     _laser_active = false;
+    _laser_fire_request = false;
+    _laser_weapon = -1;
     _laser_energy_ticks = 0;
     _laser_target_gid = 0;
     _laser_target = NULL;
+    _laser_request_start = vec3d(0.0, 0.0, 0.0);
+    _laser_request_dir = vec3d(0.0, 0.0, 0.0);
+    _laser_beam_start = vec3d(0.0, 0.0, 0.0);
+    _laser_beam_end = vec3d(0.0, 0.0, 0.0);
     _laser_next_damage_time = 0;
     _laser_next_fx_time = 0;
     _laser_next_beam_vp_time = 0;
@@ -7425,59 +7572,65 @@ void NC_STACK_ypabact::UpdateLaser(update_msg *arg)
         dir = _rotation.AxisZ();
 
     float range = ypabact_LaserRange(wproto);
-
-    // Aiming model:
-    //   * Existing target path -> honor the target selected by vanilla fire control.
-    //   * Player free fire     -> hitscan along the requested/manual aim direction.
-    //   * AI free fire         -> auto-lock the nearest enemy in a forward arc.
     bool playerControlled = getBACT_inputting() || getBACT_viewer();
 
-    vec3d hitPoint;
-    vec3d worldHitPoint;
-    bool worldHit = ypabact_LaserWorldHit(this, _laser_request_start, dir, range, &worldHitPoint);
-    TLaserWorldHit sectorHit;
-    bool hasSectorHit = false;
-    NC_STACK_ypabact *target = NULL;
-
+    // Aiming model:
+    //   * Explicit vanilla target -> use it only to choose the beam direction.
+    //   * Player free fire        -> keep requested/manual direction.
+    //   * AI free fire            -> auto-pick an enemy and bend the beam toward it.
+    // The final damage trace below is always run along the final direction and can
+    // hit allies/friendly units if they physically stand in front of the aimed target.
     if ( requestedTarget && ypabact_IsLaserDamageTarget(this, requestedTarget) )
     {
         vec3d toT = requestedTarget->_position - _laser_request_start;
         float l = toT.length();
         if ( l > 0.001f && l <= range )
+            dir = toT / l;
+    }
+    else if ( !playerControlled )
+    {
+        NC_STACK_ypabact *aimTarget = ypabact_LaserAutoTarget(this, _laser_request_start, dir, range);
+        if ( aimTarget )
         {
-            vec3d toTDir = toT / l;
-            target = requestedTarget;
-            hitPoint = target->_position;
-            dir = toTDir;
+            vec3d toT = aimTarget->_position - _laser_request_start;
+            float l = toT.length();
+            if ( l > 0.001f )
+                dir = toT / l;
         }
     }
 
-    if ( !target && playerControlled )
+    TLaserUnitHit unitHit;
+    bool hasUnitHit = ypabact_LaserHitscan(this, wproto, _laser_request_start, dir, range, &unitHit);
+
+    vec3d worldHitPoint;
+    bool worldHit = ypabact_LaserWorldHit(this, _laser_request_start, dir, range, &worldHitPoint);
+    float worldAlong = range + 1.0f;
+    if ( worldHit )
     {
-        target = ypabact_LaserHitscan(this, wproto, _laser_request_start, dir, range, &hitPoint);
+        worldAlong = (worldHitPoint - _laser_request_start).dot(dir);
+        if ( worldAlong < 0.0f )
+            worldHit = false;
     }
-    else if ( !target )
-    {
-        target = ypabact_LaserAutoTarget(this, _laser_request_start, dir, range);
-        if ( target )
-        {
-            hitPoint = target->_position;
-            vec3d toT = target->_position - _laser_request_start;
-            float l = toT.length();
-            if ( l > 0.001f )
-                dir = toT / l; // bend the beam onto the locked target
-        }
-    }
+
+    bool useWorldHit = worldHit && (!hasUnitHit || worldAlong <= unitHit.along);
+    NC_STACK_ypabact *target = (!useWorldHit && hasUnitHit) ? unitHit.target : NULL;
+    vec3d hitPoint = target ? unitHit.hitPoint : vec3d(0.0, 0.0, 0.0);
+
+    TLaserWorldHit sectorHit;
+    bool hasSectorHit = false;
 
     bool wasActive = _laser_active;
     _laser_active = true;
 
-    // Beam endpoints captured as plain positions for the (later) render pass.
-    // Unit contact uses vp_dead. World/terrain contact uses vp_megadeth.
     _laser_beam_start = _laser_request_start;
-    _laser_beam_end = target ? hitPoint : (worldHit ? worldHitPoint : (_laser_request_start + dir * range));
+    if ( target )
+        _laser_beam_end = hitPoint;
+    else if ( useWorldHit )
+        _laser_beam_end = worldHitPoint;
+    else
+        _laser_beam_end = _laser_request_start + dir * range;
 
-    if ( !target && worldHit )
+    if ( useWorldHit )
     {
         // Step a little beyond the rendered contact, matching the direct-hit missile
         // path. This reliably selects the sector/building slot under the collision point.
@@ -7584,7 +7737,7 @@ void NC_STACK_ypabact::UpdateLaser(update_msg *arg)
         // projectile megadeth impact: firing into the ground must show vp_megadeth
         // even when no unit was hit. If vp_megadeth is not configured, fall back to
         // vp_dead so old test weapons still show something instead of nothing.
-        if ( worldHit && _clock >= _laser_next_fx_time )
+        if ( useWorldHit && _clock >= _laser_next_fx_time )
         {
             int impactVP = wproto.vp_megadeth > 0 ? wproto.vp_megadeth : wproto.vp_dead;
             if ( impactVP > 0 )
@@ -9567,6 +9720,7 @@ void NC_STACK_ypabact::Renew()
     _mortar_target_center = vec3d(0.0, 0.0, 0.0);
     _mortar_has_pending = false;
     _mortar_pending_target = vec3d(0.0, 0.0, 0.0);
+    StopLaser();
     _seek_and_explode = 0;
     _seek_and_explode_weapon = 0;
     _seek_and_explode_trigger_radius = 0.0;

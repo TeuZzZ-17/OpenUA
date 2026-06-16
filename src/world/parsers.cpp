@@ -2958,11 +2958,6 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
         else
             return ScriptParser::RESULT_BAD_DATA;
     }
-    else if ( !StriCmp(p1, "mortar_scan_radius") )
-    {
-        float v = parser.stof(p2, 0);
-        _wpn->mortar_scan_radius = v > 0.0 ? v : 0.0;
-    }
     else if ( !StriCmp(p1, "mortar_min_range") )
     {
         float v = parser.stof(p2, 0);
@@ -3029,11 +3024,6 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     else if ( !StriCmp(p1, "mortar_minimap_marker") )
     {
         _wpn->mortar_minimap_marker = parser.stol(p2, NULL, 0) != 0 ? 1 : 0;
-    }
-    else if ( !StriCmp(p1, "mortar_manual_energy_cost") )
-    {
-        int v = parser.stol(p2, NULL, 0);
-        _wpn->mortar_manual_energy_cost = v > 0 ? v : 0;
     }
     else if ( !StriCmp(p1, "begin_chain_fx") )
     {
