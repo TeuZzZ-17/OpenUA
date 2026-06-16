@@ -2219,6 +2219,7 @@ public:
     void AddMortarMarker(const vec3d &pos, float radius, int owner, int lingerMs);
     void ExpireMortarMarkers();
     void RenderMortarMapMarkers();
+    void RenderLaserMapBeams(int mapTilesetId);
     bool HandleMortarMapClick(); // 2D-map: select a mortar, then click a target zone
 
     void ProfileCalcValues();
@@ -2383,7 +2384,7 @@ public:
     
     void FreeGameDataCursors();
 
-    void SpawnTransientVP(int32_t modelId, const vec3d &pos, const mat3x3 &rot, int32_t lifeTime);
+    void SpawnTransientVP(int32_t modelId, const vec3d &pos, const mat3x3 &rot, int32_t lifeTime, float scale = 1.0, const World::TVisualTint &tint = World::TVisualTint(), const vec3d &axisScale = vec3d(1.0, 1.0, 1.0));
     void SpawnChainFX(const World::TChainFXConfig &config, const vec3d &pos, const mat3x3 &rot);
     void SpawnAttachedTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime, float scale = 1.0, bool useOwnerTransform = false);
     bool UpdateRandomFXTimer(int intervalMin, int intervalMax, int32_t &nextTime);
@@ -2439,11 +2440,13 @@ public:
         vec3d followLocalOffset;
         bool followUseOwnerTransform = false;
         float scale = 1.0;
+        vec3d axisScale = vec3d(1.0, 1.0, 1.0);
         bool chainFX = false;
         std::vector<NC_STACK_base *> chainBases;
         int32_t chainIndex = -1;
         float startScale = 1.0;
         float endScale = 1.0;
+        World::TVisualTint tint; // OpenUA custom: visual_tint for this spawned model (e.g. laser beam body)
 
         TTransientVP(NC_STACK_base *base, const vec3d &p, const mat3x3 &r, int32_t life)
         : vp(base ? base->GenRenderInstance() : NULL), pos(p), rot(r), lifeTime(life)

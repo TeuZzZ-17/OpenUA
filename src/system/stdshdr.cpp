@@ -16,6 +16,7 @@ layout(std140) uniform Parameters\
     bool Textured;\
     bool Flat;\
     bool ATest;\
+    vec4 ColorMul;\
 };\
 uniform sampler2D texture;\
 in vec4 smoothColor;\
@@ -29,6 +30,7 @@ void main()\
         gl_FragColor = texture2D(texture, texCoords) * clr;\
     else\
         gl_FragColor = clr;\
+    gl_FragColor *= ColorMul;\
     if (ATest && gl_FragColor.w <= 0.0)\
         discard;\
 }";
@@ -46,6 +48,7 @@ layout(std140) uniform Parameters\
     bool Textured;\
     bool Flat;\
     bool ATest;\
+    vec4 ColorMul;\
 };\
 attribute vec3 vPos;\
 attribute vec4 vColor;\

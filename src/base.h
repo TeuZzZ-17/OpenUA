@@ -60,6 +60,8 @@ struct baseRender_msg
     float minZ = 0.;
     float maxZ = 0.;
     uint32_t flags = 0;
+    // OpenUA custom: per-render visual_tint multiplier. Neutral (1,1,1,1) = no change.
+    GFX::TGLColor tint = GFX::TGLColor(1.0, 1.0, 1.0, 1.0);
 };
 
 

@@ -1583,6 +1583,7 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
                                                           vhcl.visual_scale_random_min,
                                                           vhcl.visual_scale_random_max,
                                                           vhcl.visual_scale_axis);
+        bacto->_visual_tint = vhcl.visual_tint;
         bacto->_damaged_fx = vhcl.damaged_fx;
         bacto->_damaged_fx_next_time = 0;
         bacto->_decoration_fx = vhcl.decoration_fx;
@@ -1807,6 +1808,7 @@ NC_STACK_ypamissile * NC_STACK_ypaworld::ypaworld_func147(ypaworld_arg146 *arg)
                                                     wproto.visual_scale_random_min,
                                                     wproto.visual_scale_random_max,
                                                     wproto.visual_scale_axis);
+    wobj->_visual_tint = wproto.visual_tint;
 
     wobj->_destroyFX = wproto.dfx;
     wobj->_extDestroyFX = wproto.ExtDestroyFX;

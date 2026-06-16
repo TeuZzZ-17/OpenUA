@@ -3,6 +3,7 @@
 #include <math.h>
 #include <iterator>
 #include <array>
+#include <algorithm>
 #include <map>
 #include "env.h"
 #include "includes.h"
@@ -779,6 +780,167 @@ void NC_STACK_ypaworld::RenderMortarMapMarkers()
 
         yw_DrawMortarMapCircle(_cellMouseIsectPos.x, _cellMouseIsectPos.z, _mortarManualRadius, SEGS);
         yw_DrawMortarMapCircle(_cellMouseIsectPos.x, _cellMouseIsectPos.z, _mortarManualRadius * 0.66f, SEGS);
+    }
+}
+
+
+static bool yw_ReadSurfacePixel(SDL_Surface *surface, int x, int y, Uint32 *out)
+{
+    if ( !surface || !out || x < 0 || y < 0 || x >= surface->w || y >= surface->h )
+        return false;
+
+    const int bpp = surface->format->BytesPerPixel;
+    Uint8 *p = (Uint8 *)surface->pixels + y * surface->pitch + x * bpp;
+
+    switch ( bpp )
+    {
+    case 1:
+        *out = *p;
+        return true;
+
+    case 2:
+        *out = *(Uint16 *)p;
+        return true;
+
+    case 3:
+        if ( SDL_BYTEORDER == SDL_BIG_ENDIAN )
+            *out = (p[0] << 16) | (p[1] << 8) | p[2];
+        else
+            *out = p[0] | (p[1] << 8) | (p[2] << 16);
+        return true;
+
+    case 4:
+        *out = *(Uint32 *)p;
+        return true;
+
+    default:
+        break;
+    }
+
+    return false;
+}
+
+// OpenUA custom: laser map/radar beams should visually match the normal
+// missile dots. Missile dots are not drawn with GetColor(owner); they use the
+// owner-specific missile tile (owner + 1) from the active map/radar tileset.
+// This samples the same tile and picks a bright/saturated non-transparent pixel.
+// If anything goes wrong, fallback is the old owner color.
+static SDL_Color yw_GetMapProjectileOwnerColor(NC_STACK_ypaworld *yw, int owner, int tilesetId)
+{
+    SDL_Color fallback = {255, 255, 255, 255};
+    if ( yw && owner >= 0 )
+        fallback = yw->GetColor(owner);
+
+    if ( !yw || owner < 0 || tilesetId < 0 || tilesetId >= (int)yw->_guiTiles.size() )
+        return fallback;
+
+    TileMap *tiles = yw->_guiTiles[tilesetId];
+    if ( !tiles || !tiles->img )
+        return fallback;
+
+    SDL_Surface *surface = tiles->img->GetSwTex();
+    if ( !surface )
+        return fallback;
+
+    const int tileId = owner + 1;
+    if ( tileId < 0 || tileId >= (int)tiles->map.size() )
+        return fallback;
+
+    Common::PointRect src = tiles->map[tileId];
+    if ( src.IsEmpty() )
+        return fallback;
+
+    Uint32 colorKey = 0;
+    const bool hasColorKey = SDL_GetColorKey(surface, &colorKey) == 0;
+
+    bool locked = false;
+    if ( SDL_MUSTLOCK(surface) )
+    {
+        if ( SDL_LockSurface(surface) != 0 )
+            return fallback;
+        locked = true;
+    }
+
+    SDL_Color best = fallback;
+    int bestScore = -1;
+
+    for (int y = 0; y < src.h; y++)
+    {
+        for (int x = 0; x < src.w; x++)
+        {
+            Uint32 pixel = 0;
+            if ( !yw_ReadSurfacePixel(surface, src.x + x, src.y + y, &pixel) )
+                continue;
+
+            if ( hasColorKey && pixel == colorKey )
+                continue;
+
+            Uint8 r = 0, g = 0, b = 0, a = 255;
+            SDL_GetRGBA(pixel, surface->format, &r, &g, &b, &a);
+
+            // Font transparency is usually yellow colorkey; keep this guard too
+            // because some loaded/converted surfaces can hide the raw key value.
+            if ( a == 0 || (r == 255 && g == 255 && b == 0) )
+                continue;
+
+            const int maxc = std::max((int)r, std::max((int)g, (int)b));
+            const int minc = std::min((int)r, std::min((int)g, (int)b));
+            const int sat = maxc - minc;
+            const int luma = (int)r + (int)g + (int)b;
+
+            // Skip black/near-black outline pixels so the line follows the
+            // visible owner colour of the missile dot, not its shadow/border.
+            if ( luma < 20 )
+                continue;
+
+            const int score = luma + sat * 4;
+            if ( score > bestScore )
+            {
+                bestScore = score;
+                best = {r, g, b, 255};
+            }
+        }
+    }
+
+    if ( locked )
+        SDL_UnlockSurface(surface);
+
+    return bestScore >= 0 ? best : fallback;
+}
+
+void NC_STACK_ypaworld::RenderLaserMapBeams(int mapTilesetId)
+{
+    if ( robo_map.field_1E0 <= 0.001f || robo_map.field_1E4 <= 0.001f )
+        return;
+
+    std::vector<NC_STACK_ypabact *> drawn;
+
+    for (int y = 1; y < _mapSize.y; y++)
+    {
+        for (int x = 1; x < _mapSize.x; x++)
+        {
+            cellArea &cell = _cells(x, y);
+            if ( !(robo_map.MapViewMask & cell.view_mask) )
+                continue;
+
+            for ( NC_STACK_ypabact *bact : cell.unitsList )
+            {
+                if ( !bact || !bact->_laser_active )
+                    continue;
+                if ( bact->_status == BACT_STATUS_DEAD || bact->ShouldHideFromStrategicUI() )
+                    continue;
+                if ( bact->IsHiddenFor(GetPlayerOwner()) )
+                    continue;
+                if ( std::find(drawn.begin(), drawn.end(), bact) != drawn.end() )
+                    continue;
+
+                drawn.push_back(bact);
+
+                SDL_Color clr = yw_GetMapProjectileOwnerColor(this, bact->_owner, mapTilesetId);
+                sub_4F68FC(bact->_laser_beam_start.x, bact->_laser_beam_start.z,
+                           bact->_laser_beam_end.x, bact->_laser_beam_end.z, clr);
+            }
+        }
     }
 }
 
@@ -2194,6 +2356,7 @@ void sb_0x4f8f64(NC_STACK_ypaworld *yw)
 
     sb_0x4f8f64__sub1(yw);
     yw->RenderMortarMapMarkers();
+    yw->RenderLaserMapBeams(setid);
 
     for (int v42 = v38; v42 <= vii; v42++)
     {
@@ -9263,9 +9426,11 @@ void yw_RenderInfoReloadbar(NC_STACK_ypaworld *yw, sklt_wis *wis, CmdStream *cur
         if ( bact )
         {
 
-            int v10 = wpn->shot_time_user;
+            int v10 = wpn->IsLaser() ? wpn->laser_energy_tick_time_user : wpn->shot_time_user;
+            if ( v10 <= 0 )
+                v10 = wpn->IsLaser() ? 150 : 1000;
 
-            if ( wpn->salve_shots )
+            if ( !wpn->IsLaser() && wpn->salve_shots )
             {
                 if ( bact->_salve_counter >= wpn->salve_shots )
                     v10 = wpn->salve_delay;
@@ -9296,7 +9461,20 @@ void yw_RenderInfoWeaponInf(NC_STACK_ypaworld *yw, sklt_wis *wis, CmdStream *cur
     {
         std::string txt2;
 
-        if ( vhcl->num_weapons <= 1 )
+        // OpenUA custom: model = laser uses the same public damage readout as
+        // vanilla weapons (energy / 100), plus a trailing "+" when connected
+        // ticks ramp up laser_energy_increment_rate.
+        if ( weap->IsLaser() )
+        {
+            txt2 = fmt::sprintf("%d", weap->energy / 100);
+
+            if ( weap->laser_energy_increment_rate > 0.0f )
+                txt2 += " +";
+
+            if ( vhcl->num_weapons > 1 )
+                txt2 += fmt::sprintf(" x%d", vhcl->num_weapons);
+        }
+        else if ( vhcl->num_weapons <= 1 )
             txt2 = fmt::sprintf("%d", weap->energy / 100);
         else
             txt2 = fmt::sprintf("%d x%d", weap->energy / 100, vhcl->num_weapons);
@@ -10447,6 +10625,7 @@ void sb_0x4d7c08__sub0__sub4__sub2__sub0(NC_STACK_ypaworld *yw)
     drect.bottom = robo_map.field_1FC + robo_map.field_204 - 1;
 
     GFX::Engine.raster_func211(drect);
+    yw->RenderLaserMapBeams(61);
 
     int v14 = dround(robo_map.field_1F0 * robo_map.field_1E0) / World::CVSectorLength;
     int v29 = dround(robo_map.field_1F4 * robo_map.field_1E4) / World::CVSectorLength;

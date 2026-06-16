@@ -31,6 +31,30 @@ enum VisualScaleMode
     VISUAL_SCALE_AXIS = 2
 };
 
+// OpenUA custom: visual-only RGBA tint multiplier (see visual_tint script param).
+// Stored as normalized 0..1 float multipliers. Neutral default = no visual change.
+struct TVisualTint
+{
+    float r = 1.0;
+    float g = 1.0;
+    float b = 1.0;
+    float a = 1.0;
+
+    bool IsNeutral() const
+    {
+        return r == 1.0 && g == 1.0 && b == 1.0 && a == 1.0;
+    }
+
+    void Clamp()
+    {
+        auto cl = [](float v) -> float { return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); };
+        r = cl(r);
+        g = cl(g);
+        b = cl(b);
+        a = cl(a);
+    }
+};
+
 struct DestFX
 {
     enum FXTYPES {
@@ -341,6 +365,7 @@ struct TVhclProto
     float visual_scale_random_min = 1.0;
     float visual_scale_random_max = 1.0;
     vec3d visual_scale_axis = vec3d(1.0, 1.0, 1.0);
+    TVisualTint visual_tint; // OpenUA custom: visual-only RGBA tint multiplier
     TDamagedFXConfig damaged_fx;
     TDecorationFXConfig decoration_fx;
     std::string damaged_icon;
@@ -475,6 +500,7 @@ struct TWeapProto
         WEAPON_FLAG_GRENADE = 16,
         WEAPON_FLAG_HOMING_BOMB = 32,
         WEAPON_FLAG_MORTAR = 64, // OpenUA custom: radar-guided ballistic barrage
+        WEAPON_FLAG_LASER = 128, // OpenUA custom: continuous targeted beam weapon
 
         WEAPON_FLAGS_BOMB = WEAPON_FLAG_PROJECTILE,
         WEAPON_FLAGS_ROCKET = WEAPON_FLAG_PROJECTILE | WEAPON_FLAG_DIRECT,
@@ -482,7 +508,11 @@ struct TWeapProto
         WEAPON_FLAGS_OBSAVOID = WEAPON_FLAG_PROJECTILE | WEAPON_FLAG_DIRECT | WEAPON_FLAG_OBSAVOID,
         WEAPON_FLAGS_GRENADE = WEAPON_FLAG_PROJECTILE | WEAPON_FLAG_GRENADE,
         WEAPON_FLAGS_HOMING_BOMB = WEAPON_FLAG_PROJECTILE | WEAPON_FLAG_HOMING_BOMB,
-        WEAPON_FLAGS_MORTAR = WEAPON_FLAG_PROJECTILE | WEAPON_FLAG_MORTAR
+        WEAPON_FLAGS_MORTAR = WEAPON_FLAG_PROJECTILE | WEAPON_FLAG_MORTAR,
+        // Laser keeps PROJECTILE|DIRECT|TARGETED so the AI/aim/lock logic treats it
+        // like a normal targeted weapon, but the LASER bit reroutes firing to the
+        // continuous-beam path (UpdateLaser) instead of spawning a projectile.
+        WEAPON_FLAGS_LASER = WEAPON_FLAG_PROJECTILE | WEAPON_FLAG_DIRECT | WEAPON_FLAG_TARGETED | WEAPON_FLAG_LASER
     };
 
     int8_t unitID = 0;
@@ -498,6 +528,12 @@ struct TWeapProto
     bool IsMortar() const
     {
         return (_weaponFlags & WEAPON_FLAG_MORTAR) != 0;
+    }
+
+    // OpenUA custom: true only for weapons declared as "model = laser".
+    bool IsLaser() const
+    {
+        return (_weaponFlags & WEAPON_FLAG_LASER) != 0;
     }
 
     bool IsBombLike() const
@@ -524,6 +560,7 @@ struct TWeapProto
     float visual_scale_random_min = 1.0;
     float visual_scale_random_max = 1.0;
     vec3d visual_scale_axis = vec3d(1.0, 1.0, 1.0);
+    TVisualTint visual_tint; // OpenUA custom: visual-only RGBA tint multiplier
     std::vector<DestFX> dfx;
     std::vector<DestFX> ExtDestroyFX; // ext_dest_fx
     std::array<TVhclSound, SND_MAX> sndFXes;
@@ -555,6 +592,15 @@ struct TWeapProto
     int salve_delay = 0;
     int missile_multi_target = 0;
     int homing_bomb_multi_target = 0; // OpenUA: multi-target spread, only on model = homing_bomb
+    // OpenUA custom: dedicated continuous beam weapon ("model = laser").
+    // Vanilla-safe: these are only consulted when IsLaser() is true. For a laser
+    // weapon, "energy" is static base damage per tick; the class multipliers below
+    // (energy_heli/tank/flyer/robo) are applied like normal projectile weapons.
+    int   laser_energy_tick_time = 250;        // ms between damage ticks for AI/non-player fire
+    int   laser_energy_tick_time_user = 150;   // ms between damage ticks for player-controlled fire
+    float laser_energy_increment_rate = 0.0;   // extra base damage added after each connected tick
+    float laser_max_energy = 0.0;              // max base damage per tick (<=0 => no clamp)
+    float laser_vp_spacing = 40.0;             // visual-only distance between vp_normal beam instances
     float energy_heli = 0.0;
     float energy_tank = 0.0;
     float energy_flyer = 0.0;
@@ -600,6 +646,9 @@ struct TWeapProto
     int   mortar_airburst = 1;             // 1 = explode at the timed arc apex/target height (airburst); 0 = land on the real terrain height at the shell's own impact point
     int   mortar_minimap_marker = 0;       // 1 = show bombardment zone on the 2D strategic map
     int   mortar_manual_energy_cost = 0;   // DEPRECATED: still parsed for old scripts, ignored at runtime (manual strikes are free)
+    // OpenUA custom: looped beam sound for model = laser (snd_loop_sample/volume/pitch).
+    // Loaded lazily on first laser activation; vanilla weapons never touch it.
+    TVhclSound snd_loop;
     NC_STACK_skeleton *wireframe = NULL;
     IDVList initParams;
     std::vector<TChainFXConfig> chain_fx;

@@ -449,6 +449,12 @@ public:
     float GetMortarBarrageRadius(); // OpenUA custom: bombardment zone radius of this unit's mortar (0 if none)
     void UpdateSeekAndExplode(update_msg *arg);
     bool ApplySeekAndExplodeRammingGuidance(bool clearAvoidanceFlags);
+    // OpenUA custom: continuous laser beam ("model = laser"). UpdateLaser drives the
+    // static tick damage, beam state and loop sound each frame; the firing paths only
+    // register a per-frame request via RequestLaserFire().
+    void UpdateLaser(update_msg *arg);
+    void RequestLaserFire(int weaponId, bact_arg79 *arg);
+    void StopLaser(); // disconnect: reset tick state, stop loop sound, hide beam
     void UpdateDamageFX(update_msg *arg);
     void UpdateDecorationFX(update_msg *arg);
     void AddAoePush(const vec3d &dir, float distance); // queue aoe_unit_push knockback
@@ -749,6 +755,7 @@ public:
     vec3d _scale;
     float _visual_scale = 1.0;
     vec3d _visual_scale_vec = vec3d(1.0, 1.0, 1.0);
+    World::TVisualTint _visual_tint; // OpenUA custom: visual-only RGBA tint multiplier
     NC_STACK_base *_vp_normal;
     NC_STACK_base *_vp_fire;
     NC_STACK_base *_vp_wait;
@@ -766,6 +773,7 @@ public:
     TActiveDebuffState _active_debuff;
     TSndCarrier _debuff_soundcarrier;
     TSndCarrier _damaged_shake_carrier;
+    TSndCarrier _laser_soundcarrier; // OpenUA custom: managed loop sound for model = laser
     int _vp_active;
     extra_vproto _vp_extra[3];
     int _vp_extra_mode;
@@ -894,6 +902,21 @@ public:
     // shown) but only fires once the cooldown has elapsed. Never bypasses cooldown.
     bool _mortar_has_pending = false;
     vec3d _mortar_pending_target;
+    // OpenUA custom: laser beam runtime state (transient, per shooter/weapon/target;
+    // never saved per instance). Tracks one active beam/contact at a time.
+    bool _laser_active = false;            // beam currently firing/visible
+    bool _laser_fire_request = false;      // set by RequestLaserFire() each firing frame, consumed by UpdateLaser()
+    int  _laser_weapon = -1;               // weapon id of the active/requested laser
+    int32_t _laser_target_gid = 0;         // gid of the locked target (0 = none / ground)
+    int _laser_energy_ticks = 0;           // connected damage ticks applied to the current target
+    vec3d _laser_beam_start;               // world muzzle/fire point (for the beam visual)
+    vec3d _laser_beam_end;                 // world contact point (target center)
+    NC_STACK_ypabact *_laser_target = NULL;  // requested target this frame (valid only within the firing frame)
+    vec3d _laser_request_start;            // requested muzzle this frame
+    vec3d _laser_request_dir;              // requested forward beam direction this frame (normalized)
+    int _laser_next_damage_time = 0;       // next _clock at which static tick damage may apply
+    int _laser_next_fx_time = 0;           // next _clock at which a throttled impact VP may spawn
+    int _laser_next_beam_vp_time = 0;      // next _clock at which the VP beam body may be refreshed
     int _seek_and_explode;
     int _seek_and_explode_weapon;
     float _seek_and_explode_trigger_radius;

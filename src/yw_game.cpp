@@ -2762,7 +2762,7 @@ void NC_STACK_ypaworld::RenderFillers(baseRender_msg *arg)
     }
 }
 
-void NC_STACK_ypaworld::SpawnTransientVP(int32_t modelId, const vec3d &pos, const mat3x3 &rot, int32_t lifeTime)
+void NC_STACK_ypaworld::SpawnTransientVP(int32_t modelId, const vec3d &pos, const mat3x3 &rot, int32_t lifeTime, float scale, const World::TVisualTint &tint, const vec3d &axisScale)
 {
     if ( modelId <= 0 || modelId >= (int32_t)_vhclModels.size() || lifeTime <= 0 )
         return;
@@ -2770,7 +2770,14 @@ void NC_STACK_ypaworld::SpawnTransientVP(int32_t modelId, const vec3d &pos, cons
     NC_STACK_base *base = _vhclModels.at(modelId);
 
     if ( base )
+    {
         _transientVPs.emplace_back(base, pos, rot, lifeTime);
+        _transientVPs.back().scale = scale > 0.0f ? scale : 1.0f;
+        _transientVPs.back().axisScale = vec3d(axisScale.x > 0.0f ? axisScale.x : 1.0f,
+                                               axisScale.y > 0.0f ? axisScale.y : 1.0f,
+                                               axisScale.z > 0.0f ? axisScale.z : 1.0f);
+        _transientVPs.back().tint = tint;
+    }
 }
 
 void NC_STACK_ypaworld::SpawnChainFX(const World::TChainFXConfig &config, const vec3d &pos, const mat3x3 &rot)
@@ -3378,8 +3385,6 @@ static void yw_RenderTransientVPs(NC_STACK_ypaworld *world, std::list<NC_STACK_y
 {
     for (auto it = effects->begin(); it != effects->end();)
     {
-        it->age += arg->frameTime;
-
         if ( !it->vp || it->age >= it->lifeTime )
         {
             it = effects->erase(it);
@@ -3445,9 +3450,20 @@ static void yw_RenderTransientVPs(NC_STACK_ypaworld *world, std::list<NC_STACK_y
         }
 
         it->vp->Bas->TForm().Pos = it->pos;
-        it->vp->Bas->TForm().SclRot = it->rot.Transpose() * mat3x3::Scale(vec3d(scale));
+        it->vp->Bas->TForm().SclRot = it->rot.Transpose() * mat3x3::Scale(it->axisScale * scale);
+
+        // OpenUA custom visual_tint: tint only this transient model (e.g. laser beam body).
+        // Restore the neutral default right after so other effects stay untinted.
+        bool tinted = !it->tint.IsNeutral();
+        if ( tinted )
+            arg->tint = GFX::TGLColor(it->tint.r, it->tint.g, it->tint.b, it->tint.a);
+
         it->vp->Bas->Render(arg, it->vp.get());
 
+        if ( tinted )
+            arg->tint = GFX::TGLColor(1.0, 1.0, 1.0, 1.0);
+
+        it->age += arg->frameTime;
         ++it;
     }
 }
@@ -7059,6 +7075,72 @@ void NC_STACK_ypaworld::debug_draw_coll_spheres()
         }
     };
 
+    auto drawBeamTube = [&](const vec3d &start, const vec3d &end, float radius, uint8_t r, uint8_t g, uint8_t b) {
+        if (radius < 0.01f)
+            return;
+
+        vec3d axis = end - start;
+        float len = axis.length();
+        if (len < 1.0f)
+            return;
+        axis /= len;
+
+        vec3d ref = fabs(axis.y) < 0.9f ? vec3d(0.0f, 1.0f, 0.0f) : vec3d(1.0f, 0.0f, 0.0f);
+        vec3d side = ref * axis;
+        if (side.normalise() < 0.001f)
+            return;
+
+        vec3d up = axis * side;
+        if (up.normalise() < 0.001f)
+            return;
+
+        auto drawOrientedRing = [&](const vec3d &center) {
+            int px0 = 0, py0 = 0;
+            bool hasPrev = false;
+            for (int i = 0; i <= SEGS; i++)
+            {
+                float a = 2.0f * M_PI * i / SEGS;
+                vec3d p = center + side * (cosf(a) * radius) + up * (sinf(a) * radius);
+                int sx = 0, sy = 0;
+                if (project(p, sx, sy))
+                {
+                    if (hasPrev)
+                        GFX::GFXEngine::DrawLine(scr, Common::Line(px0, py0, sx, sy), r, g, b);
+                    px0 = sx;
+                    py0 = sy;
+                    hasPrev = true;
+                }
+                else
+                {
+                    hasPrev = false;
+                }
+            }
+        };
+
+        int sections = (int)(len / 600.0f) + 2;
+        if (sections < 2) sections = 2;
+        if (sections > 12) sections = 12;
+
+        for (int i = 0; i <= sections; i++)
+        {
+            float t = (float)i / (float)sections;
+            drawOrientedRing(start + axis * (len * t));
+        }
+
+        for (int i = 0; i < 4; i++)
+        {
+            vec3d offset;
+            if (i == 0) offset = side * radius;
+            else if (i == 1) offset = side * -radius;
+            else if (i == 2) offset = up * radius;
+            else offset = up * -radius;
+
+            int sx0 = 0, sy0 = 0, sx1 = 0, sy1 = 0;
+            if (project(start + offset, sx0, sy0) && project(end + offset, sx1, sy1))
+                GFX::GFXEngine::DrawLine(scr, Common::Line(sx0, sy0, sx1, sy1), r, g, b);
+        }
+    };
+
     // Optional near-object labels. There is deliberately no top-left fallback.
     CmdStream labels;
     labels.reserve(4096);
@@ -7204,6 +7286,25 @@ void NC_STACK_ypaworld::debug_draw_coll_spheres()
         // Cyan = seek-and-explode trigger radius.
         if ( unit->_seek_and_explode_trigger_radius > 0.01f )
             drawFlatRing(pos, unit->_seek_and_explode_trigger_radius, 60, 220, 220);
+
+        // Red tube = active model=laser beam thickness, using the weapon radius.
+        if ( unit->_laser_active &&
+             unit->_laser_weapon >= 0 &&
+             (size_t)unit->_laser_weapon < _weaponProtos.size() )
+        {
+            float laserRadius = _weaponProtos[unit->_laser_weapon].radius;
+            if ( laserRadius < 1.0f )
+                laserRadius = 1.0f;
+
+            drawBeamTube(unit->_laser_beam_start, unit->_laser_beam_end, laserRadius, 255, 60, 60);
+
+            if (dist <= LABEL_MAX_DIST)
+            {
+                char buf[64];
+                snprintf(buf, sizeof(buf), "laser radius=%.0f", laserRadius);
+                drawLabel((unit->_laser_beam_start + unit->_laser_beam_end) * 0.5f, buf, 255, 60, 60);
+            }
+        }
     }
 
     // --- TRANSIENT AoE IMPACT RINGS (recorded at detonation, fade out by timestamp) ---

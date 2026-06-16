@@ -586,6 +586,40 @@ static bool ypabact_IsCarrierSpawnEnemy(NC_STACK_ypabact *carrier, NC_STACK_ypab
     return true;
 }
 
+static bool ypabact_IsLaserDamageTarget(NC_STACK_ypabact *shooter, NC_STACK_ypabact *unit)
+{
+    if ( !ypabact_IsCarrierSpawnAliveUnit(unit) )
+        return false;
+
+    if ( unit == shooter )
+        return false;
+
+    if ( unit->_bact_type == BACT_TYPES_MISSLE )
+        return false;
+
+    if ( unit->_status == BACT_STATUS_CREATE || unit->_status == BACT_STATUS_BEAM )
+        return false;
+
+    if ( unit->_status_flg & BACT_STFLAG_NORENDER )
+        return false;
+
+    return true;
+}
+
+static bool ypabact_IsLaserAimTarget(NC_STACK_ypabact *shooter, NC_STACK_ypabact *unit)
+{
+    if ( !ypabact_IsLaserDamageTarget(shooter, unit) )
+        return false;
+
+    if ( !shooter )
+        return true;
+
+    if ( unit->_owner == World::OWNER_0 || unit->_owner == shooter->_owner )
+        return false;
+
+    return true;
+}
+
 static bool ypabact_HasEnemyNearby(NC_STACK_ypabact *carrier, float radius)
 {
     NC_STACK_ypaworld *world = carrier->getBACT_pWorld();
@@ -1026,6 +1060,7 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _height_max_user = 0.0;
     _visual_scale = 1.0;
     _visual_scale_vec = vec3d(1.0, 1.0, 1.0);
+    _visual_tint = World::TVisualTint();
     ypabact_ResetDamagedFX(this);
     _decoration_fx = World::TDecorationFXConfig();
     _decoration_fx_next_time = 0;
@@ -1235,6 +1270,7 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     ypabact_ResetDamagedFX(this);
     _visual_scale = 1.0;
     _visual_scale_vec = vec3d(1.0, 1.0, 1.0);
+    _visual_tint = World::TVisualTint();
     _decoration_fx = World::TDecorationFXConfig();
     _decoration_fx_next_time = 0;
     _damaged_force_malus = 0.0;
@@ -1447,6 +1483,7 @@ size_t NC_STACK_ypabact::Deinit()
     SFXEngine::SFXe.StopCarrier(&_soundcarrier);
     SFXEngine::SFXe.StopCarrier(&_debuff_soundcarrier);
     SFXEngine::SFXe.StopCarrier(&_damaged_shake_carrier);
+    SFXEngine::SFXe.StopCarrier(&_laser_soundcarrier);
     _active_debuff.Clear();
 
     _status_flg |= BACT_STFLAG_CLEAN;
@@ -2179,6 +2216,7 @@ void NC_STACK_ypabact::Update(update_msg *arg)
     UpdateProximityDefense(arg);
     UpdateMortar(arg);
     AI_layer1(arg);
+    UpdateLaser(arg); // OpenUA custom: process this frame's laser fire request (must run after AI_layer1 firing)
     UpdateAoePush(arg);
     UpdateSeekAndExplode(arg);
     UpdateUnitGuns(arg);
@@ -2596,6 +2634,29 @@ void NC_STACK_ypabact::Render(baseRender_msg *arg)
         return base == _vp_normal || base == _vp_fire || base == _vp_wait || base == _vp_genesis;
     };
 
+    // OpenUA custom visual_tint: same eligible visual prototypes as visual_scale.
+    // Tint is a visual-only per-instance RGBA multiplier; never affects gameplay.
+    auto shouldApplyVisualTint = [this](NC_STACK_base *base)
+    {
+        if ( _visual_tint.IsNeutral() )
+            return false;
+
+        if ( _bact_type == BACT_TYPES_MISSLE )
+            return base == _vp_normal || base == _vp_fire || base == _vp_wait;
+
+        return base == _vp_normal || base == _vp_fire || base == _vp_wait || base == _vp_genesis;
+    };
+
+    // Apply the tint only around eligible visual prototypes, then restore the
+    // neutral default so nothing else rendered with this message gets tinted.
+    auto setTint = [this, arg](bool on)
+    {
+        if ( on )
+            arg->tint = GFX::TGLColor(_visual_tint.r, _visual_tint.g, _visual_tint.b, _visual_tint.a);
+        else
+            arg->tint = GFX::TGLColor(1.0, 1.0, 1.0, 1.0);
+    };
+
     if ( _current_vp )
     {
         if ( !(_status_flg & BACT_STFLAG_NORENDER) )
@@ -2608,7 +2669,11 @@ void NC_STACK_ypabact::Render(baseRender_msg *arg)
                 if ( shouldApplyVisualScale(_current_vp->Bas) )
                     _current_vp->Bas->TForm().SclRot *= mat3x3::Scale(_visual_scale_vec);
 
+                bool tinted = shouldApplyVisualTint(_current_vp->Bas);
+                setTint(tinted);
                 _current_vp->Bas->Render(arg, _current_vp);
+                if ( tinted )
+                    setTint(false);
             }
         }
     }
@@ -2631,7 +2696,11 @@ void NC_STACK_ypabact::Render(baseRender_msg *arg)
                 if ( shouldApplyVisualScale(bd->vp->Bas) )
                     bd->vp->Bas->TForm().SclRot *= mat3x3::Scale(_visual_scale_vec);
 
+                bool tinted = shouldApplyVisualTint(bd->vp->Bas);
+                setTint(tinted);
                 bd->vp->Bas->Render(arg, bd->vp);
+                if ( tinted )
+                    setTint(false);
             }
         }
     }
@@ -6859,6 +6928,708 @@ static NC_STACK_ypabact *ypabact_GetSeekAndExplodePayloadListOwner(NC_STACK_ypab
     return unit;
 }
 
+// ============================ OpenUA custom: model = laser ============================
+// A laser is a targeted-class weapon that, instead of spawning a projectile, fires a
+// continuous aimed hitscan beam. The beam is always visible while firing (even into
+// empty space); when it crosses a valid target it applies static tick damage using
+// energy as the base tick amount. All state is transient and lives on the firing unit
+// (see the _laser_* members). The firing paths only register a per-frame request via
+// RequestLaserFire(); UpdateLaser() does all the real work.
+
+// Beam reach (engine units) derived from the weapon's life_time, so a modder controls
+// the laser length with the familiar life_time knob. Clamped to a sane span.
+static float ypabact_LaserRange(const World::TWeapProto &wproto)
+{
+    float range = (float)wproto.life_time;          // life_time (ms) reused as beam length
+    if ( range <= 0.0f )
+        range = World::CVSectorLength * 3.0f;       // safe default ~3 sectors
+
+    float minR = World::CVSectorLength * 0.5f;
+    float maxR = World::CVSectorLength * 10.0f;
+    if ( range < minR ) range = minR;
+    if ( range > maxR ) range = maxR;
+    return range;
+}
+
+static int ypabact_LaserDamageInterval(const World::TWeapProto &wproto, bool playerControlled)
+{
+    int interval = playerControlled && wproto.laser_energy_tick_time_user > 0
+                 ? wproto.laser_energy_tick_time_user
+                 : wproto.laser_energy_tick_time;
+    if ( interval <= 0 )
+        interval = 250;
+    if ( interval < 1 )
+        interval = 1;
+    return interval;
+}
+
+static float ypabact_LaserEnergyScale(const World::TWeapProto &wproto, NC_STACK_ypabact *target)
+{
+    if ( !target )
+        return 1.0f;
+
+    switch ( target->_bact_type )
+    {
+    case BACT_TYPES_BACT:
+        return wproto.energy_heli;
+
+    case BACT_TYPES_TANK:
+    case BACT_TYPES_CAR:
+        return wproto.energy_tank;
+
+    case BACT_TYPES_FLYER:
+    case BACT_TYPES_UFO:
+        return wproto.energy_flyer;
+
+    case BACT_TYPES_ROBO:
+        return wproto.energy_robo;
+
+    default:
+        return 1.0f;
+    }
+}
+
+static int ypabact_LaserTickDamage(const World::TWeapProto &wproto, NC_STACK_ypabact *target, int connectedTicks)
+{
+    if ( !target )
+        return 0;
+
+    float baseEnergy = (float)wproto.energy;
+    if ( wproto.laser_energy_increment_rate > 0.0f && connectedTicks > 0 )
+        baseEnergy += (float)connectedTicks * wproto.laser_energy_increment_rate;
+    if ( wproto.laser_max_energy > 0.0f && baseEnergy > wproto.laser_max_energy )
+        baseEnergy = wproto.laser_max_energy;
+    if ( baseEnergy <= 0.0f )
+        return 0;
+
+    float damage = baseEnergy * ypabact_LaserEnergyScale(wproto, target);
+    if ( damage <= 0.0f )
+        return 0;
+
+    float shield = target->GetEffectiveShield();
+    if ( shield >= 100.0f )
+        return 0;
+
+    float divisor = ( target->getBACT_inputting() || target->getBACT_viewer() ) ? 250.0f : 100.0f;
+    int tickDamage = (int)ceil(damage * (100.0f - shield) / divisor);
+    return tickDamage > 0 ? tickDamage : 0;
+}
+
+struct TLaserWorldHit
+{
+    Common::Point cellId;
+    int bldX = 0;
+    int bldY = 0;
+    vec3d damagePos;
+};
+
+static bool ypabact_LaserGetSectorHit(NC_STACK_ypaworld *world, const vec3d &pos, TLaserWorldHit *outHit)
+{
+    if ( !world )
+        return false;
+
+    Common::Point sec = World::PositionToSectorID(pos);
+    if ( !world->IsSector(sec) )
+        return false;
+
+    cellArea &cell = world->SectorAt(sec);
+
+    if ( !cell.IsGamePlaySector() || cell.PurposeType == cellArea::PT_CONSTRUCTING )
+        return false;
+
+    int outX = 0;
+    int outY = 0;
+
+    if ( cell.SectorType != 1 )
+    {
+        int sx = (int)(pos.x / 150.0) % 8;
+        int sy = (int)(-pos.z / 150.0) % 8;
+
+        int xSlot = sx < 3 ? 1 : (sx < 5 ? 2 : 3);
+        int ySlot = sy < 3 ? 1 : (sy < 5 ? 2 : 3);
+
+        outX = xSlot - 1;
+        outY = 2 - (ySlot - 1);
+    }
+
+    if ( outHit )
+    {
+        outHit->cellId = sec;
+        outHit->bldX = outX;
+        outHit->bldY = outY;
+        outHit->damagePos = pos;
+    }
+
+    return true;
+}
+
+static int32_t ypabact_LaserSectorTargetId(const TLaserWorldHit &hit)
+{
+    int slot = hit.bldY * 3 + hit.bldX;
+    int32_t id = (int32_t)((hit.cellId.y * 1024 + hit.cellId.x) * 9 + slot + 1);
+    return id > 0 ? -id : -1;
+}
+
+static int ypabact_LaserTickSectorEnergy(const World::TWeapProto &wproto, int connectedTicks)
+{
+    float baseEnergy = (float)wproto.energy;
+    if ( wproto.laser_energy_increment_rate > 0.0f && connectedTicks > 0 )
+        baseEnergy += (float)connectedTicks * wproto.laser_energy_increment_rate;
+    if ( wproto.laser_max_energy > 0.0f && baseEnergy > wproto.laser_max_energy )
+        baseEnergy = wproto.laser_max_energy;
+
+    // Keep the same public/internal energy scale as normal weapons and laser unit
+    // damage: energy = 1000 means "10" in script/HUD terms. The sector/building
+    // path applies its own vanilla conversion inside ypaworld_func129().
+    return baseEnergy > 0.0f ? (int)ceil(baseEnergy) : 0;
+}
+
+// Hitscan along the forward beam: returns the nearest valid target whose body the beam passes
+// through, within range. Pure forward ray (the beam always fires straight ahead), so it
+// behaves like the player expects even when aiming at empty space.
+static NC_STACK_ypabact *ypabact_LaserHitscan(NC_STACK_ypabact *shooter, const World::TWeapProto &wproto,
+                                              const vec3d &origin,
+                                              const vec3d &dir, float range, vec3d *outHitPoint)
+{
+    NC_STACK_ypaworld *world = shooter->getBACT_pWorld();
+    if ( !world )
+        return NULL;
+
+    // Scan the whole square of sectors covering the beam, so off-axis bodies are found.
+    int sectorRadius = (int)(range / World::CVSectorLength) + 2;
+    Common::Point center = World::PositionToSectorID(origin);
+
+    NC_STACK_ypabact *best = NULL;
+    float bestAlong = range + 1.0f;
+
+    for (int y = center.y - sectorRadius; y <= center.y + sectorRadius; y++)
+    {
+        for (int x = center.x - sectorRadius; x <= center.x + sectorRadius; x++)
+        {
+            Common::Point cellId(x, y);
+            if ( !world->IsSector(cellId) )
+                continue;
+
+            cellArea &cell = world->SectorAt(cellId);
+
+            for (NC_STACK_ypabact *bct : cell.unitsList)
+            {
+                if ( !ypabact_IsLaserDamageTarget(shooter, bct) )
+                    continue;
+
+                vec3d to = bct->_position - origin;
+                float along = to.dot(dir);              // distance projected on the beam
+                vec3d closest = origin + dir * (along > 0.0f ? along : 0.0f);
+                float perp = (bct->_position - closest).length();
+
+                // Forgiving hit thickness: unit size + a base window + an angular term that
+                // widens with distance, so rough aim connects at any range.
+                float weaponRadius = wproto.radius > 0.0f ? wproto.radius : 1.0f;
+                float hitRadius = bct->_radius + weaponRadius + (along > 0.0f ? along : 0.0f) * 0.02f;
+
+                if ( along <= 0.0f || along > range )   // behind muzzle or beyond reach
+                    continue;
+                if ( perp > hitRadius )
+                    continue;
+
+                if ( along < bestAlong )
+                {
+                    bestAlong = along;
+                    best = bct;
+                }
+            }
+        }
+    }
+
+    if ( best && outHitPoint )
+        *outHitPoint = best->_position;
+
+    return best;
+}
+
+// AI auto-lock: nearest enemy in a generous forward arc within range. Used for AI-driven
+// lasers so they reliably connect even if the body is not perfectly aligned; the beam is
+// then bent toward the returned target. Player fire keeps the requested firing path and
+// falls back to forward hitscan when no explicit target was provided.
+static NC_STACK_ypabact *ypabact_LaserAutoTarget(NC_STACK_ypabact *shooter, const vec3d &origin,
+                                                 const vec3d &dir, float range)
+{
+    NC_STACK_ypaworld *world = shooter->getBACT_pWorld();
+    if ( !world )
+        return NULL;
+
+    int sectorRadius = (int)(range / World::CVSectorLength) + 2;
+    Common::Point center = World::PositionToSectorID(origin);
+
+    NC_STACK_ypabact *best = NULL;
+    float bestDist = range + 1.0f;
+
+    for (int y = center.y - sectorRadius; y <= center.y + sectorRadius; y++)
+    {
+        for (int x = center.x - sectorRadius; x <= center.x + sectorRadius; x++)
+        {
+            Common::Point cellId(x, y);
+            if ( !world->IsSector(cellId) )
+                continue;
+
+            cellArea &cell = world->SectorAt(cellId);
+
+            for (NC_STACK_ypabact *bct : cell.unitsList)
+            {
+                if ( !ypabact_IsLaserAimTarget(shooter, bct) )
+                    continue;
+
+                vec3d to = bct->_position - origin;
+                float dist = to.length();
+                if ( dist < 0.001f || dist > range )
+                    continue;
+                if ( to.dot(dir) / dist < 0.4f )   // ~66 deg forward arc
+                    continue;
+
+                if ( dist < bestDist )
+                {
+                    bestDist = dist;
+                    best = bct;
+                }
+            }
+        }
+    }
+
+    return best;
+}
+
+static bool ypabact_LaserWorldHit(NC_STACK_ypabact *shooter, const vec3d &origin,
+                                      const vec3d &dir, float range, vec3d *outHitPoint)
+{
+    if ( !shooter || !shooter->getBACT_pWorld() || range <= 1.0f )
+        return false;
+
+    vec3d rayDir = dir;
+    if ( rayDir.normalise() < 0.001f )
+        return false;
+
+    // ypaworld_func136() is reliable for short ray spans, but it only checks a tiny
+    // collision set derived from the segment start/end grid cells. A full laser beam
+    // can be several sectors long, so one single long ray may miss terrain/buildings
+    // for many frames and make vp_megadeth appear only sporadically. Walk the beam
+    // in short segments and return the first real world contact.
+    const float maxSegmentLen = 240.0f;
+    float travelled = 0.0f;
+
+    while ( travelled < range )
+    {
+        float segmentLen = range - travelled;
+        if ( segmentLen > maxSegmentLen )
+            segmentLen = maxSegmentLen;
+
+        ypaworld_arg136 ray;
+        ray.stPos = origin + rayDir * travelled;
+        ray.vect = rayDir * segmentLen;
+        ray.flags = 0;
+
+        shooter->getBACT_pWorld()->ypaworld_func136(&ray);
+
+        if ( ray.isect )
+        {
+            vec3d toHit = ray.isectPos - origin;
+            float along = toHit.dot(rayDir);
+
+            // Ignore bogus/backward hits and keep the contact inside the requested beam range.
+            if ( along >= 0.0f && along <= range + 1.0f )
+            {
+                if ( outHitPoint )
+                    *outHitPoint = ray.isectPos;
+
+                return true;
+            }
+        }
+
+        travelled += segmentLen;
+    }
+
+    return false;
+}
+
+static mat3x3 ypabact_LaserRotationFromDir(const vec3d &beamDir, const mat3x3 &fallback)
+{
+    vec3d z = beamDir;
+    if ( z.normalise() < 0.001 )
+        return fallback;
+
+    vec3d x = fallback.AxisX();
+    x -= z * x.dot(z);
+
+    if ( x.normalise() < 0.001 )
+    {
+        x = (fabs(z.y) < 0.9) ? vec3d(0.0, 1.0, 0.0) : vec3d(1.0, 0.0, 0.0);
+        x = x * z;
+        if ( x.normalise() < 0.001 )
+            return fallback;
+    }
+
+    vec3d y = z * x;
+    if ( y.normalise() < 0.001 )
+        return fallback;
+
+    mat3x3 rot;
+    rot.SetX(x);
+    rot.SetY(y);
+    rot.SetZ(z);
+    return rot;
+}
+
+static float ypabact_LaserClampVPSpacing(float spacing)
+{
+    if ( spacing <= 0.0f )
+        spacing = 40.0f;
+    if ( spacing < 20.0f )
+        spacing = 20.0f;
+    if ( spacing > 500.0f )
+        spacing = 500.0f;
+    return spacing;
+}
+
+static float ypabact_LaserVisualScale(const World::TWeapProto &wproto)
+{
+    if ( wproto.visual_scale_mode == World::VISUAL_SCALE_AXIS )
+        return 1.0f;
+
+    return wproto.visual_scale > 0.0f ? wproto.visual_scale : 1.0f;
+}
+
+static vec3d ypabact_LaserVisualAxisScale(const World::TWeapProto &wproto)
+{
+    if ( wproto.visual_scale_mode != World::VISUAL_SCALE_AXIS )
+        return vec3d(1.0, 1.0, 1.0);
+
+    return vec3d(wproto.visual_scale_axis.x > 0.0f ? wproto.visual_scale_axis.x : 1.0f,
+                 wproto.visual_scale_axis.y > 0.0f ? wproto.visual_scale_axis.y : 1.0f,
+                 wproto.visual_scale_axis.z > 0.0f ? wproto.visual_scale_axis.z : 1.0f);
+}
+
+static void ypabact_SpawnLaserBeamVPs(NC_STACK_ypabact *bact, const World::TWeapProto &wproto)
+{
+    if ( !bact || wproto.vp_normal <= 0 )
+        return;
+
+    NC_STACK_ypaworld *world = bact->getBACT_pWorld();
+    if ( !world )
+        return;
+
+    if ( bact->_laser_next_beam_vp_time > 0 && bact->_clock < bact->_laser_next_beam_vp_time )
+        return;
+
+    vec3d span = bact->_laser_beam_end - bact->_laser_beam_start;
+    float len = span.length();
+    if ( len < 1.0f )
+        return;
+
+    vec3d dir = span / len;
+    mat3x3 rot = ypabact_LaserRotationFromDir(dir, bact->_rotation);
+
+    float scale = ypabact_LaserVisualScale(wproto);
+    vec3d axisScale = ypabact_LaserVisualAxisScale(wproto);
+
+    // Visual-only density control: damage timing stays controlled only by
+    // laser_energy_tick_time, while radius remains the gameplay hit thickness.
+    float spacing = ypabact_LaserClampVPSpacing(wproto.laser_vp_spacing);
+
+    int count = (int)(len / spacing) + 2;
+    if ( count < 2 ) count = 2;
+    if ( count > 320 ) count = 320;
+
+    for (int i = 0; i < count; i++)
+    {
+        float t = ((float)i + 0.5f) / (float)count;
+        vec3d pos = bact->_laser_beam_start + span * t;
+        // OpenUA custom: the laser beam body uses vp_normal, so honour the weapon's
+        // visual_tint here (same eligible prototype as projectiles). Impact/launch FX
+        // below deliberately stay untinted.
+        world->SpawnTransientVP(wproto.vp_normal, pos, rot, 45, scale, wproto.visual_tint, axisScale);
+    }
+
+    // Refresh as fast as the engine clock allows. Keep this at 1ms: 0 would be
+    // treated as invalid in several timing paths and would risk duplicate spam in
+    // the same update tick.
+    bact->_laser_next_beam_vp_time = bact->_clock + 1;
+}
+
+void NC_STACK_ypabact::RequestLaserFire(int weaponId, bact_arg79 *arg)
+{
+    _laser_weapon = weaponId;
+    _laser_fire_request = true;
+    _laser_target = (arg->tgType == BACT_TGT_TYPE_UNIT) ? arg->target.pbact : NULL;
+
+    // Muzzle/fire point in world space (same transform the projectile path uses).
+    _laser_request_start = _position + _rotation.Transpose().Transform(
+        vec3d(arg->start_point.x, arg->start_point.y, arg->start_point.z) );
+
+    _laser_request_dir = arg->direction;
+
+    if ( _laser_request_dir.normalise() < 0.001 )
+    {
+        if ( arg->tgType == BACT_TGT_TYPE_UNIT && arg->target.pbact )
+            _laser_request_dir = arg->target.pbact->_position - _laser_request_start;
+        else if ( arg->tgType == BACT_TGT_TYPE_CELL )
+            _laser_request_dir = arg->tgt_pos - _laser_request_start;
+        else if ( arg->tgType == BACT_TGT_TYPE_DRCT )
+            _laser_request_dir = arg->tgt_pos;
+    }
+
+    if ( _laser_request_dir.normalise() < 0.001 )
+        _laser_request_dir = _rotation.AxisZ();
+}
+
+void NC_STACK_ypabact::StopLaser()
+{
+    // Disconnect: stop the loop sound (only if running), drop the beam and reset tick state.
+    if ( !_laser_soundcarrier.Sounds.empty() && _laser_soundcarrier.Sounds[0].IsEnabled() )
+        SFXEngine::SFXe.StopCarrier(&_laser_soundcarrier);
+
+    _laser_active = false;
+    _laser_energy_ticks = 0;
+    _laser_target_gid = 0;
+    _laser_target = NULL;
+    _laser_next_damage_time = 0;
+    _laser_next_fx_time = 0;
+    _laser_next_beam_vp_time = 0;
+}
+
+void NC_STACK_ypabact::UpdateLaser(update_msg *arg)
+{
+    (void)arg;
+
+    bool requested = _laser_fire_request;
+    NC_STACK_ypabact *requestedTarget = _laser_target;
+    _laser_fire_request = false;
+    _laser_target = NULL;
+
+    // Not firing this frame, or weapon invalid => beam off.
+    if ( !requested ||
+         !_world || _laser_weapon < 0 || (size_t)_laser_weapon >= _world->GetWeaponsProtos().size() )
+    {
+        StopLaser();
+        return;
+    }
+
+    World::TWeapProto &wproto = _world->GetWeaponsProtos().at(_laser_weapon);
+    if ( !wproto.IsLaser() )
+    {
+        StopLaser();
+        return;
+    }
+
+    // Forward aim direction. Its reach comes from the weapon's life_time.
+    vec3d dir = _laser_request_dir;
+    if ( dir.normalise() < 0.001f )
+        dir = _rotation.AxisZ();
+
+    float range = ypabact_LaserRange(wproto);
+
+    // Aiming model:
+    //   * Existing target path -> honor the target selected by vanilla fire control.
+    //   * Player free fire     -> hitscan along the requested/manual aim direction.
+    //   * AI free fire         -> auto-lock the nearest enemy in a forward arc.
+    bool playerControlled = getBACT_inputting() || getBACT_viewer();
+
+    vec3d hitPoint;
+    vec3d worldHitPoint;
+    bool worldHit = ypabact_LaserWorldHit(this, _laser_request_start, dir, range, &worldHitPoint);
+    TLaserWorldHit sectorHit;
+    bool hasSectorHit = false;
+    NC_STACK_ypabact *target = NULL;
+
+    if ( requestedTarget && ypabact_IsLaserDamageTarget(this, requestedTarget) )
+    {
+        vec3d toT = requestedTarget->_position - _laser_request_start;
+        float l = toT.length();
+        if ( l > 0.001f && l <= range )
+        {
+            vec3d toTDir = toT / l;
+            target = requestedTarget;
+            hitPoint = target->_position;
+            dir = toTDir;
+        }
+    }
+
+    if ( !target && playerControlled )
+    {
+        target = ypabact_LaserHitscan(this, wproto, _laser_request_start, dir, range, &hitPoint);
+    }
+    else if ( !target )
+    {
+        target = ypabact_LaserAutoTarget(this, _laser_request_start, dir, range);
+        if ( target )
+        {
+            hitPoint = target->_position;
+            vec3d toT = target->_position - _laser_request_start;
+            float l = toT.length();
+            if ( l > 0.001f )
+                dir = toT / l; // bend the beam onto the locked target
+        }
+    }
+
+    bool wasActive = _laser_active;
+    _laser_active = true;
+
+    // Beam endpoints captured as plain positions for the (later) render pass.
+    // Unit contact uses vp_dead. World/terrain contact uses vp_megadeth.
+    _laser_beam_start = _laser_request_start;
+    _laser_beam_end = target ? hitPoint : (worldHit ? worldHitPoint : (_laser_request_start + dir * range));
+
+    if ( !target && worldHit )
+    {
+        // Step a little beyond the rendered contact, matching the direct-hit missile
+        // path. This reliably selects the sector/building slot under the collision point.
+        hasSectorHit = ypabact_LaserGetSectorHit(_world, worldHitPoint + dir * 5.0f, &sectorHit);
+        if ( !hasSectorHit )
+            hasSectorHit = ypabact_LaserGetSectorHit(_world, worldHitPoint, &sectorHit);
+    }
+
+    if ( !wasActive && wproto.vp_launch > 0 )
+        _world->SpawnTransientVP(wproto.vp_launch, _laser_beam_start, ypabact_LaserRotationFromDir(dir, _rotation),
+                                 90);
+
+    ypabact_SpawnLaserBeamVPs(this, wproto);
+
+    if ( target )
+    {
+        // Fresh contact or target switch => reset tick timers and optional ramp.
+        if ( !wasActive || target->_gid != _laser_target_gid )
+        {
+            _laser_energy_ticks = 0;
+            _laser_next_damage_time = 0;
+            _laser_next_fx_time = 0;
+        }
+        _laser_target_gid = target->_gid;
+
+        if ( _laser_next_damage_time <= 0 || _clock >= _laser_next_damage_time )
+        {
+            int applyNow = ypabact_LaserTickDamage(wproto, target, _laser_energy_ticks);
+
+            // Net-game authority guard (same rule as NC_STACK_ypamissile::ApplyDamageToBact):
+            // in a net game only the local player's own units apply+broadcast damage, so the
+            // beam never double-applies or desyncs across clients. Single-player applies always.
+            NC_STACK_ypabact *userHost = _world->getYW_userHostStation();
+            bool canApplyDamage = !_world->_isNetGame || (userHost && userHost->_owner == _owner);
+
+            if ( applyNow > 0 && canApplyDamage )
+            {
+                bact_arg84 dmg;
+                dmg.energy = -applyNow;
+                dmg.unit = this;
+                target->ModifyEnergy(&dmg);
+
+                if ( wproto.debuff.allow && target->_energy > 0 && target->_status != BACT_STATUS_DEAD )
+                    target->ApplyWeaponDebuff(wproto.debuff, this);
+            }
+
+            _laser_energy_ticks++;
+            _laser_next_damage_time = _clock + ypabact_LaserDamageInterval(wproto, playerControlled);
+        }
+
+        // ---- Throttled impact/contact FX ----
+        if ( _clock >= _laser_next_fx_time )
+        {
+            int impactVP = wproto.vp_dead > 0 ? wproto.vp_dead : wproto.vp_megadeth;
+            if ( impactVP > 0 )
+                _world->SpawnTransientVP(impactVP, _laser_beam_end, ypabact_LaserRotationFromDir(dir, _rotation),
+                                         90);
+            _laser_next_fx_time = _clock + 160;
+        }
+    }
+    else
+    {
+        if ( hasSectorHit )
+        {
+            int32_t sectorTargetId = ypabact_LaserSectorTargetId(sectorHit);
+            if ( !wasActive || sectorTargetId != _laser_target_gid )
+            {
+                _laser_energy_ticks = 0;
+                _laser_next_damage_time = 0;
+                _laser_next_fx_time = 0;
+            }
+            _laser_target_gid = sectorTargetId;
+
+            if ( _laser_next_damage_time <= 0 || _clock >= _laser_next_damage_time )
+            {
+                int applyNow = ypabact_LaserTickSectorEnergy(wproto, _laser_energy_ticks);
+
+                NC_STACK_ypabact *userHost = _world->getYW_userHostStation();
+                bool canApplyDamage = !_world->_isNetGame || (userHost && userHost->_owner == _owner);
+
+                if ( applyNow > 0 && canApplyDamage )
+                {
+                    yw_arg129 dmg;
+                    dmg.field_0 = 0;
+                    dmg.pos = sectorHit.damagePos;
+                    dmg.field_10 = applyNow;
+                    dmg.unit = this;
+                    ChangeSectorEnergy(&dmg);
+                }
+
+                _laser_energy_ticks++;
+                _laser_next_damage_time = _clock + ypabact_LaserDamageInterval(wproto, playerControlled);
+            }
+        }
+        else
+        {
+            // No damage contact: the beam still shows forward, but the ramp resets.
+            _laser_energy_ticks = 0;
+            _laser_target_gid = 0;
+            _laser_next_damage_time = 0;
+        }
+
+        // Terrain/building/world contact FX. This is the laser equivalent of a
+        // projectile megadeth impact: firing into the ground must show vp_megadeth
+        // even when no unit was hit. If vp_megadeth is not configured, fall back to
+        // vp_dead so old test weapons still show something instead of nothing.
+        if ( worldHit && _clock >= _laser_next_fx_time )
+        {
+            int impactVP = wproto.vp_megadeth > 0 ? wproto.vp_megadeth : wproto.vp_dead;
+            if ( impactVP > 0 )
+                _world->SpawnTransientVP(impactVP, _laser_beam_end, ypabact_LaserRotationFromDir(dir, _rotation),
+                                         90);
+            _laser_next_fx_time = _clock + 160;
+        }
+    }
+
+    // ---- Loop sound: laser loops by default while the trigger is held ----
+    wproto.snd_loop.LoadSamples(); // idempotent: real load happens only once
+
+    TSampleData *psample = wproto.snd_loop.MainSample.Sample
+                         ? wproto.snd_loop.MainSample.Sample->GetSampleData()
+                         : NULL;
+
+    if ( psample )
+    {
+        if ( _laser_soundcarrier.Sounds.empty() )
+            _laser_soundcarrier.Resize(1);
+
+        TSoundSource &snd = _laser_soundcarrier.Sounds[0];
+        snd.PSample = psample;
+        snd.SampleVariants.clear();
+        snd.SampleVariants.push_back(psample);
+        snd.Volume = wproto.snd_loop.volume ? wproto.snd_loop.volume : 120;
+        snd.Pitch = wproto.snd_loop.pitch;
+        snd.PriorityBias = 0;
+        snd.SetLoop(true);
+        snd.SetFragmented(false);
+        snd.PPFx = NULL;
+        snd.SetPFx(false);
+        snd.PShkFx = NULL;
+        snd.SetShk(false);
+
+        _laser_soundcarrier.Position = _laser_beam_start;
+        _laser_soundcarrier.Vector = _fly_dir * _fly_dir_length;
+
+        if ( !snd.IsEnabled() )
+            SFXEngine::SFXe.startSound(&_laser_soundcarrier, 0);
+
+        SFXEngine::SFXe.UpdateSoundCarrier(&_laser_soundcarrier);
+    }
+}
+
 void NC_STACK_ypabact::UpdateSeekAndExplode(update_msg *)
 {
     NC_STACK_ypabact *target = ypabact_FindSeekAndExplodeContactTarget(this);
@@ -6964,6 +7735,16 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
         return 0;
 
     World::TWeapProto &cooldownProto = _world->GetWeaponsProtos().at(cooldownWeapon);
+
+    // OpenUA custom: a laser weapon does not spawn projectiles and is not rate-limited
+    // by shot_time. It registers a per-frame fire request that UpdateLaser() turns into
+    // a continuous beam (static tick damage + VP beam visual + loop sound). Bail out here,
+    // before the cooldown gate and the normal missile-spawn path.
+    if ( cooldownProto.IsLaser() )
+    {
+        RequestLaserFire(cooldownWeapon, arg);
+        return 0;
+    }
 
     if ( _weapon_time )
     {

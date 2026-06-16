@@ -768,6 +768,39 @@ static bool ParseVisualScaleParam(ScriptParser::Parser &parser,
     return false;
 }
 
+// OpenUA custom: parse "visual_tint = R_G_B_A" (each component 0..255).
+// Alpha is optional and defaults to 255. Out-of-range values are clamped.
+// Stored as normalized 0..1 float multipliers. Neutral default = no visual change.
+static bool ParseVisualTintParam(ScriptParser::Parser &parser,
+                                 const std::string &p1,
+                                 const std::string &p2,
+                                 TVisualTint &tint)
+{
+    if ( StriCmp(p1, "visual_tint") )
+        return false;
+
+    std::vector<std::string> parts = Stok::Split(p2, "_");
+
+    auto clamp255 = [](long v) -> float
+    {
+        if ( v < 0 )
+            v = 0;
+        if ( v > 255 )
+            v = 255;
+        return (float)v / 255.0f;
+    };
+
+    long comp[4] = {255, 255, 255, 255};
+    for (size_t i = 0; i < parts.size() && i < 4; i++)
+        comp[i] = parser.stol(parts[i], 0, 10);
+
+    tint.r = clamp255(comp[0]);
+    tint.g = clamp255(comp[1]);
+    tint.b = clamp255(comp[2]);
+    tint.a = clamp255(comp[3]);
+    return true;
+}
+
 static World::TChainFXConfig::Trigger ParseChainFXTrigger(const std::string &name, bool weaponPrototype)
 {
     if ( weaponPrototype )
@@ -1426,6 +1459,9 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
                                     _vhcl->visual_scale_random_min,
                                     _vhcl->visual_scale_random_max,
                                     _vhcl->visual_scale_axis) )
+    {
+    }
+    else if ( ParseVisualTintParam(parser, p1, p2, _vhcl->visual_tint) )
     {
     }
     else if ( !StriCmp(p1, "invulnerable") )
@@ -2151,6 +2187,7 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->visual_scale_random_min = 1.0;
         _vhcl->visual_scale_random_max = 1.0;
         _vhcl->visual_scale_axis = vec3d(1.0, 1.0, 1.0);
+        _vhcl->visual_tint = TVisualTint();
         _vhcl->damaged_fx = TDamagedFXConfig();
         _vhcl->damaged_icon.clear();
         _vhcl->regen_icon.clear();
@@ -2317,6 +2354,12 @@ bool WeaponProtoParser::IsScope(ScriptParser::Parser &parser, const std::string 
         _wpn->salve_shots = 0;
         _wpn->missile_multi_target = 0;
         _wpn->homing_bomb_multi_target = 0;
+        // OpenUA custom: model = laser defaults (vanilla-safe / disabled by default)
+        _wpn->laser_energy_tick_time = 250;
+        _wpn->laser_energy_tick_time_user = 150;
+        _wpn->laser_energy_increment_rate = 0.0;
+        _wpn->laser_max_energy = 0.0;
+        _wpn->laser_vp_spacing = 40.0;
         _wpn->vp_normal = 0;
         _wpn->vp_fire = 1;
         _wpn->vp_megadeth = 2;
@@ -2329,6 +2372,7 @@ bool WeaponProtoParser::IsScope(ScriptParser::Parser &parser, const std::string 
         _wpn->visual_scale_random_min = 1.0;
         _wpn->visual_scale_random_max = 1.0;
         _wpn->visual_scale_axis = vec3d(1.0, 1.0, 1.0);
+        _wpn->visual_tint = TVisualTint();
         _wpn->type_icon = 65;
         _wpn->debuff = TWeaponDebuffConfig();
         _wpn->debuff.tick_snd.volume = 120;
@@ -2390,6 +2434,8 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
             _wpn->_weaponFlags = TWeapProto::WEAPON_FLAGS_HOMING_BOMB;
         else if ( !StriCmp(p2, "mortar") )
             _wpn->_weaponFlags = TWeapProto::WEAPON_FLAGS_MORTAR;
+        else if ( !StriCmp(p2, "laser") )
+            _wpn->_weaponFlags = TWeapProto::WEAPON_FLAGS_LASER;
         else if ( !StriCmp(p2, "bomb") || !StriCmp(p2, "special") )
             _wpn->_weaponFlags = TWeapProto::WEAPON_FLAGS_BOMB;
         else
@@ -2723,6 +2769,50 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
         int maxTargets = parser.stol(p2, NULL, 0);
         _wpn->homing_bomb_multi_target = maxTargets > 0 ? maxTargets : 0;
     }
+    // ---- OpenUA custom: model = laser parameters ----
+    else if ( !StriCmp(p1, "laser_energy_tick_time") )
+    {
+        int tickTime = parser.stol(p2, NULL, 0);
+        _wpn->laser_energy_tick_time = tickTime > 0 ? tickTime : 250;
+    }
+    else if ( !StriCmp(p1, "laser_energy_tick_time_user") )
+    {
+        int tickTime = parser.stol(p2, NULL, 0);
+        _wpn->laser_energy_tick_time_user = tickTime > 0 ? tickTime : 150;
+    }
+    else if ( !StriCmp(p1, "laser_energy_increment_rate") )
+    {
+        float rate = parser.stof(p2, 0);
+        _wpn->laser_energy_increment_rate = rate > 0.0 ? rate : 0.0;
+    }
+    else if ( !StriCmp(p1, "laser_max_energy") )
+    {
+        float maxEnergy = parser.stof(p2, 0);
+        _wpn->laser_max_energy = maxEnergy > 0.0 ? maxEnergy : 0.0;
+    }
+    else if ( !StriCmp(p1, "laser_vp_spacing") )
+    {
+        float spacing = parser.stof(p2, 0);
+        if ( spacing <= 0.0 )
+            spacing = 40.0;
+        if ( spacing < 20.0 )
+            spacing = 20.0;
+        if ( spacing > 500.0 )
+            spacing = 500.0;
+        _wpn->laser_vp_spacing = spacing;
+    }
+    else if ( !StriCmp(p1, "snd_loop_sample") )
+    {
+        _wpn->snd_loop.SetMainSampleVariant(0, p2);
+    }
+    else if ( !StriCmp(p1, "snd_loop_volume") )
+    {
+        _wpn->snd_loop.volume = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "snd_loop_pitch") )
+    {
+        _wpn->snd_loop.pitch = parser.stol(p2, NULL, 0);
+    }
     else if ( !StriCmp(p1, "add_energy") )
     {
         _wpn->energy += parser.stol(p2, NULL, 0);
@@ -2785,6 +2875,9 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
                                     _wpn->visual_scale_random_min,
                                     _wpn->visual_scale_random_max,
                                     _wpn->visual_scale_axis) )
+    {
+    }
+    else if ( ParseVisualTintParam(parser, p1, p2, _wpn->visual_tint) )
     {
     }
     else if ( ParseDecorationFXParam(parser, p1, p2, _wpn->decoration_fx) )

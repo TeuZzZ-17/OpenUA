@@ -526,8 +526,9 @@ size_t NC_STACK_base::Render(baseRender_msg *arg, Instance * inst, bool doCopy /
 
             rend.Distance = distance;
             rend.Color = msh.Mat.Color;
+            rend.ColorMul = arg->tint; // OpenUA custom: per-object visual_tint multiplier
             rend.Flags = msh.Mat.Flags;
-            
+
             if ((msh.Mat.Flags & GFX::RFLAGS_DYNAMIC_TEXTURE) && msh.Mat.TexSource)
             {
                 msh.Mat.TexSource->SetTime(arg->globTime, arg->frameTime);
@@ -637,6 +638,7 @@ size_t NC_STACK_base::RenderImmediately(baseRender_msg *arg, Instance * inst)
             GFX::TRenderNode rend( GFX::TRenderNode::TYPE_MESH );
             rend.Distance = distance;
             rend.Color = msh.Mat.Color;
+            rend.ColorMul = arg->tint; // OpenUA custom: per-object visual_tint multiplier
             rend.Flags = msh.Mat.Flags | arg->flags;
             
             if (newsky)

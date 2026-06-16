@@ -270,9 +270,11 @@ struct TRenderNode
     
     uint32_t Flags = 0;
     TGLColor Color;
-    
+    // OpenUA custom: per-node visual_tint multiplier. Neutral (1,1,1,1) = no change.
+    TGLColor ColorMul = TGLColor(1.0, 1.0, 1.0, 1.0);
+
     mat4x4 TForm;
-    int32_t TimeStamp = 0; 
+    int32_t TimeStamp = 0;
     int32_t FrameTime = 0;
     
     float FogStart = 0.0;
@@ -830,9 +832,11 @@ protected:
     static constexpr int32_t _vboTextured = 156; // 4
     static constexpr int32_t _vboFlat     = 160; // 4
     static constexpr int32_t _vboATest    = 164; // 4
-    static constexpr int32_t _vboParamsSize = 168; 
+    // OpenUA custom: visual_tint multiplier (std140 vec4 -> 16-byte aligned at 176)
+    static constexpr int32_t _vboColorMul = 176; // 4 * 4 = 16
+    static constexpr int32_t _vboParamsSize = 192;
     static constexpr int32_t _vboParamsBlockBinding = 0;
-    
+
     struct
     {
         mat4x4f Proj;
@@ -847,6 +851,9 @@ protected:
         int32_t Textured = 0;
         int32_t Flat = 0;
         int32_t ATest = 0;
+        int32_t _pad2 = 0;
+        int32_t _pad3 = 0;
+        float   ColorMul[4] = {1.0, 1.0, 1.0, 1.0}; // std140 vec4 at offset 176
     } _vboStatesBlock;
     
     bool _vboStatesChanged = true;

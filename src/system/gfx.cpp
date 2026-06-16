@@ -1142,14 +1142,39 @@ void GFXEngine::RenderingMeshOld(TRenderNode *nod)
     
     if (flags & RFLAGS_COMPUTED_COLOR)
         useComputedColor = true;
-    
+
+    // OpenUA custom visual_tint: per-node color multiplier (fixed-function path).
+    // Computed into the scratch ComputedColor right before the draw, so the shared
+    // mesh's base vertex colors are never permanently modified.
+    if ( nod->ColorMul.r != 1.0 || nod->ColorMul.g != 1.0 ||
+         nod->ColorMul.b != 1.0 || nod->ColorMul.a != 1.0 )
+    {
+        for (TVertex &v : mesh->Vertexes)
+        {
+            TGLColor src = useComputedColor ? v.ComputedColor : v.Color;
+            v.ComputedColor.r = src.r * nod->ColorMul.r;
+            v.ComputedColor.g = src.g * nod->ColorMul.g;
+            v.ComputedColor.b = src.b * nod->ColorMul.b;
+            v.ComputedColor.a = src.a * nod->ColorMul.a;
+        }
+        useComputedColor = true;
+
+        // If the tint lowers alpha, enable a local alpha blend so it is visible.
+        if ( nod->ColorMul.a < 1.0 && !_states.AlphaBlend )
+        {
+            _states.AlphaBlend = true;
+            _states.SrcBlend = GL_SRC_ALPHA;
+            _states.DstBlend = GL_ONE_MINUS_SRC_ALPHA;
+        }
+    }
+
     if (flags & RFLAGS_DISABLE_ZWRITE)
         _states.Zwrite = false;
 
     SetRenderStates(0);
 
     SetModelViewMatrix( nod->TForm );
-  
+
     glVertexPointer(3, GL_FLOAT, sizeof(TVertex), &mesh->Vertexes[0].Pos);
     
     if (useComputedColor)
@@ -1290,11 +1315,19 @@ void GFXEngine::RenderingMesh(TRenderNode *nod)
     if (flags & RFLAGS_DISABLE_ZWRITE)
         _states.Zwrite = false;
 
+    // OpenUA custom visual_tint: enable a local alpha blend when the tint lowers alpha.
+    if ( nod->ColorMul.a < 1.0 && !_states.AlphaBlend )
+    {
+        _states.AlphaBlend = true;
+        _states.SrcBlend = GL_SRC_ALPHA;
+        _states.DstBlend = GL_ONE_MINUS_SRC_ALPHA;
+    }
+
     _states.DataBuf = nod->Mesh->glDataBuf;
     _states.IndexBuf = nod->Mesh->glIndexBuf;
-    
+
     SetRenderStates(0);
-    
+
     SetModelViewMatrix(nod->TForm);
 
     Glext::GLVertexAttribPointer(_lastStates.Prog.PosLoc, 3, GL_FLOAT, GL_FALSE,  sizeof(TVertex), (void *)offsetof(TVertex, Pos));
@@ -1311,8 +1344,21 @@ void GFXEngine::RenderingMesh(TRenderNode *nod)
         else
             Glext::GLVertexAttribPointer(_lastStates.Prog.UVLoc, 2, GL_FLOAT, GL_FALSE,  sizeof(TVertex), (void *)offsetof(TVertex, TexCoord));
     }
-    
-    CommitUBOParameters();    
+
+    // OpenUA custom visual_tint: push the per-node color multiplier to the shader UBO.
+    if ( _vboStatesBlock.ColorMul[0] != nod->ColorMul.r ||
+         _vboStatesBlock.ColorMul[1] != nod->ColorMul.g ||
+         _vboStatesBlock.ColorMul[2] != nod->ColorMul.b ||
+         _vboStatesBlock.ColorMul[3] != nod->ColorMul.a )
+    {
+        _vboStatesBlock.ColorMul[0] = nod->ColorMul.r;
+        _vboStatesBlock.ColorMul[1] = nod->ColorMul.g;
+        _vboStatesBlock.ColorMul[2] = nod->ColorMul.b;
+        _vboStatesBlock.ColorMul[3] = nod->ColorMul.a;
+        _vboStatesChanged = true;
+    }
+
+    CommitUBOParameters();
     glDrawElements(GL_TRIANGLES, mesh->Indixes.size(), GLINDEXTYPE, NULL);
 }
 
@@ -3927,8 +3973,19 @@ void GFXEngine::DrawVtxQuad(const std::array<GFX::TVertex, 4> &vtx)
             Glext::GLVertexAttribPointer(_lastStates.Prog.ColorLoc, 4, GL_FLOAT, GL_FALSE,  sizeof(TVertex), (void *)offsetof(TVertex, Color));
         if (_lastStates.Prog.UVLoc != -1)
             Glext::GLVertexAttribPointer(_lastStates.Prog.UVLoc, 2, GL_FLOAT, GL_FALSE,  sizeof(TVertex), (void *)offsetof(TVertex, TexCoord));
-        
-        CommitUBOParameters();    
+
+        // OpenUA custom visual_tint: screen/HUD/UI quads must never inherit a mesh tint.
+        if ( _vboStatesBlock.ColorMul[0] != 1.0 || _vboStatesBlock.ColorMul[1] != 1.0 ||
+             _vboStatesBlock.ColorMul[2] != 1.0 || _vboStatesBlock.ColorMul[3] != 1.0 )
+        {
+            _vboStatesBlock.ColorMul[0] = 1.0;
+            _vboStatesBlock.ColorMul[1] = 1.0;
+            _vboStatesBlock.ColorMul[2] = 1.0;
+            _vboStatesBlock.ColorMul[3] = 1.0;
+            _vboStatesChanged = true;
+        }
+
+        CommitUBOParameters();
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, NULL);
     }
     else
