@@ -447,6 +447,7 @@ public:
     bool IsMortarPlatform(); // OpenUA custom: true if any weapon slot is a mortar (blocks first-person entry)
     bool IsManualMortarPlatform(); // OpenUA custom: mortar platform that opted into manual map-click control
     float GetMortarBarrageRadius(); // OpenUA custom: bombardment zone radius of this unit's mortar (0 if none)
+    float GetMortarReadinessRatio(); // OpenUA custom: 0..1 cooldown readiness for UI bars
     void UpdateSeekAndExplode(update_msg *arg);
     bool ApplySeekAndExplodeRammingGuidance(bool clearAvoidanceFlags);
     // OpenUA custom: continuous laser beam ("model = laser"). UpdateLaser drives the

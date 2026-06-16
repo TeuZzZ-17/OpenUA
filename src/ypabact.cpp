@@ -6288,6 +6288,64 @@ static int ypabact_GetVehicleProtoMortarWeaponId(NC_STACK_ypaworld *world, int v
     return 0;
 }
 
+static bool ypabact_IsLiveMortarGunActor(NC_STACK_ypabact *gunObj, int *outWeaponId = NULL)
+{
+    if ( outWeaponId )
+        *outWeaponId = 0;
+
+    if ( !gunObj || !gunObj->getBACT_pWorld() )
+        return false;
+
+    if ( gunObj->IsDestroyed() ||
+         gunObj->_status == BACT_STATUS_DEAD ||
+         gunObj->_status == BACT_STATUS_CREATE ||
+         (gunObj->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2 | BACT_STFLAG_NORENDER)) )
+        return false;
+
+    int weaponId = ypabact_GetMortarWeaponId(gunObj);
+    if ( weaponId <= 0 )
+        return false;
+
+    if ( outWeaponId )
+        *outWeaponId = weaponId;
+
+    return true;
+}
+
+static NC_STACK_ypabact *ypabact_GetMortarActorFromGunList(std::vector<World::TRoboGun> &guns, int *outWeaponId = NULL)
+{
+    if ( outWeaponId )
+        *outWeaponId = 0;
+
+    for (World::TRoboGun &gun : guns)
+    {
+        int weaponId = 0;
+        if ( ypabact_IsLiveMortarGunActor(gun.gun_obj, &weaponId) )
+        {
+            if ( outWeaponId )
+                *outWeaponId = weaponId;
+            return gun.gun_obj;
+        }
+    }
+
+    return NULL;
+}
+
+static int ypabact_GetProtoMortarWeaponIdFromGunList(NC_STACK_ypaworld *world, const std::vector<World::TRoboGun> &guns)
+{
+    if ( !world )
+        return 0;
+
+    for (const World::TRoboGun &gun : guns)
+    {
+        int weaponId = ypabact_GetVehicleProtoMortarWeaponId(world, gun.robo_gun_type);
+        if ( weaponId > 0 )
+            return weaponId;
+    }
+
+    return 0;
+}
+
 static NC_STACK_ypabact *ypabact_GetMountedMortarActor(NC_STACK_ypabact *unit, int *outWeaponId = NULL)
 {
     if ( outWeaponId )
@@ -6296,25 +6354,18 @@ static NC_STACK_ypabact *ypabact_GetMountedMortarActor(NC_STACK_ypabact *unit, i
     if ( !unit || !unit->getBACT_pWorld() )
         return NULL;
 
-    for (World::TRoboGun &gun : unit->_unitGuns)
+    // Vehicle-mounted unit guns. The parent is selected/rendered in UI, while
+    // the child gun owns barrage cooldown/state and launch position.
+    if ( NC_STACK_ypabact *actor = ypabact_GetMortarActorFromGunList(unit->_unitGuns, outWeaponId) )
+        return actor;
+
+    // Host Station / Robo guns use a separate gun list. Treat them like mounted
+    // unit guns for mortar purposes: click/draw on the robo parent, fire from the
+    // real gun child.
+    if ( NC_STACK_yparobo *robo = dynamic_cast<NC_STACK_yparobo *>(unit) )
     {
-        NC_STACK_ypabact *gunObj = gun.gun_obj;
-        if ( !gunObj )
-            continue;
-
-        if ( gunObj->IsDestroyed() ||
-             gunObj->_status == BACT_STATUS_DEAD ||
-             gunObj->_status == BACT_STATUS_CREATE ||
-             (gunObj->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2 | BACT_STFLAG_NORENDER)) )
-            continue;
-
-        int weaponId = ypabact_GetMortarWeaponId(gunObj);
-        if ( weaponId > 0 )
-        {
-            if ( outWeaponId )
-                *outWeaponId = weaponId;
-            return gunObj;
-        }
+        if ( NC_STACK_ypabact *actor = ypabact_GetMortarActorFromGunList(robo->_roboGuns, outWeaponId) )
+            return actor;
     }
 
     return NULL;
@@ -6332,9 +6383,13 @@ static int ypabact_GetMountedMortarWeaponId(NC_STACK_ypabact *unit)
     // Prototype fallback: this lets the parent be recognized as a mortar platform
     // even before the mounted gun child has finished its create cycle. The live
     // child still owns actual firing once manual/AI orders are executed.
-    for (const World::TRoboGun &gun : unit->_unitGuns)
+    int weaponId = ypabact_GetProtoMortarWeaponIdFromGunList(unit->getBACT_pWorld(), unit->_unitGuns);
+    if ( weaponId > 0 )
+        return weaponId;
+
+    if ( NC_STACK_yparobo *robo = dynamic_cast<NC_STACK_yparobo *>(unit) )
     {
-        int weaponId = ypabact_GetVehicleProtoMortarWeaponId(unit->getBACT_pWorld(), gun.robo_gun_type);
+        weaponId = ypabact_GetProtoMortarWeaponIdFromGunList(unit->getBACT_pWorld(), robo->_roboGuns);
         if ( weaponId > 0 )
             return weaponId;
     }
@@ -6359,8 +6414,8 @@ static NC_STACK_ypabact *ypabact_GetManualMortarActor(NC_STACK_ypabact *unit, in
 }
 
 // OpenUA custom: true if this unit carries a "model = mortar" weapon in any own
-// slot, or if one of its mounted unit-gun children carries one. Used to keep
-// mortar platforms map-only (no first-person possession).
+// slot, or if one of its mounted unit-gun / robo-gun children carries one. Used
+// to keep mortar platforms map-only (no first-person possession).
 bool NC_STACK_ypabact::IsMortarPlatform()
 {
     return ypabact_GetMortarWeaponId(this) > 0 || ypabact_GetMountedMortarWeaponId(this) > 0;
@@ -6393,6 +6448,34 @@ float NC_STACK_ypabact::GetMortarBarrageRadius()
         return _world->GetWeaponsProtos().at(weaponId).mortar_barrage_radius;
 
     return 0.0f;
+}
+
+float NC_STACK_ypabact::GetMortarReadinessRatio()
+{
+    if ( !_world )
+        return 0.0f;
+
+    int weaponId = 0;
+    NC_STACK_ypabact *actor = ypabact_GetManualMortarActor(this, &weaponId);
+    if ( !actor || weaponId <= 0 || (size_t)weaponId >= _world->GetWeaponsProtos().size() )
+        return IsMortarPlatform() ? 1.0f : 0.0f;
+
+    if ( actor->_mortar_barrage_active && actor->_mortar_shots_remaining > 0 )
+        return 1.0f;
+
+    const World::TWeapProto &wproto = _world->GetWeaponsProtos().at(weaponId);
+    int cooldown = wproto.mortar_barrage_cooldown > 0 ? wproto.mortar_barrage_cooldown : 10000;
+    if ( cooldown <= 0 || actor->_clock >= actor->_mortar_next_activation_time )
+        return 1.0f;
+
+    int remaining = actor->_mortar_next_activation_time - actor->_clock;
+    float ready = 1.0f - ((float)remaining / (float)cooldown);
+    if ( ready < 0.0f )
+        ready = 0.0f;
+    if ( ready > 1.0f )
+        ready = 1.0f;
+
+    return ready;
 }
 
 static bool ypabact_CanUseMortar(NC_STACK_ypabact *unit)

@@ -317,6 +317,34 @@ static void yw_RenderUnitSquareBar(NC_STACK_ypaworld *yw, CmdStream *cur, int le
     }
 }
 
+static bool yw_ShouldRenderMortarCooldownBar(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact)
+{
+    if ( !yw || !bact || !bact->IsMortarPlatform() )
+        return false;
+
+    if ( yw->IsSpectatorControlled() )
+        return bact->_owner != World::OWNER_0 && !yw->IsSpectatorBact(bact);
+
+    return yw->_userRobo && bact->_owner == yw->_userRobo->_owner;
+}
+
+static bool yw_RenderMortarCooldownBar(NC_STACK_ypaworld *yw, CmdStream *cur, NC_STACK_ypabact *bact,
+                                       int left, int top, int squareCount)
+{
+    if ( !yw_ShouldRenderMortarCooldownBar(yw, bact) )
+        return false;
+
+    float ratio = bact->GetMortarReadinessRatio();
+    if ( ratio < 0.0f )
+        ratio = 0.0f;
+    if ( ratio > 1.0f )
+        ratio = 1.0f;
+
+    // Tiles 3/7 are kept separate from the HP (2/6) and shield (1/5) pairs.
+    yw_RenderUnitSquareBar(yw, cur, left, top, squareCount, dround(ratio * 1000.0f), 1000, 3, 7);
+    return true;
+}
+
 bool StatusIconCanRenderCockpitUnit(NC_STACK_ypabact *bact)
 {
     if ( !bact ||
@@ -716,11 +744,95 @@ void sub_4F68FC(float a3, float a4, float a5, float a6, SDL_Color a7)
     GFX::Engine.raster_func201( Common::Line( sub_4F681C({a3, a4}), sub_4F681C({a5, a6}) )  );
 }
 
-// OpenUA custom: draw active mortar bombardment zones on the opened 2D strategic
-// map only. Rings are NOT gated by fog/view_mask: target selection already honours
-// mortar_requires_radar, and an accepted strike's zone must stay visible even over
-// dark/fogged map. Colour follows the owner's faction colour (classic Resistance
-// colour for the player's own strikes).
+static void yw_RenderMortarCooldownRadarBar(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact,
+                                            int iconWidth, int iconHeight)
+{
+    if ( !yw_ShouldRenderMortarCooldownBar(yw, bact) || bact->_energy_max <= 0 )
+        return;
+
+    float ratio = bact->GetMortarReadinessRatio();
+    if ( ratio < 0.0f )
+        ratio = 0.0f;
+    if ( ratio > 1.0f )
+        ratio = 1.0f;
+
+    Common::Point center = sub_4F681C(bact->_position.XZ());
+
+    int width = iconWidth > 5 ? iconWidth : 5;
+    int y = center.y - (iconHeight / 2) - 3;
+    int x0 = center.x - (width / 2);
+    int x1 = x0 + width - 1;
+
+    int clipLeft = robo_map.field_200;
+    int clipTop = robo_map.field_204;
+    int clipRight = robo_map.field_200 + robo_map.field_1F8 - 1;
+    int clipBottom = robo_map.field_204 + robo_map.field_1FC - 1;
+
+    if ( y < clipTop || y > clipBottom || x1 < clipLeft || x0 > clipRight )
+        return;
+
+    if ( x0 < clipLeft )
+        x0 = clipLeft;
+    if ( x1 > clipRight )
+        x1 = clipRight;
+
+    SDL_Color bg = {48, 48, 48, 255};
+    SDL_Color fg = {255, 255, 255, 255};
+
+    GFX::Engine.raster_func217(bg);
+    GFX::Engine.raster_func201(Common::Line(Common::Point(x0, y), Common::Point(x1, y)));
+
+    int filled = x0 + dround((float)(x1 - x0) * ratio);
+    if ( filled < x0 )
+        filled = x0;
+    if ( filled > x1 )
+        filled = x1;
+
+    GFX::Engine.raster_func217(fg);
+    GFX::Engine.raster_func201(Common::Line(Common::Point(x0, y), Common::Point(filled, y)));
+}
+
+static void yw_RenderMortarCooldownRadarBars(NC_STACK_ypaworld *yw, int cellX0, int cellY0, int cellX1, int cellY1)
+{
+    // This helper is used by both the opened strategic map and the small gameplay
+    // radar/minimap. Do not gate it on field_1EC & 4: the small radar path
+    // temporarily sets field_1EC to 1 even though we still want the mortar
+    // readiness bar there. Visibility/ownership is filtered per unit below.
+    if ( !yw || robo_map.field_1EE <= 2 )
+        return;
+
+    for (int cy = cellY0; cy <= cellY1; cy++)
+    {
+        for (int cx = cellX0; cx <= cellX1; cx++)
+        {
+            cellArea &cell = yw->_cells(cx, cy);
+            if ( !(robo_map.MapViewMask & cell.view_mask) )
+                continue;
+
+            for (NC_STACK_ypabact *bact : cell.unitsList)
+            {
+                if ( !bact || bact->ShouldHideFromStrategicUI() || bact->_bact_type == BACT_TYPES_MISSLE )
+                    continue;
+
+                int iconW = 7;
+                int iconH = 7;
+
+                if ( bact->_bact_type == BACT_TYPES_ROBO )
+                {
+                    iconH = yw->_guiTiles[1]->h;
+                    iconW = yw->_guiTiles[1]->map[24].w;
+                }
+
+                yw_RenderMortarCooldownRadarBar(yw, bact, iconW, iconH);
+            }
+        }
+    }
+}
+
+// OpenUA custom: draw active mortar bombardment zones on the 2D strategic map and
+// the small gameplay radar. Rings are NOT gated by fog/view_mask: target selection
+// already honours mortar_requires_radar, and an accepted strike's zone must stay
+// visible even over dark/fogged map. Colour follows the owner's faction colour.
 // Helper: draw one circle on the 2D map (world XZ centre + world radius).
 static void yw_DrawMortarMapCircle(float cx, float cz, float radius, int segs)
 {
@@ -743,9 +855,6 @@ static void yw_DrawMortarMapCircle(float cx, float cz, float radius, int segs)
 void NC_STACK_ypaworld::RenderMortarMapMarkers()
 {
     ExpireMortarMarkers();
-
-    if ( !robo_map.IsOpen() )
-        return;
 
     if ( robo_map.field_1E0 <= 0.001f || robo_map.field_1E4 <= 0.001f )
         return;
@@ -770,10 +879,9 @@ void NC_STACK_ypaworld::RenderMortarMapMarkers()
         yw_DrawMortarMapCircle(marker.pos.x, marker.pos.z, marker.radius * 0.66f, SEGS);
     }
 
-    // White aiming preview: while a mortar is selected, a white ring follows the
-    // cursor on the map. On the confirming click it becomes a coloured (azure)
-    // active marker above and the bombardment starts.
-    if ( _mortarManualGid && _mortarManualRadius > 0.01f )
+    // White aiming preview: only on the opened map. The small radar shows accepted
+    // barrage/pending markers, not the cursor-following targeting preview.
+    if ( robo_map.IsOpen() && _mortarManualGid && _mortarManualRadius > 0.01f )
     {
         SDL_Color white = {255, 255, 255, 255};
         GFX::Engine.raster_func217(white);
@@ -2445,6 +2553,12 @@ void sb_0x4f8f64(NC_STACK_ypaworld *yw)
     FontUA::set_end(&robo_map.t1_cmdbuf_3);
 
     GFX::Engine.ProcessDrawSeq(robo_map.t1_cmdbuf_3);
+
+    // OpenUA custom: draw the mortar cooldown/readiness bar on top of the
+    // strategic-map unit icons/HP bars, using the same parent/child mortar
+    // platform rules as the 3D world overlay and the small radar.
+    GFX::Engine.raster_func211(rect);
+    yw_RenderMortarCooldownRadarBars(yw, v33, v38, v43, vii);
 }
 
 void sub_4C157C(NC_STACK_ypaworld *yw)
@@ -10039,8 +10153,16 @@ void yw_RenderUnitLifeBar(NC_STACK_ypaworld *yw, CmdStream *cur, NC_STACK_ypabac
                             yw_RenderUnitSquareBar(yw, cur, v42, lifeTop, v13, bact->_energy, bact->_energy_max, 2, 6);
                             yw_RenderUnitSquareBar(yw, cur, v42, shieldTop, v13, (int)bact->GetEffectiveShield(), 100, 1, 5);
 
+                            int statusAnchorTop = lifeTop;
+                            int mortarCooldownTop = lifeTop - barHeight - 1;
+                            if ( mortarCooldownTop >= 0 &&
+                                 yw_RenderMortarCooldownBar(yw, cur, bact, v42, mortarCooldownTop, v13) )
+                            {
+                                statusAnchorTop = mortarCooldownTop;
+                            }
+
                             if ( bact->_vehicleID >= 0 && (size_t)bact->_vehicleID < yw->_vhclProtos.size() )
-                                StatusIconRenderWorld(yw, bact, &yw->_vhclProtos[bact->_vehicleID], v42, lifeTop, v43, barHeight);
+                                StatusIconRenderWorld(yw, bact, &yw->_vhclProtos[bact->_vehicleID], v42, statusAnchorTop, v43, barHeight);
                         }
                     }
                 }
@@ -10625,6 +10747,7 @@ void sb_0x4d7c08__sub0__sub4__sub2__sub0(NC_STACK_ypaworld *yw)
     drect.bottom = robo_map.field_1FC + robo_map.field_204 - 1;
 
     GFX::Engine.raster_func211(drect);
+    yw->RenderMortarMapMarkers();
     yw->RenderLaserMapBeams(61);
 
     int v14 = dround(robo_map.field_1F0 * robo_map.field_1E0) / World::CVSectorLength;
@@ -10712,6 +10835,12 @@ void sb_0x4d7c08__sub0__sub4__sub2__sub0(NC_STACK_ypaworld *yw)
     FontUA::set_end(&buf);
 
     GFX::Engine.ProcessDrawSeq(buf);
+
+    // OpenUA custom: the 3D world already shows the mortar cooldown/readiness bar
+    // above the HP bar. Mirror that feedback on the small gameplay radar too,
+    // drawing it after unit icons so it stays visible.
+    GFX::Engine.raster_func211(drect);
+    yw_RenderMortarCooldownRadarBars(yw, v14, v29, v28, v30);
 }
 
 void yw_RenderHUDRadare(NC_STACK_ypaworld *yw)
