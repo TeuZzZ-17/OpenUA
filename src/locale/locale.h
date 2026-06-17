@@ -26,7 +26,10 @@ public:
         // OpenUA-only options may collide with stale strings in existing
         // language.lng files. Force their source defaults until language packs
         // are explicitly updated.
-        if ( id == TIP_CONF_HOSTSTATIONAI || id == TIP_CONF_SPECTATORMODE )
+        // TIP_MENU_HELP is repurposed for the Database button in OpenUA;
+        // force default so stale lng files don't show "Go to Online Help".
+        if ( id == TIP_CONF_HOSTSTATIONAI || id == TIP_CONF_SPECTATORMODE ||
+             id == TIP_MENU_HELP )
             return DefaultStrings::Tooltips[ id ];
 
         return Get(LBL_TIPS + id, DefaultStrings::Tooltips[ id ]);

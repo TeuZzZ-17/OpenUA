@@ -61,7 +61,8 @@ std::array<std::string, TITLE_MAX> DefaultStrings::Titles = Common::ArrayInit<st
     {TITLE_PROFILE, "PLAYER"},
     {TITLE_LOCALE, "LOCALE"},
     {TITLE_HELP, "HELP"},
-    {TITLE_QUIT, "QUIT"}
+    {TITLE_QUIT, "QUIT"},
+    {TITLE_DATABASE, "Database"}
 });
 
 
@@ -398,7 +399,7 @@ std::array<std::string, TIP_MAX> DefaultStrings::Tooltips = Common::ArrayInit<st
     {TIP_MENU_SOUNDLEFT, "YOU HEAR THE SOUND AT LEFT"},
     {TIP_MENU_SOUNDRIGHT, "YOU HEAR THE SOUND AT RIGHT"},
     {TIP_MENU_NETSCREEN, "OPEN/CLOSE NETWORKREQUESTER"},
-    {TIP_MENU_HELP, "GIVE ME MORE INFORMATION"},
+    {TIP_MENU_HELP, "Browse game database"},
     {TIP_MENU_TOMAIN, "GO BACK TO START PAGE"},
     {TIP_MENU_BACKTOLVLSEL, "GO BACK TO LEVELSELECTION"},
     {TIP_MENU_NETCLOSE, "CLOSE NETWORK REQUESTER"},

@@ -91,6 +91,68 @@ namespace UIWidgets {
         TXTBOX = 1200
     };
 
+    // OpenUA: Database screen widget and event IDs (range 2000-2079)
+    enum DATABASE_WIDGET_IDS {
+        DB_BTN_UNITS      = 2001,
+        DB_BTN_WEAPONS    = 2002,
+        DB_BTN_BUILDINGS  = 2003,
+        DB_BTN_PREV       = 2004,
+        DB_BTN_BACK       = 2005,
+        DB_BTN_NEXT       = 2006,
+        // List rows (left panel) — these are TYPE_BUTTON for click selection
+        DB_LINE_0         = 2010,
+        DB_LINE_1         = 2011,
+        DB_LINE_2         = 2012,
+        DB_LINE_3         = 2013,
+        DB_LINE_4         = 2014,
+        DB_LINE_5         = 2015,
+        DB_LINE_6         = 2016,
+        DB_LINE_7         = 2017,
+        DB_LINE_8         = 2018,
+        DB_LINE_9         = 2019,
+        DB_LINE_10        = 2020,
+        DB_LINE_11        = 2021,
+        DB_LINE_12        = 2022,
+        DB_LINE_13        = 2023,
+        DB_LINE_14        = 2024,
+        DB_LINE_15        = 2025,
+        DB_LINE_16        = 2026,
+        DB_LINE_17        = 2027,
+        DB_LINE_18        = 2028,
+        DB_LINE_19        = 2029,
+        DB_LINE_20        = 2030,
+        DB_LINE_21        = 2031,
+        DB_LINE_22        = 2032,
+        // Page label (left panel header)
+        DB_LABEL_PAGE     = 2033,
+        // Detail pane (right panel) — TYPE_CAPTION text lines
+        DB_DETAIL_HEADER  = 2060,
+        DB_DETAIL_0       = 2061,
+        DB_DETAIL_1       = 2062,
+        DB_DETAIL_2       = 2063,
+        DB_DETAIL_3       = 2064,
+        DB_DETAIL_4       = 2065,
+        DB_DETAIL_5       = 2066,
+        DB_DETAIL_6       = 2067,
+        DB_DETAIL_7       = 2068,
+        DB_DETAIL_8       = 2069,
+        DB_DETAIL_9       = 2070,
+        DB_DETAIL_10      = 2071,
+        DB_DETAIL_11      = 2072,
+        DB_DETAIL_12      = 2073,
+        DB_DETAIL_13      = 2074,
+    };
+    enum DATABASE_EVENT_IDS {
+        DB_UP_UNITS       = 2101,
+        DB_UP_WEAPONS     = 2102,
+        DB_UP_BUILDINGS   = 2103,
+        DB_UP_PREV        = 2104,
+        DB_UP_BACK        = 2105,
+        DB_UP_NEXT        = 2106,
+        // Row click events: DB_UP_LINE_BASE + k
+        DB_UP_LINE_BASE   = 2110,
+    };
+
 }
 
 namespace World
@@ -437,7 +499,8 @@ enum
     ENVMODE_SELLOCALE = 7,
     ENVMODE_ABOUT = 8,
     ENVMODE_SELPLAYER = 9,
-    ENVMODE_HELP = 10
+    ENVMODE_HELP = 10,
+    ENVMODE_DATABASE = 11
 };
 
 struct EnvAction
@@ -602,6 +665,12 @@ public:
     NC_STACK_button *about_button;
     uint32_t aboutDlgLastKeyTime;
     int8_t aboutDlgKeyCount;
+
+    // OpenUA: Database/Encyclopedia screen
+    NC_STACK_button *database_button = nullptr;
+    int db_tab      = 0;   // 0=Units 1=Weapons 2=Buildings
+    int db_page     = 0;
+    int db_selected = 0;   // selected row index within current page
 
     NC_STACK_button *network_button;
     GuiList network_listvw;
@@ -812,7 +881,10 @@ public:
     bool SaveSpectatorModeToNucleusIni();
     void sub_46A7F8();
     void ShowAbout();
-    
+    void ShowDatabaseMenu();
+    void PopulateDatabasePage();
+    void PopulateDetailPane();
+
     bool SaveBuildProtoState();
     void SaveSettings();
     
@@ -1950,6 +2022,7 @@ public:
     virtual bool CreateDiskControls();
     virtual bool CreateLocaleControls();
     virtual bool CreateAboutControls();
+    virtual bool CreateDatabaseControls();
     virtual bool CreateNetworkControls();
     virtual bool OpenGameShell();
     virtual void CloseGameShell();
@@ -2218,6 +2291,7 @@ public:
     // OpenUA custom: mortar bombardment markers + manual map-click control.
     void AddMortarMarker(const vec3d &pos, float radius, int owner, int lingerMs);
     void ExpireMortarMarkers();
+    void ClearMortarMarkers();
     void RenderMortarMapMarkers();
     void RenderLaserMapBeams(int mapTilesetId);
     bool HandleMortarMapClick(); // 2D-map: select a mortar, then click a target zone

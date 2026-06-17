@@ -2472,6 +2472,225 @@ void UserData::ShowAbout()
     EnvMode = ENVMODE_ABOUT;
 }
 
+void UserData::ShowDatabaseMenu()
+{
+    if ( !database_button )
+        return;
+
+    titel_button->HideScreen();
+    db_tab      = 0;
+    db_page     = 0;
+    db_selected = 0;
+    PopulateDatabasePage();
+    database_button->ShowScreen();
+    EnvMode = ENVMODE_DATABASE;
+}
+
+// Truncate a name for display; never modifies the proto itself.
+static std::string db_trunc(const std::string &s, int max_len)
+{
+    if ((int)s.size() <= max_len)
+        return s;
+    return s.substr(0, max_len - 3) + "...";
+}
+
+// Collect valid prototype indices for the active tab.
+static void db_collect_valid(const UserData *usr, std::vector<int> &out)
+{
+    out.clear();
+    const std::vector<World::TVhclProto>    &vhcls = usr->p_YW->GetVhclProtos();
+    const std::vector<World::TWeapProto>    &wpns  = usr->p_YW->GetWeaponsProtos();
+    const std::vector<World::TBuildingProto>&blds   = usr->p_YW->GetBuildProtos();
+
+    if (usr->db_tab == 0)
+    {
+        for (int i = 0; i < (int)vhcls.size(); i++)
+            if (vhcls[i].Index >= 0) out.push_back(i);
+    }
+    else if (usr->db_tab == 1)
+    {
+        for (int i = 0; i < (int)wpns.size(); i++)
+            if (!wpns[i].name.empty()) out.push_back(i);
+    }
+    else
+    {
+        for (int i = 0; i < (int)blds.size(); i++)
+            if (!blds[i].Name.empty()) out.push_back(i);
+    }
+}
+
+static int db_display_attack_from_weapon(const std::vector<World::TWeapProto> &wpns, int weapon_id)
+{
+    if (weapon_id > 0 && weapon_id < (int)wpns.size() && !wpns[weapon_id].name.empty())
+        return wpns[weapon_id].energy / 100;
+    return -1;
+}
+
+static std::string db_weapon_name(const std::vector<World::TWeapProto> &wpns, int weapon_id, int max_len)
+{
+    if (weapon_id > 0 && weapon_id < (int)wpns.size() && !wpns[weapon_id].name.empty())
+        return db_trunc(wpns[weapon_id].name, max_len);
+    return "none";
+}
+
+void UserData::PopulateDatabasePage()
+{
+    if ( !database_button )
+        return;
+
+    // Fill the available vertical space; each row stays intentionally short.
+    // The selected item detail pane carries the actual gameplay stats.
+    // Keep this in sync with CreateDatabaseControls().
+    static const int LINES = 22;
+
+    const std::vector<World::TVhclProto>    &vhcls = p_YW->GetVhclProtos();
+    const std::vector<World::TWeapProto>    &wpns  = p_YW->GetWeaponsProtos();
+    const std::vector<World::TBuildingProto>&blds   = p_YW->GetBuildProtos();
+
+    std::vector<int> valid;
+    db_collect_valid(this, valid);
+    int total = (int)valid.size();
+    int total_pages = (total == 0) ? 1 : (total + LINES - 1) / LINES;
+
+    if (db_page < 0) db_page = 0;
+    if (db_page >= total_pages) db_page = total_pages - 1;
+
+    int entries_on_page = total - db_page * LINES;
+    if (entries_on_page > LINES) entries_on_page = LINES;
+    if (entries_on_page < 0)    entries_on_page = 0;
+
+    if (db_selected >= entries_on_page) db_selected = (entries_on_page > 0) ? entries_on_page - 1 : 0;
+    if (db_selected < 0) db_selected = 0;
+
+    static const char *tab_labels[] = { "Units", "Weapons", "Buildings" };
+    std::string page_lbl;
+    if (total == 0)
+        page_lbl = fmt::sprintf("%s  -- no prototype data available --", tab_labels[db_tab]);
+    else
+        page_lbl = fmt::sprintf("%s  page %d / %d  (%d entries)",
+            tab_labels[db_tab], db_page + 1, total_pages, total);
+    database_button->SetText(UIWidgets::DB_LABEL_PAGE, page_lbl);
+
+    int start = db_page * LINES;
+    for (int k = 0; k < LINES; k++)
+    {
+        int btn_id = UIWidgets::DB_LINE_0 + k;
+        int idx    = start + k;
+        std::string line;
+
+        if (idx < total)
+        {
+            int pid = valid[idx];
+            const char *sel = (k == db_selected) ? ">" : " ";
+
+            if (db_tab == 0)
+            {
+                const World::TVhclProto &p = vhcls[pid];
+                std::string nm = db_trunc(p.name, 16);
+
+                // Keep the list compact. Weapon name and attack are shown in the detail pane.
+                line = fmt::sprintf("%s[%3d] %-16s HP:%5d DEF:%3d",
+                    sel, pid, nm, p.energy, p.shield);
+            }
+            else if (db_tab == 1)
+            {
+                const World::TWeapProto &p = wpns[pid];
+                std::string nm = db_trunc(p.name, 18);
+                int atk_disp = p.energy / 100;
+                line = fmt::sprintf("%s[%3d] %-18s ATK:%3d",
+                    sel, pid, nm, atk_disp);
+            }
+            else
+            {
+                const World::TBuildingProto &p = blds[pid];
+                std::string nm = db_trunc(p.Name, 17);
+                line = fmt::sprintf("%s[%3d] %-17s HP:%5d",
+                    sel, pid, nm, p.Energy);
+            }
+        }
+        else
+        {
+            line = " ";
+        }
+
+        database_button->SetText(btn_id, line);
+    }
+
+    PopulateDetailPane();
+}
+
+void UserData::PopulateDetailPane()
+{
+    if ( !database_button )
+        return;
+
+    static const int LINES = 20;
+    static const int DETAIL_LINES = 7;
+
+    const std::vector<World::TVhclProto>    &vhcls = p_YW->GetVhclProtos();
+    const std::vector<World::TWeapProto>    &wpns  = p_YW->GetWeaponsProtos();
+    const std::vector<World::TBuildingProto>&blds   = p_YW->GetBuildProtos();
+
+    std::vector<int> valid;
+    db_collect_valid(this, valid);
+    int total = (int)valid.size();
+
+    static const char *detail_hdrs[] = { "-- Unit Details --", "-- Weapon Details --", "-- Building Details --" };
+    database_button->SetText(UIWidgets::DB_DETAIL_HEADER, detail_hdrs[db_tab]);
+
+    int abs_idx = db_page * LINES + db_selected;
+    if (abs_idx >= total)
+    {
+        for (int k = 0; k < DETAIL_LINES; k++)
+            database_button->SetText(UIWidgets::DB_DETAIL_0 + k, " ");
+        return;
+    }
+
+    int pid = valid[abs_idx];
+    std::string lines[DETAIL_LINES];
+    for (int i = 0; i < DETAIL_LINES; i++) lines[i] = " ";
+
+    if (db_tab == 0)
+    {
+        const World::TVhclProto &p = vhcls[pid];
+
+        int wid = (int)p.weapon;
+        int atk_disp = db_display_attack_from_weapon(wpns, wid);
+        std::string wpn_str = db_weapon_name(wpns, wid, 18);
+
+        lines[0] = fmt::sprintf("Name:    %s", db_trunc(p.name, 18));
+        lines[1] = fmt::sprintf("HP:      %d", p.energy);
+        lines[2] = fmt::sprintf("Defense: %d", p.shield);
+        lines[3] = fmt::sprintf("Weapon:  %s", wpn_str);
+        lines[4] = (atk_disp >= 0)
+                    ? fmt::sprintf("Attack:  %d", atk_disp)
+                    : std::string("Attack:  --");
+        lines[5] = fmt::sprintf("Mgun:    %d", (int)p.mgun);
+        lines[6] = fmt::sprintf("Radar:   %d", (int)p.radar);
+    }
+    else if (db_tab == 1)
+    {
+        const World::TWeapProto &p = wpns[pid];
+
+        lines[0] = fmt::sprintf("Name:    %s", db_trunc(p.name, 18));
+        lines[1] = fmt::sprintf("Attack:  %d", p.energy / 100);
+        lines[2] = fmt::sprintf("Radius:  %.0f", p.radius);
+        lines[3] = fmt::sprintf("Reload:  %d ms", p.shot_time);
+        lines[4] = fmt::sprintf("Player:  %d ms", p.shot_time_user);
+        lines[5] = fmt::sprintf("Life:    %d ms", p.life_time);
+    }
+    else
+    {
+        const World::TBuildingProto &p = blds[pid];
+
+        lines[0] = fmt::sprintf("Name:  %s", db_trunc(p.Name, 19));
+        lines[1] = fmt::sprintf("HP:    %d", p.Energy);
+        lines[2] = fmt::sprintf("Power: %d", (int)p.Power);
+    }
+
+    for (int k = 0; k < DETAIL_LINES; k++)
+        database_button->SetText(UIWidgets::DB_DETAIL_0 + k, lines[k]);
+}
 
 int ypaworld_func158__sub0__sub6(char a1)
 {
@@ -2843,7 +3062,64 @@ void UserData::GameShellUiHandleInput()
         }
         else if ( r.code == UIWidgets::MAIN_MENU_EVENT_IDS::BTN_HELP_UP )
         {
-            p_YW->_helpURL = Locale::Text::Help(Locale::HELP_MAIN);
+            ShowDatabaseMenu();
+        }
+    }
+
+    // OpenUA: Database screen event processing
+    if ( EnvMode == ENVMODE_DATABASE && database_button )
+    {
+        NC_STACK_button::ResCode dbr = database_button->ProcessWidgetsEvents(Input);
+        if ( dbr )
+        {
+            if ( dbr.code == UIWidgets::DB_UP_UNITS )
+            {
+                db_tab = 0; db_page = 0; db_selected = 0;
+                PopulateDatabasePage();
+            }
+            else if ( dbr.code == UIWidgets::DB_UP_WEAPONS )
+            {
+                db_tab = 1; db_page = 0; db_selected = 0;
+                PopulateDatabasePage();
+            }
+            else if ( dbr.code == UIWidgets::DB_UP_BUILDINGS )
+            {
+                db_tab = 2; db_page = 0; db_selected = 0;
+                PopulateDatabasePage();
+            }
+            else if ( dbr.code == UIWidgets::DB_UP_PREV )
+            {
+                db_page--; db_selected = 0;
+                PopulateDatabasePage();
+            }
+            else if ( dbr.code == UIWidgets::DB_UP_NEXT )
+            {
+                db_page++; db_selected = 0;
+                PopulateDatabasePage();
+            }
+            else if ( dbr.code == UIWidgets::DB_UP_BACK )
+            {
+                EnvMode = ENVMODE_TITLE;
+                database_button->HideScreen();
+                titel_button->ShowScreen();
+            }
+            else if ( dbr.code >= UIWidgets::DB_UP_LINE_BASE &&
+                      dbr.code <  UIWidgets::DB_UP_LINE_BASE + 22 )
+            {
+                db_selected = dbr.code - UIWidgets::DB_UP_LINE_BASE;
+                PopulateDatabasePage();
+            }
+        }
+
+        // Keyboard Up/Down row navigation
+        if ( Input->KbdLastHit == Input::KC_UP )
+        {
+            if ( db_selected > 0 ) { db_selected--; PopulateDatabasePage(); }
+        }
+        else if ( Input->KbdLastHit == Input::KC_DOWN )
+        {
+            db_selected++;   // PopulateDatabasePage clamps to valid entries
+            PopulateDatabasePage();
         }
     }
 
@@ -3848,6 +4124,16 @@ void UserData::GameShellUiHandleInput()
 
             about_button->HideScreen();
 
+            titel_button->ShowScreen();
+        }
+    }
+
+    if ( EnvMode == ENVMODE_DATABASE && database_button )
+    {
+        if ( Input->KbdLastHit == Input::KC_ESCAPE )
+        {
+            EnvMode = ENVMODE_TITLE;
+            database_button->HideScreen();
             titel_button->ShowScreen();
         }
     }

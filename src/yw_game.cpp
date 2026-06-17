@@ -200,6 +200,7 @@ int NC_STACK_ypaworld::LevelCommonLoader(TLevelDescription *mapp, int levelID, i
     _cellOnMouse = 0;
     _bactOnMouse = NULL;
     _bactPrevClicked = 0;
+    ClearMortarMarkers();
     _mortarManualGid = 0;
     _mortarManualRadius = 0.0f;
     _viewerBact = NULL;
@@ -7411,6 +7412,11 @@ void NC_STACK_ypaworld::ExpireMortarMarkers()
         else
             i++;
     }
+}
+
+void NC_STACK_ypaworld::ClearMortarMarkers()
+{
+    _mortarMarkers.clear();
 }
 
 void NC_STACK_ypaworld::HistoryAktCreate(NC_STACK_ypabact *bact)

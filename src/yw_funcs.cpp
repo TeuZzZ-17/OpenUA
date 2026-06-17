@@ -2743,6 +2743,11 @@ void ypaworld_func158__sub3(NC_STACK_ypaworld *yw, UserData *usr)
         usr->about_button->Draw();
         break;
 
+    case ENVMODE_DATABASE:
+        if ( usr->database_button )
+            usr->database_button->Draw();
+        break;
+
     case ENVMODE_SELPLAYER:
         usr->disk_button->Draw();
         ypaworld_func158__saveload_list_draw(yw, usr);

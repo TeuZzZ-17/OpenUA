@@ -2586,40 +2586,104 @@ void NC_STACK_ypabact::UpdateDecorationFX(update_msg *)
 // or touching the class-specific _fly_dir physics) makes the knockback both
 // smooth (spread over several frames) and uniform across every vehicle class.
 static const float AOE_PUSH_TAU = 0.30f; // knockback time constant, seconds
+static const float AOE_PUSH_MAX_DT = 0.05f;
+static const float AOE_PUSH_MAX_STEP = 80.0f;
+
+static bool ypabact_IsAoePushGroundAlignedUnit(NC_STACK_ypabact *unit)
+{
+    if ( !unit )
+        return false;
+
+    return unit->_bact_type == BACT_TYPES_TANK ||
+           unit->_bact_type == BACT_TYPES_CAR ||
+           unit->_bact_type == BACT_TYPES_HOVER;
+}
+
+static bool ypabact_SnapAoePushGroundUnit(NC_STACK_ypabact *unit)
+{
+    ypaworld_arg136 ground;
+    ground.stPos = unit->_position.X0Z() - vec3d::OY(30000.0);
+    ground.vect = vec3d::OY(50000.0);
+    ground.flags = 0;
+
+    unit->getBACT_pWorld()->ypaworld_func136(&ground);
+
+    if ( !ground.isect )
+        return false;
+
+    unit->_position.y = ground.isectPos.y - (unit->getBACT_viewer() ? unit->_viewer_overeof : unit->_overeof);
+    unit->_status_flg |= BACT_STFLAG_LAND;
+    return true;
+}
 
 void NC_STACK_ypabact::AddAoePush(const vec3d &dir, float distance)
 {
     if ( distance <= 0.0f )
         return;
 
-    _aoePushVel += dir * (distance / AOE_PUSH_TAU);
+    float dirLen = dir.length();
+    if ( !isfinite(dirLen) || dirLen <= 0.001f )
+        return;
+
+    _aoePushVel += (dir / dirLen) * (distance / AOE_PUSH_TAU);
 }
 
 void NC_STACK_ypabact::UpdateAoePush(update_msg *arg)
 {
-    if ( _aoePushVel.length() < 1.0f )
+    float pushSpeed = _aoePushVel.length();
+    if ( !isfinite(pushSpeed) || pushSpeed < 1.0f )
     {
         _aoePushVel = vec3d(0.0, 0.0, 0.0);
         return;
     }
 
     float dtime = arg->frameTime / 1000.0;
+    if ( !isfinite(dtime) || dtime <= 0.0f )
+        return;
+
+    if ( dtime > AOE_PUSH_MAX_DT )
+        dtime = AOE_PUSH_MAX_DT;
 
     // Move this frame's slice, terrain-checked so we never shove a unit through
     // the ground or a wall (same safety as the engine's ApplyImpulse).
-    vec3d step = _aoePushVel * dtime;
+    vec3d totalStep = _aoePushVel * dtime;
+    float stepLen = totalStep.length();
+    if ( !isfinite(stepLen) || stepLen <= 0.0f )
+    {
+        _aoePushVel = vec3d(0.0, 0.0, 0.0);
+        return;
+    }
 
-    ypaworld_arg136 moveTest;
-    moveTest.stPos = _position;
-    moveTest.vect  = step;
-    moveTest.flags = 0;
+    int slices = (int)ceil(stepLen / AOE_PUSH_MAX_STEP);
+    if ( slices < 1 )
+        slices = 1;
 
-    _world->ypaworld_func136(&moveTest);
+    vec3d step = totalStep / (float)slices;
+    bool groundAligned = ypabact_IsAoePushGroundAlignedUnit(this);
 
-    if ( moveTest.isect )
-        _aoePushVel = vec3d(0.0, 0.0, 0.0); // hit terrain: stop the knockback
-    else
+    for (int i = 0; i < slices; i++)
+    {
+        ypaworld_arg136 moveTest;
+        moveTest.stPos = _position;
+        moveTest.vect  = step;
+        moveTest.flags = 0;
+
+        _world->ypaworld_func136(&moveTest);
+
+        if ( moveTest.isect )
+        {
+            _aoePushVel = vec3d(0.0, 0.0, 0.0); // hit terrain: stop the knockback
+            break;
+        }
+
         _position += step;
+
+        if ( groundAligned && !ypabact_SnapAoePushGroundUnit(this) )
+        {
+            _aoePushVel = vec3d(0.0, 0.0, 0.0);
+            break;
+        }
+    }
 
     // Exponential decay toward zero.
     _aoePushVel *= expf(-dtime / AOE_PUSH_TAU);
@@ -5367,6 +5431,26 @@ static bool ypabact_IsValidSeekAndExplodeTarget(NC_STACK_ypabact *unit, NC_STACK
     return true;
 }
 
+static bool ypabact_IsSeekAndExplodeVerticalFlightUnit(NC_STACK_ypabact *unit)
+{
+    if ( !unit )
+        return false;
+
+    // Script parser maps model=heli to BACT_TYPES_BACT; plane/glider/zeppelin
+    // use BACT_TYPES_FLYER, while model=ufo has its own runtime class.
+    return unit->_bact_type == BACT_TYPES_BACT ||
+           unit->_bact_type == BACT_TYPES_FLYER ||
+           unit->_bact_type == BACT_TYPES_UFO;
+}
+
+static bool ypabact_ShouldSeekAndExplodeUseHorizontalAirRamming(NC_STACK_ypabact *unit, NC_STACK_ypabact *target)
+{
+    bool unitIsAir = ypabact_IsSeekAndExplodeVerticalFlightUnit(unit);
+    bool targetIsAir = ypabact_IsSeekAndExplodeVerticalFlightUnit(target);
+
+    return unitIsAir && !targetIsAir;
+}
+
 static bool ypabact_IsSeekAndExplodeContact(NC_STACK_ypabact *unit, NC_STACK_ypabact *target)
 {
     if ( !ypabact_IsValidSeekAndExplodeTarget(unit, target) )
@@ -5376,7 +5460,11 @@ static bool ypabact_IsSeekAndExplodeContact(NC_STACK_ypabact *unit, NC_STACK_ypa
     if ( detonationDistance <= 0.0 )
         return false;
 
-    return (target->_position - unit->_position).length() <= detonationDistance;
+    vec3d delta = target->_position - unit->_position;
+    if ( ypabact_ShouldSeekAndExplodeUseHorizontalAirRamming(unit, target) )
+        return delta.XZ().length() <= detonationDistance;
+
+    return delta.length() <= detonationDistance;
 }
 
 static NC_STACK_ypabact *ypabact_FindSeekAndExplodeContactTarget(NC_STACK_ypabact *unit)
@@ -5459,7 +5547,13 @@ bool NC_STACK_ypabact::ApplySeekAndExplodeRammingGuidance(bool clearAvoidanceFla
     if ( !target )
         return false;
 
+    bool horizontalAirRamming = ypabact_ShouldSeekAndExplodeUseHorizontalAirRamming(this, target);
+    float safeVerticalDir = _target_dir.y;
+
     vec3d desired = target->_position - _position;
+    if ( horizontalAirRamming )
+        desired.y = 0.0;
+
     float desiredLen = desired.length();
     if ( desiredLen <= 0.001 )
         return false;
@@ -5467,8 +5561,20 @@ bool NC_STACK_ypabact::ApplySeekAndExplodeRammingGuidance(bool clearAvoidanceFla
     _target_vec = desired;
     _target_dir = desired / desiredLen;
 
+    if ( horizontalAirRamming )
+    {
+        // Keep the vertical correction calculated by the unit's own flight AI
+        // so heli/flyer/ufo ramming does not cancel ground-avoidance lift.
+        _target_dir.y = safeVerticalDir;
+        if ( _target_dir.normalise() <= 0.001 )
+            _target_dir = desired / desiredLen;
+    }
+
     _status_flg |= BACT_STFLAG_MOVE | BACT_STFLAG_ATTACK;
     _status_flg &= ~BACT_STFLAG_APPROACH;
+
+    if ( horizontalAirRamming )
+        _status_flg &= ~BACT_STFLAG_LAND;
 
     if ( clearAvoidanceFlags )
         _status_flg &= ~(BACT_STFLAG_DODGE_LEFT | BACT_STFLAG_DODGE_RIGHT);
@@ -8325,7 +8431,10 @@ void NC_STACK_ypabact::UpdateSeekAndExplode(update_msg *)
             payloadDir = vec3d::OZ(1.0);
 
         payload->SetLauncherBact(this);
-        payload->SetStartHeight(arg147.pos.y);
+        // Seek-and-explode detonates at the carrier position. If the payload is
+        // model=bomb, the normal drop-height filter would skip nearby ground
+        // units that sit slightly below the carrier.
+        payload->SetStartHeight(std::numeric_limits<float>::lowest());
         payload->_owner = _owner;
         payload->_host_station = _host_station;
         payload->_fly_dir = payloadDir;

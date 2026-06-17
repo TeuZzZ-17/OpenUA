@@ -2637,6 +2637,7 @@ void sb_0x4e75e8__sub1(NC_STACK_ypaworld *yw, int mode)
         case ENVMODE_ABOUT:
         case ENVMODE_SELPLAYER:
         case ENVMODE_HELP:
+        case ENVMODE_DATABASE:
             menu_map  = yw->_globalMapRegions.menu_map[v38].PicName;
             rollover_map = yw->_globalMapRegions.settings_map[v38].PicName;
             break;
@@ -2931,7 +2932,7 @@ bool NC_STACK_ypaworld::CreateTitleControls(){
                             btn_64arg.xpos = _screenSize.x * 0.3328125;
                             btn_64arg.ypos = _screenSize.y * 0.7166666666666667;
                             btn_64arg.width = _screenSize.x / 3;
-                            btn_64arg.caption = Locale::Text::Title(Locale::TITLE_HELP);
+                            btn_64arg.caption = Locale::Text::Title(Locale::TITLE_DATABASE);
                             btn_64arg.caption2.clear();
                             btn_64arg.pressedCode = 0;
                             btn_64arg.downCode = UIWidgets::MAIN_MENU_EVENT_IDS::ALL_DOWN;
@@ -4860,6 +4861,149 @@ bool NC_STACK_ypaworld::CreateAboutControls(){
     _GameShell->about_button->HideScreen();
     return true;
 }
+
+bool NC_STACK_ypaworld::CreateDatabaseControls()
+{
+    _GameShell->database_button = Nucleus::CInit<NC_STACK_button>( {
+        {NC_STACK_button::BTN_ATT_X, (int32_t)0},
+        // OpenUA Database: use the full shell height. The previous panel started at
+        // scaledFontHeight, leaving a large empty strip above the tabs and wasting
+        // vertical space.
+        {NC_STACK_button::BTN_ATT_Y, (int32_t)0},
+        {NC_STACK_button::BTN_ATT_W, (int32_t)_screenSize.x},
+        {NC_STACK_button::BTN_ATT_H, (int32_t)_screenSize.y} });
+
+    if ( !_GameShell->database_button )
+    {
+        ypa_log_out("Unable to create database-button\n");
+        return false;
+    }
+
+    // Database V1.3: keep the list compact and let the right pane show the real stats.
+    // The old one-line stat dump was too wide and looked like a debug table.
+    const int lw   = (_screenSize.x * 48) / 100;   // list panel width
+    const int rx   = (_screenSize.x * 50) / 100;   // right panel x origin
+    const int rw   = _screenSize.x - rx;            // right panel width
+    const int lh   = _fontH + vertMenuSpace;        // line height
+    const int DB_VISIBLE_LINES = 22;                // fill the vertical space above the bottom buttons without overlapping navigation
+
+    bool ok = true;
+    NC_STACK_button::button_64_arg btn;
+    btn.caption2.clear();
+    btn.pressedCode = 0;
+
+    // --- TAB BUTTONS (full width, top row) ---
+    btn.tileset_down = 19;
+    btn.tileset_up   = 18;
+    btn.field_3A     = 30;
+    btn.button_type  = NC_STACK_button::TYPE_BUTTON;
+    btn.downCode     = UIWidgets::MAIN_MENU_EVENT_IDS::ALL_DOWN;
+    btn.flags        = NC_STACK_button::FLAG_BORDER | NC_STACK_button::FLAG_CENTER | NC_STACK_button::FLAG_TEXT;
+    btn.txt_r        = _iniColors[68].r;
+    btn.txt_g        = _iniColors[68].g;
+    btn.txt_b        = _iniColors[68].b;
+    btn.ypos         = 0;
+    btn.width        = _screenSize.x / 3;
+
+    btn.xpos = 0;                        btn.caption = "Units";     btn.button_id = UIWidgets::DB_BTN_UNITS;     btn.upCode = UIWidgets::DB_UP_UNITS;
+    if (!_GameShell->database_button->Add(&btn)) ok = false;
+    btn.xpos = _screenSize.x / 3;       btn.caption = "Weapons";   btn.button_id = UIWidgets::DB_BTN_WEAPONS;   btn.upCode = UIWidgets::DB_UP_WEAPONS;
+    if (!_GameShell->database_button->Add(&btn)) ok = false;
+    btn.xpos = (2 * _screenSize.x) / 3; btn.caption = "Buildings"; btn.button_id = UIWidgets::DB_BTN_BUILDINGS; btn.upCode = UIWidgets::DB_UP_BUILDINGS;
+    if (!_GameShell->database_button->Add(&btn)) ok = false;
+
+    // --- LEFT PANEL: page label (TYPE_CAPTION, left-aligned) ---
+    btn.tileset_down = 16;
+    btn.tileset_up   = 16;
+    btn.field_3A     = 16;
+    btn.button_type  = NC_STACK_button::TYPE_CAPTION;
+    btn.downCode     = 0;
+    btn.upCode       = 0;
+    btn.xpos         = 0;
+    btn.width        = lw;
+    btn.flags        = NC_STACK_button::FLAG_TEXT;
+    btn.ypos         = lh;
+    btn.caption      = " ";
+    btn.button_id    = UIWidgets::DB_LABEL_PAGE;
+    if (!_GameShell->database_button->Add(&btn)) ok = false;
+
+    // --- LEFT PANEL: compact list rows (TYPE_BUTTON, clickable, no border) ---
+    btn.tileset_down = 19;
+    btn.tileset_up   = 18;
+    btn.field_3A     = 30;
+    btn.button_type  = NC_STACK_button::TYPE_BUTTON;
+    btn.downCode     = UIWidgets::MAIN_MENU_EVENT_IDS::ALL_DOWN;
+    btn.flags        = NC_STACK_button::FLAG_TEXT;   // no border, just text+click
+    btn.xpos         = 0;
+    btn.width        = lw;
+    for (int k = 0; k < DB_VISIBLE_LINES; k++)
+    {
+        btn.ypos      = (k + 2) * lh;
+        btn.caption   = " ";
+        btn.button_id = UIWidgets::DB_LINE_0 + k;
+        btn.upCode    = UIWidgets::DB_UP_LINE_BASE + k;
+        if (!_GameShell->database_button->Add(&btn)) ok = false;
+    }
+
+    // --- RIGHT PANEL: detail header (TYPE_CAPTION) ---
+    btn.tileset_down = 16;
+    btn.tileset_up   = 16;
+    btn.field_3A     = 16;
+    btn.button_type  = NC_STACK_button::TYPE_CAPTION;
+    btn.downCode     = 0;
+    btn.upCode       = 0;
+    btn.xpos         = rx;
+    btn.width        = rw;
+    btn.flags        = NC_STACK_button::FLAG_TEXT;
+    btn.ypos         = lh;
+    btn.caption      = "-- Details --";
+    btn.button_id    = UIWidgets::DB_DETAIL_HEADER;
+    if (!_GameShell->database_button->Add(&btn)) ok = false;
+
+    // --- RIGHT PANEL: short, player-facing detail lines (TYPE_CAPTION, left-aligned) ---
+    // Keep this readable: no physics/internal VP dump here.
+    btn.flags = NC_STACK_button::FLAG_TEXT;
+    for (int k = 0; k < 7; k++)
+    {
+        btn.ypos      = (k + 2) * lh;
+        btn.caption   = " ";
+        btn.button_id = UIWidgets::DB_DETAIL_0 + k;
+        if (!_GameShell->database_button->Add(&btn)) ok = false;
+    }
+
+    // --- NAV BUTTONS (full width, anchored near the bottom of the panel) ---
+    // The database panel now starts at screen top, so child Y is relative to the full screen.
+    // Anchor the row one line + margin above the bottom edge.
+    const int panelH = _screenSize.y;
+    int nav_y = panelH - lh - vertMenuSpace;
+    if (nav_y < 10 * lh) nav_y = 10 * lh;   // safety floor on tiny resolutions
+
+    btn.tileset_down = 19;
+    btn.tileset_up   = 18;
+    btn.field_3A     = 30;
+    btn.button_type  = NC_STACK_button::TYPE_BUTTON;
+    btn.downCode     = UIWidgets::MAIN_MENU_EVENT_IDS::ALL_DOWN;
+    btn.flags        = NC_STACK_button::FLAG_BORDER | NC_STACK_button::FLAG_CENTER | NC_STACK_button::FLAG_TEXT;
+    btn.ypos         = nav_y;
+    btn.width        = _screenSize.x / 3;
+
+    btn.xpos = 0;                        btn.caption = "< Prev"; btn.button_id = UIWidgets::DB_BTN_PREV; btn.upCode = UIWidgets::DB_UP_PREV;
+    if (!_GameShell->database_button->Add(&btn)) ok = false;
+    btn.xpos = _screenSize.x / 3;       btn.caption = "Back";   btn.button_id = UIWidgets::DB_BTN_BACK; btn.upCode = UIWidgets::DB_UP_BACK;
+    if (!_GameShell->database_button->Add(&btn)) ok = false;
+    btn.xpos = (2 * _screenSize.x) / 3; btn.caption = "Next >"; btn.button_id = UIWidgets::DB_BTN_NEXT; btn.upCode = UIWidgets::DB_UP_NEXT;
+    if (!_GameShell->database_button->Add(&btn)) ok = false;
+
+    if ( !ok )
+    {
+        ypa_log_out("Unable to add buttons to database panel\n");
+        return false;
+    }
+
+    _GameShell->database_button->HideScreen();
+    return true;
+}
+
 bool NC_STACK_ypaworld::CreateNetworkControls()
 {
     int posLeftPaddingX = (_screenSize.x * 0.3) / 2;
@@ -5508,7 +5652,8 @@ bool NC_STACK_ypaworld::OpenGameShell()
     if (!this->CreateLocaleControls()) return false;
     printf("Creating CreateAboutControls\n");
     if (!this->CreateAboutControls()) return false;
-    
+    printf("Creating CreateDatabaseControls\n");
+    if (!this->CreateDatabaseControls()) return false;
 
     dword_5A50B6 = menuWidth - _fontVBScrollW;
 

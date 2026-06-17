@@ -93,7 +93,8 @@ enum TITLE
     TITLE_LOCALE   = 6,
     TITLE_HELP     = 7,
     TITLE_QUIT     = 8,
-    
+    TITLE_DATABASE = 9,
+
     TITLE_MAX
 };
 

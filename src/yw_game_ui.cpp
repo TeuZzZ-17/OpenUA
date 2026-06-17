@@ -830,9 +830,9 @@ static void yw_RenderMortarCooldownRadarBars(NC_STACK_ypaworld *yw, int cellX0, 
 }
 
 // OpenUA custom: draw active mortar bombardment zones on the 2D strategic map and
-// the small gameplay radar. Rings are NOT gated by fog/view_mask: target selection
-// already honours mortar_requires_radar, and an accepted strike's zone must stay
-// visible even over dark/fogged map. Colour follows the owner's faction colour.
+// the small gameplay radar. Own strike markers stay visible as player orders;
+// enemy markers require the target sector to be currently visible/discovered.
+// Colour follows the owner's faction colour.
 // Helper: draw one circle on the 2D map (world XZ centre + world radius).
 static void yw_DrawMortarMapCircle(float cx, float cz, float radius, int segs)
 {
@@ -852,6 +852,21 @@ static void yw_DrawMortarMapCircle(float cx, float cz, float radius, int segs)
     }
 }
 
+static bool yw_IsMortarMarkerVisible(NC_STACK_ypaworld *yw, const NC_STACK_ypaworld::MortarMarker &marker, const Common::Point &cellId)
+{
+    if ( !yw || !yw->IsSector(cellId) )
+        return false;
+
+    if ( yw->_userRobo && marker.owner == yw->_userRobo->_owner )
+        return true;
+
+    cellArea &cell = yw->SectorAt(cellId);
+    if ( yw->IsSpectatorControlled() )
+        return (robo_map.MapViewMask & cell.view_mask) != 0;
+
+    return yw->_userRobo && cell.IsCanSee(yw->_userRobo->_owner);
+}
+
 void NC_STACK_ypaworld::RenderMortarMapMarkers()
 {
     ExpireMortarMarkers();
@@ -869,7 +884,7 @@ void NC_STACK_ypaworld::RenderMortarMapMarkers()
             continue;
 
         Common::Point cellId = World::PositionToSectorID(marker.pos);
-        if ( !IsSector(cellId) )
+        if ( !yw_IsMortarMarkerVisible(this, marker, cellId) )
             continue;
 
         SDL_Color clr = GetColor(marker.owner);
@@ -1075,9 +1090,9 @@ bool NC_STACK_ypaworld::HandleMortarMapClick()
     int playerOwner = _userRobo->_owner;
 
     // A mortar is already selected: this click chooses the target area.
+    // Clicking another own mortar keeps the old convenient re-select behaviour.
     if ( _mortarManualGid )
     {
-        // Clicking another of our own manual mortars re-selects it instead.
         if ( (_guiActFlags & 0x20) && _bactOnMouse &&
              _bactOnMouse->_owner == playerOwner &&
              _bactOnMouse->IsManualMortarPlatform() )
@@ -11961,6 +11976,18 @@ void NC_STACK_ypaworld::ypaworld_func64__sub21(TInputState *arg)
         // normal command mode (field_1D0 == 1). Build (16) / teleport (32) modes
         // are left untouched. Consumes the click so no first-person entry or RTS
         // order is produced for a mortar interaction.
+        if ( !IsSpectatorControlled() &&
+             bzda.field_1D0 == 1 &&
+             (_guiActFlags & 8) &&
+             _mortarManualGid &&
+             (arg->ClickInf.flag & TClickBoxInf::FLAG_RM_DOWN) )
+        {
+            _mortarManualGid = 0;
+            _mortarManualRadius = 0.0f;
+            arg->ClickInf.flag &= ~TClickBoxInf::FLAG_RM_DOWN;
+            return;
+        }
+
         if ( !IsSpectatorControlled() &&
              bzda.field_1D0 == 1 &&
              (_guiActFlags & 8) &&
