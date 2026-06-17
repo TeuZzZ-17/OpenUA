@@ -1328,6 +1328,10 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
 
         _vhcl->spawn_count = count;
     }
+    else if ( !StriCmp(p1, "spawn_instant") )
+    {
+        _vhcl->spawn_instant = parser.stol(p2, NULL, 0) ? 1 : 0;
+    }
     else if ( !StriCmp(p1, "spawn_at_death_units") )
     {
         _vhcl->spawn_at_death_units = parser.stol(p2, NULL, 0) ? 1 : 0;
@@ -2209,6 +2213,7 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->spawn_random_pos = 0.0;
         _vhcl->spawn_max_active = 0;
         _vhcl->spawn_count = 1;
+        _vhcl->spawn_instant = 0;
         _vhcl->spawn_at_death_units = 0;
         _vhcl->spawn_at_death_vehicle = 0;
         _vhcl->spawn_at_death_count = 1;
@@ -2360,6 +2365,11 @@ bool WeaponProtoParser::IsScope(ScriptParser::Parser &parser, const std::string 
         _wpn->laser_energy_increment_rate = 0.0;
         _wpn->laser_max_energy = 0.0;
         _wpn->laser_vp_spacing = 40.0;
+        _wpn->laser_chain_allow = 0;
+        _wpn->laser_chain_max_jumps = 0;
+        _wpn->laser_chain_radius = 0.0;
+        _wpn->laser_chain_damage_mult = 1.0;
+        _wpn->laser_multi_target = 1;
         _wpn->vp_normal = 0;
         _wpn->vp_fire = 1;
         _wpn->vp_megadeth = 2;
@@ -2386,6 +2396,7 @@ bool WeaponProtoParser::IsScope(ScriptParser::Parser &parser, const std::string 
         _wpn->debuff.tick_snd.sndPrm_shk.pos.z = 0.2;
         _wpn->cluster = TWeaponClusterConfig();
         _wpn->cluster.snd.volume = 120;
+        _wpn->chain = TWeaponChainConfig();
 
         for (TVhclSound &fx : _wpn->sndFXes)
         {
@@ -2727,6 +2738,30 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     {
         _wpn->cluster.snd.volume = parser.stol(p2, NULL, 0);
     }
+    else if ( !StriCmp(p1, "chain_allow") )
+    {
+        _wpn->chain.allow = parser.stol(p2, NULL, 0) != 0;
+    }
+    else if ( !StriCmp(p1, "chain_max_jumps") )
+    {
+        int maxJumps = parser.stol(p2, NULL, 0);
+        _wpn->chain.max_jumps = maxJumps > 0 ? maxJumps : 0;
+    }
+    else if ( !StriCmp(p1, "chain_radius") )
+    {
+        float radius = parser.stof(p2, 0);
+        _wpn->chain.radius = radius > 0.0 ? radius : 0.0;
+    }
+    else if ( !StriCmp(p1, "chain_damage_mult") )
+    {
+        float mult = parser.stof(p2, 0);
+        _wpn->chain.damage_mult = mult > 0.0 ? mult : 0.0;
+    }
+    else if ( !StriCmp(p1, "chain_jump_delay") )
+    {
+        int delay = parser.stol(p2, NULL, 0);
+        _wpn->chain.jump_delay = delay > 0 ? delay : 0;
+    }
     else if ( !StriCmp(p1, "life_time") )
     {
         _wpn->life_time = parser.stol(p2, NULL, 0);
@@ -2800,6 +2835,30 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
         if ( spacing > 500.0 )
             spacing = 500.0;
         _wpn->laser_vp_spacing = spacing;
+    }
+    else if ( !StriCmp(p1, "laser_chain_allow") )
+    {
+        _wpn->laser_chain_allow = parser.stol(p2, NULL, 0) != 0 ? 1 : 0;
+    }
+    else if ( !StriCmp(p1, "laser_chain_max_jumps") )
+    {
+        int maxJumps = parser.stol(p2, NULL, 0);
+        _wpn->laser_chain_max_jumps = maxJumps > 0 ? maxJumps : 0;
+    }
+    else if ( !StriCmp(p1, "laser_chain_radius") )
+    {
+        float radius = parser.stof(p2, 0);
+        _wpn->laser_chain_radius = radius > 0.0 ? radius : 0.0;
+    }
+    else if ( !StriCmp(p1, "laser_chain_damage_mult") )
+    {
+        float mult = parser.stof(p2, 0);
+        _wpn->laser_chain_damage_mult = mult > 0.0 ? mult : 1.0;
+    }
+    else if ( !StriCmp(p1, "laser_multi_target") )
+    {
+        int maxTargets = parser.stol(p2, NULL, 0);
+        _wpn->laser_multi_target = maxTargets > 1 ? maxTargets : 1;
     }
     else if ( !StriCmp(p1, "snd_loop_sample") )
     {
@@ -3149,6 +3208,10 @@ int BuildProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1
     {
         int count = parser.stol(p2, NULL, 0);
         _bld->spawn_count = count > 0 ? count : 1;
+    }
+    else if ( !StriCmp(p1, "spawn_instant") )
+    {
+        _bld->spawn_instant = parser.stol(p2, NULL, 0) ? 1 : 0;
     }
     else if ( !StriCmp(p1, "spawn_icon") )
     {

@@ -152,6 +152,13 @@ protected:
     void ApplyAttachedDirectHitDamage();
     void SteerHomingBombDirection(float dtime);
     bool TryClusterSplit();
+    bool CanChainToTarget(NC_STACK_ypabact *target, NC_STACK_ypabact *currentHit) const;
+    NC_STACK_ypabact *FindNextChainTarget(NC_STACK_ypabact *currentHit) const;
+    bool SpawnChainProjectile(const vec3d &originPos, float originRadius, NC_STACK_ypabact *nextTarget, int childEnergy);
+    void TrySpawnChainProjectile(NC_STACK_ypabact *currentHit, int appliedDamage);
+    void UpdatePendingChainJump(update_msg *arg);
+    void RememberChainHit(NC_STACK_ypabact *target);
+    bool IsChainHit(NC_STACK_ypabact *target) const;
     void UpdateMortarBallistic(update_msg *arg); // OpenUA custom: ballistic shell flight + timed impact
 
     struct TBuildingHitRef
@@ -189,11 +196,23 @@ protected:
     int _mislClusterAge          = 0;
     bool _mislClusterDone        = false;
     bool _mislClusterChild       = false;
+    int  _mislChainDepth         = 0;
+    int  _mislChainEnergy        = 0;
+    bool _mislChainSpawned       = false;
+    bool _mislChainAllowFriendly = false;
+    bool _mislChainPending       = false;
+    int  _mislChainPendingElapsed = 0;
+    int  _mislChainPendingDelay  = 0;
+    int32_t _mislChainPendingTargetGid = 0;
+    int  _mislChainPendingEnergy = 0;
+    vec3d _mislChainPendingOrigin;
+    float _mislChainPendingOriginRadius = 0.0;
     bool _mislAttachedToTarget   = false;
     int32_t _mislAttachTargetGid = 0;
     vec3d _mislAttachOffset;
     vec3d _mislLastAttachedPosition;
     TSndCarrier _mislClusterSoundCarrier;
+    std::vector<int32_t> _mislChainHitGids;
     std::vector<NC_STACK_ypabact *> _mislDirectHitUnits;
     std::vector<TBuildingHitRef> _mislDirectHitBuildings;
     std::vector<TBuildingHitRef> _mislDirectHitSectors;

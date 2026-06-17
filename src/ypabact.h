@@ -854,6 +854,7 @@ public:
     float _spawn_random_pos;
     int _spawn_max_active;
     int _spawn_count;
+    int _spawn_instant;
     int _spawn_last_time;
     int _spawn_at_death_units;
     int _spawn_at_death_vehicle;
@@ -903,8 +904,26 @@ public:
     // shown) but only fires once the cooldown has elapsed. Never bypasses cooldown.
     bool _mortar_has_pending = false;
     vec3d _mortar_pending_target;
+    struct TLaserBeamRequest
+    {
+        NC_STACK_ypabact *target = NULL;
+        vec3d start;
+        vec3d dir;
+    };
+
+    struct TLaserBeamRuntime
+    {
+        vec3d start;
+        vec3d end;
+        int32_t target_gid = 0;
+        int energy_ticks = 0;
+        int next_damage_time = 0;
+        int next_fx_time = 0;
+    };
+
     // OpenUA custom: laser beam runtime state (transient, per shooter/weapon/target;
-    // never saved per instance). Tracks one active beam/contact at a time.
+    // never saved per instance). Supports direct laser_multi_target beams and chain
+    // segments, while keeping the first beam in the legacy fields for older debug/UI paths.
     bool _laser_active = false;            // beam currently firing/visible
     bool _laser_fire_request = false;      // set by RequestLaserFire() each firing frame, consumed by UpdateLaser()
     int  _laser_weapon = -1;               // weapon id of the active/requested laser
@@ -918,6 +937,8 @@ public:
     int _laser_next_damage_time = 0;       // next _clock at which static tick damage may apply
     int _laser_next_fx_time = 0;           // next _clock at which a throttled impact VP may spawn
     int _laser_next_beam_vp_time = 0;      // next _clock at which the VP beam body may be refreshed
+    std::vector<TLaserBeamRequest> _laser_requests;
+    std::vector<TLaserBeamRuntime> _laser_beams;
     int _seek_and_explode;
     int _seek_and_explode_weapon;
     float _seek_and_explode_trigger_radius;

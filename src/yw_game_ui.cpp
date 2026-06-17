@@ -1045,8 +1045,16 @@ void NC_STACK_ypaworld::RenderLaserMapBeams(int mapTilesetId)
                 drawn.push_back(bact);
 
                 SDL_Color clr = yw_GetMapProjectileOwnerColor(this, bact->_owner, mapTilesetId);
-                sub_4F68FC(bact->_laser_beam_start.x, bact->_laser_beam_start.z,
-                           bact->_laser_beam_end.x, bact->_laser_beam_end.z, clr);
+                if ( !bact->_laser_beams.empty() )
+                {
+                    for (const NC_STACK_ypabact::TLaserBeamRuntime &beam : bact->_laser_beams)
+                        sub_4F68FC(beam.start.x, beam.start.z, beam.end.x, beam.end.z, clr);
+                }
+                else
+                {
+                    sub_4F68FC(bact->_laser_beam_start.x, bact->_laser_beam_start.z,
+                               bact->_laser_beam_end.x, bact->_laser_beam_end.z, clr);
+                }
             }
         }
     }
@@ -9585,8 +9593,8 @@ void yw_RenderInfoWeaponInf(NC_STACK_ypaworld *yw, sklt_wis *wis, CmdStream *cur
             if ( weap->laser_energy_increment_rate > 0.0f )
                 txt2 += " +";
 
-            if ( vhcl->num_weapons > 1 )
-                txt2 += fmt::sprintf(" x%d", vhcl->num_weapons);
+            if ( weap->laser_multi_target > 1 )
+                txt2 += fmt::sprintf(" x%d", weap->laser_multi_target);
         }
         else if ( vhcl->num_weapons <= 1 )
             txt2 = fmt::sprintf("%d", weap->energy / 100);

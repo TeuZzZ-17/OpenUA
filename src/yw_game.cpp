@@ -3306,13 +3306,17 @@ static NC_STACK_ypabact *yw_CreateBuildingSpawnedUnit(NC_STACK_ypaworld *world, 
     target.tgt_pos = pos;
     unit->SetTarget(&target);
 
-    setState_msg state;
-    state.setFlags = 0;
-    state.unsetFlags = 0;
-    state.newStatus = BACT_STATUS_CREATE;
-    unit->SetState(&state);
+    if ( !proto.spawn_instant )
+    {
+        setState_msg state;
+        state.setFlags = 0;
+        state.unsetFlags = 0;
+        state.newStatus = BACT_STATUS_CREATE;
+        unit->SetState(&state);
 
-    unit->_scale_time = unit->_energy_max * 0.2;
+        unit->_scale_time = unit->_energy_max * 0.2;
+    }
+
     world->HistoryAktCreate(unit);
 
     return unit;
@@ -7296,13 +7300,24 @@ void NC_STACK_ypaworld::debug_draw_coll_spheres()
             if ( laserRadius < 1.0f )
                 laserRadius = 1.0f;
 
-            drawBeamTube(unit->_laser_beam_start, unit->_laser_beam_end, laserRadius, 255, 60, 60);
+            if ( !unit->_laser_beams.empty() )
+            {
+                for (const NC_STACK_ypabact::TLaserBeamRuntime &beam : unit->_laser_beams)
+                    drawBeamTube(beam.start, beam.end, laserRadius, 255, 60, 60);
+            }
+            else
+            {
+                drawBeamTube(unit->_laser_beam_start, unit->_laser_beam_end, laserRadius, 255, 60, 60);
+            }
 
             if (dist <= LABEL_MAX_DIST)
             {
                 char buf[64];
                 snprintf(buf, sizeof(buf), "laser radius=%.0f", laserRadius);
-                drawLabel((unit->_laser_beam_start + unit->_laser_beam_end) * 0.5f, buf, 255, 60, 60);
+                vec3d labelPos = unit->_laser_beams.empty()
+                               ? (unit->_laser_beam_start + unit->_laser_beam_end) * 0.5f
+                               : (unit->_laser_beams[0].start + unit->_laser_beams[0].end) * 0.5f;
+                drawLabel(labelPos, buf, 255, 60, 60);
             }
         }
     }

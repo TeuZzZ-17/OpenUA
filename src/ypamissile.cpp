@@ -121,6 +121,18 @@ size_t NC_STACK_ypamissile::Init(IDVList &stak)
     _mislClusterAge = 0;
     _mislClusterDone = false;
     _mislClusterChild = false;
+    _mislChainDepth = 0;
+    _mislChainEnergy = 0;
+    _mislChainSpawned = false;
+    _mislChainAllowFriendly = false;
+    _mislChainPending = false;
+    _mislChainPendingElapsed = 0;
+    _mislChainPendingDelay = 0;
+    _mislChainPendingTargetGid = 0;
+    _mislChainPendingEnergy = 0;
+    _mislChainPendingOrigin = vec3d(0.0, 0.0, 0.0);
+    _mislChainPendingOriginRadius = 0.0;
+    _mislChainHitGids.clear();
     _mislAttachedToTarget = false;
     _mislAttachTargetGid = 0;
     _mislAttachOffset = vec3d(0.0, 0.0, 0.0);
@@ -269,6 +281,8 @@ void NC_STACK_ypamissile::AI_layer1(update_msg *arg)
 {
     if ( !_mislClusterSoundCarrier.Sounds.empty() )
         SFXEngine::SFXe.UpdateSoundCarrier(&_mislClusterSoundCarrier);
+
+    UpdatePendingChainJump(arg);
 
     if ( _status == BACT_STATUS_DEAD )
         _yls_time -= arg->frameTime;
@@ -464,6 +478,292 @@ bool NC_STACK_ypamissile::TryClusterSplit()
     setBACT_yourLastSeconds(0);
 
     return true;
+}
+
+bool NC_STACK_ypamissile::IsChainHit(NC_STACK_ypabact *target) const
+{
+    if ( !target || !target->_gid )
+        return false;
+
+    return std::find(_mislChainHitGids.begin(), _mislChainHitGids.end(), target->_gid) != _mislChainHitGids.end();
+}
+
+void NC_STACK_ypamissile::RememberChainHit(NC_STACK_ypabact *target)
+{
+    if ( target && target->_gid && !IsChainHit(target) )
+        _mislChainHitGids.push_back(target->_gid);
+}
+
+bool NC_STACK_ypamissile::CanChainToTarget(NC_STACK_ypabact *target, NC_STACK_ypabact *currentHit) const
+{
+    if ( !target || target == this || target == _mislEmitter || target == currentHit )
+        return false;
+
+    if ( !_world || target->getBACT_pWorld() != _world )
+        return false;
+
+    if ( _owner == World::OWNER_0 || _owner == World::OWNER_7 ||
+         target->_owner == World::OWNER_0 || target->_owner == World::OWNER_7 )
+        return false;
+
+    if ( !_mislChainAllowFriendly && target->_owner == _owner )
+        return false;
+
+    if ( target->_isDummy )
+        return false;
+
+    switch ( target->_bact_type )
+    {
+    case BACT_TYPES_BACT:
+    case BACT_TYPES_TANK:
+    case BACT_TYPES_ROBO:
+    case BACT_TYPES_FLYER:
+    case BACT_TYPES_UFO:
+    case BACT_TYPES_CAR:
+    case BACT_TYPES_GUN:
+    case BACT_TYPES_HOVER:
+        break;
+
+    default:
+        return false;
+    }
+
+    if ( target->_bact_type == BACT_TYPES_MISSLE ||
+         target->_status == BACT_STATUS_DEAD ||
+         target->_status == BACT_STATUS_CREATE ||
+         target->_status == BACT_STATUS_BEAM ||
+         target->_energy <= 0 ||
+         target->_energy_max <= 0 ||
+         target->IsDestroyed() ||
+         (target->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2 | BACT_STFLAG_NORENDER)) )
+        return false;
+
+    if ( target->_bact_type == BACT_TYPES_GUN && target->GetEffectiveShield() >= 100.0f )
+    {
+        NC_STACK_ypagun *gun = dynamic_cast<NC_STACK_ypagun *>(target);
+        if ( !gun || (gun->IsRoboGun() && !target->_isUnitGunChild) )
+            return false;
+    }
+
+    return !IsChainHit(target);
+}
+
+NC_STACK_ypabact *NC_STACK_ypamissile::FindNextChainTarget(NC_STACK_ypabact *currentHit) const
+{
+    if ( !_world || !currentHit )
+        return NULL;
+
+    if ( _vehicleID < 0 || (size_t)_vehicleID >= _world->GetWeaponsProtos().size() )
+        return NULL;
+
+    const World::TWeapProto &wproto = _world->GetWeaponsProtos().at(_vehicleID);
+    if ( wproto.chain.radius <= 0.0 )
+        return NULL;
+
+    Common::Point centerCell = World::PositionToSectorID(currentHit->_position);
+    int cellRadius = (int)ceil(wproto.chain.radius / World::CVSectorLength) + 1;
+    float radiusSq = wproto.chain.radius * wproto.chain.radius;
+    float bestScore = radiusSq + 1.0f;
+    NC_STACK_ypabact *bestTarget = NULL;
+
+    for ( int dy = -cellRadius; dy <= cellRadius; dy++ )
+    {
+        for ( int dx = -cellRadius; dx <= cellRadius; dx++ )
+        {
+            Common::Point cellId = centerCell + Common::Point(dx, dy);
+
+            if ( !_world->IsSector(cellId) )
+                continue;
+
+            cellArea &cell = _world->SectorAt(cellId);
+
+            for ( NC_STACK_ypabact *candidate : cell.unitsList )
+            {
+                if ( !CanChainToTarget(candidate, currentHit) )
+                    continue;
+
+                vec3d delta = candidate->_position - currentHit->_position;
+                float distSq = delta.dot(delta);
+
+                if ( distSq > radiusSq || distSq >= bestScore )
+                    continue;
+
+                bestScore = distSq;
+                bestTarget = candidate;
+            }
+        }
+    }
+
+    return bestTarget;
+}
+
+bool NC_STACK_ypamissile::SpawnChainProjectile(const vec3d &originPos, float originRadius, NC_STACK_ypabact *nextTarget, int childEnergy)
+{
+    if ( !_world || !_mislEmitter || !nextTarget || childEnergy <= 0 )
+        return false;
+
+    if ( _vehicleID < 0 || (size_t)_vehicleID >= _world->GetWeaponsProtos().size() )
+        return false;
+
+    World::TWeapProto &wproto = _world->GetWeaponsProtos().at(_vehicleID);
+
+    if ( !wproto.chain.allow || wproto.IsLaser() || wproto.IsMortar() || !(wproto._weaponFlags & World::TWeapProto::WEAPON_FLAG_PROJECTILE) )
+        return false;
+
+    vec3d chainDir = nextTarget->_position - originPos;
+    float chainDirLen = chainDir.length();
+    if ( chainDirLen <= 0.001 )
+        return false;
+
+    chainDir /= chainDirLen;
+
+    float launchOffset = originRadius + wproto.radius + 1.0f;
+    if ( launchOffset < 1.0f )
+        launchOffset = 1.0f;
+
+    ypaworld_arg146 arg147;
+    arg147.vehicle_id = _vehicleID;
+    arg147.pos = originPos + chainDir * launchOffset;
+
+    NC_STACK_ypamissile *child = _world->ypaworld_func147(&arg147);
+    if ( !child )
+        return false;
+
+    child->SetLauncherBact(_mislEmitter);
+    child->SetStartHeight(arg147.pos.y);
+    child->_owner = _owner;
+    child->_host_station = _host_station;
+    child->_energy = childEnergy;
+    child->_energy_max = childEnergy;
+    child->_fly_dir = chainDir;
+    child->_fly_dir_length = wproto.start_speed;
+
+    if ( !(wproto._weaponFlags & 0x12) )
+        child->_fly_dir_length *= 0.2;
+
+    child->_rotation.SetZ(child->_fly_dir);
+    child->_rotation.SetX(_rotation.AxisX());
+    child->_rotation.SetY(child->_rotation.AxisZ() * child->_rotation.AxisX());
+
+    if ( wproto.vp_launch > 0 )
+        _world->SpawnTransientVP(wproto.vp_launch, child->_position, child->_rotation, 1000);
+
+    child->_kidRef.Detach();
+    child->_parent = NULL;
+    _mislEmitter->_missiles_list.push_back(child);
+
+    child->_mislChainDepth = _mislChainDepth + 1;
+    child->_mislChainEnergy = childEnergy;
+    child->_mislChainHitGids = _mislChainHitGids;
+    child->_mislChainSpawned = false;
+    child->_mislChainAllowFriendly = _mislChainAllowFriendly;
+
+    if ( child->GetMissileType() == MISL_TARGETED || wproto.IsHomingBomb() )
+    {
+        setTarget_msg arg67;
+        arg67.tgt.pbact = nextTarget;
+        arg67.tgt_type = BACT_TGT_TYPE_UNIT;
+        arg67.priority = 0;
+        arg67.tgt_pos = nextTarget->_position;
+
+        child->SetTarget(&arg67);
+    }
+    else
+    {
+        child->_primTtype = BACT_TGT_TYPE_DRCT;
+        child->_target_dir = child->_fly_dir;
+    }
+
+    SFXEngine::SFXe.startSound(&child->_soundcarrier, World::TWeapProto::SND_LAUNCH);
+
+    return true;
+}
+
+void NC_STACK_ypamissile::UpdatePendingChainJump(update_msg *arg)
+{
+    if ( !_mislChainPending )
+        return;
+
+    if ( !arg )
+        return;
+
+    _mislChainPendingElapsed += arg->frameTime;
+    if ( _mislChainPendingElapsed < _mislChainPendingDelay )
+        return;
+
+    _mislChainPending = false;
+
+    if ( !_world || !_mislChainPendingTargetGid || _mislChainPendingEnergy <= 0 )
+        return;
+
+    NC_STACK_ypabact *target = ypamissile_FindLiveBactByGid(_world->_unitsList, _mislChainPendingTargetGid);
+    if ( !CanChainToTarget(target, NULL) )
+        return;
+
+    SpawnChainProjectile(_mislChainPendingOrigin, _mislChainPendingOriginRadius, target, _mislChainPendingEnergy);
+}
+
+void NC_STACK_ypamissile::TrySpawnChainProjectile(NC_STACK_ypabact *currentHit, int appliedDamage)
+{
+    if ( currentHit && !_mislChainAllowFriendly && _mislChainDepth == 0 && currentHit->_owner == _owner &&
+         _mislEmitter && (_mislEmitter->getBACT_inputting() || _mislEmitter->getBACT_viewer()) )
+    {
+        _mislChainAllowFriendly = true;
+    }
+
+    if ( _mislChainSpawned || appliedDamage <= 0 || !CanChainToTarget(currentHit, NULL) )
+        return;
+
+    if ( !_world || _vehicleID < 0 || (size_t)_vehicleID >= _world->GetWeaponsProtos().size() )
+        return;
+
+    World::TWeapProto &wproto = _world->GetWeaponsProtos().at(_vehicleID);
+    const World::TWeaponChainConfig &chain = wproto.chain;
+
+    if ( !chain.allow || chain.max_jumps <= 0 || chain.radius <= 0.0 || chain.damage_mult <= 0.0 )
+        return;
+
+    if ( wproto.IsLaser() || wproto.IsMortar() )
+        return;
+
+    if ( !(wproto._weaponFlags & World::TWeapProto::WEAPON_FLAG_PROJECTILE) )
+        return;
+
+    if ( _mislChainDepth >= chain.max_jumps )
+        return;
+
+    int currentEnergy = _mislChainEnergy > 0 ? _mislChainEnergy : _energy;
+    if ( currentEnergy <= 0 )
+        return;
+
+    RememberChainHit(currentHit);
+
+    NC_STACK_ypabact *nextTarget = FindNextChainTarget(currentHit);
+    if ( !nextTarget )
+        return;
+
+    int childEnergy = (int)((float)currentEnergy * chain.damage_mult);
+    if ( childEnergy <= 0 )
+        return;
+
+    _mislChainEnergy = currentEnergy;
+    if ( chain.jump_delay <= 0 )
+    {
+        _mislChainSpawned = SpawnChainProjectile(currentHit->_position, currentHit->_radius, nextTarget, childEnergy);
+        return;
+    }
+
+    _mislChainSpawned = true;
+    _mislChainPending = true;
+    _mislChainPendingElapsed = 0;
+    _mislChainPendingDelay = chain.jump_delay;
+    _mislChainPendingTargetGid = nextTarget->_gid;
+    _mislChainPendingEnergy = childEnergy;
+    _mislChainPendingOrigin = currentHit->_position;
+    _mislChainPendingOriginRadius = currentHit->_radius;
+
+    if ( _yls_time < _mislChainPendingDelay + 100 )
+        setBACT_yourLastSeconds(_mislChainPendingDelay + 100);
 }
 
 bool NC_STACK_ypamissile::TubeCollisionTest(bool applyDirectDamage, NC_STACK_ypabact **hitTarget)
@@ -739,7 +1039,8 @@ void NC_STACK_ypamissile::ApplyDirectHitToBact(NC_STACK_ypabact *bct)
     bct->_status_flg &= ~BACT_STFLAG_LAND;
     RememberDirectHitUnit(bct);
     ApplyDirectPushToBact(bct);
-    ApplyDamageToBact(bct, _energy);
+    int appliedDamage = ApplyDamageToBact(bct, _energy);
+    TrySpawnChainProjectile(bct, appliedDamage);
 }
 
 void NC_STACK_ypamissile::ApplyDirectPushToBact(NC_STACK_ypabact *bct)
@@ -1878,6 +2179,18 @@ void NC_STACK_ypamissile::Renew()
     _mislClusterAge = 0;
     _mislClusterDone = false;
     _mislClusterChild = false;
+    _mislChainDepth = 0;
+    _mislChainEnergy = 0;
+    _mislChainSpawned = false;
+    _mislChainAllowFriendly = false;
+    _mislChainPending = false;
+    _mislChainPendingElapsed = 0;
+    _mislChainPendingDelay = 0;
+    _mislChainPendingTargetGid = 0;
+    _mislChainPendingEnergy = 0;
+    _mislChainPendingOrigin = vec3d(0.0, 0.0, 0.0);
+    _mislChainPendingOriginRadius = 0.0;
+    _mislChainHitGids.clear();
     _mislAttachedToTarget = false;
     _mislAttachTargetGid = 0;
     _mislAttachOffset = vec3d(0.0, 0.0, 0.0);

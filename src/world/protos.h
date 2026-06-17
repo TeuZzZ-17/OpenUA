@@ -218,6 +218,15 @@ struct TWeaponClusterConfig
     TVhclSound snd;
 };
 
+struct TWeaponChainConfig
+{
+    bool allow = false;
+    int max_jumps = 0;
+    float radius = 0.0;
+    float damage_mult = 1.0;
+    int jump_delay = 0;
+};
+
 struct TRoboGun
 {
     vec3d pos;
@@ -388,6 +397,7 @@ struct TVhclProto
     float spawn_random_pos = 0.0;
     int spawn_max_active = 0;
     int spawn_count = 1;
+    int spawn_instant = 0;
     int spawn_at_death_units = 0;
     int16_t spawn_at_death_vehicle = 0;
     int spawn_at_death_count = 1;
@@ -566,6 +576,7 @@ struct TWeapProto
     std::array<TVhclSound, SND_MAX> sndFXes;
     TWeaponDebuffConfig debuff;
     TWeaponClusterConfig cluster;
+    TWeaponChainConfig chain;
     TDecorationFXConfig decoration_fx;
 //    int field_870 = 0;
 //    int field_874 = 0;
@@ -601,6 +612,11 @@ struct TWeapProto
     float laser_energy_increment_rate = 0.0;   // extra base damage added after each connected tick
     float laser_max_energy = 0.0;              // max base damage per tick (<=0 => no clamp)
     float laser_vp_spacing = 40.0;             // visual-only distance between vp_normal beam instances
+    int   laser_chain_allow = 0;               // 1 = primary laser hit may chain to nearby enemy units
+    int   laser_chain_max_jumps = 0;           // max unit-to-unit chain segments after the primary hit
+    float laser_chain_radius = 0.0;            // search radius around the last chained unit
+    float laser_chain_damage_mult = 1.0;       // cumulative damage multiplier per chain jump
+    int   laser_multi_target = 1;              // total direct shooter-to-target laser beams (<=1 = off)
     float energy_heli = 0.0;
     float energy_tank = 0.0;
     float energy_flyer = 0.0;
@@ -682,6 +698,7 @@ struct TBuildingProto
     float spawn_trigger_radius = 0.0;
     int spawn_max_active = 0;
     int spawn_count = 1;
+    int spawn_instant = 0;
     std::string spawn_icon;
 };
 
