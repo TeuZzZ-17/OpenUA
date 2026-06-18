@@ -4879,13 +4879,30 @@ bool NC_STACK_ypaworld::CreateDatabaseControls()
         return false;
     }
 
-    // Database V1.3: keep the list compact and let the right pane show the real stats.
-    // The old one-line stat dump was too wide and looked like a debug table.
-    const int lw   = (_screenSize.x * 48) / 100;   // list panel width
-    const int rx   = (_screenSize.x * 50) / 100;   // right panel x origin
+    // Database V2: list rows now show only ID + name, so the left bars can be
+    // shorter and the lore/image pane can claim more of the screen.
+    const int lw   = (_screenSize.x * 34) / 100;   // list panel width
+    const int rx   = (_screenSize.x * 36) / 100;   // right panel x origin
     const int rw   = _screenSize.x - rx;            // right panel width
     const int lh   = _fontH + vertMenuSpace;        // line height
     const int DB_VISIBLE_LINES = 22;                // fill the vertical space above the bottom buttons without overlapping navigation
+    const int DB_DETAIL_LINES = 14;
+    const int panelH = _screenSize.y;
+    int nav_y = panelH - lh - vertMenuSpace;
+    if (nav_y < 10 * lh) nav_y = 10 * lh;   // safety floor on tiny resolutions
+
+    int imgW = std::max(120, (rw * 70) / 100);
+    const int textW = imgW;
+    const int textX = rx;
+    const int statsX = rx + (rw * 52) / 100;
+    int statsW = _screenSize.x - statsX - vertMenuSpace;
+    if ( statsW < 80 ) statsW = 80;
+    const int imgX = rx + (rw - imgW) / 2;
+    const int imgY = (DB_DETAIL_LINES + 3) * lh;
+    int imgH = nav_y - imgY - vertMenuSpace;
+    if (imgH < lh * 3) imgH = lh * 3;
+    if (imgX + imgW > _screenSize.x) imgW = _screenSize.x - imgX;
+    if (imgH < 1) imgH = 1;
 
     bool ok = true;
     NC_STACK_button::button_64_arg btn;
@@ -4952,18 +4969,19 @@ bool NC_STACK_ypaworld::CreateDatabaseControls()
     btn.button_type  = NC_STACK_button::TYPE_CAPTION;
     btn.downCode     = 0;
     btn.upCode       = 0;
-    btn.xpos         = rx;
-    btn.width        = rw;
+    btn.xpos         = textX;
+    btn.width        = textW;
     btn.flags        = NC_STACK_button::FLAG_TEXT;
     btn.ypos         = lh;
     btn.caption      = "-- Details --";
     btn.button_id    = UIWidgets::DB_DETAIL_HEADER;
     if (!_GameShell->database_button->Add(&btn)) ok = false;
 
-    // --- RIGHT PANEL: short, player-facing detail lines (TYPE_CAPTION, left-aligned) ---
-    // Keep this readable: no physics/internal VP dump here.
+    // --- RIGHT PANEL: player-facing detail/description lines (TYPE_CAPTION, left-aligned) ---
     btn.flags = NC_STACK_button::FLAG_TEXT;
-    for (int k = 0; k < 7; k++)
+    btn.xpos = textX;
+    btn.width = textW;
+    for (int k = 0; k < DB_DETAIL_LINES; k++)
     {
         btn.ypos      = (k + 2) * lh;
         btn.caption   = " ";
@@ -4971,13 +4989,34 @@ bool NC_STACK_ypaworld::CreateDatabaseControls()
         if (!_GameShell->database_button->Add(&btn)) ok = false;
     }
 
-    // --- NAV BUTTONS (full width, anchored near the bottom of the panel) ---
-    // The database panel now starts at screen top, so child Y is relative to the full screen.
-    // Anchor the row one line + margin above the bottom edge.
-    const int panelH = _screenSize.y;
-    int nav_y = panelH - lh - vertMenuSpace;
-    if (nav_y < 10 * lh) nav_y = 10 * lh;   // safety floor on tiny resolutions
+    // --- RIGHT PANEL: compact runtime stats block, using the empty upper-right space. ---
+    btn.flags     = NC_STACK_button::FLAG_TEXT;
+    btn.xpos      = statsX;
+    btn.width     = statsW;
+    btn.ypos      = 2 * lh;
+    btn.caption   = " ";
+    btn.button_id = UIWidgets::DB_STATS_HEADER;
+    if (!_GameShell->database_button->Add(&btn)) ok = false;
 
+    for (int k = 0; k < 4; k++)
+    {
+        btn.ypos      = (k + 3) * lh;
+        btn.caption   = " ";
+        btn.button_id = UIWidgets::DB_STATS_0 + k;
+        if (!_GameShell->database_button->Add(&btn)) ok = false;
+    }
+
+    // --- RIGHT PANEL: image placeholder text, centered inside the custom preview box ---
+    btn.xpos      = imgX;
+    btn.width     = imgW;
+    btn.ypos      = imgY + (imgH / 2) - (lh / 2);
+    btn.flags     = NC_STACK_button::FLAG_TEXT | NC_STACK_button::FLAG_CENTER;
+    btn.caption   = " ";
+    btn.button_id = UIWidgets::DB_IMAGE_TEXT;
+    if (!_GameShell->database_button->Add(&btn)) ok = false;
+
+    // --- NAV BUTTONS (full width, anchored near the bottom of the panel) ---
+    // The database panel starts at screen top, so child Y is relative to the full screen.
     btn.tileset_down = 19;
     btn.tileset_up   = 18;
     btn.field_3A     = 30;

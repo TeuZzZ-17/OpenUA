@@ -2745,7 +2745,10 @@ void ypaworld_func158__sub3(NC_STACK_ypaworld *yw, UserData *usr)
 
     case ENVMODE_DATABASE:
         if ( usr->database_button )
+        {
             usr->database_button->Draw();
+            usr->RenderDatabaseEntryMedia();
+        }
         break;
 
     case ENVMODE_SELPLAYER:
@@ -2908,6 +2911,10 @@ void UserData::clear()
     about_button = NULL;
     aboutDlgLastKeyTime = 0;
     aboutDlgKeyCount = 0;
+    ReleaseDatabaseEntryImage();
+    db_entry_tab = -1;
+    db_entry_id = -1;
+    db_entry_has_image = false;
 
     network_button = NULL;
     //GuiList network_listvw;

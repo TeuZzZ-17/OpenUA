@@ -5,6 +5,8 @@
 #include "bmpAnm.h"
 #include "utils.h"
 
+#include <utility>
+
 
 
 size_t NC_STACK_bmpanim::Init(IDVList &stak)
@@ -241,33 +243,9 @@ bool NC_STACK_bmpanim::ReadFrameData(FSMgr::iFileHandle *fil, ResBmpAnm *arg)
     return true;
 }
 
-ResBmpAnm *NC_STACK_bmpanim::LoadFromFile(const std::string &name, IFFile *iff)
+static ResBmpAnm *bmpanim_read_stream(FSMgr::iFileHandle *pfile, IFFile *iff)
 {
-    IFFile iffOpened;
-    FSMgr::FileHandle fil;
-    FSMgr::iFileHandle *pfile = iff;
-
-    if ( !iff )
-    {                
-        fil = uaOpenFile( std::string("rsrc:rsrcpool/") + name, "rb" );
-        if (!fil.OK())
-            return NULL;
-        
-        uint32_t tmp = fil.readU32B();
-        fil.seek(0, SEEK_SET);
-
-        if ( tmp != TAG_FORM )
-            pfile = &fil;
-        else
-        {
-            iffOpened = IFFile(fil);
-            pfile = &iffOpened;
-            
-            iff = &iffOpened;
-        }
-    }
-    
-    if (iff)
+    if ( iff )
     {
         if ( (iff->parse() | iff->parse()) != IFFile::IFF_ERR_OK )
             return NULL;
@@ -281,13 +259,13 @@ ResBmpAnm *NC_STACK_bmpanim::LoadFromFile(const std::string &name, IFFile *iff)
     {
         bool ReadOK = false;
         
-        if ( ReadClassName(pfile, pdata) )
+        if ( NC_STACK_bmpanim::ReadClassName(pfile, pdata) )
         {
-            if ( ReadBitmapNames(pfile, pdata) )
+            if ( NC_STACK_bmpanim::ReadBitmapNames(pfile, pdata) )
             {
-                if ( ReadTexCoords(pfile, pdata) )
+                if ( NC_STACK_bmpanim::ReadTexCoords(pfile, pdata) )
                 {
-                    if ( ReadFrameData(pfile, pdata) )
+                    if ( NC_STACK_bmpanim::ReadFrameData(pfile, pdata) )
                         ReadOK = true;
                 }
             }
@@ -304,6 +282,64 @@ ResBmpAnm *NC_STACK_bmpanim::LoadFromFile(const std::string &name, IFFile *iff)
     {
         iff->parse();
         iff->parse();
+    }
+
+    return pdata;
+}
+
+static ResBmpAnm *bmpanim_load_from_file_handle(FSMgr::FileHandle fil)
+{
+    if ( !fil.OK() )
+        return NULL;
+
+    IFFile iffOpened;
+    IFFile *iff = NULL;
+    FSMgr::iFileHandle *pfile = &fil;
+
+    uint32_t tmp = fil.readU32B();
+    fil.seek(0, SEEK_SET);
+
+    if ( tmp == TAG_FORM )
+    {
+        iffOpened = IFFile(fil);
+        pfile = &iffOpened;
+        iff = &iffOpened;
+    }
+
+    return bmpanim_read_stream(pfile, iff);
+}
+
+static void bmpanim_SkipEmbeddedChunk(IFFile *mfile)
+{
+    if ( mfile && !mfile->parse() )
+        mfile->skipChunk();
+}
+
+ResBmpAnm *NC_STACK_bmpanim::LoadFromFile(const std::string &name, IFFile *iff)
+{
+    if ( iff )
+        return bmpanim_read_stream(iff, iff);
+
+    const std::string path = std::string("rsrc:rsrcpool/") + name;
+    IFFile::SetLooseOverride overrideInfo;
+    FSMgr::FileHandle fil = IFFile::UAOpenFileWithSetLooseOverride(path, "rb", &overrideInfo, "NC_STACK_bmpanim::LoadFromFile");
+    if ( !fil.OK() )
+        return NULL;
+
+    ResBmpAnm *pdata = bmpanim_load_from_file_handle(std::move(fil));
+    if ( pdata )
+    {
+        IFFile::ReportSetLooseOverrideUsed(overrideInfo);
+        return pdata;
+    }
+
+    if ( overrideInfo.active )
+    {
+        IFFile::ReportSetLooseOverrideFailed(overrideInfo, "loose file existed but failed to load; vanilla fallback used.");
+
+        FSMgr::FileHandle vanilla = IFFile::UAOpenFileVanilla(path, "rb");
+        if ( vanilla.OK() )
+            pdata = bmpanim_load_from_file_handle(std::move(vanilla));
     }
 
     return pdata;
@@ -380,7 +416,31 @@ rsrc * NC_STACK_bmpanim::rsrc_func64(IDVList &stak)
             const std::string v9 = stak.Get<std::string>(RSRC_ATT_NAME, "");
             IFFile *iff = stak.Get<IFFile *>(RSRC_ATT_PIFFFILE, NULL);
             if ( !v9.empty() )
-                res->data = LoadFromFile(v9, iff);
+            {
+                if ( iff && !stak.Get<int32_t>(RSRC_ATT_SKIP_SET_LOOSE_OVERRIDE, 0) )
+                {
+                    IFFile::SetLooseOverride overrideInfo;
+                    FSMgr::FileHandle fil = IFFile::UAOpenFileWithSetLooseEmbeddedOverride(v9, "rb", &overrideInfo, "NC_STACK_bmpanim::rsrc_func64");
+                    if ( fil.OK() )
+                    {
+                        res->data = bmpanim_load_from_file_handle(std::move(fil));
+                        if ( res->data )
+                        {
+                            IFFile::ReportSetLooseOverrideUsed(overrideInfo);
+                            bmpanim_SkipEmbeddedChunk(iff);
+                        }
+                        else
+                        {
+                            IFFile::ReportSetLooseOverrideFailed(overrideInfo, "loose embedded override existed but failed to load; embedded SET.BAS fallback used.");
+                        }
+                    }
+                }
+
+                if ( !res->data )
+                {
+                    res->data = LoadFromFile(v9, iff);
+                }
+            }
         }
 
         if ( !res->data )

@@ -418,6 +418,63 @@ rsrc * NC_STACK_ilbm::READ_ILBM(IDVList &stak, IFFile *mfil, int transp)
     return res;
 }
 
+static rsrc *ILBM_ReadOpenedOrVanilla(NC_STACK_ilbm *obj, IDVList &stak, const std::string &name, int transp)
+{
+    IFFile *mfile = IFFile::RsrcOpenIFFile(name, "rb", "NC_STACK_ilbm::rsrc_func64");
+    if ( !mfile )
+        return NULL;
+
+    rsrc *res = obj->READ_ILBM(stak, mfile, transp);
+    if ( res )
+    {
+        mfile->ReportSetLooseOverrideUsed();
+        delete mfile;
+        return res;
+    }
+
+    if ( mfile->IsSetLooseOverride() )
+    {
+        mfile->ReportSetLooseOverrideFailed("loose file existed but failed to load; vanilla fallback used.");
+        delete mfile;
+
+        mfile = IFFile::RsrcOpenIFFileVanilla(name, "rb");
+        if ( !mfile )
+            return NULL;
+
+        res = obj->READ_ILBM(stak, mfile, transp);
+        delete mfile;
+        return res;
+    }
+
+    delete mfile;
+    return NULL;
+}
+
+static void ILBM_SkipEmbeddedChunk(IFFile *mfile)
+{
+    if ( mfile && !mfile->parse() )
+        mfile->skipChunk();
+}
+
+static rsrc *ILBM_ReadEmbeddedOverride(NC_STACK_ilbm *obj, IDVList &stak, const std::string &name, IFFile *embeddedFile)
+{
+    IFFile::SetLooseOverride overrideInfo;
+    IFFile mfile = IFFile::UAOpenIFFileWithSetLooseEmbeddedOverride(name, "rb", &overrideInfo, "NC_STACK_ilbm::rsrc_func64");
+    if ( !mfile.OK() )
+        return NULL;
+
+    rsrc *res = obj->READ_ILBM(stak, &mfile, 0);
+    if ( res )
+    {
+        mfile.ReportSetLooseOverrideUsed();
+        ILBM_SkipEmbeddedChunk(embeddedFile);
+        return res;
+    }
+
+    IFFile::ReportSetLooseOverrideFailed(overrideInfo, "loose embedded override existed but failed to load; embedded SET.BAS fallback used.");
+    return NULL;
+}
+
 
 // Create ilbm resource node and fill rsrc field data
 rsrc * NC_STACK_ilbm::rsrc_func64(IDVList &stak)
@@ -458,8 +515,6 @@ rsrc * NC_STACK_ilbm::rsrc_func64(IDVList &stak)
 
     IFFile *mfile = stak.Get<IFFile *>(RSRC_ATT_PIFFFILE, NULL);
 
-    int selfOpened = 0;
-
     if ( reassignName )
     {
         if ( mfile )
@@ -470,35 +525,25 @@ rsrc * NC_STACK_ilbm::rsrc_func64(IDVList &stak)
             mfile->skipChunk();
         }
 
-        mfile = IFFile::RsrcOpenIFFile(reassignName, "rb");
-
-        if ( !mfile )
-            return NULL;
-
-        selfOpened = 1;
+        return ILBM_ReadOpenedOrVanilla(this, stak, reassignName, 1);
     }
     else
     {
         if ( mfile )
         {
             stak.Add(BMD_ATT_CONVCOLOR, (int32_t)1);
-        }
-        else
-        {
-            mfile = IFFile::RsrcOpenIFFile(resName, "rb");
-            if ( !mfile )
-                return NULL;
+            if ( !stak.Get<int32_t>(RSRC_ATT_SKIP_SET_LOOSE_OVERRIDE, 0) )
+            {
+                rsrc *overrideRes = ILBM_ReadEmbeddedOverride(this, stak, resName, mfile);
+                if ( overrideRes )
+                    return overrideRes;
+            }
 
-            selfOpened = 1;
+            return READ_ILBM(stak, mfile, 0);
         }
     }
 
-    rsrc *res = READ_ILBM(stak, mfile, reassignName != 0);
-
-    if ( selfOpened )
-        delete mfile;
-
-    return res;
+    return ILBM_ReadOpenedOrVanilla(this, stak, resName, 0);
 }
 
 void ILBM__WRITE_TO_FILE_BMHD(IFFile *mfile, ResBitmap *bitm)
@@ -662,4 +707,3 @@ int NC_STACK_ilbm::getILBM_saveFmt()
 {
     return _saveAsIlbm;
 }
-

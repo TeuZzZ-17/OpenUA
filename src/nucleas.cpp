@@ -178,9 +178,7 @@ NC_STACK_nucleus *NC_STACK_nucleus::LoadObjectFromIFF(IFFile *mfile)
 
             clss = Nucleus::ClassList.find(classname);
             if ( clss == Nucleus::ClassList.end() )
-            {
                 return NULL;
-            }
 
 
             mfile->parse();
@@ -230,5 +228,3 @@ bool NC_STACK_nucleus::SaveObjectIntoIFF(IFFile *mfile)
 
     return res;
 }
-
-

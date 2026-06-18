@@ -1,0 +1,1 @@
+Struttura costruibile che fornisce supporto strategico alla fazione. Gli edifici possono generare energia, difendere il territorio, produrre unità, rilevare nemici o sbloccare nuove capacità operative. La loro protezione e conquista sono fondamentali per il controllo della mappa.

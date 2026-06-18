@@ -26,11 +26,11 @@ public:
         // OpenUA-only options may collide with stale strings in existing
         // language.lng files. Force their source defaults until language packs
         // are explicitly updated.
-        // TIP_MENU_HELP is repurposed for the Database button in OpenUA;
-        // force default so stale lng files don't show "Go to Online Help".
-        if ( id == TIP_CONF_HOSTSTATIONAI || id == TIP_CONF_SPECTATORMODE ||
-             id == TIP_MENU_HELP )
+        if ( id == TIP_CONF_HOSTSTATIONAI || id == TIP_CONF_SPECTATORMODE )
             return DefaultStrings::Tooltips[ id ];
+        // TIP_MENU_HELP (ID 137, lng index 937) can now be overridden by
+        // Language.lng. Set entry 937 = <> to keep the default fallback
+        // "Browse game database", or set it to a localized string.
 
         return Get(LBL_TIPS + id, DefaultStrings::Tooltips[ id ]);
     }

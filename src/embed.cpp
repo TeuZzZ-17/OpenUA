@@ -4,11 +4,21 @@
 #include "embed.h"
 #include "utils.h"
 
+#include "IFFile.h"
 #include "rsrc.h"
 
 #include "math.h"
 #include "inttypes.h"
 
+namespace
+{
+bool IsSetLooseEmrsOverrideClass(const std::string &classname)
+{
+    return classname == "ilbm.class" ||
+           classname == "sklt.class" ||
+           classname == "bmpanim.class";
+}
+}
 
 // Create embed resource node and fill rsrc field data
 size_t NC_STACK_embed::Init(IDVList &)
@@ -60,7 +70,8 @@ size_t NC_STACK_embed::LoadingFromIFF(IFFile **file)
         else if ( chunk.Is(TAG_EMRS) )
         {
             std::string classname = mfile->readStr(255);
-            mfile->parse();
+            size_t emrsOffset = mfile->tell();
+            int payloadParse = mfile->parse();
             
             std::string resname;
             size_t fnd = classname.find('\0');
@@ -69,10 +80,72 @@ size_t NC_STACK_embed::LoadingFromIFF(IFFile **file)
                 resname = classname.substr(fnd + 1);
                 classname.resize(fnd);
             }
-            if (classname.back() == '\0')
+            if (!classname.empty() && classname.back() == '\0')
                 classname.pop_back();
-            if (resname.back() == '\0')
+            if (!resname.empty() && resname.back() == '\0')
                 resname.pop_back();
+
+            if ( IsSetLooseEmrsOverrideClass(classname) )
+            {
+                IFFile::SetLooseOverride overrideInfo;
+                if ( IFFile::FindSetLooseEmrsOverride(resname,
+                                                       "rb",
+                                                       classname,
+                                                       "unknown",
+                                                       &overrideInfo,
+                                                       "NC_STACK_embed::LoadingFromIFF",
+                                                       emrsOffset) )
+                {
+                    std::string payload = "unknown";
+                    if ( payloadParse == IFFile::IFF_ERR_EOC )
+                        payload = mfile->PeekNextChunkLabel();
+                    else if ( !payloadParse )
+                        payload = IFFile::ChunkLabel(mfile->GetCurrentChunk());
+                    overrideInfo.embeddedPayload = payload;
+
+                    FSMgr::FileHandle looseHandle = FSMgr::iDir::openFile(overrideInfo.resolvedPath, "rb");
+                    if ( looseHandle.OK() )
+                    {
+                        IFFile looseFile(std::move(looseHandle));
+                        NC_STACK_rsrc *override_class = Nucleus::CTFInit<NC_STACK_rsrc>(classname,
+                           {{NC_STACK_rsrc::RSRC_ATT_NAME, resname},
+                            {NC_STACK_rsrc::RSRC_ATT_TRYSHARED, (int32_t)1},
+                            {NC_STACK_rsrc::RSRC_ATT_PIFFFILE, &looseFile},
+                            {NC_STACK_rsrc::RSRC_ATT_SKIP_SET_LOOSE_OVERRIDE, (int32_t)1}});
+
+                        if ( override_class )
+                        {
+                            bool payloadSkipped = false;
+                            if ( payloadParse == IFFile::IFF_ERR_EOC )
+                            {
+                                if ( !mfile->parse() )
+                                    payloadSkipped = mfile->skipChunk();
+                            }
+                            else if ( !payloadParse )
+                            {
+                                payloadSkipped = mfile->skipChunk();
+                            }
+
+                            if ( payloadSkipped )
+                            {
+                                IFFile::ReportSetLooseOverrideUsed(overrideInfo);
+
+                                _resources.push_back(override_class);
+                                continue;
+                            }
+
+                            override_class->Delete();
+                            IFFile::ReportSetLooseOverrideFailed(overrideInfo, "loose EMRS override loaded but embedded payload skip failed; embedded payload fallback used.");
+                        }
+
+                        IFFile::ReportSetLooseOverrideFailed(overrideInfo, "loose EMRS override existed but failed to load; embedded payload fallback used.");
+                    }
+                    else
+                    {
+                        IFFile::ReportSetLooseOverrideFailed(overrideInfo, "loose EMRS override existed but failed to open; embedded payload fallback used.");
+                    }
+                }
+            }
 
             NC_STACK_rsrc *embd_class = Nucleus::CTFInit<NC_STACK_rsrc>(classname,
                {{NC_STACK_rsrc::RSRC_ATT_NAME, resname},
@@ -131,4 +204,3 @@ size_t NC_STACK_embed::SavingIntoIFF(IFFile **file)
     
     return mfile->popChunk() == IFFile::IFF_ERR_OK;
 }
-

@@ -84,12 +84,53 @@ public:
     virtual int seek(long int offset, int origin) override;
 
     std::string readStr(int maxSz);
+    std::string PeekNextChunkLabel();
 
-    static IFFile *RsrcOpenIFFile(const std::string &filename, const std::string &mode);
-    static IFFile UAOpenIFFile(const std::string &filename, const std::string &mode);
+    struct SetLooseOverride
+    {
+        bool active = false;
+        int32_t setId = 0;
+        std::string requested;
+        std::string resolvedPath;
+        std::string extensionForm;
+        std::string vanillaPath;
+        bool embedded = false;
+        std::string sourceFunction;
+        bool emrs = false;
+        std::string emrsClass;
+        std::string embeddedPayload;
+    };
+
+    bool IsSetLooseOverride() const;
+    void ReportSetLooseOverrideUsed() const;
+    void ReportSetLooseOverrideFailed(const std::string &reason) const;
+    static void ReportSetLooseOverrideUsed(const SetLooseOverride &overrideInfo);
+    static void ReportSetLooseOverrideFailed(const SetLooseOverride &overrideInfo, const std::string &reason);
+    static void ReportSetBasRawScan(const std::string &filename, const char *sourceFunction = NULL);
+    static void FlushSetLooseOverrideReport();
+    static void BeginSetBasParseTrace(const std::string &filename);
+    static void EndSetBasParseTrace();
+    static bool IsSetBasParseTraceActive();
+    static void TraceSetBasParse(const char *section, const std::string &message, const IFFile *mfile = NULL);
+    static std::string ChunkLabel(const Context &chunk);
+
+    static bool FindSetLooseOverride(const std::string &filename, const std::string &mode, SetLooseOverride *out, const char *sourceFunction = NULL);
+    static bool FindSetLooseEmbeddedOverride(const std::string &filename, const std::string &mode, SetLooseOverride *out, const char *sourceFunction = NULL);
+    static bool FindSetLooseEmrsOverride(const std::string &filename, const std::string &mode, const std::string &className, const std::string &payload, SetLooseOverride *out, const char *sourceFunction = NULL, size_t currentOffset = (size_t)-1);
+    static FSMgr::FileHandle UAOpenFileWithSetLooseOverride(const std::string &filename, const std::string &mode, SetLooseOverride *out, const char *sourceFunction = NULL);
+    static FSMgr::FileHandle UAOpenFileWithSetLooseEmbeddedOverride(const std::string &filename, const std::string &mode, SetLooseOverride *out, const char *sourceFunction = NULL);
+    static FSMgr::FileHandle UAOpenFileWithSetLooseEmrsOverride(const std::string &filename, const std::string &mode, const std::string &className, const std::string &payload, SetLooseOverride *out, const char *sourceFunction = NULL, size_t currentOffset = (size_t)-1);
+    static FSMgr::FileHandle UAOpenFileVanilla(const std::string &filename, const std::string &mode);
+    static IFFile *RsrcOpenIFFileVanilla(const std::string &filename, const std::string &mode);
+    static IFFile UAOpenIFFileVanilla(const std::string &filename, const std::string &mode);
+    static IFFile UAOpenIFFileWithSetLooseEmbeddedOverride(const std::string &filename, const std::string &mode, SetLooseOverride *out, const char *sourceFunction = NULL);
+    static IFFile UAOpenIFFileWithSetLooseEmrsOverride(const std::string &filename, const std::string &mode, const std::string &className, const std::string &payload, SetLooseOverride *out, const char *sourceFunction = NULL, size_t currentOffset = (size_t)-1);
+    static IFFile *RsrcOpenIFFile(const std::string &filename, const std::string &mode, const char *sourceFunction = NULL);
+    static IFFile UAOpenIFFile(const std::string &filename, const std::string &mode, const char *sourceFunction = NULL);
 
 protected:
     FSMgr::FileHandle file_handle;
+    SetLooseOverride _setLooseOverride;
     bool _flagPop = false;
     int depth = 0;
     std::deque<Context> ctxStack;

@@ -411,6 +411,31 @@ rsrc * sklt_func64__sub0(NC_STACK_sklt *obj, IDVList &stak, IFFile *mfile)
     return res;
 }
 
+static void sklt_SkipEmbeddedChunk(IFFile *mfile)
+{
+    if ( mfile && !mfile->parse() )
+        mfile->skipChunk();
+}
+
+static rsrc *sklt_ReadEmbeddedOverride(NC_STACK_sklt *obj, IDVList &stak, const std::string &filename, IFFile *embeddedFile)
+{
+    IFFile::SetLooseOverride overrideInfo;
+    IFFile mfile = IFFile::UAOpenIFFileWithSetLooseEmbeddedOverride(filename, "rb", &overrideInfo, "NC_STACK_sklt::rsrc_func64");
+    if ( !mfile.OK() )
+        return NULL;
+
+    rsrc *res = sklt_func64__sub0(obj, stak, &mfile);
+    if ( res )
+    {
+        mfile.ReportSetLooseOverrideUsed();
+        sklt_SkipEmbeddedChunk(embeddedFile);
+        return res;
+    }
+
+    IFFile::ReportSetLooseOverrideFailed(overrideInfo, "loose embedded override existed but failed to load; embedded SET.BAS fallback used.");
+    return NULL;
+}
+
 // Create sklt resource node and fill rsrc field data
 rsrc * NC_STACK_sklt::rsrc_func64(IDVList &stak)
 {
@@ -423,7 +448,7 @@ rsrc * NC_STACK_sklt::rsrc_func64(IDVList &stak)
 
         if ( !mfile )
         {
-            mfile = IFFile::RsrcOpenIFFile(filename, "rb");
+            mfile = IFFile::RsrcOpenIFFile(filename, "rb", "NC_STACK_sklt::rsrc_func64");
 
             if ( !mfile )
                 return NULL;
@@ -431,7 +456,30 @@ rsrc * NC_STACK_sklt::rsrc_func64(IDVList &stak)
             selfopened = 1;
         }
 
+        if ( !selfopened && !stak.Get<int32_t>(RSRC_ATT_SKIP_SET_LOOSE_OVERRIDE, 0) )
+        {
+            rsrc *overrideRes = sklt_ReadEmbeddedOverride(this, stak, filename, mfile);
+            if ( overrideRes )
+                return overrideRes;
+        }
+
         rsrc *res = sklt_func64__sub0(this, stak, mfile);
+
+        if ( res && selfopened )
+            mfile->ReportSetLooseOverrideUsed();
+        else if ( !res && selfopened && mfile->IsSetLooseOverride() )
+        {
+            mfile->ReportSetLooseOverrideFailed("loose file existed but failed to load; vanilla fallback used.");
+            delete mfile;
+
+            mfile = IFFile::RsrcOpenIFFileVanilla(filename, "rb");
+            if ( !mfile )
+                return NULL;
+
+            res = sklt_func64__sub0(this, stak, mfile);
+            delete mfile;
+            return res;
+        }
 
         if ( selfopened )
             delete mfile;
@@ -515,4 +563,3 @@ size_t NC_STACK_sklt::rsrc_func66(rsrc_func66_arg *arg)
         delete mfile;
     return arg->OpenedStream;
 }
-

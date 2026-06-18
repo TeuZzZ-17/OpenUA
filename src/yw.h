@@ -141,6 +141,13 @@ namespace UIWidgets {
         DB_DETAIL_11      = 2072,
         DB_DETAIL_12      = 2073,
         DB_DETAIL_13      = 2074,
+        DB_IMAGE_TEXT     = 2075,
+        // Compact stat block shown in the free upper-right database space.
+        DB_STATS_HEADER   = 2076,
+        DB_STATS_0        = 2077,
+        DB_STATS_1        = 2078,
+        DB_STATS_2        = 2079,
+        DB_STATS_3        = 2080,
     };
     enum DATABASE_EVENT_IDS {
         DB_UP_UNITS       = 2101,
@@ -671,6 +678,10 @@ public:
     int db_tab      = 0;   // 0=Units 1=Weapons 2=Buildings
     int db_page     = 0;
     int db_selected = 0;   // selected row index within current page
+    int db_entry_tab = -1;
+    int db_entry_id = -1;
+    NC_STACK_bitmap *db_entry_image = nullptr;
+    bool db_entry_has_image = false;
 
     NC_STACK_button *network_button;
     GuiList network_listvw;
@@ -884,6 +895,8 @@ public:
     void ShowDatabaseMenu();
     void PopulateDatabasePage();
     void PopulateDetailPane();
+    void ReleaseDatabaseEntryImage();
+    void RenderDatabaseEntryMedia();
 
     bool SaveBuildProtoState();
     void SaveSettings();

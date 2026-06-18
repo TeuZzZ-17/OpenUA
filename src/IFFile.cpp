@@ -1,9 +1,607 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <algorithm>
+#include <cctype>
+#include <map>
+#include <set>
+#include <string.h>
+#include <utility>
+#include <vector>
 #include "includes.h"
 #include "IFFile.h"
 #include "utils.h"
 #include "env.h"
+
+namespace
+{
+struct SetLooseReportEntry
+{
+    std::string requested;
+    std::string resolvedPath;
+    std::string extensionForm;
+    std::string reason;
+    bool embedded = false;
+    std::string sourceFunction;
+    bool emrs = false;
+    std::string emrsClass;
+    std::string embeddedPayload;
+};
+
+struct SetLooseLookupEntry
+{
+    std::string requested;
+    std::string originalCandidate;
+    bool originalExists = false;
+    std::string legacyCandidate;
+    bool legacyExists = false;
+    std::string sourceFunction;
+};
+
+struct SetLooseEmrsLookupEntry
+{
+    std::string requested;
+    std::string className;
+    std::string payload;
+    std::string currentOffset;
+    std::string originalCandidate;
+    bool originalExists = false;
+    std::string legacyCandidate;
+    bool legacyExists = false;
+    std::string sourceFunction;
+};
+
+struct SetBasMarkerEntry
+{
+    std::string name;
+    std::vector<size_t> offsets;
+};
+
+struct SetBasRawScanEntry
+{
+    std::string openedAsset;
+    std::string resolvedSource;
+    std::string diskPath;
+    std::string sourceKind;
+    size_t fileSize = 0;
+    std::string rawStatus;
+    std::string firstBytesHex;
+    std::string firstFormType;
+    std::vector<std::string> topLevelChunks;
+    std::vector<SetBasMarkerEntry> markers;
+    std::string sourceFunction;
+};
+
+struct SetLooseReport
+{
+    bool initialized = false;
+    bool available = false;
+    int32_t setId = 0;
+    std::string root;
+    std::string reportPath;
+    std::vector<SetLooseReportEntry> used;
+    std::vector<SetLooseReportEntry> failed;
+    std::vector<SetLooseLookupEntry> lookups;
+    std::vector<SetLooseLookupEntry> embeddedLookups;
+    std::vector<SetLooseEmrsLookupEntry> emrsLookups;
+    std::vector<SetBasRawScanEntry> setBasRawScans;
+    std::vector<std::string> setBasParseTrace;
+    size_t emrsResourcesChecked = 0;
+    std::set<std::string> usedKeys;
+    std::set<std::string> failedKeys;
+    std::set<std::string> lookupKeys;
+    std::set<std::string> embeddedLookupKeys;
+    std::set<std::string> emrsLookupKeys;
+    std::set<std::string> setBasRawScanKeys;
+};
+
+std::map<int32_t, SetLooseReport> g_setLooseReports;
+bool g_setBasParseTraceActive = false;
+int32_t g_setBasParseTraceSetId = 0;
+size_t g_setBasParseTraceCount = 0;
+const size_t SETBAS_PARSE_TRACE_LIMIT = 200;
+
+std::string setLooseNormalizeSlashes(std::string path)
+{
+    std::replace(path.begin(), path.end(), '\\', '/');
+    return path;
+}
+
+std::string setLooseLower(std::string str)
+{
+    std::transform(str.begin(), str.end(), str.begin(), [](unsigned char c) {
+        return (char)std::tolower(c);
+    });
+    return str;
+}
+
+std::string setLooseTagToString(uint32_t tag)
+{
+    char name[5] = {
+        (char)((tag >> 24) & 0xFF),
+        (char)((tag >> 16) & 0xFF),
+        (char)((tag >> 8) & 0xFF),
+        (char)(tag & 0xFF),
+        0
+    };
+    return std::string(name);
+}
+
+std::string setLooseChunkLabel(const IFFile::Context &chunk)
+{
+    std::string label = setLooseTagToString(chunk.TAG);
+    if (chunk.TAG == TAG_FORM)
+        label += " " + setLooseTagToString(chunk.TAG_EXTENSION);
+    return label;
+}
+
+std::string setLooseFormatOffset(size_t offset)
+{
+    char buf[32];
+    snprintf(buf, sizeof(buf), "0x%zX", offset);
+    return std::string(buf);
+}
+
+std::string setLooseFormatOffsets(const std::vector<size_t> &offsets)
+{
+    if (offsets.empty())
+        return std::string();
+
+    std::string result;
+    for (size_t i = 0; i < offsets.size(); i++)
+    {
+        if (i)
+            result += ", ";
+        result += setLooseFormatOffset(offsets[i]);
+    }
+    return result;
+}
+
+uint32_t setLooseReadU32BE(const std::vector<uint8_t> &data, size_t offset)
+{
+    if (offset + 4 > data.size())
+        return 0;
+
+    return ((uint32_t)data[offset] << 24) |
+           ((uint32_t)data[offset + 1] << 16) |
+           ((uint32_t)data[offset + 2] << 8) |
+           (uint32_t)data[offset + 3];
+}
+
+std::vector<size_t> setLooseFindMarkerOffsets(const std::vector<uint8_t> &data, const std::string &marker)
+{
+    std::vector<size_t> offsets;
+    if (marker.empty() || data.size() < marker.size())
+        return offsets;
+
+    for (size_t pos = 0; pos + marker.size() <= data.size(); pos++)
+    {
+        if (memcmp(data.data() + pos, marker.data(), marker.size()) == 0)
+        {
+            offsets.push_back(pos);
+            if (offsets.size() >= 8)
+                break;
+        }
+    }
+    return offsets;
+}
+
+std::string setLooseFirstBytesHex(const std::vector<uint8_t> &data)
+{
+    size_t count = std::min<size_t>(64, data.size());
+    std::string result;
+
+    for (size_t i = 0; i < count; i++)
+    {
+        char buf[4];
+        snprintf(buf, sizeof(buf), "%02X", data[i]);
+        if (i)
+            result += " ";
+        result += buf;
+    }
+    return result;
+}
+
+std::vector<std::string> setLooseTopLevelChunks(const std::vector<uint8_t> &data)
+{
+    std::vector<std::string> chunks;
+    if (data.size() < 12 || setLooseReadU32BE(data, 0) != TAG_FORM)
+        return chunks;
+
+    size_t offset = 12;
+    while (offset + 8 <= data.size() && chunks.size() < 12)
+    {
+        uint32_t tag = setLooseReadU32BE(data, offset);
+        uint32_t size = setLooseReadU32BE(data, offset + 4);
+
+        std::string label = setLooseTagToString(tag);
+        if (tag == TAG_FORM && offset + 12 <= data.size())
+            label += " " + setLooseTagToString(setLooseReadU32BE(data, offset + 8));
+
+        label += " @ " + setLooseFormatOffset(offset);
+        chunks.push_back(label);
+
+        size_t advance = 8 + size + (size & 1);
+        if (!advance || offset + advance <= offset)
+            break;
+        offset += advance;
+    }
+    return chunks;
+}
+
+std::string setLooseStripLeadingSlashes(std::string path)
+{
+    while (!path.empty() && (path.front() == '/' || path.front() == '\\'))
+        path.erase(path.begin());
+    return path;
+}
+
+bool setLooseIsReadMode(const std::string &mode)
+{
+    return mode.find('r') != std::string::npos &&
+           mode.find('w') == std::string::npos &&
+           mode.find('a') == std::string::npos;
+}
+
+int32_t setLooseCurrentSetId()
+{
+    std::string prefix = setLooseLower(setLooseNormalizeSlashes(Common::Env.GetPrefix("rsrc")));
+    const std::string tag = "data:set";
+
+    if (prefix.compare(0, tag.size(), tag) != 0)
+        return 0;
+
+    size_t pos = tag.size();
+    int32_t setId = 0;
+    bool hasDigit = false;
+
+    while (pos < prefix.size() && std::isdigit((unsigned char)prefix[pos]))
+    {
+        hasDigit = true;
+        setId = setId * 10 + (prefix[pos] - '0');
+        pos++;
+    }
+
+    if (!hasDigit || setId < 1 || setId > 6)
+        return 0;
+
+    return setId;
+}
+
+std::string setLooseAssetFromRequest(const std::string &filename, int32_t setId)
+{
+    std::string request = setLooseNormalizeSlashes(filename);
+    size_t colonPos = request.find(':');
+
+    if (colonPos != std::string::npos)
+    {
+        std::string prefix = setLooseLower(request.substr(0, colonPos));
+        if (prefix == "rsrc")
+            return setLooseStripLeadingSlashes(request.substr(colonPos + 1));
+    }
+
+    std::string lowered = setLooseLower(request);
+    std::string setTag = "data:set" + std::to_string(setId);
+
+    if (lowered.compare(0, setTag.size(), setTag) == 0)
+    {
+        size_t pos = setTag.size();
+        if (pos < request.size() && (request[pos] == ':' || request[pos] == '/' || request[pos] == '\\'))
+            pos++;
+
+        return setLooseStripLeadingSlashes(request.substr(pos));
+    }
+
+    return std::string();
+}
+
+std::string setLooseExtension(const std::string &path)
+{
+    size_t slashPos = path.find_last_of("/\\");
+    size_t dotPos = path.rfind('.');
+
+    if (dotPos == std::string::npos || (slashPos != std::string::npos && dotPos < slashPos))
+        return std::string();
+
+    return setLooseLower(path.substr(dotPos + 1));
+}
+
+bool setLooseSupportedExtension(const std::string &assetPath)
+{
+    std::string ext = setLooseExtension(assetPath);
+
+    return ext == "base" || ext == "bas" ||
+           ext == "sklt" || ext == "skl" ||
+           ext == "ilbm" || ext == "ilb" ||
+           ext == "anm";
+}
+
+bool setLooseWriteReport(SetLooseReport &report)
+{
+    if (!report.available)
+        return false;
+
+    FSMgr::FileHandle *fil = FSMgr::iDir::openFileAlloc(report.reportPath, "w");
+    if (!fil)
+        return false;
+
+    fil->puts("OpenUA SET Loose Override Report\n");
+    fil->printf("Set: %d\n", report.setId);
+    fil->printf("Loose root: %s\n\n", report.root.c_str());
+
+    fil->puts("USED:\n");
+    if (report.used.empty())
+        fil->puts("<none>\n");
+    else
+    {
+        for (const SetLooseReportEntry &entry : report.used)
+        {
+            fil->printf("%s [%s] -> %s\n",
+                        entry.requested.c_str(),
+                        entry.extensionForm.c_str(),
+                        entry.resolvedPath.c_str());
+            if (entry.emrs)
+            {
+                fil->puts("  source: EMRS embedded SET resource override\n");
+                fil->printf("  class: %s\n", entry.emrsClass.c_str());
+                fil->printf("  embedded payload replaced: %s\n", entry.embeddedPayload.c_str());
+            }
+            else if (entry.embedded)
+            {
+                fil->puts("  source: embedded SET resource override\n");
+                fil->printf("  loader: %s\n", entry.sourceFunction.c_str());
+            }
+        }
+    }
+
+    fil->puts("\nFAILED OVERRIDES:\n");
+    if (report.failed.empty())
+        fil->puts("<none>\n");
+    else
+    {
+        for (const SetLooseReportEntry &entry : report.failed)
+        {
+            fil->printf("%s [%s] -> %s\n",
+                        entry.requested.c_str(),
+                        entry.extensionForm.c_str(),
+                        entry.resolvedPath.c_str());
+            fil->printf("Reason: %s\n", entry.reason.c_str());
+            if (entry.emrs)
+            {
+                fil->puts("  source: EMRS embedded SET resource override\n");
+                fil->printf("  class: %s\n", entry.emrsClass.c_str());
+                fil->printf("  embedded payload retained: %s\n", entry.embeddedPayload.c_str());
+            }
+            else if (entry.embedded)
+            {
+                fil->puts("  source: embedded SET resource override\n");
+                fil->printf("  loader: %s\n", entry.sourceFunction.c_str());
+            }
+        }
+    }
+
+    fil->puts("\nLOOKUPS:\n");
+    if (report.lookups.empty())
+        fil->puts("<none>\n");
+    else
+    {
+        for (const SetLooseLookupEntry &entry : report.lookups)
+        {
+            fil->printf("%s\n", entry.requested.c_str());
+            fil->printf("  original candidate: %s [exists %s]\n",
+                        entry.originalCandidate.c_str(),
+                        entry.originalExists ? "yes" : "no");
+            fil->printf("  legacy candidate:   %s [exists %s]\n",
+                        entry.legacyCandidate.c_str(),
+                        entry.legacyExists ? "yes" : "no");
+            fil->printf("  source function: %s\n", entry.sourceFunction.c_str());
+        }
+    }
+
+    fil->puts("\nSET LOOSE OVERRIDE SUMMARY:\n");
+    fil->printf("EMRS resources checked: %zu\n", report.emrsResourcesChecked);
+    fil->printf("overrides used: %zu\n", report.used.size());
+    fil->printf("failed overrides: %zu\n", report.failed.size());
+
+    delete fil;
+    return true;
+}
+
+bool setLooseEnsureReport(int32_t setId)
+{
+    SetLooseReport &report = g_setLooseReports[setId];
+
+    if (!report.initialized)
+    {
+        report.initialized = true;
+        report.setId = setId;
+        report.root = "Data/Set" + std::to_string(setId) + "/Loose/";
+        report.reportPath = report.root + "_openua_set_override_report.txt";
+
+        FSMgr::iNode *rootNode = FSMgr::iDir::findNode(report.root);
+        report.available = rootNode && rootNode->getType() == FSMgr::iNode::NTYPE_DIR;
+
+        if (report.available)
+            setLooseWriteReport(report);
+    }
+
+    return report.available;
+}
+
+void setLooseAddUsed(const IFFile::SetLooseOverride &overrideInfo)
+{
+    if (!overrideInfo.active || !setLooseEnsureReport(overrideInfo.setId))
+        return;
+
+    SetLooseReport &report = g_setLooseReports[overrideInfo.setId];
+    std::string key = overrideInfo.requested + "\n" + overrideInfo.resolvedPath + "\n" +
+                      (overrideInfo.emrs ? "emrs" : (overrideInfo.embedded ? "embedded" : "file")) + "\n" +
+                      overrideInfo.sourceFunction;
+
+    if (!report.usedKeys.insert(key).second)
+        return;
+
+    report.used.push_back({overrideInfo.requested,
+                           overrideInfo.resolvedPath,
+                           overrideInfo.extensionForm,
+                           std::string(),
+                           overrideInfo.embedded,
+                           overrideInfo.sourceFunction,
+                           overrideInfo.emrs,
+                           overrideInfo.emrsClass,
+                           overrideInfo.embeddedPayload});
+    setLooseWriteReport(report);
+}
+
+void setLooseAddFailed(const IFFile::SetLooseOverride &overrideInfo, const std::string &reason)
+{
+    if (!overrideInfo.active || !setLooseEnsureReport(overrideInfo.setId))
+        return;
+
+    SetLooseReport &report = g_setLooseReports[overrideInfo.setId];
+    std::string key = overrideInfo.requested + "\n" + overrideInfo.resolvedPath + "\n" +
+                      (overrideInfo.emrs ? "emrs" : (overrideInfo.embedded ? "embedded" : "file")) + "\n" +
+                      overrideInfo.sourceFunction;
+
+    if (!report.failedKeys.insert(key).second)
+        return;
+
+    report.failed.push_back({overrideInfo.requested,
+                             overrideInfo.resolvedPath,
+                             overrideInfo.extensionForm,
+                             reason,
+                             overrideInfo.embedded,
+                             overrideInfo.sourceFunction,
+                             overrideInfo.emrs,
+                             overrideInfo.emrsClass,
+                             overrideInfo.embeddedPayload});
+    setLooseWriteReport(report);
+}
+
+void setLooseAddLookup(int32_t setId,
+                       const std::string &assetPath,
+                       const std::string &originalPath,
+                       bool originalExists,
+                       const std::string &legacyPath,
+                       bool legacyExists,
+                       const char *sourceFunction,
+                       bool embedded)
+{
+    if (!setLooseEnsureReport(setId))
+        return;
+
+    SetLooseReport &report = g_setLooseReports[setId];
+    std::string source = sourceFunction ? sourceFunction : "IFFile::UAOpenFileWithSetLooseOverride";
+    std::string key = assetPath + "\n" + originalPath + "\n" + legacyPath + "\n" + source;
+
+    std::set<std::string> &keys = embedded ? report.embeddedLookupKeys : report.lookupKeys;
+    std::vector<SetLooseLookupEntry> &lookups = embedded ? report.embeddedLookups : report.lookups;
+
+    if (!keys.insert(key).second)
+        return;
+
+    lookups.push_back({assetPath,
+                       originalPath,
+                       originalExists,
+                       legacyPath,
+                       legacyExists,
+                       source});
+    setLooseWriteReport(report);
+}
+
+void setLooseAddEmrsLookup(int32_t setId,
+                           const std::string &assetPath,
+                           const std::string &className,
+                           const std::string &payload,
+                           size_t currentOffset,
+                           const std::string &originalPath,
+                           bool originalExists,
+                           const std::string &legacyPath,
+                           bool legacyExists,
+                           const char *sourceFunction)
+{
+    if (!setLooseEnsureReport(setId))
+        return;
+
+    SetLooseReport &report = g_setLooseReports[setId];
+    std::string source = sourceFunction ? sourceFunction : "NC_STACK_embed::LoadingFromIFF";
+    std::string key = assetPath + "\n" + className + "\n" + payload + "\n" +
+                      originalPath + "\n" + legacyPath + "\n" + source;
+
+    if (!report.emrsLookupKeys.insert(key).second)
+        return;
+
+    std::string offsetLabel = currentOffset == (size_t)-1 ? "unknown" : setLooseFormatOffset(currentOffset);
+
+    report.emrsLookups.push_back({assetPath,
+                                  className,
+                                  payload,
+                                  offsetLabel,
+                                  originalPath,
+                                  originalExists,
+                                  legacyPath,
+                                  legacyExists,
+                                  source});
+    setLooseWriteReport(report);
+}
+
+std::string setLooseEmbeddedAssetFromRequest(const std::string &filename, int32_t setId)
+{
+    std::string assetPath = setLooseAssetFromRequest(filename, setId);
+    if (!assetPath.empty())
+        return assetPath;
+
+    return setLooseStripLeadingSlashes(setLooseNormalizeSlashes(filename));
+}
+
+std::string setLooseSetBasSourceKind(const std::string &resolvedSource, FSMgr::iNode *node, int32_t setId)
+{
+    if (!node)
+        return "unknown (resolved virtual path not found; raw stream owned below IFFile/FSMgr)";
+
+    if (node->getType() != FSMgr::iNode::NTYPE_FILE)
+        return "unknown (resolved virtual path is not a file)";
+
+    std::string source = setLooseLower(setLooseNormalizeSlashes(resolvedSource));
+    std::string disk = setLooseLower(setLooseNormalizeSlashes(node->getPath()));
+    std::string objectsPrefix = "data/set" + std::to_string(setId) + "/objects/";
+
+    if (source.find("/loose/") != std::string::npos)
+        return "SET loose override path";
+
+    if (disk.find("/mods/") != std::string::npos)
+        return "virtual FS/mod path (filesystem file)";
+
+    if (source.compare(0, objectsPrefix.size(), objectsPrefix) == 0)
+        return "normal loose Data/SetN/Objects SET.BAS style file";
+
+    return "virtual FS path (filesystem file)";
+}
+
+void setLooseAddSetBasRawScan(const SetBasRawScanEntry &scan, int32_t setId)
+{
+    if (!setLooseEnsureReport(setId))
+        return;
+
+    SetLooseReport &report = g_setLooseReports[setId];
+    std::string key = scan.openedAsset + "\n" + scan.resolvedSource + "\n" + scan.diskPath;
+
+    if (!report.setBasRawScanKeys.insert(key).second)
+        return;
+
+    report.setBasRawScans.push_back(scan);
+    setLooseWriteReport(report);
+}
+
+void setLooseAddSetBasParseTraceLine(int32_t setId, const std::string &line)
+{
+    if (!setLooseEnsureReport(setId))
+        return;
+
+    SetLooseReport &report = g_setLooseReports[setId];
+    report.setBasParseTrace.push_back(line);
+    setLooseWriteReport(report);
+}
+}
 
 
 
@@ -35,28 +633,564 @@ IFFile::IFFile(FSMgr::FileHandle &&f)
     ctxStack.emplace_front(TAG_FORM, TAG_NONE, 0x80000000, 0);
 }
 
-IFFile *IFFile::RsrcOpenIFFile(const std::string &filename, const std::string &mode)
+IFFile *IFFile::RsrcOpenIFFile(const std::string &filename, const std::string &mode, const char *sourceFunction)
 {
-    std::string tmpBuf = "rsrc:";
-    tmpBuf += filename;
-    
-    tmpBuf = correctSeparatorAndExt( Common::Env.ApplyPrefix( tmpBuf ) );
-
-    if ( !FSMgr::iDir::fileExist(tmpBuf) )
+    IFFile result = UAOpenIFFile("rsrc:" + filename, mode, sourceFunction ? sourceFunction : "IFFile::RsrcOpenIFFile");
+    if ( !result.OK() )
         return NULL;
-    
-    FSMgr::FileHandle f = FSMgr::iDir::openFile(tmpBuf, mode);
-    return new IFFile(f);
+
+    return new IFFile(std::move(result));
 }
 
-IFFile IFFile::UAOpenIFFile(const std::string &filename, const std::string &mode)
+IFFile *IFFile::RsrcOpenIFFileVanilla(const std::string &filename, const std::string &mode)
+{
+    IFFile result = UAOpenIFFileVanilla("rsrc:" + filename, mode);
+    if ( !result.OK() )
+        return NULL;
+
+    return new IFFile(std::move(result));
+}
+
+FSMgr::FileHandle IFFile::UAOpenFileVanilla(const std::string &filename, const std::string &mode)
 {
     std::string tmpBuf = correctSeparatorAndExt( Common::Env.ApplyPrefix( filename ) );
 
     if ( !FSMgr::iDir::fileExist(tmpBuf) )
+        return FSMgr::FileHandle();
+
+    return FSMgr::iDir::openFile(tmpBuf, mode);
+}
+
+IFFile IFFile::UAOpenIFFileVanilla(const std::string &filename, const std::string &mode)
+{
+    FSMgr::FileHandle fil = UAOpenFileVanilla(filename, mode);
+    if ( !fil.OK() )
         return IFFile();
-    
-    return IFFile(FSMgr::iDir::openFileAlloc(tmpBuf, mode));
+
+    return IFFile(std::move(fil));
+}
+
+bool IFFile::FindSetLooseOverride(const std::string &filename, const std::string &mode, SetLooseOverride *out, const char *sourceFunction)
+{
+    if (out)
+        *out = SetLooseOverride();
+
+    if ( !setLooseIsReadMode(mode) )
+        return false;
+
+    int32_t setId = setLooseCurrentSetId();
+    if ( !setId )
+        return false;
+
+    std::string assetPath = setLooseAssetFromRequest(filename, setId);
+    if ( assetPath.empty() || !setLooseSupportedExtension(assetPath) )
+        return false;
+
+    assetPath = setLooseStripLeadingSlashes(setLooseNormalizeSlashes(assetPath));
+    if ( assetPath.find(':') != std::string::npos )
+        return false;
+
+    if ( !setLooseEnsureReport(setId) )
+        return false;
+
+    std::string looseRoot = "Data/Set" + std::to_string(setId) + "/Loose/";
+    std::string originalPath = looseRoot + assetPath;
+    std::string legacyPath = setLooseNormalizeSlashes(correctSeparatorAndExt(originalPath));
+    bool originalExists = FSMgr::iDir::fileExist(originalPath);
+    bool legacyExists = FSMgr::iDir::fileExist(legacyPath);
+
+    setLooseAddLookup(setId,
+                      assetPath,
+                      originalPath,
+                      originalExists,
+                      legacyPath,
+                      legacyExists,
+                      sourceFunction,
+                      false);
+
+    struct Candidate
+    {
+        std::string path;
+        std::string extensionForm;
+        bool exists = false;
+    };
+
+    std::vector<Candidate> candidates;
+    candidates.push_back({originalPath, "original requested extension form", originalExists});
+
+    if ( legacyPath != setLooseNormalizeSlashes(originalPath) )
+        candidates.push_back({legacyPath, "legacy 3-letter extension form", legacyExists});
+
+    for (const Candidate &candidate : candidates)
+    {
+        if ( candidate.exists )
+        {
+            if (out)
+            {
+                out->active = true;
+                out->setId = setId;
+                out->requested = assetPath;
+                out->resolvedPath = candidate.path;
+                out->extensionForm = candidate.extensionForm;
+                out->vanillaPath = setLooseNormalizeSlashes(correctSeparatorAndExt(Common::Env.ApplyPrefix(filename)));
+                out->embedded = false;
+                out->sourceFunction = sourceFunction ? sourceFunction : "IFFile::UAOpenFileWithSetLooseOverride";
+            }
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool IFFile::FindSetLooseEmbeddedOverride(const std::string &filename, const std::string &mode, SetLooseOverride *out, const char *sourceFunction)
+{
+    if (out)
+        *out = SetLooseOverride();
+
+    if ( !setLooseIsReadMode(mode) )
+        return false;
+
+    int32_t setId = setLooseCurrentSetId();
+    if ( !setId )
+        return false;
+
+    std::string assetPath = setLooseEmbeddedAssetFromRequest(filename, setId);
+    if ( assetPath.empty() || !setLooseSupportedExtension(assetPath) )
+        return false;
+
+    assetPath = setLooseStripLeadingSlashes(setLooseNormalizeSlashes(assetPath));
+    if ( assetPath.find(':') != std::string::npos )
+        return false;
+
+    if ( !setLooseEnsureReport(setId) )
+        return false;
+
+    std::string looseRoot = "Data/Set" + std::to_string(setId) + "/Loose/";
+    std::string originalPath = looseRoot + assetPath;
+    std::string legacyPath = setLooseNormalizeSlashes(correctSeparatorAndExt(originalPath));
+    bool originalExists = FSMgr::iDir::fileExist(originalPath);
+    bool legacyExists = FSMgr::iDir::fileExist(legacyPath);
+
+    setLooseAddLookup(setId,
+                      assetPath,
+                      originalPath,
+                      originalExists,
+                      legacyPath,
+                      legacyExists,
+                      sourceFunction,
+                      true);
+
+    struct Candidate
+    {
+        std::string path;
+        std::string extensionForm;
+        bool exists = false;
+    };
+
+    std::vector<Candidate> candidates;
+    candidates.push_back({originalPath, "original requested extension form", originalExists});
+
+    if ( legacyPath != setLooseNormalizeSlashes(originalPath) )
+        candidates.push_back({legacyPath, "legacy 3-letter extension form", legacyExists});
+
+    for (const Candidate &candidate : candidates)
+    {
+        if ( candidate.exists )
+        {
+            if (out)
+            {
+                out->active = true;
+                out->setId = setId;
+                out->requested = assetPath;
+                out->resolvedPath = candidate.path;
+                out->extensionForm = candidate.extensionForm;
+                out->embedded = true;
+                out->sourceFunction = sourceFunction ? sourceFunction : "IFFile::UAOpenFileWithSetLooseEmbeddedOverride";
+            }
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool IFFile::FindSetLooseEmrsOverride(const std::string &filename, const std::string &mode, const std::string &className, const std::string &payload, SetLooseOverride *out, const char *sourceFunction, size_t currentOffset)
+{
+    (void)currentOffset;
+
+    if (out)
+        *out = SetLooseOverride();
+
+    if ( !setLooseIsReadMode(mode) )
+        return false;
+
+    int32_t setId = setLooseCurrentSetId();
+    if ( !setId )
+        return false;
+
+    std::string assetPath = setLooseEmbeddedAssetFromRequest(filename, setId);
+    if ( assetPath.empty() )
+        return false;
+
+    assetPath = setLooseStripLeadingSlashes(setLooseNormalizeSlashes(assetPath));
+    if ( assetPath.find(':') != std::string::npos )
+        return false;
+
+    if ( !setLooseEnsureReport(setId) )
+        return false;
+
+    std::string looseRoot = "Data/Set" + std::to_string(setId) + "/Loose/";
+    std::string originalPath = looseRoot + assetPath;
+    std::string legacyPath = setLooseNormalizeSlashes(correctSeparatorAndExt(originalPath));
+    bool originalExists = FSMgr::iDir::fileExist(originalPath);
+    bool legacyExists = FSMgr::iDir::fileExist(legacyPath);
+
+    g_setLooseReports[setId].emrsResourcesChecked++;
+
+    struct Candidate
+    {
+        std::string path;
+        std::string extensionForm;
+        bool exists = false;
+    };
+
+    std::vector<Candidate> candidates;
+    candidates.push_back({originalPath, "original requested extension form", originalExists});
+
+    if ( legacyPath != setLooseNormalizeSlashes(originalPath) )
+        candidates.push_back({legacyPath, "legacy 3-letter extension form", legacyExists});
+
+    for (const Candidate &candidate : candidates)
+    {
+        if ( candidate.exists )
+        {
+            if (out)
+            {
+                out->active = true;
+                out->setId = setId;
+                out->requested = assetPath;
+                out->resolvedPath = candidate.path;
+                out->extensionForm = candidate.extensionForm;
+                out->embedded = true;
+                out->sourceFunction = sourceFunction ? sourceFunction : "NC_STACK_embed::LoadingFromIFF";
+                out->emrs = true;
+                out->emrsClass = className;
+                out->embeddedPayload = payload;
+            }
+            return true;
+        }
+    }
+
+    return false;
+}
+
+FSMgr::FileHandle IFFile::UAOpenFileWithSetLooseOverride(const std::string &filename, const std::string &mode, SetLooseOverride *out, const char *sourceFunction)
+{
+    SetLooseOverride overrideInfo;
+
+    if ( FindSetLooseOverride(filename, mode, &overrideInfo, sourceFunction) )
+    {
+        FSMgr::FileHandle fil = FSMgr::iDir::openFile(overrideInfo.resolvedPath, mode);
+        if ( fil.OK() )
+        {
+            if (out)
+                *out = overrideInfo;
+
+            return fil;
+        }
+
+        setLooseAddFailed(overrideInfo, "loose file existed but failed to load; vanilla fallback used.");
+    }
+
+    if (out)
+        *out = SetLooseOverride();
+
+    return UAOpenFileVanilla(filename, mode);
+}
+
+FSMgr::FileHandle IFFile::UAOpenFileWithSetLooseEmbeddedOverride(const std::string &filename, const std::string &mode, SetLooseOverride *out, const char *sourceFunction)
+{
+    SetLooseOverride overrideInfo;
+
+    if ( FindSetLooseEmbeddedOverride(filename, mode, &overrideInfo, sourceFunction) )
+    {
+        FSMgr::FileHandle fil = FSMgr::iDir::openFile(overrideInfo.resolvedPath, mode);
+        if ( fil.OK() )
+        {
+            if (out)
+                *out = overrideInfo;
+
+            return fil;
+        }
+
+        setLooseAddFailed(overrideInfo, "loose embedded override existed but failed to open; embedded SET.BAS fallback used.");
+    }
+
+    if (out)
+        *out = SetLooseOverride();
+
+    return FSMgr::FileHandle();
+}
+
+FSMgr::FileHandle IFFile::UAOpenFileWithSetLooseEmrsOverride(const std::string &filename, const std::string &mode, const std::string &className, const std::string &payload, SetLooseOverride *out, const char *sourceFunction, size_t currentOffset)
+{
+    SetLooseOverride overrideInfo;
+
+    if ( FindSetLooseEmrsOverride(filename, mode, className, payload, &overrideInfo, sourceFunction, currentOffset) )
+    {
+        FSMgr::FileHandle fil = FSMgr::iDir::openFile(overrideInfo.resolvedPath, mode);
+        if ( fil.OK() )
+        {
+            if (out)
+                *out = overrideInfo;
+
+            return fil;
+        }
+
+        setLooseAddFailed(overrideInfo, "loose EMRS override existed but failed to open; embedded payload fallback used.");
+    }
+
+    if (out)
+        *out = SetLooseOverride();
+
+    return FSMgr::FileHandle();
+}
+
+IFFile IFFile::UAOpenIFFile(const std::string &filename, const std::string &mode, const char *sourceFunction)
+{
+    SetLooseOverride overrideInfo;
+    FSMgr::FileHandle fil = UAOpenFileWithSetLooseOverride(filename, mode, &overrideInfo, sourceFunction ? sourceFunction : "IFFile::UAOpenIFFile");
+
+    if ( !fil.OK() )
+        return IFFile();
+
+    IFFile result(std::move(fil));
+    result._setLooseOverride = overrideInfo;
+    return result;
+}
+
+IFFile IFFile::UAOpenIFFileWithSetLooseEmbeddedOverride(const std::string &filename, const std::string &mode, SetLooseOverride *out, const char *sourceFunction)
+{
+    SetLooseOverride overrideInfo;
+    FSMgr::FileHandle fil = UAOpenFileWithSetLooseEmbeddedOverride(filename, mode, &overrideInfo, sourceFunction);
+
+    if ( !fil.OK() )
+        return IFFile();
+
+    IFFile result(std::move(fil));
+    result._setLooseOverride = overrideInfo;
+
+    if (out)
+        *out = overrideInfo;
+
+    return result;
+}
+
+IFFile IFFile::UAOpenIFFileWithSetLooseEmrsOverride(const std::string &filename, const std::string &mode, const std::string &className, const std::string &payload, SetLooseOverride *out, const char *sourceFunction, size_t currentOffset)
+{
+    SetLooseOverride overrideInfo;
+    FSMgr::FileHandle fil = UAOpenFileWithSetLooseEmrsOverride(filename, mode, className, payload, &overrideInfo, sourceFunction, currentOffset);
+
+    if ( !fil.OK() )
+        return IFFile();
+
+    IFFile result(std::move(fil));
+    result._setLooseOverride = overrideInfo;
+
+    if (out)
+        *out = overrideInfo;
+
+    return result;
+}
+
+bool IFFile::IsSetLooseOverride() const
+{
+    return _setLooseOverride.active;
+}
+
+void IFFile::ReportSetLooseOverrideUsed() const
+{
+    setLooseAddUsed(_setLooseOverride);
+}
+
+void IFFile::ReportSetLooseOverrideFailed(const std::string &reason) const
+{
+    setLooseAddFailed(_setLooseOverride, reason);
+}
+
+void IFFile::ReportSetLooseOverrideUsed(const SetLooseOverride &overrideInfo)
+{
+    setLooseAddUsed(overrideInfo);
+}
+
+void IFFile::ReportSetLooseOverrideFailed(const SetLooseOverride &overrideInfo, const std::string &reason)
+{
+    setLooseAddFailed(overrideInfo, reason);
+}
+
+void IFFile::ReportSetBasRawScan(const std::string &filename, const char *sourceFunction)
+{
+    int32_t setId = setLooseCurrentSetId();
+    if ( !setId || !setLooseEnsureReport(setId) )
+        return;
+
+    SetLooseOverride overrideInfo;
+    std::string resolvedSource;
+    std::string diskPath;
+    std::string rawStatus = "ok";
+
+    if ( FindSetLooseOverride(filename, "rb", &overrideInfo, sourceFunction ? sourceFunction : "NC_STACK_base::LoadBaseFromFile") )
+    {
+        resolvedSource = overrideInfo.resolvedPath;
+    }
+    else
+    {
+        resolvedSource = setLooseNormalizeSlashes(correctSeparatorAndExt(Common::Env.ApplyPrefix(filename)));
+    }
+
+    FSMgr::iNode *node = FSMgr::iDir::findNode(resolvedSource);
+    if ( node )
+        diskPath = node->getPath();
+
+    SetBasRawScanEntry scan;
+    scan.openedAsset = setLooseEmbeddedAssetFromRequest(filename, setId);
+    scan.resolvedSource = resolvedSource;
+    scan.diskPath = diskPath.empty() ? "<unknown>" : diskPath;
+    scan.sourceKind = setLooseSetBasSourceKind(resolvedSource, node, setId);
+    scan.sourceFunction = sourceFunction ? sourceFunction : "NC_STACK_base::LoadBaseFromFile";
+
+    const std::vector<std::string> markerNames = {
+        "EMRS",
+        "ilbm.class",
+        "MTL.ILBM",
+        "BODEN1.ILBM",
+        "BODEN2.ILBM",
+        "BODEN5.ILBM",
+        "CITY1.ILBM",
+        "FORM",
+        "VBMP",
+        "HEAD",
+        "BODY"
+    };
+
+    if ( !node || node->getType() != FSMgr::iNode::NTYPE_FILE )
+    {
+        scan.rawStatus = "raw bytes unavailable at IFFile layer; lower owner is FSMgr::iDir::openFile";
+        for (const std::string &marker : markerNames)
+            scan.markers.push_back({marker, std::vector<size_t>()});
+        setLooseAddSetBasRawScan(scan, setId);
+        return;
+    }
+
+    FSMgr::FileHandle fil = FSMgr::iDir::openFile(node, "rb");
+    if ( !fil.OK() )
+    {
+        scan.rawStatus = "raw bytes unavailable: FSMgr::iDir::openFile failed";
+        for (const std::string &marker : markerNames)
+            scan.markers.push_back({marker, std::vector<size_t>()});
+        setLooseAddSetBasRawScan(scan, setId);
+        return;
+    }
+
+    fil.seek(0, SEEK_END);
+    scan.fileSize = fil.tell();
+    fil.seek(0, SEEK_SET);
+
+    std::vector<uint8_t> data(scan.fileSize);
+    if ( scan.fileSize && fil.read(data.data(), scan.fileSize) != scan.fileSize )
+        rawStatus = "raw read was partial";
+
+    scan.rawStatus = rawStatus;
+    scan.firstBytesHex = setLooseFirstBytesHex(data);
+
+    if (data.size() >= 12 && setLooseReadU32BE(data, 0) == TAG_FORM)
+        scan.firstFormType = setLooseTagToString(setLooseReadU32BE(data, 8));
+    else
+        scan.firstFormType = "<not FORM>";
+
+    scan.topLevelChunks = setLooseTopLevelChunks(data);
+
+    for (const std::string &marker : markerNames)
+        scan.markers.push_back({marker, setLooseFindMarkerOffsets(data, marker)});
+
+    setLooseAddSetBasRawScan(scan, setId);
+}
+
+void IFFile::FlushSetLooseOverrideReport()
+{
+    int32_t setId = setLooseCurrentSetId();
+    if ( !setId || !setLooseEnsureReport(setId) )
+        return;
+
+    setLooseWriteReport(g_setLooseReports[setId]);
+}
+
+void IFFile::BeginSetBasParseTrace(const std::string &filename)
+{
+    int32_t setId = setLooseCurrentSetId();
+    if ( !setId || !setLooseEnsureReport(setId) )
+        return;
+
+    g_setBasParseTraceActive = true;
+    g_setBasParseTraceSetId = setId;
+    g_setBasParseTraceCount = 0;
+
+    std::string asset = setLooseEmbeddedAssetFromRequest(filename, setId);
+    SetLooseReport &report = g_setLooseReports[setId];
+    if (report.setBasParseTrace.empty())
+        setLooseAddSetBasParseTraceLine(setId, "opened asset: " + asset);
+}
+
+void IFFile::EndSetBasParseTrace()
+{
+    if ( g_setBasParseTraceActive && g_setBasParseTraceSetId )
+        setLooseAddSetBasParseTraceLine(g_setBasParseTraceSetId, "trace ended");
+
+    g_setBasParseTraceActive = false;
+    g_setBasParseTraceSetId = 0;
+    g_setBasParseTraceCount = 0;
+}
+
+bool IFFile::IsSetBasParseTraceActive()
+{
+    return g_setBasParseTraceActive && g_setBasParseTraceSetId;
+}
+
+void IFFile::TraceSetBasParse(const char *section, const std::string &message, const IFFile *mfile)
+{
+    if ( !IsSetBasParseTraceActive() )
+        return;
+
+    if ( g_setBasParseTraceCount >= SETBAS_PARSE_TRACE_LIMIT )
+        return;
+
+    std::string line;
+    if (section && section[0])
+    {
+        line += section;
+        line += ": ";
+    }
+
+    if (mfile)
+    {
+        line += "[tell ";
+        line += setLooseFormatOffset(mfile->tell());
+        line += "] ";
+    }
+
+    line += message;
+    g_setBasParseTraceCount++;
+
+    if ( g_setBasParseTraceCount == SETBAS_PARSE_TRACE_LIMIT )
+        line += " (trace limit reached)";
+
+    setLooseAddSetBasParseTraceLine(g_setBasParseTraceSetId, line);
+}
+
+std::string IFFile::ChunkLabel(const Context &chunk)
+{
+    return setLooseChunkLabel(chunk);
 }
 
 int IFFile::pushChunk(uint32_t TAG1, uint32_t TAG2, int32_t TAG_SZ)
@@ -294,6 +1428,33 @@ std::string IFFile::readStr(int maxSz)
     std::string tmp(bf, read(bf, maxSz));
     delete[] bf;
     return tmp;
+}
+
+std::string IFFile::PeekNextChunkLabel()
+{
+    if ( !file_handle.OK() )
+        return "unknown";
+
+    size_t pos = file_handle.tell();
+    uint32_t tag = file_handle.readU32B();
+    file_handle.readU32B();
+
+    if ( file_handle.readErr() )
+    {
+        file_handle.seek((long int)pos, SEEK_SET);
+        return "unknown";
+    }
+
+    std::string label = setLooseTagToString(tag);
+    if ( tag == TAG_FORM )
+    {
+        uint32_t ext = file_handle.readU32B();
+        if ( !file_handle.readErr() )
+            label += " " + setLooseTagToString(ext);
+    }
+
+    file_handle.seek((long int)pos, SEEK_SET);
+    return label;
 }
 
 

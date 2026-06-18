@@ -19,6 +19,7 @@
 #include "system/inivals.h"
 #include "loaders.h"
 #include "obj3d.h"
+#include "ypaflyer.h"
 #include "utils.h"
 
 extern int vertMenuSpace;
@@ -2519,18 +2520,578 @@ static void db_collect_valid(const UserData *usr, std::vector<int> &out)
     }
 }
 
-static int db_display_attack_from_weapon(const std::vector<World::TWeapProto> &wpns, int weapon_id)
+static std::string db_weapon_display_name(const std::vector<World::TWeapProto> &wpns, int weaponId)
 {
-    if (weapon_id > 0 && weapon_id < (int)wpns.size() && !wpns[weapon_id].name.empty())
-        return wpns[weapon_id].energy / 100;
-    return -1;
+    if ( weaponId < 0 || weaponId >= (int)wpns.size() || wpns[weaponId].name.empty() )
+        return "none";
+
+    return wpns[weaponId].name;
 }
 
-static std::string db_weapon_name(const std::vector<World::TWeapProto> &wpns, int weapon_id, int max_len)
+static int db_vehicle_flyer_type(const World::TVhclProto &p)
 {
-    if (weapon_id > 0 && weapon_id < (int)wpns.size() && !wpns[weapon_id].name.empty())
-        return db_trunc(wpns[weapon_id].name, max_len);
-    return "none";
+    IDVList::const_iterator it = p.initParams.find(NC_STACK_ypaflyer::FLY_ATT_TYPE);
+    if ( it == p.initParams.end() )
+        return -1;
+
+    try
+    {
+        return nonstd::any_cast<int32_t>(it->second.Value);
+    }
+    catch ( const nonstd::bad_any_cast& )
+    {
+        return -1;
+    }
+}
+
+static std::string db_vehicle_model_display_name(const World::TVhclProto &p)
+{
+    if ( p.is_dummy )
+        return "dummy";
+
+    switch ( p.model_id )
+    {
+        case BACT_TYPES_BACT:
+            return "heli";
+        case BACT_TYPES_TANK:
+            return "tank";
+        case BACT_TYPES_ROBO:
+            return "robo";
+        case BACT_TYPES_MISSLE:
+            return "missile";
+        case BACT_TYPES_FLYER:
+        {
+            // Several original script models share the same runtime class.
+            // Show the script-facing model name, not the internal class name
+            // "flyer", because "flyer" is not a real SCR model keyword.
+            switch ( db_vehicle_flyer_type(p) )
+            {
+                case 0: return "zeppelin";
+                case 2: return "glider";
+                case 3: return "plane";
+                default:return "plane";
+            }
+        }
+        case BACT_TYPES_UFO:
+            return "ufo";
+        case BACT_TYPES_CAR:
+            return "car";
+        case BACT_TYPES_GUN:
+            return "gun";
+        case BACT_TYPES_HOVER:
+            return "hover";
+        default:
+            return "unknown";
+    }
+}
+
+static std::string db_weapon_model_display_name(const World::TWeapProto &p)
+{
+    if ( p.IsLaser() )
+        return "laser";
+    if ( p.IsMortar() )
+        return "mortar";
+    if ( p.IsHomingBomb() )
+        return "homing_bomb";
+
+    switch ( p._weaponFlags )
+    {
+        case World::TWeapProto::WEAPON_FLAGS_GRENADE: return "grenade";
+        case World::TWeapProto::WEAPON_FLAGS_ROCKET:  return "rocket";
+        case World::TWeapProto::WEAPON_FLAGS_MISSILE: return "missile";
+        case World::TWeapProto::WEAPON_FLAGS_BOMB:    return "bomb";
+        case World::TWeapProto::WEAPON_FLAGS_OBSAVOID:return "obsavoid";
+        default:                                      return "unknown";
+    }
+}
+
+static bool db_weapon_has_aoe(const World::TWeapProto &p)
+{
+    return p.aoe_unit_energy != 0 ||
+           p.aoe_building_energy != 0 ||
+           p.aoe_sector_energy != 0 ||
+           p.aoe_unit_radius > 0.0f ||
+           p.aoe_building_radius > 0.0f ||
+           p.aoe_sector_radius > 0.0f;
+}
+
+static std::string db_building_model_display_name(const World::TBuildingProto &p)
+{
+    switch ( p.ModelID )
+    {
+        case 0: return "building";
+        case 1: return "kraftwerk";
+        case 2: return "radar";
+        case 3: return "defcenter";
+        default:return "unknown";
+    }
+}
+
+static std::string db_database_asset_path(const char *kind, const char *prefix, int id, const char *ext)
+{
+    return fmt::sprintf("Database/%s/%s_%d.%s", kind, prefix, id, ext);
+}
+
+static std::string db_database_flat_asset_path(const char *prefix, int id, const char *ext)
+{
+    return fmt::sprintf("Database/%s_%d.%s", prefix, id, ext);
+}
+
+static const char *db_asset_kind(int tab)
+{
+    static const char *kinds[] = { "Units", "Weapons", "Buildings" };
+    return kinds[tab >= 0 && tab < 3 ? tab : 0];
+}
+
+static const char *db_asset_prefix(int tab)
+{
+    static const char *prefixes[] = { "vehicle", "weapon", "building" };
+    return prefixes[tab >= 0 && tab < 3 ? tab : 0];
+}
+
+static std::string db_database_asset_path(int tab, int id, const char *ext)
+{
+    return db_database_asset_path(db_asset_kind(tab), db_asset_prefix(tab), id, ext);
+}
+
+static std::string db_database_flat_asset_path(int tab, int id, const char *ext)
+{
+    return db_database_flat_asset_path(db_asset_prefix(tab), id, ext);
+}
+
+static bool db_load_text_file(const std::string &path, std::string *out)
+{
+    out->clear();
+
+    FSMgr::FileHandle fil = uaOpenFile("data:" + path, "r");
+    if ( !fil.OK() )
+        return false;
+
+    std::string line;
+    while ( fil.ReadLine(&line) )
+    {
+        if ( out->size() + line.size() > 8192 )
+            break;
+        *out += line;
+    }
+
+    return true;
+}
+
+static bool db_load_database_text(int tab, int id, std::string *out)
+{
+    if ( db_load_text_file(db_database_asset_path(tab, id, "txt"), out) )
+        return true;
+
+    return db_load_text_file(db_database_flat_asset_path(tab, id, "txt"), out);
+}
+
+static int db_text_width(TileMap *tiles, const std::string &txt)
+{
+    if ( !tiles )
+        return (int)txt.size() * 12;
+
+    int width = 0;
+    for (char ch : txt)
+        width += tiles->map[(uint8_t)ch].w;
+    return width;
+}
+
+static std::string db_fit_text(TileMap *tiles, const std::string &txt, int max_width)
+{
+    if ( max_width <= 0 || txt.empty() )
+        return std::string();
+
+    if ( db_text_width(tiles, txt) <= max_width )
+        return txt;
+
+    const std::string ellipsis = "...";
+    if ( db_text_width(tiles, ellipsis) > max_width )
+    {
+        std::string tiny;
+        for (char ch : ellipsis)
+        {
+            std::string candidate = tiny + ch;
+            if ( db_text_width(tiles, candidate) > max_width )
+                break;
+            tiny = candidate;
+        }
+        return tiny;
+    }
+
+    std::string out = txt;
+    while ( !out.empty() && db_text_width(tiles, out + ellipsis) > max_width )
+        out.pop_back();
+
+    return out + ellipsis;
+}
+
+static std::string db_centered_proto_id(int proto_id)
+{
+    // Fixed-width slot: names keep the same X, while two-digit IDs no longer
+    // look glued to the left side of the brackets.
+    if ( proto_id >= 0 && proto_id < 10 )
+        return fmt::sprintf("[ %d  ]", proto_id);
+    if ( proto_id >= 10 && proto_id < 100 )
+        return fmt::sprintf("[ %d ]", proto_id);
+    if ( proto_id >= 100 && proto_id < 1000 )
+        return fmt::sprintf("[%d]", proto_id);
+
+    return fmt::sprintf("[%d]", proto_id);
+}
+
+static std::string db_make_name_row(const std::string &name,
+                                    int proto_id,
+                                    bool selected,
+                                    int row_width)
+{
+    const char *sel = selected ? ">" : " ";
+    std::string prefix = std::string(sel) + db_centered_proto_id(proto_id) + " ";
+
+    TileMap *tiles = GFX::Engine.GetTileset(16);
+    int name_width = row_width - db_text_width(tiles, prefix) - 8;
+    if ( name_width < 24 )
+        name_width = 24;
+
+    return prefix + db_fit_text(tiles, name, name_width);
+}
+
+static bool db_text_fits(TileMap *tiles, const std::string &txt, int max_width)
+{
+    return db_text_width(tiles, txt) <= max_width;
+}
+
+static int db_entry_text_width(NC_STACK_ypaworld *yw)
+{
+    const int rx = (yw->_screenSize.x * 36) / 100;
+    const int rw = yw->_screenSize.x - rx;
+    return std::max(120, (rw * 70) / 100);
+}
+
+static int db_detail_text_columns(NC_STACK_ypaworld *yw)
+{
+    // The database screen uses the old shell font through button captions.
+    // TileMap pixel metrics under-report its final on-screen width, so pixel
+    // wrapping still lets long Italian lore lines get clipped by the widget.
+    // Use a conservative character budget scaled from the tested 1536-wide
+    // shell instead. This favors readable wrapping over edge-hugging text.
+    if ( !yw || yw->_screenSize.x <= 0 )
+        return 38;
+
+    int columns = (yw->_screenSize.x * 40) / 1536;
+    if ( columns < 30 ) columns = 30;
+    if ( columns > 52 ) columns = 52;
+    return columns;
+}
+
+static void db_push_wrapped_line(TileMap *tiles, const std::string &line, int max_width, int max_lines, std::vector<std::string> *out)
+{
+    auto push_word = [&](std::string word)
+    {
+        if ( word.empty() )
+            return;
+
+        if ( !out->empty() && !out->back().empty() )
+        {
+            std::string candidate = out->back() + " " + word;
+            if ( db_text_fits(tiles, candidate, max_width) )
+            {
+                out->back() = candidate;
+                return;
+            }
+        }
+
+        while ( !word.empty() && (int)out->size() < max_lines )
+        {
+            int cut = (int)word.size();
+            while ( cut > 1 && !db_text_fits(tiles, word.substr(0, cut), max_width) )
+                cut--;
+
+            out->push_back(word.substr(0, cut));
+            word.erase(0, cut);
+        }
+    };
+
+    size_t pos = 0;
+    while ( pos < line.size() && (int)out->size() < max_lines )
+    {
+        while ( pos < line.size() && (line[pos] == ' ' || line[pos] == '\t') )
+            pos++;
+
+        size_t start = pos;
+        while ( pos < line.size() && line[pos] != ' ' && line[pos] != '\t' )
+            pos++;
+
+        push_word(line.substr(start, pos - start));
+    }
+}
+
+static std::vector<std::string> db_wrap_text(const std::string &text, int max_width, int max_lines)
+{
+    std::vector<std::string> out;
+    TileMap *tiles = GFX::Engine.GetTileset(16);
+
+    size_t start = 0;
+    while ( start <= text.size() && (int)out.size() < max_lines )
+    {
+        size_t end = text.find('\n', start);
+        std::string line = (end == std::string::npos) ? text.substr(start) : text.substr(start, end - start);
+        if ( !line.empty() && line.back() == '\r' )
+            line.pop_back();
+
+        if ( line.empty() )
+            out.push_back(std::string(" "));
+        else
+            db_push_wrapped_line(tiles, line, max_width, max_lines, &out);
+
+        if ( end == std::string::npos )
+            break;
+        start = end + 1;
+    }
+
+    return out;
+}
+
+static std::vector<std::string> db_wrap_text_columns(const std::string &text, int max_columns, int max_lines)
+{
+    std::vector<std::string> out;
+    if ( max_columns < 8 )
+        max_columns = 8;
+
+    auto push_word = [&](std::string word)
+    {
+        if ( word.empty() || (int)out.size() >= max_lines )
+            return;
+
+        while ( !word.empty() && (int)out.size() < max_lines )
+        {
+            if ( !out.empty() && !out.back().empty() && out.back() != " " )
+            {
+                std::string candidate = out.back() + " " + word;
+                if ( (int)candidate.size() <= max_columns )
+                {
+                    out.back() = candidate;
+                    return;
+                }
+            }
+
+            if ( (int)word.size() <= max_columns )
+            {
+                out.push_back(word);
+                return;
+            }
+
+            int cut = max_columns;
+            while ( cut > 1 && cut < (int)word.size() && ((uint8_t)word[cut] & 0xC0) == 0x80 )
+                cut--; // avoid splitting in the middle of a UTF-8 continuation byte
+            out.push_back(word.substr(0, cut));
+            word.erase(0, cut);
+        }
+    };
+
+    size_t start = 0;
+    while ( start <= text.size() && (int)out.size() < max_lines )
+    {
+        size_t end = text.find('\n', start);
+        std::string line = (end == std::string::npos) ? text.substr(start) : text.substr(start, end - start);
+        while ( !line.empty() && (line.back() == '\r' || line.back() == '\n') )
+            line.pop_back();
+
+        if ( line.empty() )
+        {
+            out.push_back(" ");
+        }
+        else
+        {
+            size_t pos = 0;
+            while ( pos < line.size() && (int)out.size() < max_lines )
+            {
+                while ( pos < line.size() && (line[pos] == ' ' || line[pos] == '\t') )
+                    pos++;
+
+                size_t wordStart = pos;
+                while ( pos < line.size() && line[pos] != ' ' && line[pos] != '\t' )
+                    pos++;
+
+                push_word(line.substr(wordStart, pos - wordStart));
+            }
+        }
+
+        if ( end == std::string::npos )
+            break;
+        start = end + 1;
+    }
+
+    return out;
+}
+
+static NC_STACK_bitmap *db_load_database_image(int tab, int id)
+{
+    std::string path = db_database_asset_path(tab, id, "png");
+    if ( !uaFileExist("data:" + path) )
+        path = db_database_flat_asset_path(tab, id, "png");
+
+    if ( !uaFileExist("data:" + path) )
+        return NULL;
+
+    std::string oldRsrc = Common::Env.GetPrefix("rsrc");
+    Common::Env.SetPrefix("rsrc", "data:");
+
+    NC_STACK_bitmap *img = Utils::ProxyLoadImage({
+        {NC_STACK_rsrc::RSRC_ATT_NAME, path},
+        {NC_STACK_bitmap::BMD_ATT_CONVCOLOR, (int32_t)1}});
+
+    if ( !oldRsrc.empty() )
+        Common::Env.SetPrefix("rsrc", oldRsrc);
+
+    if ( img && img->GetBitmap() )
+        return img;
+
+    if ( img )
+        img->Delete();
+    return NULL;
+}
+
+void UserData::ReleaseDatabaseEntryImage()
+{
+    if ( db_entry_image )
+    {
+        db_entry_image->Delete();
+        db_entry_image = NULL;
+    }
+}
+
+static void db_get_entry_image_rect(NC_STACK_ypaworld *yw, int *left, int *top, int *width, int *height)
+{
+    const int lh = yw->_fontH + vertMenuSpace;
+    const int rx = (yw->_screenSize.x * 36) / 100;
+    const int rw = yw->_screenSize.x - rx;
+    const int panelH = yw->_screenSize.y;
+    int nav_y = panelH - lh - vertMenuSpace;
+    if (nav_y < 10 * lh) nav_y = 10 * lh;
+
+    const int detailLines = 14;
+    int imgW = std::max(120, (rw * 70) / 100);
+    int imgX = rx + (rw - imgW) / 2;
+    int imgY = (detailLines + 3) * lh;
+    int imgH = nav_y - imgY - vertMenuSpace;
+
+    if (imgH < lh * 3) imgH = lh * 3;
+    if (imgX + imgW > yw->_screenSize.x) imgW = yw->_screenSize.x - imgX;
+    if (imgY + imgH > nav_y) imgH = nav_y - imgY - vertMenuSpace;
+    if (imgW < 1) imgW = 1;
+    if (imgH < 1) imgH = 1;
+
+    *left = imgX;
+    *top = imgY;
+    *width = imgW;
+    *height = imgH;
+}
+
+static Common::FRect db_screen_rect_to_ndc(NC_STACK_ypaworld *yw, int left, int top, int width, int height)
+{
+    const float halfW = (float)yw->_screenSize.x * 0.5f;
+    const float halfH = (float)yw->_screenSize.y * 0.5f;
+
+    return Common::FRect(
+        ((float)left / halfW) - 1.0f,
+        ((float)top / halfH) - 1.0f,
+        ((float)(left + width) / halfW) - 1.0f,
+        ((float)(top + height) / halfH) - 1.0f);
+}
+
+static void db_draw_frame(SDL_Surface *scr, int left, int top, int width, int height, uint8_t r, uint8_t g, uint8_t b)
+{
+    if ( !scr || width <= 0 || height <= 0 )
+        return;
+
+    int right = left + width - 1;
+    int bottom = top + height - 1;
+
+    GFX::GFXEngine::DrawLine(scr, Common::Line(left, top, right, top), r, g, b);
+    GFX::GFXEngine::DrawLine(scr, Common::Line(right, top, right, bottom), r, g, b);
+    GFX::GFXEngine::DrawLine(scr, Common::Line(right, bottom, left, bottom), r, g, b);
+    GFX::GFXEngine::DrawLine(scr, Common::Line(left, bottom, left, top), r, g, b);
+}
+
+static void db_fill_card_background(SDL_Surface *scr, int left, int top, int width, int height)
+{
+    if ( !scr || width <= 2 || height <= 2 )
+        return;
+
+    SDL_Rect rect;
+    rect.x = left + 1;
+    rect.y = top + 1;
+    rect.w = width - 2;
+    rect.h = height - 2;
+
+    // Solid dark matte: this makes the image preview read as an intentional UI
+    // card instead of a floating PNG inside a mismatched legacy border.
+    SDL_FillRect(scr, &rect, SDL_MapRGB(scr->format, 5, 12, 14));
+}
+
+void UserData::RenderDatabaseEntryMedia()
+{
+    if ( !p_YW || db_tab < 0 || db_tab > 2 )
+        return;
+
+    int left = 0;
+    int top = 0;
+    int width = 0;
+    int height = 0;
+    db_get_entry_image_rect(p_YW, &left, &top, &width, &height);
+
+    SDL_Surface *scr = GFX::Engine.Screen();
+    uint8_t r = p_YW->_iniColors[68].r;
+    uint8_t g = p_YW->_iniColors[68].g;
+    uint8_t b = p_YW->_iniColors[68].b;
+
+    bool hasImage = (db_entry_has_image && db_entry_image && db_entry_image->GetBitmap());
+
+    if ( hasImage && scr )
+        db_fill_card_background(scr, left, top, width, height);
+
+    int drawX = left;
+    int drawY = top;
+    int drawW = width;
+    int drawH = height;
+
+    if ( hasImage )
+    {
+        ResBitmap *bitm = db_entry_image->GetBitmap();
+        const int pad = std::max(8, p_YW->_fontH / 3);
+        int maxW = std::max(1, width - pad * 2);
+        int maxH = std::max(1, height - pad * 2);
+        float scale = std::min((float)maxW / (float)bitm->width, (float)maxH / (float)bitm->height);
+        drawW = std::max(1, (int)((float)bitm->width * scale));
+        drawH = std::max(1, (int)((float)bitm->height * scale));
+        drawX = left + (width - drawW) / 2;
+        drawY = top + (height - drawH) / 2;
+
+        GFX::rstr_arg204 arg;
+        arg.pbitm = bitm;
+        arg.float4 = Common::FRect(-1.0, -1.0, 1.0, 1.0);
+        arg.float14 = db_screen_rect_to_ndc(p_YW, drawX, drawY, drawW, drawH);
+        GFX::Engine.raster_func204(&arg);
+    }
+
+    if ( scr )
+    {
+        // Outer frame: the stable preview card. Missing-image placeholders keep
+        // using this full box so the centered "No image" caption remains visible.
+        db_draw_frame(scr, left, top, width, height, r, g, b);
+
+        // Inner frame: only when an actual PNG is drawn. It follows the real
+        // aspect-fit image rectangle, so non-matching aspect ratios look
+        // deliberate instead of visually offset.
+        if ( hasImage )
+        {
+            uint8_t ir = (uint8_t)std::max(32, (int)r / 2);
+            uint8_t ig = (uint8_t)std::max(32, (int)g / 2);
+            uint8_t ib = (uint8_t)std::max(32, (int)b / 2);
+            db_draw_frame(scr, drawX - 1, drawY - 1, drawW + 2, drawH + 2, ir, ig, ib);
+        }
+    }
 }
 
 void UserData::PopulateDatabasePage()
@@ -2538,8 +3099,8 @@ void UserData::PopulateDatabasePage()
     if ( !database_button )
         return;
 
-    // Fill the available vertical space; each row stays intentionally short.
-    // The selected item detail pane carries the actual gameplay stats.
+    // Fill the available vertical space; rows stay name-only and the right pane
+    // carries the database text/image entry.
     // Keep this in sync with CreateDatabaseControls().
     static const int LINES = 22;
 
@@ -2581,31 +3142,22 @@ void UserData::PopulateDatabasePage()
         if (idx < total)
         {
             int pid = valid[idx];
-            const char *sel = (k == db_selected) ? ">" : " ";
+            const int listWidth = (p_YW->_screenSize.x * 34) / 100;
 
             if (db_tab == 0)
             {
                 const World::TVhclProto &p = vhcls[pid];
-                std::string nm = db_trunc(p.name, 16);
-
-                // Keep the list compact. Weapon name and attack are shown in the detail pane.
-                line = fmt::sprintf("%s[%3d] %-16s HP:%5d DEF:%3d",
-                    sel, pid, nm, p.energy, p.shield);
+                line = db_make_name_row(p.name, pid, k == db_selected, listWidth);
             }
             else if (db_tab == 1)
             {
                 const World::TWeapProto &p = wpns[pid];
-                std::string nm = db_trunc(p.name, 18);
-                int atk_disp = p.energy / 100;
-                line = fmt::sprintf("%s[%3d] %-18s ATK:%3d",
-                    sel, pid, nm, atk_disp);
+                line = db_make_name_row(p.name, pid, k == db_selected, listWidth);
             }
             else
             {
                 const World::TBuildingProto &p = blds[pid];
-                std::string nm = db_trunc(p.Name, 17);
-                line = fmt::sprintf("%s[%3d] %-17s HP:%5d",
-                    sel, pid, nm, p.Energy);
+                line = db_make_name_row(p.Name, pid, k == db_selected, listWidth);
             }
         }
         else
@@ -2624,8 +3176,10 @@ void UserData::PopulateDetailPane()
     if ( !database_button )
         return;
 
-    static const int LINES = 20;
-    static const int DETAIL_LINES = 7;
+    // Must match PopulateDatabasePage()/CreateDatabaseControls().
+    // If this differs, selected rows on page 2+ show the wrong detail entry.
+    static const int LINES = 22;
+    static const int DETAIL_LINES = 14;
 
     const std::vector<World::TVhclProto>    &vhcls = p_YW->GetVhclProtos();
     const std::vector<World::TWeapProto>    &wpns  = p_YW->GetWeaponsProtos();
@@ -2635,14 +3189,24 @@ void UserData::PopulateDetailPane()
     db_collect_valid(this, valid);
     int total = (int)valid.size();
 
-    static const char *detail_hdrs[] = { "-- Unit Details --", "-- Weapon Details --", "-- Building Details --" };
-    database_button->SetText(UIWidgets::DB_DETAIL_HEADER, detail_hdrs[db_tab]);
+    database_button->SetText(UIWidgets::DB_DETAIL_HEADER, "Database");
+    database_button->SetText(UIWidgets::DB_IMAGE_TEXT, " ");
+    database_button->SetText(UIWidgets::DB_STATS_HEADER, " ");
+    for (int k = 0; k < 4; k++)
+        database_button->SetText(UIWidgets::DB_STATS_0 + k, " ");
 
     int abs_idx = db_page * LINES + db_selected;
     if (abs_idx >= total)
     {
         for (int k = 0; k < DETAIL_LINES; k++)
             database_button->SetText(UIWidgets::DB_DETAIL_0 + k, " ");
+        database_button->SetText(UIWidgets::DB_STATS_HEADER, " ");
+        for (int k = 0; k < 4; k++)
+            database_button->SetText(UIWidgets::DB_STATS_0 + k, " ");
+        ReleaseDatabaseEntryImage();
+        db_entry_tab = -1;
+        db_entry_id = -1;
+        db_entry_has_image = false;
         return;
     }
 
@@ -2650,43 +3214,73 @@ void UserData::PopulateDetailPane()
     std::string lines[DETAIL_LINES];
     for (int i = 0; i < DETAIL_LINES; i++) lines[i] = " ";
 
+    std::string entryName;
     if (db_tab == 0)
     {
-        const World::TVhclProto &p = vhcls[pid];
-
-        int wid = (int)p.weapon;
-        int atk_disp = db_display_attack_from_weapon(wpns, wid);
-        std::string wpn_str = db_weapon_name(wpns, wid, 18);
-
-        lines[0] = fmt::sprintf("Name:    %s", db_trunc(p.name, 18));
-        lines[1] = fmt::sprintf("HP:      %d", p.energy);
-        lines[2] = fmt::sprintf("Defense: %d", p.shield);
-        lines[3] = fmt::sprintf("Weapon:  %s", wpn_str);
-        lines[4] = (atk_disp >= 0)
-                    ? fmt::sprintf("Attack:  %d", atk_disp)
-                    : std::string("Attack:  --");
-        lines[5] = fmt::sprintf("Mgun:    %d", (int)p.mgun);
-        lines[6] = fmt::sprintf("Radar:   %d", (int)p.radar);
+        entryName = vhcls[pid].name;
     }
     else if (db_tab == 1)
     {
-        const World::TWeapProto &p = wpns[pid];
+        entryName = wpns[pid].name;
+    }
+    else
+    {
+        entryName = blds[pid].Name;
+    }
 
-        lines[0] = fmt::sprintf("Name:    %s", db_trunc(p.name, 18));
-        lines[1] = fmt::sprintf("Attack:  %d", p.energy / 100);
-        lines[2] = fmt::sprintf("Radius:  %.0f", p.radius);
-        lines[3] = fmt::sprintf("Reload:  %d ms", p.shot_time);
-        lines[4] = fmt::sprintf("Player:  %d ms", p.shot_time_user);
-        lines[5] = fmt::sprintf("Life:    %d ms", p.life_time);
+    database_button->SetText(UIWidgets::DB_DETAIL_HEADER, db_trunc(entryName, 28));
+
+    std::string statLines[4] = { " ", " ", " ", " " };
+    std::string statHeader = "STATS";
+    if ( db_tab == 0 )
+    {
+        const World::TVhclProto &p = vhcls[pid];
+        statLines[0] = "Model: " + db_trunc(db_vehicle_model_display_name(p), 18);
+        statLines[1] = fmt::sprintf("HP: %d", p.energy);
+        statLines[2] = fmt::sprintf("DEF: %d", p.shield);
+        statLines[3] = "Weapon: " + db_trunc(db_weapon_display_name(wpns, p.weapon), 20);
+    }
+    else if ( db_tab == 1 )
+    {
+        const World::TWeapProto &p = wpns[pid];
+        statLines[0] = "Model: " + db_trunc(db_weapon_model_display_name(p), 18);
+        statLines[1] = fmt::sprintf("ATK: %d", p.energy / 100);
+        statLines[2] = std::string("AoE: ") + (db_weapon_has_aoe(p) ? "yes" : "no");
+        statLines[3] = " ";
     }
     else
     {
         const World::TBuildingProto &p = blds[pid];
-
-        lines[0] = fmt::sprintf("Name:  %s", db_trunc(p.Name, 19));
-        lines[1] = fmt::sprintf("HP:    %d", p.Energy);
-        lines[2] = fmt::sprintf("Power: %d", (int)p.Power);
+        statLines[0] = "Model: " + db_trunc(db_building_model_display_name(p), 18);
+        statLines[1] = fmt::sprintf("HP: %d", p.Energy);
+        statLines[2] = fmt::sprintf("Power: %d", p.Power);
+        statLines[3] = fmt::sprintf("Guns: %d", (int)p.Guns.size());
     }
+
+    database_button->SetText(UIWidgets::DB_STATS_HEADER, statHeader);
+    for (int k = 0; k < 4; k++)
+        database_button->SetText(UIWidgets::DB_STATS_0 + k, statLines[k]);
+
+    std::string body;
+    if ( !db_load_database_text(db_tab, pid, &body) || body.empty() )
+        body = "No database entry available.";
+
+    const int wrapColumns = db_detail_text_columns(p_YW);
+    std::vector<std::string> wrapped = db_wrap_text_columns(body, wrapColumns, DETAIL_LINES);
+    for (int i = 0; i < DETAIL_LINES && i < (int)wrapped.size(); i++)
+        lines[i] = wrapped[i].empty() ? std::string(" ") : wrapped[i];
+
+    if ( db_entry_tab != db_tab || db_entry_id != pid )
+    {
+        ReleaseDatabaseEntryImage();
+        db_entry_image = db_load_database_image(db_tab, pid);
+        db_entry_tab = db_tab;
+        db_entry_id = pid;
+        db_entry_has_image = (db_entry_image && db_entry_image->GetBitmap());
+    }
+
+    if ( !db_entry_has_image )
+        database_button->SetText(UIWidgets::DB_IMAGE_TEXT, "No image");
 
     for (int k = 0; k < DETAIL_LINES; k++)
         database_button->SetText(UIWidgets::DB_DETAIL_0 + k, lines[k]);

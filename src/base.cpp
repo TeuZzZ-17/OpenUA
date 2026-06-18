@@ -214,8 +214,6 @@ size_t NC_STACK_base::LoadingFromIFF(IFFile **file)
 
         const IFFile::Context &chunk = mfile->GetCurrentChunk();
 
-
-
         if ( chunk.Is(TAG_FORM, TAG_ROOT) )
         {
             obj_ok = NC_STACK_nucleus::LoadingFromIFF(file);
@@ -818,22 +816,57 @@ bool NC_STACK_base::IsStatic()
 }
 
 
-NC_STACK_base *NC_STACK_base::LoadBaseFromFile(const std::string &fname)
+static NC_STACK_base *LoadBaseFromIFFFile(IFFile *mfile)
 {
     NC_STACK_base *result = NULL;
 
-    IFFile mfile = IFFile::UAOpenIFFile(fname, "rb");
-    if ( !mfile.OK() )
-        return NULL;
-
-    if ( !mfile.parse() )
+    if ( !mfile->parse() )
     {
-        if ( mfile.GetCurrentChunk().Is(TAG_FORM, TAG_MC2) && !mfile.parse() )
+        if ( mfile->GetCurrentChunk().Is(TAG_FORM, TAG_MC2) && !mfile->parse() )
         {
-            if ( mfile.GetCurrentChunk().Is(TAG_FORM, TAG_OBJT) )
-                result = dynamic_cast<NC_STACK_base *>(LoadObjectFromIFF(&mfile));
+            if ( mfile->GetCurrentChunk().Is(TAG_FORM, TAG_OBJT) )
+                result = dynamic_cast<NC_STACK_base *>(NC_STACK_nucleus::LoadObjectFromIFF(mfile));
         }
     }
+
+    return result;
+}
+
+NC_STACK_base *NC_STACK_base::LoadBaseFromFile(const std::string &fname)
+{
+    std::string scanName = fname;
+    std::replace(scanName.begin(), scanName.end(), '\\', '/');
+    bool traceSetBas = !StriCmp(scanName, "rsrc:objects/set.base") || !StriCmp(scanName, "rsrc:objects/set.bas") ||
+                       !StriCmp(scanName, "objects/set.base") || !StriCmp(scanName, "objects/set.bas");
+
+    IFFile mfile = IFFile::UAOpenIFFile(fname, "rb", "NC_STACK_base::LoadBaseFromFile");
+    if ( !mfile.OK() )
+    {
+        if ( traceSetBas )
+            IFFile::FlushSetLooseOverrideReport();
+        return NULL;
+    }
+
+    NC_STACK_base *result = LoadBaseFromIFFFile(&mfile);
+    if ( result )
+    {
+        mfile.ReportSetLooseOverrideUsed();
+        if ( traceSetBas )
+            IFFile::FlushSetLooseOverrideReport();
+        return result;
+    }
+
+    if ( mfile.IsSetLooseOverride() )
+    {
+        mfile.ReportSetLooseOverrideFailed("loose file existed but failed to load; vanilla fallback used.");
+
+        IFFile vanilla = IFFile::UAOpenIFFileVanilla(fname, "rb");
+        if ( vanilla.OK() )
+            result = LoadBaseFromIFFFile(&vanilla);
+    }
+
+    if ( traceSetBas )
+        IFFile::FlushSetLooseOverrideReport();
 
     return result;
 }
