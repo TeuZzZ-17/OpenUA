@@ -2863,11 +2863,14 @@ void GFXEngine::Init()
         Glext::GLLinkProgram(progID);
         
         _colorEffectsShaderProg = TColorEffectsProg(progID);
-        
+
         if (_vbo)
             BindVBOParameters(_colorEffectsShaderProg);
     }
-    
+
+    // OpenUA custom: load the fullscreen visual filter selected in nucleus.ini.
+    // Safe no-op when "Standard"/empty or when the file is missing.
+    ApplyVisualFilterFromConfig();
 }
 
 void GFXEngine::Deinit()
@@ -2918,6 +2921,12 @@ void GFXEngine::Deinit()
     _colorEffectsShaderProg.ID = 0;
     _vsShader = 0;
     _psShader = 0;
+
+    // OpenUA custom: free the visual filter LUT texture
+    if (_visualFilterLut)
+        glDeleteTextures(1, &_visualFilterLut);
+    _visualFilterLut = 0;
+    _visualFilterActive = false;
 }
 
 GFXEngine::~GFXEngine()
@@ -3188,30 +3197,230 @@ bool GFXEngine::LoadPalette(const std::string &palette_ilbm)
 
 std::string GFXEngine::GetPaletteThemeOverridePath(const std::string &palette_ilbm)
 {
-    std::string palettePath = palette_ilbm;
-    for (char &c : palettePath)
-    {
-        if (c == '\\')
-            c = '/';
-    }
-
-    const std::string standardPal = "palette/standard.pal";
-    if (palettePath.size() < standardPal.size() ||
-        StriCmp(palettePath.substr(palettePath.size() - standardPal.size()), standardPal))
-    {
-        return palette_ilbm;
-    }
-
-    std::string theme = System::IniConf::GfxPaletteTheme.Get<std::string>();
-    if (theme.empty() || !StriCmp(theme, "Original"))
-        return palette_ilbm;
-
-    if (theme.size() < 4 || StriCmp(theme.substr(theme.size() - 4), ".pal"))
-        theme += ".pal";
-
-    return "palette/" + theme;
+    // OpenUA: the legacy "palette theme" system used to remap the base SET palette
+    // (palette/standard.pal / slot0) to one of the alternative palettes in Data/Palette
+    // (red.pal, blau.pal, gruen.pal, ...). With loose/extracted SET textures this
+    // remapping no longer works correctly, so the behaviour is intentionally bypassed.
+    //
+    // The base/vanilla palette behaviour is preserved by always returning the original
+    // requested palette: standard.pal (and per-level slot0) load exactly as in vanilla.
+    // Modern color grading is now handled by the fullscreen visual filter (see
+    // SetVisualFilter / DrawFBO and Data/Filters/*.pal), not by swapping the SET palette.
+    return palette_ilbm;
 }
-    
+
+// OpenUA custom: read gfx.visual_filter_strength ("0.0".."1.0") with a safe default.
+static float ReadVisualFilterStrength()
+{
+    float strength = 0.65f;
+    std::string s = System::IniConf::GfxVisualFilterStrength.Get<std::string>();
+    if (!s.empty())
+    {
+        try { strength = std::stof(s); }
+        catch (...) { strength = 0.65f; }
+    }
+    if (strength < 0.0f) strength = 0.0f;
+    if (strength > 1.0f) strength = 1.0f;
+    return strength;
+}
+
+// OpenUA custom: select the fullscreen visual filter.
+// filterName == "Standard"/"None"/"Original"/empty disables the filter (no visual change).
+// Otherwise loads Data/Filters/<name>.pal as a 256-entry RGB LUT (read with the normal
+// ILBM/CMAP loader) and uploads it to a 256x1 GL texture used by the post-process shader.
+void GFXEngine::SetVisualFilter(const std::string &filterName)
+{
+    // Trim whitespace
+    std::string name = filterName;
+    size_t a = name.find_first_not_of(" \t\r\n");
+    if (a == std::string::npos)
+        name.clear();
+    else
+    {
+        size_t b = name.find_last_not_of(" \t\r\n");
+        name = name.substr(a, b - a + 1);
+    }
+
+    float strength = ReadVisualFilterStrength();
+
+    bool disable = name.empty()
+                || !StriCmp(name, "Standard")
+                || !StriCmp(name, "Original")
+                || !StriCmp(name, "None");
+
+    if (disable)
+    {
+        _visualFilterActive = false;
+        _visualFilterStrength = 0.0f;
+        _visualFilterName = "Standard";
+        ypa_log_out("Visual filter: disabled (Standard / no fullscreen filter, rendering unchanged)\n");
+        return;
+    }
+
+    if (!_glext)
+    {
+        // No GL extensions -> no post-process path at all; remember the name but stay inert.
+        _visualFilterActive = false;
+        _visualFilterStrength = 0.0f;
+        _visualFilterName = "Standard";
+        ypa_log_out("Visual filter: [%s] requested but GL extensions are unavailable; filter inactive.\n",
+                    name.c_str());
+        return;
+    }
+
+    // Ensure ".pal" extension
+    std::string file = name;
+    if (file.size() < 4 || StriCmp(file.substr(file.size() - 4), ".pal"))
+        file += ".pal";
+
+    const std::string loadPath = "Filters/" + file;
+
+    std::string oldRsrc = Common::Env.SetPrefix("rsrc", "data:");
+
+    NC_STACK_bitmap *ilbm = Nucleus::CInit<NC_STACK_ilbm>( {
+        {NC_STACK_rsrc::RSRC_ATT_NAME, loadPath},
+        {NC_STACK_bitmap::BMD_ATT_HAS_COLORMAP, (int32_t)1}} );
+
+    Common::Env.SetPrefix("rsrc", oldRsrc);
+
+    UA_PALETTE *pal = ilbm ? ilbm->getBMD_palette() : NULL;
+    if (!pal)
+    {
+        ypa_log_out("WARNING: Visual filter [%s] could not be loaded from [data:%s]; filter disabled.\n",
+                    name.c_str(), loadPath.c_str());
+        if (ilbm)
+            ilbm->Delete();
+        _visualFilterActive = false;
+        _visualFilterStrength = 0.0f;
+        _visualFilterName = "Standard";
+        return;
+    }
+
+    // OpenUA: build a SMOOTH luminance grade from the palette.
+    // A UA .pal CMAP is an arbitrary indexed game palette. Even sorted by luminance it has
+    // harsh chroma jumps (colors of similar luminance but very different hue) which show up
+    // as red/blue speckle. So we:
+    //   1) sort the 256 colors by perceived luminance,
+    //   2) average them into a few equal-count buckets (non-empty by construction),
+    //   3) linearly interpolate the bucket averages back into a 256-entry ramp,
+    //   4) run a small moving-average smoothing pass.
+    // The result is a smooth color-grade ramp, not indexed-palette noise.
+    struct LumColor { float r, g, b, lum; };
+    std::array<LumColor, 256> sorted;
+    for (int i = 0; i < 256; i++)
+    {
+        const SDL_Color &c = (*pal)[i];
+        sorted[i].r = c.r;
+        sorted[i].g = c.g;
+        sorted[i].b = c.b;
+        sorted[i].lum = 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
+    }
+
+    std::sort(sorted.begin(), sorted.end(),
+              [](const LumColor &a, const LumColor &b) { return a.lum < b.lum; });
+
+    // Equal-count buckets averaged into control colors.
+    const int kBuckets = 16;
+    std::array<float, kBuckets> br, bg, bb;
+    for (int k = 0; k < kBuckets; k++)
+    {
+        int start = (k * 256) / kBuckets;
+        int end   = ((k + 1) * 256) / kBuckets;
+        if (end <= start)
+            end = start + 1;
+
+        float sr = 0, sg = 0, sb = 0;
+        for (int j = start; j < end; j++)
+        {
+            sr += sorted[j].r;
+            sg += sorted[j].g;
+            sb += sorted[j].b;
+        }
+        float n = float(end - start);
+        br[k] = sr / n;
+        bg[k] = sg / n;
+        bb[k] = sb / n;
+    }
+
+    // Interpolate the bucket control colors into a continuous 256-entry ramp.
+    float rampR[256], rampG[256], rampB[256];
+    for (int i = 0; i < 256; i++)
+    {
+        float t = (i / 255.0f) * (kBuckets - 1);
+        int lo = (int)t;
+        int hi = lo + 1;
+        if (hi > kBuckets - 1)
+            hi = kBuckets - 1;
+        float f = t - lo;
+        rampR[i] = br[lo] + (br[hi] - br[lo]) * f;
+        rampG[i] = bg[lo] + (bg[hi] - bg[lo]) * f;
+        rampB[i] = bb[lo] + (bb[hi] - bb[lo]) * f;
+    }
+
+    // Moving-average smoothing pass (removes any residual chroma steps).
+    auto clamp8 = [](float v) -> uint8_t
+    {
+        if (v < 0.0f)   v = 0.0f;
+        if (v > 255.0f) v = 255.0f;
+        return (uint8_t)(v + 0.5f);
+    };
+
+    std::vector<uint8_t> lut(256 * 3); // tightly packed r,g,b,r,g,b...
+    const int radius = 3;
+    for (int i = 0; i < 256; i++)
+    {
+        float sr = 0, sg = 0, sb = 0;
+        int cnt = 0;
+        for (int d = -radius; d <= radius; d++)
+        {
+            int j = i + d;
+            if (j < 0)   j = 0;
+            if (j > 255) j = 255;
+            sr += rampR[j];
+            sg += rampG[j];
+            sb += rampB[j];
+            cnt++;
+        }
+        lut[i * 3 + 0] = clamp8(sr / cnt);
+        lut[i * 3 + 1] = clamp8(sg / cnt);
+        lut[i * 3 + 2] = clamp8(sb / cnt);
+    }
+
+    ilbm->Delete();
+
+    if (!_visualFilterLut)
+        glGenTextures(1, &_visualFilterLut);
+
+    // Upload on texture unit 1 so the engine's unit-0 binding cache is never disturbed.
+    Glext::GLActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, _visualFilterLut);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 256, 1, 0, GL_RGB, GL_UNSIGNED_BYTE, lut.data());
+    // Smooth ramp -> GL_LINEAR; clamp at the edges.
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    Glext::GLActiveTexture(GL_TEXTURE0);
+
+    _visualFilterActive = true;
+    _visualFilterStrength = strength;
+    _visualFilterName = name;
+
+    const bool postFxOn = (_colorEffects > 0);
+    ypa_log_out("Visual filter: ENABLED name=[%s] path=[data:%s] strength=%.2f post_process=%s%s\n",
+                name.c_str(), loadPath.c_str(), strength,
+                postFxOn ? "on" : "off",
+                postFxOn ? "" : " (WARNING: gfx.color_effects=0 -> post-process pass disabled, filter not visible)");
+}
+
+// OpenUA custom: apply the visual filter selected in nucleus.ini (gfx.visual_filter).
+void GFXEngine::ApplyVisualFilterFromConfig()
+{
+    SetVisualFilter(System::IniConf::GfxVisualFilter.Get<std::string>());
+}
+
 uint8_t *GFXEngine::MakeScreenCopy(int *ow, int *oh)
 {
     Common::Point res = System::GetResolution();
@@ -4143,19 +4352,35 @@ void GFXEngine::DrawFBO()
     
     if (_colorEffectsShaderProg.MillisecsLoc >= 0)
         Glext::GLUniform1i(_colorEffectsShaderProg.MillisecsLoc, SDL_GetTicks());
-    
+
+    // OpenUA custom: fullscreen visual filter LUT.
+    // Strength 0 => shader passthrough (identical to vanilla post-process output).
+    if (_colorEffectsShaderProg.FilterStrengthLoc >= 0)
+    {
+        float strength = (_visualFilterActive && _visualFilterLut) ? _visualFilterStrength : 0.0f;
+        Glext::GLUniform1f(_colorEffectsShaderProg.FilterStrengthLoc, strength);
+
+        if (strength > 0.0f && _colorEffectsShaderProg.FilterLutLoc >= 0)
+        {
+            Glext::GLUniform1i(_colorEffectsShaderProg.FilterLutLoc, 1);
+            Glext::GLActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D, _visualFilterLut);
+            Glext::GLActiveTexture(GL_TEXTURE0); // engine assumes unit 0 is active
+        }
+    }
+
     static std::array<TVertex, 4> vtx = {
         GFX::TVertex( vec3f(-1.0,  1.0, 0.0), tUtV(0.0, 1.0) ),
         GFX::TVertex( vec3f(-1.0, -1.0, 0.0), tUtV(0.0, 0.0) ),
         GFX::TVertex( vec3f( 1.0, -1.0, 0.0), tUtV(1.0, 0.0) ),
         GFX::TVertex( vec3f( 1.0,  1.0, 0.0), tUtV(1.0, 1.0) )
     };
-    
+
     DrawVtxQuad(vtx);
-    
+
     _states = save;
 }
- 
+
 void GFXEngine::SetFBOBlending(int mode)
 {
     _fboBlend = mode;
@@ -4466,6 +4691,9 @@ TColorEffectsProg::TColorEffectsProg(uint32_t id)
     RandLoc = Glext::GLGetUniformLocation(ID, "randval");
     ScrSizeLoc = Glext::GLGetUniformLocation(ID, "screenSize");
     MillisecsLoc = Glext::GLGetUniformLocation(ID, "millisecs");
+    // OpenUA custom: fullscreen visual filter
+    FilterLutLoc = Glext::GLGetUniformLocation(ID, "filterLut");
+    FilterStrengthLoc = Glext::GLGetUniformLocation(ID, "filterStrength");
 }
 
 }

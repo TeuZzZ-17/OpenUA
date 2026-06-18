@@ -4321,7 +4321,7 @@ bool NC_STACK_ypaworld::CreateVideoControls()
     btn_64arg.button_type = NC_STACK_button::TYPE_BUTTON;
     btn_64arg.xpos = buttonsSpace + v294 * 0.4;
     btn_64arg.width = v294 * 0.6;
-    btn_64arg.caption = "Original";
+    btn_64arg.caption = "Standard"; // OpenUA: Atmosphere now selects a fullscreen visual filter
     btn_64arg.caption2.clear();
     btn_64arg.downCode = 0;
     btn_64arg.upCode = 1136;
@@ -6526,7 +6526,7 @@ void NC_STACK_ypaworld::UpdateGameShell()
     _GameShell->video_button->SetState(&v16);
 
     v16.butID = 1174;
-    v16.field_4 = (!System::IniConf::GamePlayerRoboAIBehavior.Get<bool>()) + 1;
+    v16.field_4 = (!System::IniConf::GameRoboPlayerAIBehavior.Get<bool>()) + 1;
     _GameShell->video_button->SetState(&v16);
 
     v16.butID = 1175;

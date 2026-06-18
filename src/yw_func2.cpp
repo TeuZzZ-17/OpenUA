@@ -38,6 +38,10 @@ static constexpr int SETTINGS_CHANGE_PALETTE_THEME = 0x2000;
 static constexpr int SETTINGS_CHANGE_PLAYER_ROBO_AI_BEHAVIOR = 0x4000;
 static constexpr int SETTINGS_CHANGE_SPECTATOR_MODE = 0x8000;
 
+// OpenUA: the "Atmosphere" dropdown now selects a modern fullscreen visual filter from
+// Data/Filters/*.pal (see GFXEngine::SetVisualFilter), NOT the legacy SET palette-theme.
+// The existing paletteTheme* members/functions are reused as the filter selector to keep
+// the menu infrastructure unchanged. An empty selection means "Standard" (no filter).
 static std::string NormalizePaletteThemeName(std::string theme)
 {
     size_t first = theme.find_first_not_of(" \t\r\n");
@@ -47,7 +51,8 @@ static std::string NormalizePaletteThemeName(std::string theme)
     size_t last = theme.find_last_not_of(" \t\r\n");
     theme = theme.substr(first, last - first + 1);
 
-    if (!StriCmp(theme, "Original"))
+    // "Standard" is the new sentinel; "Original" kept for backward compatibility.
+    if (!StriCmp(theme, "Standard") || !StriCmp(theme, "Original"))
         return std::string();
 
     return theme;
@@ -55,12 +60,12 @@ static std::string NormalizePaletteThemeName(std::string theme)
 
 static std::string PaletteThemeStorageValue(const std::string &theme)
 {
-    return theme.empty() ? std::string("Original") : theme;
+    return theme.empty() ? std::string("Standard") : theme;
 }
 
 static bool LoadPaletteThemeCache(std::string *theme)
 {
-    FSMgr::FileHandle *fil = uaOpenFileAlloc("env:palette_theme.txt", "r");
+    FSMgr::FileHandle *fil = uaOpenFileAlloc("env:visual_filter.txt", "r");
     if (!fil)
         return false;
 
@@ -80,7 +85,7 @@ static bool LoadPaletteThemeCache(std::string *theme)
 
 static void SavePaletteThemeCache(const std::string &theme)
 {
-    FSMgr::FileHandle *fil = uaOpenFileAlloc("env:palette_theme.txt", "w");
+    FSMgr::FileHandle *fil = uaOpenFileAlloc("env:visual_filter.txt", "w");
     if (!fil)
         return;
 
@@ -91,7 +96,7 @@ static void SavePaletteThemeCache(const std::string &theme)
 static std::string PaletteThemeDisplayName(const std::string &fileName)
 {
     if (fileName.empty())
-        return "Original";
+        return "Standard";
 
     std::string name = fileName;
     if (name.size() >= 4 && !StriCmp(name.substr(name.size() - 4), ".pal"))
@@ -1158,20 +1163,24 @@ void UserData::sb_0x46aa8c()
 
     if ( _settingsChangeOptions & SETTINGS_CHANGE_PALETTE_THEME )
     {
+        // OpenUA: apply & persist the selected fullscreen visual filter (Data/Filters/*.pal).
         paletteTheme = confPaletteTheme;
-        System::IniConf::GfxPaletteTheme.Value = PaletteThemeStorageValue(paletteTheme);
+        System::IniConf::GfxVisualFilter.Value = PaletteThemeStorageValue(paletteTheme);
         SavePaletteThemeCache(paletteTheme);
 
+        // Apply immediately so the change is visible without restarting.
+        GFX::Engine.SetVisualFilter(PaletteThemeStorageValue(paletteTheme));
+
         if ( !SavePaletteThemeToNucleusIni() )
-            ypa_log_out("WARNING: Could not save gfx.palette_theme to nucleus.ini\n");
+            ypa_log_out("WARNING: Could not save gfx.visual_filter to nucleus.ini\n");
     }
 
     if ( _settingsChangeOptions & SETTINGS_CHANGE_PLAYER_ROBO_AI_BEHAVIOR )
     {
-        System::IniConf::GamePlayerRoboAIBehavior.Value = confPlayerRoboAIBehavior;
+        System::IniConf::GameRoboPlayerAIBehavior.Value = confPlayerRoboAIBehavior;
 
         if ( !SavePlayerRoboAIBehaviorToNucleusIni() )
-            ypa_log_out("WARNING: Could not save game.player_robo_ai_behavior to nucleus.ini\n");
+            ypa_log_out("WARNING: Could not save game.robo_player_ai_behavior to nucleus.ini\n");
     }
 
     if ( _settingsChangeOptions & SETTINGS_CHANGE_SPECTATOR_MODE )
@@ -1599,7 +1608,7 @@ void UserData::ShowOptionsMenu()
 
     RefreshPaletteThemes();
     confPaletteTheme = paletteTheme;
-    confPlayerRoboAIBehavior = System::IniConf::GamePlayerRoboAIBehavior.Get<bool>();
+    confPlayerRoboAIBehavior = System::IniConf::GameRoboPlayerAIBehavior.Get<bool>();
     confSpectatorMode = System::IniConf::GameSpectatorMode.Get<bool>();
     UpdatePaletteThemeText();
 
@@ -1949,7 +1958,7 @@ void UserData::sub_46A3C0()
     _settingsChangeOptions = 0;
     EnvMode = ENVMODE_TITLE;
     confPaletteTheme = paletteTheme;
-    confPlayerRoboAIBehavior = System::IniConf::GamePlayerRoboAIBehavior.Get<bool>();
+    confPlayerRoboAIBehavior = System::IniConf::GameRoboPlayerAIBehavior.Get<bool>();
     confSpectatorMode = System::IniConf::GameSpectatorMode.Get<bool>();
 
     int gfxId = GFX::GFXEngine::Instance.GetGfxModeIndex(p_YW->_gfxMode);
@@ -2069,7 +2078,9 @@ void UserData::RefreshPaletteThemes()
     paletteThemes.clear();
     paletteThemes.push_back(std::string());
 
-    FSMgr::DirIter dir = uaOpenDir("data:palette");
+    // OpenUA: enumerate modern fullscreen filters from Data/Filters/*.pal.
+    // Missing folder simply yields the single "Standard" (none) entry -> identical rendering.
+    FSMgr::DirIter dir = uaOpenDir("data:Filters");
     FSMgr::iNode *node = NULL;
 
     while (dir.getNext(&node))
@@ -2105,7 +2116,7 @@ void UserData::RefreshPaletteThemes()
     }
 
     if (!hasThemeSource)
-        currentTheme = NormalizePaletteThemeName(System::IniConf::GfxPaletteTheme.Get<std::string>());
+        currentTheme = NormalizePaletteThemeName(System::IniConf::GfxVisualFilter.Get<std::string>());
 
     bool found = currentTheme.empty();
     for (const std::string &theme : paletteThemes)
@@ -2148,7 +2159,8 @@ void UserData::CyclePaletteTheme()
 
 bool UserData::SavePaletteThemeToNucleusIni()
 {
-    const std::string key = "gfx.palette_theme";
+    // OpenUA: the Atmosphere selector persists the modern visual filter name.
+    const std::string key = "gfx.visual_filter";
     const std::string newLine = key + " = " + PaletteThemeStorageValue(paletteTheme);
 
     std::vector<std::string> lines;
@@ -2200,8 +2212,8 @@ bool UserData::SavePaletteThemeToNucleusIni()
 
 bool UserData::SavePlayerRoboAIBehaviorToNucleusIni()
 {
-    const std::string key = "game.player_robo_ai_behavior";
-    const std::string newLine = key + std::string(" = ") + (System::IniConf::GamePlayerRoboAIBehavior.Get<bool>() ? "yes" : "no");
+    const std::string key = "game.robo_player_ai_behavior";
+    const std::string newLine = key + std::string(" = ") + (System::IniConf::GameRoboPlayerAIBehavior.Get<bool>() ? "yes" : "no");
 
     std::vector<std::string> lines;
     bool replaced = false;

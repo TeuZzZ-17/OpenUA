@@ -35,6 +35,9 @@ Common::Ini::Key IniConf::GfxXRes("gfx.xres", Common::Ini::KT_DIGIT);
 Common::Ini::Key IniConf::GfxYRes("gfx.yres", Common::Ini::KT_DIGIT);
 Common::Ini::Key IniConf::GfxPalette("gfx.palette", Common::Ini::KT_WORD);
 Common::Ini::Key IniConf::GfxPaletteTheme("gfx.palette_theme", Common::Ini::KT_WORD);
+// OpenUA custom: modern fullscreen visual filter (replaces the legacy palette-theme remap).
+Common::Ini::Key IniConf::GfxVisualFilter("gfx.visual_filter", Common::Ini::KT_WORD, std::string("Standard"));
+Common::Ini::Key IniConf::GfxVisualFilterStrength("gfx.visual_filter_strength", Common::Ini::KT_WORD, std::string("0.65"));
 Common::Ini::Key IniConf::GfxDisplay("gfx.display", Common::Ini::KT_WORD);
 Common::Ini::Key IniConf::GfxDisplay2("gfx.display2", Common::Ini::KT_WORD);
 
@@ -198,7 +201,7 @@ Common::Ini::Key IniConf::GameDebug("game.debug", Common::Ini::KT_BOOL);
 // Yparobo keys
 Common::Ini::Key IniConf::GameNewAI("game.newai",    Common::Ini::KT_BOOL, true);
 Common::Ini::Key IniConf::GameTimeLine("game.timeline", Common::Ini::KT_DIGIT, (int32_t)600000);
-Common::Ini::Key IniConf::GamePlayerRoboAIBehavior("game.player_robo_ai_behavior", Common::Ini::KT_BOOL, false);
+Common::Ini::Key IniConf::GameRoboPlayerAIBehavior("game.robo_player_ai_behavior", Common::Ini::KT_BOOL, false);
 Common::Ini::Key IniConf::GameSpectatorMode("game.spectator_mode", Common::Ini::KT_BOOL, false);
 Common::Ini::Key IniConf::GameSpectatorVehicleID("game.spectator_vehicle_id", Common::Ini::KT_DIGIT, (int32_t)0);
 Common::Ini::Key IniConf::GameSpectatorOwner1AI("game.spectator_owner1_ai", Common::Ini::KT_STRING, std::string("balanced"));
@@ -247,6 +250,8 @@ void IniConf::Init()
         , &GfxYRes
         , &GfxPalette
         , &GfxPaletteTheme
+        , &GfxVisualFilter
+        , &GfxVisualFilterStrength
         , &GfxDisplay
         , &GfxDisplay2
 
@@ -384,7 +389,7 @@ void IniConf::Init()
 
         , &GameNewAI
         , &GameTimeLine
-        , &GamePlayerRoboAIBehavior
+        , &GameRoboPlayerAIBehavior
         , &GameSpectatorMode
         , &GameSpectatorVehicleID
         , &GameSpectatorOwner1AI

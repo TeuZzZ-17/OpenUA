@@ -322,7 +322,10 @@ struct TColorEffectsProg : TShaderProg
     int32_t RandLoc = -1;
     int32_t ScrSizeLoc = -1;
     int32_t MillisecsLoc = -1;
-    
+    // OpenUA custom: fullscreen visual filter (LUT indexed by luminance)
+    int32_t FilterLutLoc = -1;
+    int32_t FilterStrengthLoc = -1;
+
     TColorEffectsProg() = default;
     TColorEffectsProg(uint32_t id);
 };
@@ -559,6 +562,15 @@ public:
     bool LoadPalette(const std::string &palette_ilbm);
     std::string GetPaletteThemeOverridePath(const std::string &palette_ilbm);
     SDL_Cursor *LoadCursor(const std::string &name);
+
+    // OpenUA custom: modern fullscreen visual filter (Data/Filters/*.pal used as a
+    // luminance-indexed LUT applied on the final post-process pass). Vanilla-safe:
+    // "Standard"/empty/strength 0 produce no change at all.
+    void SetVisualFilter(const std::string &filterName);
+    void ApplyVisualFilterFromConfig();
+    bool IsVisualFilterActive() const { return _visualFilterActive; }
+    float GetVisualFilterStrength() const { return _visualFilterStrength; }
+    const std::string &GetVisualFilterName() const { return _visualFilterName; }
     
     
     static SDL_PixelFormat *GetPixelFormat() { return _pixfmt; };
@@ -879,7 +891,13 @@ protected:
     uint32_t _psShader = 0;
     uint32_t _vsShader = 0;
     TColorEffectsProg _colorEffectsShaderProg;
-    
+
+    // OpenUA custom: fullscreen visual filter state
+    uint32_t _visualFilterLut = 0;        // GL texture, 256x1 RGB LUT
+    float _visualFilterStrength = 0.0f;   // effective blend strength (0 => off)
+    bool _visualFilterActive = false;     // true only when a real filter LUT is loaded
+    std::string _visualFilterName;        // selected filter file name ("Standard" when none)
+
     static std::vector<TGFXDeviceInfo> _devices;
 };
     

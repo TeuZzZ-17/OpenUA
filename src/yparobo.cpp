@@ -1459,7 +1459,7 @@ bool NC_STACK_yparobo::TryStartPlayerMobileMove(update_msg *arg)
     // The vanilla teleport command spends only the beam / movement battery,
     // and that beam cost is still the authoritative relocation price.
     //
-    // However, with player_robo_ai_behavior enabled the trip takes time.  If
+    // However, with robo_player_ai_behavior enabled the trip takes time.  If
     // only _roboEnergyMove is drained while the Host Station travels, the
     // vanilla player fill-mode balancer will later pull energy/creation down
     // in one visible lump when the movement finishes and beam rebalancing is
@@ -1505,7 +1505,7 @@ bool NC_STACK_yparobo::ShouldUsePlayerRoboIdleMotion() const
 {
     // Vanilla disables robo_does_twist / robo_does_flux while the player is
     // inside the Host Station or one of its guns, because the player Robo uses
-    // the simple wallow() idle path. In player_robo_ai_behavior mode we deliberately
+    // the simple wallow() idle path. In robo_player_ai_behavior mode we deliberately
     // allow the real Robo idle motion too, so the player Host Station behaves
     // like AI Host Stations when standing still.
     return _playerRoboAIBehavior &&
@@ -6514,7 +6514,7 @@ void NC_STACK_yparobo::setBACT_inputting(bool inpt)
         _world->setYW_userHostStation(this);
 
         _roboState |= ROBOSTATE_PLAYERROBO;
-        _playerRoboAIBehavior = System::IniConf::GamePlayerRoboAIBehavior.Get<bool>();
+        _playerRoboAIBehavior = System::IniConf::GameRoboPlayerAIBehavior.Get<bool>();
         if ( _playerRoboAIBehavior )
             CapturePlayerMobileCockpitPitchBase();
     }

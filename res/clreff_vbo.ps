@@ -18,8 +18,20 @@ in vec2 texCoords;
 uniform vec3 normclr;
 uniform vec3 invclr;
 
+// OpenUA custom: fullscreen visual filter (256x1 LUT indexed by luminance)
+uniform sampler2D filterLut;
+uniform float filterStrength;
+
 void main()
 {
     vec4 clr = texture2D(texture, texCoords);
-    gl_FragColor = vec4( clr.xyz * normclr + (1.0 - clr.xyz) * invclr, clr.w);
+    vec3 base = clr.xyz * normclr + (1.0 - clr.xyz) * invclr;
+    if (filterStrength > 0.0)
+    {
+        float lum = clamp(dot(base, vec3(0.2126, 0.7152, 0.0722)), 0.0, 1.0);
+        float lutX = (lum * 255.0 + 0.5) / 256.0; // sample at texel center
+        vec3 graded = texture2D(filterLut, vec2(lutX, 0.5)).rgb;
+        base = mix(base, graded, filterStrength);
+    }
+    gl_FragColor = vec4(base, clr.w);
 }

@@ -136,9 +136,8 @@ void sb_0x44ca90__sub2(NC_STACK_ypaworld *yw, TLevelDescription *mapp)
     {
         if (!mapp->Palettes[0].empty())
         {
-            if (yw->_GameShell)
-                System::IniConf::GfxPaletteTheme.Value = yw->_GameShell->paletteTheme.empty() ? std::string("Original") : yw->_GameShell->paletteTheme;
-
+            // OpenUA: legacy palette-theme remap is bypassed (GetPaletteThemeOverridePath is a
+            // passthrough), so the level base palette (slot0) always loads as in vanilla.
             std::string palettePath = GFX::Engine.GetPaletteThemeOverridePath(mapp->Palettes[0]);
             std::string oldRsrc;
             if (palettePath != mapp->Palettes[0])

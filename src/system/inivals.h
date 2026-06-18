@@ -42,7 +42,9 @@ public:
     static Common::Ini::Key GfxXRes;
     static Common::Ini::Key GfxYRes;
     static Common::Ini::Key GfxPalette;
-    static Common::Ini::Key GfxPaletteTheme;
+    static Common::Ini::Key GfxPaletteTheme;       // DEPRECATED/inert: legacy SET palette-theme remap (bypassed)
+    static Common::Ini::Key GfxVisualFilter;       // OpenUA: fullscreen visual filter name (Data/Filters/*.pal), "Standard" = none
+    static Common::Ini::Key GfxVisualFilterStrength; // OpenUA: visual filter blend strength 0.0..1.0 (default 0.65)
     static Common::Ini::Key GfxDisplay;
     static Common::Ini::Key GfxDisplay2;
     
@@ -198,7 +200,7 @@ public:
     
     static Common::Ini::Key GameNewAI;
     static Common::Ini::Key GameTimeLine;
-    static Common::Ini::Key GamePlayerRoboAIBehavior;
+    static Common::Ini::Key GameRoboPlayerAIBehavior;
     static Common::Ini::Key GameSpectatorMode;
     static Common::Ini::Key GameSpectatorVehicleID;
     static Common::Ini::Key GameSpectatorOwner1AI;
