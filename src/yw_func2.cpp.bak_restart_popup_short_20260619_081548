@@ -4417,7 +4417,7 @@ void UserData::GameShellUiHandleInput()
         else if ( r.code == 1304 ) // VSync cycle
         {
             if ( !(_settingsChangeOptions & SETTINGS_CHANGE_RESTART_REQUIRED_GRAPHICS) )
-                ShowMenuMsgBox(0, "Restart Required", "Restart game to apply.", true);
+                ShowMenuMsgBox(0, "Restart Required", "Restart the game to apply VSync, FPS Limit or Blending changes.", true);
             confVsync = CycleVsync(confVsync);
             video_button->SetText(1181, VsyncLabel(confVsync));
             _settingsChangeOptions |= SETTINGS_CHANGE_VSYNC;
@@ -4425,7 +4425,7 @@ void UserData::GameShellUiHandleInput()
         else if ( r.code == 1305 ) // FPS Limit cycle
         {
             if ( !(_settingsChangeOptions & SETTINGS_CHANGE_RESTART_REQUIRED_GRAPHICS) )
-                ShowMenuMsgBox(0, "Restart Required", "Restart game to apply.", true);
+                ShowMenuMsgBox(0, "Restart Required", "Restart the game to apply VSync, FPS Limit or Blending changes.", true);
             confMaxFps = CycleFps(confMaxFps);
             video_button->SetText(1182, std::to_string(confMaxFps));
             _settingsChangeOptions |= SETTINGS_CHANGE_MAXFPS;
@@ -4433,7 +4433,7 @@ void UserData::GameShellUiHandleInput()
         else if ( r.code == 1306 ) // Blending cycle
         {
             if ( !(_settingsChangeOptions & SETTINGS_CHANGE_RESTART_REQUIRED_GRAPHICS) )
-                ShowMenuMsgBox(0, "Restart Required", "Restart game to apply.", true);
+                ShowMenuMsgBox(0, "Restart Required", "Restart the game to apply VSync, FPS Limit or Blending changes.", true);
             confBlending = CycleBlending(confBlending);
             video_button->SetText(1183, BlendingLabel(confBlending));
             _settingsChangeOptions |= SETTINGS_CHANGE_BLENDING;

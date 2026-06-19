@@ -3497,8 +3497,8 @@ void NC_STACK_ypaworld::RenderGame(base_64arg *bs64, int a2)
     }
     else
     {
-        // Classic-sky safe clip: draw slightly past the full-black fog end, but stay inside the vanilla sky dome.
-        rndrs.maxZ = 3300.0;
+        // Dark-horizon safe clip: draw a little past the fog end, but stay inside the vanilla sky dome.
+        rndrs.maxZ = 3500.0;
     }
 
     int v6 = _renderSectors - 1;

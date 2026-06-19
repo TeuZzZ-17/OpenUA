@@ -43,8 +43,6 @@ static constexpr int SETTINGS_CHANGE_VSYNC                  = 0x20000;
 static constexpr int SETTINGS_CHANGE_MAXFPS                 = 0x40000;
 static constexpr int SETTINGS_CHANGE_BLENDING              = 0x80000;
 static constexpr int SETTINGS_CHANGE_MOVIE_PLAYER          = 0x100000;
-static constexpr int SETTINGS_CHANGE_RESTART_REQUIRED_GRAPHICS =
-    SETTINGS_CHANGE_VSYNC | SETTINGS_CHANGE_MAXFPS | SETTINGS_CHANGE_BLENDING;
 
 // OpenUA: cycle-button value tables for the modern graphics options.
 static const int kFpsLimitValues[] = { 30, 60, 120, 144, 165, 240 };
@@ -4416,24 +4414,18 @@ void UserData::GameShellUiHandleInput()
         }
         else if ( r.code == 1304 ) // VSync cycle
         {
-            if ( !(_settingsChangeOptions & SETTINGS_CHANGE_RESTART_REQUIRED_GRAPHICS) )
-                ShowMenuMsgBox(0, "Restart Required", "Restart game to apply.", true);
             confVsync = CycleVsync(confVsync);
             video_button->SetText(1181, VsyncLabel(confVsync));
             _settingsChangeOptions |= SETTINGS_CHANGE_VSYNC;
         }
         else if ( r.code == 1305 ) // FPS Limit cycle
         {
-            if ( !(_settingsChangeOptions & SETTINGS_CHANGE_RESTART_REQUIRED_GRAPHICS) )
-                ShowMenuMsgBox(0, "Restart Required", "Restart game to apply.", true);
             confMaxFps = CycleFps(confMaxFps);
             video_button->SetText(1182, std::to_string(confMaxFps));
             _settingsChangeOptions |= SETTINGS_CHANGE_MAXFPS;
         }
         else if ( r.code == 1306 ) // Blending cycle
         {
-            if ( !(_settingsChangeOptions & SETTINGS_CHANGE_RESTART_REQUIRED_GRAPHICS) )
-                ShowMenuMsgBox(0, "Restart Required", "Restart game to apply.", true);
             confBlending = CycleBlending(confBlending);
             video_button->SetText(1183, BlendingLabel(confBlending));
             _settingsChangeOptions |= SETTINGS_CHANGE_BLENDING;
