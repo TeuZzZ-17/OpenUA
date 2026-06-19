@@ -640,6 +640,9 @@ public:
     bool enemyIndicator;
     bool confEnemyIndicator;
 
+    // NOTE: these paletteTheme* members are reused as the modern visual-filter selector
+    // (Data/Filters/*.pal). The legacy SET palette-theme remap is bypassed; the old name
+    // is kept to avoid churn. See yw_func2.cpp and GfxVisualFilter.
     std::vector<std::string> paletteThemes;
     std::string paletteTheme;
     std::string confPaletteTheme;
@@ -2918,7 +2921,7 @@ public:
     TNetGameEvent _netEvent;
     
     
-    float _vehicleSectorRatio = 0.0; // not used
+    float _vehicleSectorRatio = 0.0; // inactive: parsed (vehicle_sector_ratio) but never read; kept for INI compat
     uint32_t _defaultUnitLimit = 0;
     uint32_t _defaultUnitLimitArg = 0;
     uint32_t _defaultUnitLimitType = 0;
@@ -2949,6 +2952,7 @@ public:
     bool _allowMultiBuildLevel = false;
     
     /* Fix original bug */
+    // inactive: parsed (fix_weapon_radius) but never read; per-class radii disabled, collision uses weapon.radius
     bool _fixWeaponRadius = false;
     
     /* */

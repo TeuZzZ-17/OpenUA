@@ -99,6 +99,8 @@ public:
                                float sectorRadius, int sectorEnergy, int falloff);
     virtual void SetAoeUnitPush(int push);
     virtual void SetDirectPush(int push);
+    // Per-class weapon radius API: inactive (always set to 0.0) but kept for ABI/object-system
+    // compatibility. Collision uses weapon.radius only. Do not remove. See GetRadius* below.
     virtual void SetRadiusHeli(float);
     virtual void SetRadiusTank(float);
     virtual void SetRadiusFlyer(float);
@@ -116,6 +118,8 @@ public:
     virtual int GetPowerTank();
     virtual int GetPowerFlyer();
     virtual int GetPowerRobo();
+    // Inactive per-class weapon radius accessors (currently no callers); kept for
+    // ABI/object-system compatibility alongside SetRadius* above. Do not remove.
     virtual float GetRadiusHeli();
     virtual float GetRadiusTank();
     virtual float GetRadiusFlyer();

@@ -6952,7 +6952,10 @@ static bool ypabact_FireMortarShell(NC_STACK_ypabact *unit, int weaponId, const 
         driftVec.z = sin(ang) * wproto.mortar_inflight_drift;
     }
 
-    shell->SetupMortarShell(launchPos, landing, wproto.mortar_flight_time, wproto.mortar_arc_height, driftVec);
+    // Use the same guarded flight time the shell clamps to internally, so the
+    // trajectory and the lifetime/marker below agree even if mortar_flight_time <= 0.
+    int flight = wproto.mortar_flight_time > 0 ? wproto.mortar_flight_time : 2500;
+    shell->SetupMortarShell(launchPos, landing, flight, wproto.mortar_arc_height, driftVec);
 
     shell->_kidRef.Detach();
     shell->_parent = NULL;
@@ -6963,8 +6966,7 @@ static bool ypabact_FireMortarShell(NC_STACK_ypabact *unit, int weaponId, const 
 
     SFXEngine::SFXe.startSound(&shell->_soundcarrier, 1);
 
-    // Make sure the shell outlives its scheduled flight time.
-    int flight = wproto.mortar_flight_time > 0 ? wproto.mortar_flight_time : 2500;
+    // Make sure the shell outlives its scheduled flight time (reuses guarded flight above).
     if ( shell->GetLifeTime() < flight + 1000 )
         shell->SetLifeTime(flight + 1000);
 
@@ -7582,8 +7584,11 @@ static bool ypabact_LaserTargetInList(NC_STACK_ypabact *target, const std::vecto
     return std::find(targets.begin(), targets.end(), target) != targets.end();
 }
 
-static bool ypabact_IsLaserMultiTargetCandidate(NC_STACK_ypabact *shooter, NC_STACK_ypabact *unit,
-                                                bool friendlyTargets)
+// Shared owner/validity filter for laser secondary targets. Used both for direct
+// multi-target beams and for chain jumps (identical logic); "friendly" selects
+// same-owner vs enemy-owner targets.
+static bool ypabact_IsLaserSecondaryTargetCandidate(NC_STACK_ypabact *shooter, NC_STACK_ypabact *unit,
+                                                    bool friendly)
 {
     if ( !ypabact_IsLaserDamageTarget(shooter, unit) )
         return false;
@@ -7591,7 +7596,7 @@ static bool ypabact_IsLaserMultiTargetCandidate(NC_STACK_ypabact *shooter, NC_ST
     if ( !shooter || unit->_owner == World::OWNER_0 )
         return false;
 
-    if ( friendlyTargets )
+    if ( friendly )
         return unit->_owner == shooter->_owner;
 
     return unit->_owner != shooter->_owner;
@@ -7627,7 +7632,7 @@ static NC_STACK_ypabact *ypabact_FindNearestLaserMultiTarget(NC_STACK_ypabact *s
 
             for (NC_STACK_ypabact *bct : cell.unitsList)
             {
-                if ( !ypabact_IsLaserMultiTargetCandidate(shooter, bct, friendlyTargets) )
+                if ( !ypabact_IsLaserSecondaryTargetCandidate(shooter, bct, friendlyTargets) )
                     continue;
                 if ( ypabact_LaserTargetInList(bct, excluded) )
                     continue;
@@ -7649,20 +7654,6 @@ static NC_STACK_ypabact *ypabact_FindNearestLaserMultiTarget(NC_STACK_ypabact *s
     }
 
     return best;
-}
-
-static bool ypabact_IsLaserChainCandidate(NC_STACK_ypabact *shooter, NC_STACK_ypabact *unit, bool friendlyChain)
-{
-    if ( !ypabact_IsLaserDamageTarget(shooter, unit) )
-        return false;
-
-    if ( !shooter || unit->_owner == World::OWNER_0 )
-        return false;
-
-    if ( friendlyChain )
-        return unit->_owner == shooter->_owner;
-
-    return unit->_owner != shooter->_owner;
 }
 
 static NC_STACK_ypabact *ypabact_FindNearestLaserChainUnit(NC_STACK_ypabact *shooter, const vec3d &origin,
@@ -7691,7 +7682,7 @@ static NC_STACK_ypabact *ypabact_FindNearestLaserChainUnit(NC_STACK_ypabact *sho
 
             for (NC_STACK_ypabact *bct : cell.unitsList)
             {
-                if ( !ypabact_IsLaserChainCandidate(shooter, bct, friendlyChain) )
+                if ( !ypabact_IsLaserSecondaryTargetCandidate(shooter, bct, friendlyChain) )
                     continue;
                 if ( ypabact_LaserTargetInList(bct, excluded) )
                     continue;
@@ -7731,7 +7722,7 @@ static void ypabact_AddLaserMultiTargetRequests(NC_STACK_ypabact *shooter, const
 
     for (const NC_STACK_ypabact::TLaserBeamRequest &request : *requests)
     {
-        if ( request.target && ypabact_IsLaserMultiTargetCandidate(shooter, request.target, friendlyTargets) &&
+        if ( request.target && ypabact_IsLaserSecondaryTargetCandidate(shooter, request.target, friendlyTargets) &&
              !ypabact_LaserTargetInList(request.target, selectedTargets) )
             selectedTargets.push_back(request.target);
     }
