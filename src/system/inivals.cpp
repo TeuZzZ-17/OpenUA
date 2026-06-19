@@ -37,7 +37,7 @@ Common::Ini::Key IniConf::GfxPalette("gfx.palette", Common::Ini::KT_WORD);
 Common::Ini::Key IniConf::GfxPaletteTheme("gfx.palette_theme", Common::Ini::KT_WORD);
 // OpenUA custom: modern fullscreen visual filter (replaces the legacy palette-theme remap).
 Common::Ini::Key IniConf::GfxVisualFilter("gfx.visual_filter", Common::Ini::KT_WORD, std::string("Standard"));
-Common::Ini::Key IniConf::GfxVisualFilterStrength("gfx.visual_filter_strength", Common::Ini::KT_WORD, std::string("0.65"));
+Common::Ini::Key IniConf::GfxVisualFilterStrength("gfx.visual_filter_strength", Common::Ini::KT_WORD, std::string("0.30"));
 Common::Ini::Key IniConf::GfxDisplay("gfx.display", Common::Ini::KT_WORD);
 Common::Ini::Key IniConf::GfxDisplay2("gfx.display2", Common::Ini::KT_WORD);
 
@@ -60,6 +60,9 @@ Common::Ini::Key IniConf::GfxColorEffPower15("gfx.color_eff_pwr[15]", Common::In
 Common::Ini::Key IniConf::GfxColorEffPower16("gfx.color_eff_pwr[16]", Common::Ini::KT_DIGIT, (int32_t)100);
 
 Common::Ini::Key IniConf::GfxVBO("gfx.vbo", Common::Ini::KT_BOOL, true);
+
+// OpenUA custom: hide the legacy passive menu hover/help description texts by default.
+Common::Ini::Key IniConf::UiHideMenuHints("ui.hide_menu_hints", Common::Ini::KT_BOOL, true);
 
 
 // Input Engine
@@ -423,7 +426,9 @@ void IniConf::Init()
                   
         , &GfxAdditionalModes
         , &GfxVBO
-                  
+
+        , &UiHideMenuHints
+
         , &DevMode
     };
 }

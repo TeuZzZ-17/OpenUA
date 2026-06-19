@@ -500,8 +500,8 @@ int GuiList::Init(NC_STACK_ypaworld *yw, tInit &in)
     {
         flags |= (FLAG_WITH_CLOSE | FLAG_WITH_DRAGBAR);
 
-        if ( in.withHelp )
-            flags |= FLAG_WITH_HELP;
+        // OpenUA: the old online-help titlebar icon pointed to dead HTML help.
+        // Do not show it in modern UI windows, even if legacy callers request it.
     }
 
 

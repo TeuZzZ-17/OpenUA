@@ -122,7 +122,7 @@ public:
         int upperVborder = 0;//15
         int lowerVborder = 0;//16
         bool keyboardInput = false;//17
-        bool withHelp = true;//18
+        bool withHelp = false;//18  // OpenUA: deprecated online-help titlebar icon hidden by default
     };
 
 

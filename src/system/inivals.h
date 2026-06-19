@@ -216,7 +216,9 @@ public:
     static Common::Ini::Key GameHideBlacksect;
     
     static Common::Ini::Key GfxVBO;
-    
+
+    static Common::Ini::Key UiHideMenuHints; // OpenUA: ui.hide_menu_hints (default yes) — suppress passive menu hover/help hints
+
     static Common::Ini::Key DevMode;
     
 private:

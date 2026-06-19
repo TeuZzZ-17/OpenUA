@@ -3210,18 +3210,57 @@ std::string GFXEngine::GetPaletteThemeOverridePath(const std::string &palette_il
 }
 
 // OpenUA custom: read gfx.visual_filter_strength ("0.0".."1.0") with a safe default.
+// The Options menu also writes env:visual_filter_strength.txt as a tiny runtime cache,
+// mirroring env:visual_filter.txt. This avoids the slider falling back to the default
+// value when the legacy shell/config path reloads before nucleus.ini state is refreshed.
+static std::string ReadVisualFilterStrengthCache()
+{
+    FSMgr::FileHandle *fil = uaOpenFileAlloc("env:visual_filter_strength.txt", "r");
+    if (!fil)
+        return std::string();
+
+    std::string line;
+    bool ok = fil->ReadLine(&line);
+    delete fil;
+
+    if (!ok)
+        return std::string();
+
+    size_t first = line.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos)
+        return std::string();
+
+    size_t last = line.find_last_not_of(" \t\r\n");
+    return line.substr(first, last - first + 1);
+}
+
+static float ParseVisualFilterStrength(std::string s, float fallback)
+{
+    if (s.empty())
+        return fallback;
+
+    try
+    {
+        float strength = std::stof(s);
+        if (strength < 0.0f) strength = 0.0f;
+        if (strength > 1.0f) strength = 1.0f;
+        return strength;
+    }
+    catch (...)
+    {
+        return fallback;
+    }
+}
+
 static float ReadVisualFilterStrength()
 {
-    float strength = 0.65f;
-    std::string s = System::IniConf::GfxVisualFilterStrength.Get<std::string>();
-    if (!s.empty())
-    {
-        try { strength = std::stof(s); }
-        catch (...) { strength = 0.65f; }
-    }
-    if (strength < 0.0f) strength = 0.0f;
-    if (strength > 1.0f) strength = 1.0f;
-    return strength;
+    const float defaultStrength = 0.30f; // default if missing/invalid (matches the Atmosphere Strength slider)
+
+    std::string cached = ReadVisualFilterStrengthCache();
+    if (!cached.empty())
+        return ParseVisualFilterStrength(cached, defaultStrength);
+
+    return ParseVisualFilterStrength(System::IniConf::GfxVisualFilterStrength.Get<std::string>(), defaultStrength);
 }
 
 // OpenUA custom: select the fullscreen visual filter.

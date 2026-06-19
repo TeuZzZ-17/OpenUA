@@ -175,15 +175,9 @@ void UAWindow::Update()
     else if (_closeBtn->IsEnabled())
         _closeBtn->SetEnable(false);
     
-    if (_flagsWindow & FLAG_WND_HELP)
-    {
-        if (!_helpBtn->IsEnabled())
-            _helpBtn->SetEnable(true);
-        
-        rpos -= _helpBtn->GetWidth();
-        _helpBtn->MoveTo( rpos, 0);
-    }
-    else if (_helpBtn->IsEnabled())
+    // OpenUA: deprecated online-help titlebar button removed globally.
+    // Leave FLAG_WND_HELP defined for ABI/source compatibility, but never show it.
+    if (_helpBtn->IsEnabled())
         _helpBtn->SetEnable(false);
     
     if (_flagsWindow & FLAG_WND_MAXM)
@@ -236,9 +230,9 @@ void UAWindow::OnCloseClick(Widget *w, void *d)
 
 void UAWindow::OnHelpClick(Widget *w, void *d)
 {
-    UAWindow *form = (UAWindow *)d;
-    if (form->_fOnHelpClick)
-        form->_fOnHelpClick(form, form->_fOnHelpClickData);
+    // OpenUA: legacy online help is intentionally disabled.
+    (void)w;
+    (void)d;
 }
 
 void UAWindow::OnBtnDownSound(Widget *w, void *d, Common::Point, Common::Point, int)

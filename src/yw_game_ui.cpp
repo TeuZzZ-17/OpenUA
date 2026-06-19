@@ -587,15 +587,11 @@ void NC_STACK_ypaworld::sb_0x4c87fc(const std::string &a2, GuiBase *lstvw)
 
 void NC_STACK_ypaworld::sub_449DE8(const std::string &a2)
 {
-    if ( !_isNetGame )
-    {
-        sb_0x4c87fc( Locale::Text::Advanced(Locale::ADV_RLYHELP) , &exit_menu);
-
-        dword_5C8B78 = 13;
-
-        _helpURL.clear();
-        _helpSavedURL = a2;
-    }
+    // OpenUA: legacy online help pages are obsolete/dead.
+    // Keep this as a harmless compatibility stub for old callers/hotkeys.
+    (void)a2;
+    _helpURL.clear();
+    _helpSavedURL.clear();
 }
 
 
@@ -3274,7 +3270,7 @@ void  sb_0x451034__sub2(NC_STACK_ypaworld *yw)
     robo_map.t1_cmdbuf_2.reserve(256);
     robo_map.t1_cmdbuf_3.reserve(32768);
 
-    robo_map.flags = (GuiBase::FLAG_WITH_HELP | GuiBase::FLAG_CLOSED | GuiBase::FLAG_WITH_CLOSE | GuiBase::FLAG_WITH_DRAGBAR);
+    robo_map.flags = (GuiBase::FLAG_CLOSED | GuiBase::FLAG_WITH_CLOSE | GuiBase::FLAG_WITH_DRAGBAR);
     robo_map.field_228 = 8;
     robo_map.field_22C = yw->_guiTiles[10]->map[65].w;
     robo_map.field_230 = yw->_guiTiles[10]->h;
@@ -4426,16 +4422,10 @@ void gui_update_tools(NC_STACK_ypaworld *yw, CmdStream *cur)
         FontUA::store_u8(cur, 63);
     }
 
-    bzda.buttons[9] = ButtonBox(yw->_iconOrderW + bzda.field_910, bzda.field_918, yw->_iconOrderH, yw->_iconOrderW); // help_btn
+    // OpenUA: remove the deprecated online-help button from the gameplay toolbar.
+    bzda.buttons[9] = ButtonBox(); // help_btn removed
 
-    if ( bzda.field_91C & 0x200 )
-        FontUA::select_tileset(cur, 22);
-    else
-        FontUA::select_tileset(cur, 21);
-
-    FontUA::store_u8(cur, 76);
-
-    bzda.buttons[10] = ButtonBox(bzda.field_910 + 2 * yw->_iconOrderW,  bzda.field_918,  yw->_iconOrderW,  yw->_iconOrderH); // menu_btn
+    bzda.buttons[10] = ButtonBox(yw->_iconOrderW + bzda.field_910,  bzda.field_918,  yw->_iconOrderW,  yw->_iconOrderH); // menu_btn
 
     if ( bzda.field_91C & 0x400 )
         FontUA::select_tileset(cur, 22);
@@ -5546,15 +5536,7 @@ void  ypaworld_func64__sub7__sub2(NC_STACK_ypaworld *yw, TInputState *inpt)
                 break;
 
             case 9:
-                if ( winpt->flag & (TClickBoxInf::FLAG_BTN_DOWN | TClickBoxInf::FLAG_BTN_HOLD) )
-                    bzda.field_91C |= 0x200;
-
-                if ( winpt->flag & TClickBoxInf::FLAG_BTN_UP )
-                {
-                    yw->sub_449DE8(Locale::Text::Help(Locale::HELP_GAMEPLAY));
-                }
-
-                yw->SetShowingTooltipWithHotkey(Locale::TIP_ONLINEHELP, 43);
+                // Deprecated online-help button removed from the toolbar.
                 break;
 
             case 10:

@@ -37,6 +37,47 @@ extern int dword_5A50B6_h;
 static constexpr int SETTINGS_CHANGE_PALETTE_THEME = 0x2000;
 static constexpr int SETTINGS_CHANGE_PLAYER_ROBO_AI_BEHAVIOR = 0x4000;
 static constexpr int SETTINGS_CHANGE_SPECTATOR_MODE = 0x8000;
+// OpenUA: modern graphics options
+static constexpr int SETTINGS_CHANGE_VISUAL_FILTER_STRENGTH = 0x10000;
+static constexpr int SETTINGS_CHANGE_VSYNC                  = 0x20000;
+static constexpr int SETTINGS_CHANGE_MAXFPS                 = 0x40000;
+static constexpr int SETTINGS_CHANGE_BLENDING              = 0x80000;
+static constexpr int SETTINGS_CHANGE_MOVIE_PLAYER          = 0x100000;
+
+// OpenUA: cycle-button value tables for the modern graphics options.
+static const int kFpsLimitValues[] = { 30, 60, 120, 144, 165, 240 };
+static const int kFpsLimitCount = (int)(sizeof(kFpsLimitValues) / sizeof(kFpsLimitValues[0]));
+
+static std::string VsyncLabel(int v)
+{
+    switch (v)
+    {
+        case 0:  return "Off";
+        case 2:  return "Adaptive";
+        default: return "On";
+    }
+}
+
+static std::string BlendingLabel(int v)
+{
+    switch (v)
+    {
+        case 1:  return "Additive";
+        case 2:  return "Sharp";
+        default: return "Default";
+    }
+}
+
+static int CycleVsync(int v)      { return (v == 0) ? 1 : (v == 1) ? 2 : 0; }
+static int CycleBlending(int v)   { return (v == 0) ? 1 : (v == 1) ? 2 : 0; }
+
+static int CycleFps(int v)
+{
+    for (int i = 0; i < kFpsLimitCount; i++)
+        if (kFpsLimitValues[i] == v)
+            return kFpsLimitValues[(i + 1) % kFpsLimitCount];
+    return 60; // unknown current value -> snap to a sane default
+}
 
 // OpenUA: the "Atmosphere" dropdown now selects a modern fullscreen visual filter from
 // Data/Filters/*.pal (see GFXEngine::SetVisualFilter), NOT the legacy SET palette-theme.
@@ -91,6 +132,75 @@ static void SavePaletteThemeCache(const std::string &theme)
 
     fil->puts(PaletteThemeStorageValue(theme) + "\n");
     delete fil;
+}
+
+static std::string VisualFilterStrengthStorageValue(int value)
+{
+    if (value < 0) value = 0;
+    if (value > 100) value = 100;
+
+    return std::to_string(value / 100) + "."
+         + (value % 100 < 10 ? "0" : "")
+         + std::to_string(value % 100);
+}
+
+static void SaveVisualFilterStrengthCache(int value)
+{
+    FSMgr::FileHandle *fil = uaOpenFileAlloc("env:visual_filter_strength.txt", "w");
+    if (!fil)
+        return;
+
+    fil->puts(VisualFilterStrengthStorageValue(value) + "\n");
+    delete fil;
+}
+
+static bool LoadVisualFilterStrengthCache(std::string *value)
+{
+    FSMgr::FileHandle *fil = uaOpenFileAlloc("env:visual_filter_strength.txt", "r");
+    if (!fil)
+        return false;
+
+    std::string line;
+    bool ok = fil->ReadLine(&line);
+    delete fil;
+
+    if (!ok)
+        return false;
+
+    size_t first = line.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos)
+        return false;
+
+    size_t last = line.find_last_not_of(" \t\r\n");
+    *value = line.substr(first, last - first + 1);
+    return true;
+}
+
+static int VisualFilterStrengthPercentFromString(std::string s, int fallback)
+{
+    if (s.empty())
+        return fallback;
+
+    try
+    {
+        float st = std::stof(s);
+        if (st < 0.0f) st = 0.0f;
+        if (st > 1.0f) st = 1.0f;
+        return (int)(st * 100.0f + 0.5f);
+    }
+    catch (...)
+    {
+        return fallback;
+    }
+}
+
+static int LoadVisualFilterStrengthPercent()
+{
+    std::string cached;
+    if (LoadVisualFilterStrengthCache(&cached))
+        return VisualFilterStrengthPercentFromString(cached, 30);
+
+    return VisualFilterStrengthPercentFromString(System::IniConf::GfxVisualFilterStrength.Get<std::string>(), 30);
 }
 
 static std::string PaletteThemeDisplayName(const std::string &fileName)
@@ -1191,6 +1301,61 @@ void UserData::sb_0x46aa8c()
             ypa_log_out("WARNING: Could not save game.spectator_mode to nucleus.ini\n");
     }
 
+    // OpenUA: always persist the current Atmosphere Strength slider on OK.
+    // Some slider interactions can update the visual slider value without setting
+    // SETTINGS_CHANGE_VISUAL_FILTER_STRENGTH reliably, which made the value appear
+    // changed for the current session but reset after restarting the game.
+    {
+        NC_STACK_button::Slider *s = video_button->GetSliderData(1180);
+        if (s)
+            confVisualFilterStrength = s->value;
+
+        int v = confVisualFilterStrength;
+        if (v < 0) v = 0;
+        if (v > 100) v = 100;
+        confVisualFilterStrength = v;
+
+        // UI 0..100 -> "0.00".."1.00"
+        std::string sv = VisualFilterStrengthStorageValue(v);
+
+        System::IniConf::GfxVisualFilterStrength.Value = sv;
+        SaveVisualFilterStrengthCache(v);
+
+        // Live-apply: re-select the current filter so the new strength takes effect now.
+        GFX::Engine.SetVisualFilter(PaletteThemeStorageValue(paletteTheme));
+
+        if ( !SaveKeyToNucleusIni("gfx.visual_filter_strength", sv) )
+            ypa_log_out("WARNING: Could not save gfx.visual_filter_strength to nucleus.ini\n");
+    }
+
+    if ( _settingsChangeOptions & SETTINGS_CHANGE_VSYNC )
+    {
+        System::IniConf::GfxVsync.Value = (int32_t)confVsync;
+        if ( !SaveKeyToNucleusIni("gfx.vsync", std::to_string(confVsync)) )
+            ypa_log_out("WARNING: Could not save gfx.vsync to nucleus.ini\n");
+    }
+
+    if ( _settingsChangeOptions & SETTINGS_CHANGE_MAXFPS )
+    {
+        System::IniConf::GfxMaxFps.Value = (int32_t)confMaxFps;
+        if ( !SaveKeyToNucleusIni("gfx.maxfps", std::to_string(confMaxFps)) )
+            ypa_log_out("WARNING: Could not save gfx.maxfps to nucleus.ini\n");
+    }
+
+    if ( _settingsChangeOptions & SETTINGS_CHANGE_BLENDING )
+    {
+        System::IniConf::GfxBlending.Value = (int32_t)confBlending;
+        if ( !SaveKeyToNucleusIni("gfx.blending", std::to_string(confBlending)) )
+            ypa_log_out("WARNING: Could not save gfx.blending to nucleus.ini\n");
+    }
+
+    if ( _settingsChangeOptions & SETTINGS_CHANGE_MOVIE_PLAYER )
+    {
+        System::IniConf::GfxMoviePlayer.Value = confMoviePlayer;
+        if ( !SaveKeyToNucleusIni("gfx.movie_player", confMoviePlayer ? "yes" : "no") )
+            ypa_log_out("WARNING: Could not save gfx.movie_player to nucleus.ini\n");
+    }
+
     if ( forceChange )
     {
         yw->SetGameShellVideoMode( IsWindowedFlag() );
@@ -1276,6 +1441,14 @@ int UserData::ypaworld_func158__sub0__sub7()
 
 void UserData::ShowToolTip(int id)
 {
+    // OpenUA: ui.hide_menu_hints (default yes) suppresses the legacy passive menu
+    // hover/help description texts (e.g. "Turn Sky On/Off...", "Go to Save/Load Screen").
+    // This is the single central place where menu buttons assign their hover hint, so the
+    // gate is fully centralized; no language.lng strings are touched. Set the key to "no"
+    // to restore the original behavior.
+    if ( System::IniConf::UiHideMenuHints.Get<bool>() )
+        return;
+
     switch (id)
     {
     default:
@@ -2019,6 +2192,19 @@ void UserData::sub_46A3C0()
     v10.butID = 1175;
     video_button->SetState(&v10);
 
+    // OpenUA: reset modern graphics options to the saved/config values
+    confVsync = System::IniConf::GfxVsync.Get<int32_t>();
+    confMaxFps = System::IniConf::GfxMaxFps.Get<int32_t>();
+    confBlending = System::IniConf::GfxBlending.Get<int32_t>();
+    confMoviePlayer = System::IniConf::GfxMoviePlayer.Get<bool>();
+    {
+        confVisualFilterStrength = LoadVisualFilterStrengthPercent();
+    }
+    v10.field_4 = (!confMoviePlayer) + 1;
+    v10.butID = 1184;
+    video_button->SetState(&v10);
+    UpdateGfxOptionTexts();
+
     NC_STACK_button::Slider *tmp = video_button->GetSliderData(1159);
     tmp->value = fxnumber;
     video_button->Refresh(1159);
@@ -2208,6 +2394,75 @@ bool UserData::SavePaletteThemeToNucleusIni()
 
     delete out;
     return true;
+}
+
+// OpenUA: generic "key = value" writer for nucleus.ini. Replaces the line for `key`
+// if present, otherwise appends it. ALL other lines (including hidden/legacy settings)
+// are preserved verbatim, so saving Options never erases unrelated settings.
+bool UserData::SaveKeyToNucleusIni(const std::string &key, const std::string &value)
+{
+    const std::string newLine = key + " = " + value;
+
+    std::vector<std::string> lines;
+    bool replaced = false;
+
+    FSMgr::FileHandle *in = uaOpenFileAlloc("nucleus.ini", "r");
+    if (in)
+    {
+        std::string line;
+        while (in->ReadLine(&line))
+        {
+            while (!line.empty() && (line.back() == '\n' || line.back() == '\r'))
+                line.pop_back();
+
+            std::string test = line;
+            size_t comment = test.find_first_of(";");
+            if (comment != std::string::npos)
+                test.erase(comment);
+
+            Stok tokens(test, "= \t");
+            std::string token;
+            if (tokens.GetNext(&token) && !StriCmp(token, key))
+            {
+                lines.push_back(newLine);
+                replaced = true;
+            }
+            else
+            {
+                lines.push_back(line);
+            }
+        }
+
+        delete in;
+    }
+
+    if (!replaced)
+        lines.push_back(newLine);
+
+    FSMgr::FileHandle *out = uaOpenFileAlloc("nucleus.ini", "w");
+    if (!out)
+        return false;
+
+    for (const std::string &line : lines)
+        out->puts(line + "\n");
+
+    delete out;
+    return true;
+}
+
+// OpenUA: refresh the captions of the modern graphics cycle-buttons + the strength slider.
+void UserData::UpdateGfxOptionTexts()
+{
+    video_button->SetText(1181, VsyncLabel(confVsync));
+    video_button->SetText(1182, std::to_string(confMaxFps));
+    video_button->SetText(1183, BlendingLabel(confBlending));
+
+    NC_STACK_button::Slider *s = video_button->GetSliderData(1180);
+    if (s)
+    {
+        s->value = confVisualFilterStrength;
+        video_button->Refresh(1180);
+    }
 }
 
 bool UserData::SavePlayerRoboAIBehaviorToNucleusIni()
@@ -4133,6 +4388,60 @@ void UserData::GameShellUiHandleInput()
         else if ( r.code == 1118 )
         {
             _settingsChangeOptions |= 0x100;
+        }
+        // OpenUA: modern graphics options
+        else if ( r.code == 1301 || r.code == 1302 || r.code == 1303 ) // Atmosphere Strength slider
+        {
+            NC_STACK_button::Slider *s = video_button->GetSliderData(1180);
+            if (s)
+            {
+                confVisualFilterStrength = s->value;
+                if (confVisualFilterStrength < 0) confVisualFilterStrength = 0;
+                if (confVisualFilterStrength > 100) confVisualFilterStrength = 100;
+
+                // If the user releases the slider, persist immediately. This avoids
+                // losing the value if the legacy OK path misses the slider-dirty flag
+                // or if the shell refreshes the menu before Options is closed.
+                if (r.code == 1303)
+                {
+                    std::string sv = VisualFilterStrengthStorageValue(confVisualFilterStrength);
+                    System::IniConf::GfxVisualFilterStrength.Value = sv;
+                    SaveVisualFilterStrengthCache(confVisualFilterStrength);
+                    GFX::Engine.SetVisualFilter(PaletteThemeStorageValue(paletteTheme));
+                    if ( !SaveKeyToNucleusIni("gfx.visual_filter_strength", sv) )
+                        ypa_log_out("WARNING: Could not save gfx.visual_filter_strength to nucleus.ini\n");
+                }
+            }
+
+            _settingsChangeOptions |= SETTINGS_CHANGE_VISUAL_FILTER_STRENGTH;
+        }
+        else if ( r.code == 1304 ) // VSync cycle
+        {
+            confVsync = CycleVsync(confVsync);
+            video_button->SetText(1181, VsyncLabel(confVsync));
+            _settingsChangeOptions |= SETTINGS_CHANGE_VSYNC;
+        }
+        else if ( r.code == 1305 ) // FPS Limit cycle
+        {
+            confMaxFps = CycleFps(confMaxFps);
+            video_button->SetText(1182, std::to_string(confMaxFps));
+            _settingsChangeOptions |= SETTINGS_CHANGE_MAXFPS;
+        }
+        else if ( r.code == 1306 ) // Blending cycle
+        {
+            confBlending = CycleBlending(confBlending);
+            video_button->SetText(1183, BlendingLabel(confBlending));
+            _settingsChangeOptions |= SETTINGS_CHANGE_BLENDING;
+        }
+        else if ( r.code == 1307 ) // Intro Movies checkbox (checked)
+        {
+            confMoviePlayer = true;
+            _settingsChangeOptions |= SETTINGS_CHANGE_MOVIE_PLAYER;
+        }
+        else if ( r.code == 1308 ) // Intro Movies checkbox (unchecked)
+        {
+            confMoviePlayer = false;
+            _settingsChangeOptions |= SETTINGS_CHANGE_MOVIE_PLAYER;
         }
         else if ( r.code == 1124 )
         {
