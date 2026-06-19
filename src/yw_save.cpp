@@ -186,10 +186,9 @@ int yw_write_video(FSMgr::FileHandle *fil, UserData *usr)
     fil->printf("new_video\n");
     fil->printf("    videomode = %d\n", ((usr->p_YW->_gameDefaultRes.x << 12) | usr->p_YW->_gameDefaultRes.y) );
 
-    if ( usr->GFXFlags & World::GFX_FLAG_FARVIEW )
-        fil->printf("    farview = yes\n");
-    else
-        fil->printf("    farview = no\n");
+    // OpenUA modern default: the old Horizon Depth checkbox is hidden and far view
+    // is forced high, so keep saved profiles normalized to farview=yes.
+    fil->printf("    farview = yes\n");
 
     if ( usr->GFXFlags & World::GFX_FLAG_16BITTEXTURE )
         fil->printf("    16bittexture = yes\n");

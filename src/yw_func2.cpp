@@ -1086,18 +1086,14 @@ void UserData::sub_46D960()
 
 void NC_STACK_ypaworld::SetFarView(bool farvw)
 {
-    if ( farvw )
-    {
-        setYW_visSectors(9);
-        setYW_normVisLimit(2100);
-        setYW_fadeLength(900);
-    }
-    else
-    {
-        setYW_visSectors(5);
-        setYW_normVisLimit(1400);
-        setYW_fadeLength(600);
-    }
+    // OpenUA modern UI hides the old Horizon Depth checkbox.
+    // Keep far view enabled, but tune it for the classic dark horizon fade with Sky enabled.
+    // Do not use the newsky alpha fade here: it makes the horizon too clean/bright.
+    (void)farvw;
+
+    setYW_visSectors(9);
+    setYW_normVisLimit(3000);
+    setYW_fadeLength(1300);
 }
 
 //Options OK

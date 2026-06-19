@@ -366,9 +366,15 @@ size_t NC_STACK_ypaworld::Init(IDVList &stak)
 
 
     _fxLimit = 16;
-    _renderSectors = stak.Get<int32_t>(YW_ATT_VISSECTORS, YW_RENDER_SECTORS_DEF);
-    _normalVizLimit = stak.Get<int32_t>(YW_ATT_NORMVISLIMIT, 1400);
-    _normalFadeLength = stak.Get<int32_t>(YW_ATT_FADELENGTH, 600);
+    // OpenUA modern default: Horizon Depth / far view is no longer exposed in the UI.
+    // Keep the world on the maximum safe legacy render radius by default.
+    // OpenUA modern default: Horizon Depth is hidden, but the original sky dome/skybox is finite.
+    // Keep far view enabled while staying inside the vanilla sky boundary.
+    // OpenUA modern default: Horizon Depth is hidden, so keep far view enabled.
+    // Use the classic black depth-fog horizon instead of the newsky alpha fade.
+    _renderSectors = stak.Get<int32_t>(YW_ATT_VISSECTORS, 9);
+    _normalVizLimit = stak.Get<int32_t>(YW_ATT_NORMVISLIMIT, 3000);
+    _normalFadeLength = stak.Get<int32_t>(YW_ATT_FADELENGTH, 1300);
     _skyVizLimit = stak.Get<int32_t>(YW_ATT_SKYVISLIMIT, 4200);
     _skyFadeLength = stak.Get<int32_t>(YW_ATT_SKYFADELENGTH, 1100);
     _mapSize.x = stak.Get<int32_t>(YW_ATT_MAPMAX_X, 64);

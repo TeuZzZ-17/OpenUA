@@ -3491,10 +3491,15 @@ void NC_STACK_ypaworld::RenderGame(base_64arg *bs64, int a2)
 
     rndrs.minZ = 1.0;
 
-    if ( _renderSectors == 5 )
+    if ( _renderSectors <= 5 )
+    {
         rndrs.maxZ = 1500.0;
+    }
     else
+    {
+        // Dark-horizon safe clip: draw a little past the fog end, but stay inside the vanilla sky dome.
         rndrs.maxZ = 3500.0;
+    }
 
     int v6 = _renderSectors - 1;
 
