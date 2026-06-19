@@ -100,14 +100,6 @@ void ParticleSystem::Render(Frak *p, float scale, area_arg_65 *rndrParams)
             rend.Flags = mesh.Mat.Flags | rndrParams->flags;
             rend.Color = mesh.Mat.Color;
 
-            /*if (newsky)
-            {
-                if ( distance >= transDist ||
-                     skel132.tform.Transform(msh.BoundBox.Min).XZ().length() >= transDist ||
-                     skel132.tform.Transform(msh.BoundBox.Max).XZ().length() >= transDist )
-                    rend.Mat.Flags |= GFX::RFLAGS_FALLOFF;
-            }*/
-
             if ((mesh.Mat.Flags & GFX::RFLAGS_DYNAMIC_TEXTURE) && mesh.Mat.TexSource)
             {
                 mesh.Mat.TexSource->SetTime(rndrParams->timeStamp, rndrParams->frameTime);

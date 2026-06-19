@@ -384,7 +384,7 @@ void ypaworld_func158__DrawVehicle(NC_STACK_ypaworld *yw, TBriefengScreen *brf, 
     brf->ObjRenderParams.adeCount = 0;
     brf->ObjRenderParams.minZ = 17.0;
     brf->ObjRenderParams.maxZ = 32000.0;
-    brf->ObjRenderParams.flags = GFX::RFLAGS_IGNORE_FALLOFF;
+    brf->ObjRenderParams.flags = 0;
 
     if ( brf->ViewingObject ) // Not none
     {
@@ -1089,13 +1089,13 @@ void UserData::sub_46D960()
 void NC_STACK_ypaworld::SetFarView(bool farvw)
 {
     // OpenUA modern UI hides the old Horizon Depth checkbox.
-    // Always keep farview enabled, but tune it for classic sky + stronger black horizon fade.
-    // Do not use gfx.newsky here: on the current experimental build it can show sky-dome artifacts.
+    // Always keep farview enabled and use only the classic UA sky + strong black horizon fog.
+    // Stronger incremental tuning: the dark horizon band starts closer to the player and reaches black earlier.
     (void)farvw;
 
     setYW_visSectors(9);
     setYW_normVisLimit(2800);
-    setYW_fadeLength(1600);
+    setYW_fadeLength(1800);
 }
 
 

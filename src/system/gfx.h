@@ -116,8 +116,6 @@ enum RFLAGS
     RFLAGS_ZEROTRACY =      (1 << 4),
     RFLAGS_LUMTRACY  =      (1 << 5),
     RFLAGS_SKY       =      (1 << 6),
-    RFLAGS_FALLOFF   =      (1 << 7),
-    RFLAGS_IGNORE_FALLOFF = (1 << 8),
     RFLAGS_COMPUTED_COLOR = (1 << 9),
     RFLAGS_DISABLE_ZWRITE = (1 << 10),
 };    

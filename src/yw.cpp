@@ -367,16 +367,19 @@ size_t NC_STACK_ypaworld::Init(IDVList &stak)
 
     _fxLimit = 16;
     // OpenUA modern default: Horizon Depth/farview is hidden from the UI.
-    // Use classic sky + black depth-fog, tuned to keep a dark horizon inside the vanilla sky dome.
-    // Slightly earlier fog start than the previous tuning: keeps distance, restores a little more horizon shadow.
+    // Use only the classic UA sky. The removed alternative far alpha-fade path is no longer configurable.
+    // Distance is pushed near the safe vanilla sky-dome limit, while the fog/horizon band is intentionally strong.
+    // Keep maxZ high, but make the last visible terrain/object band fall into a wider, darker classic fog.
     _renderSectors = stak.Get<int32_t>(YW_ATT_VISSECTORS, 9);
-    _normalVizLimit = stak.Get<int32_t>(YW_ATT_NORMVISLIMIT, 2700);
-    _normalFadeLength = stak.Get<int32_t>(YW_ATT_FADELENGTH, 1600);
-    _skyVizLimit = stak.Get<int32_t>(YW_ATT_SKYVISLIMIT, 4200);
-    _skyFadeLength = stak.Get<int32_t>(YW_ATT_SKYFADELENGTH, 1100);
+    _normalVizLimit = stak.Get<int32_t>(YW_ATT_NORMVISLIMIT, 2800);
+    _normalFadeLength = stak.Get<int32_t>(YW_ATT_FADELENGTH, 1800);
+    _skyVizLimit = stak.Get<int32_t>(YW_ATT_SKYVISLIMIT, 3600);
+    _skyFadeLength = stak.Get<int32_t>(YW_ATT_SKYFADELENGTH, 2000);
     _mapSize.x = stak.Get<int32_t>(YW_ATT_MAPMAX_X, 64);
     _mapSize.y = stak.Get<int32_t>(YW_ATT_MAPMAX_Y, 64);
-    _skyHeight = stak.Get<int32_t>(YW_ATT_SKYHEIGHT, -550);
+    // Negative Y is upward in UA coordinates. Raising the classic sky dome prevents its lower rim
+    // from looking glued to the far terrain when farview is pushed beyond vanilla values.
+    _skyHeight = stak.Get<int32_t>(YW_ATT_SKYHEIGHT, -900);
     _skyRender = stak.Get<bool>(YW_ATT_SKYRENDER, true);
     _doEnergyRecalc = stak.Get<bool>(YW_ATT_DOENERGYRECALC, true);
 

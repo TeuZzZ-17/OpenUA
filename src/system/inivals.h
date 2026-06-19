@@ -33,9 +33,6 @@ public:
     static Common::Ini::Key GfxSolidFont;
     static Common::Ini::Key GfxVsync;
     static Common::Ini::Key GfxMaxFps;
-    static Common::Ini::Key GfxNewSky;
-    static Common::Ini::Key GfxSkyDistance;
-    static Common::Ini::Key GfxSkyLength;
     static Common::Ini::Key GfxAdditionalModes;
     
     static Common::Ini::Key GfxMode;

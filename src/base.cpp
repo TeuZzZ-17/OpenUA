@@ -513,9 +513,6 @@ size_t NC_STACK_base::Render(baseRender_msg *arg, Instance * inst, bool doCopy /
         
         float distance = skel132.tform.getTranslate().length();
         
-        bool newsky = System::IniConf::GfxNewSky.Get<bool>();
-        float transDist = System::IniConf::GfxSkyDistance.Get<int>();
-        
         for(GFX::TMesh &msh : Meshes)
         {       
             arg->adeCount += msh.Indixes.size() / 3;
@@ -543,14 +540,6 @@ size_t NC_STACK_base::Render(baseRender_msg *arg, Instance * inst, bool doCopy /
             
             rend.Flags |= arg->flags;
             
-            if (newsky && !(rend.Flags & GFX::RFLAGS_IGNORE_FALLOFF))
-            {
-                if ( distance >= transDist ||
-                     skel132.tform.Transform(msh.BoundBox.Min).XZ().length() >= transDist ||
-                     skel132.tform.Transform(msh.BoundBox.Max).XZ().length() >= transDist )
-                    rend.Flags |= GFX::RFLAGS_FALLOFF;
-            }
-
             if (doCopy)
             {
                 rend.LocalMesh = msh;
@@ -628,9 +617,6 @@ size_t NC_STACK_base::RenderImmediately(baseRender_msg *arg, Instance * inst)
         
         float distance = skel132.tform.Transform( _transform.Pos ).length();
         
-        bool newsky = System::IniConf::GfxNewSky.Get<bool>();
-        float transDist = System::IniConf::GfxSkyDistance.Get<int>();
-        
         for(GFX::TMesh &msh : Meshes)
         {
             GFX::TRenderNode rend( GFX::TRenderNode::TYPE_MESH );
@@ -639,13 +625,6 @@ size_t NC_STACK_base::RenderImmediately(baseRender_msg *arg, Instance * inst)
             rend.ColorMul = arg->tint; // OpenUA custom: per-object visual_tint multiplier
             rend.Flags = msh.Mat.Flags | arg->flags;
             
-            if (newsky)
-            {
-                if ( skel132.tform.Transform(msh.BoundBox.Min + _transform.Pos).XZ().length() >= transDist ||
-                     skel132.tform.Transform(msh.BoundBox.Max + _transform.Pos).XZ().length() >= transDist )
-                    rend.Flags |= GFX::RFLAGS_FALLOFF;
-            }
-
             rend.Mesh = &msh;            
             rend.TForm = skel132.tform;
             rend.TimeStamp = arg->globTime;
@@ -1071,9 +1050,6 @@ void TObjectCache::Render(baseRender_msg *arg)
 
     float distance = tf.Transform( Transform.Pos ).length();
 
-    bool newsky = System::IniConf::GfxNewSky.Get<bool>();
-    float transDist = System::IniConf::GfxSkyDistance.Get<int>();
-        
     for(GFX::TMesh &msh : Meshes)
     {
         arg->adeCount += msh.Indixes.size() / 3;
@@ -1100,14 +1076,6 @@ void TObjectCache::Render(baseRender_msg *arg)
             rend.Tex = msh.Mat.Tex;
 
         rend.Flags |= arg->flags;
-
-        if (newsky && !(rend.Flags & GFX::RFLAGS_IGNORE_FALLOFF))
-        {
-            if ( distance >= transDist ||
-                 tf.Transform(msh.BoundBox.Min).XZ().length() >= transDist ||
-                 tf.Transform(msh.BoundBox.Max).XZ().length() >= transDist )
-                rend.Flags |= GFX::RFLAGS_FALLOFF;
-        }
 
         rend.Mesh = &msh;
         rend.TForm = tf;

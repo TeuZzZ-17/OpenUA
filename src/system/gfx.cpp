@@ -1096,49 +1096,7 @@ void GFXEngine::RenderingMeshOld(TRenderNode *nod)
         _states.Fog = false;
         _states.Shaded = true;
     }
-    else if (flags & RFLAGS_FALLOFF)
-    {
-        float transDist = System::IniConf::GfxSkyDistance.Get<int>();
-        float transLen = System::IniConf::GfxSkyLength.Get<int>();
 
-        for(TVertex &v : mesh->Vertexes)
-        {
-            v.ComputedColor = v.Color;
-
-            float distance = nod->TForm.Transform( v.Pos ).XZ().length();
-
-            if (distance > transDist)
-            {
-                float prc = (distance - transDist) / transLen;
-                if (prc > 1.0)
-                    prc = 1.0;
-                if (prc < 0.0)
-                    prc = 0.0;
-
-                prc = (1.0 - prc);
-
-                v.ComputedColor.a *= prc;
-
-                useComputedColor = true;
-            }
-        }
-
-        if (useComputedColor)
-        {
-            _states.Zwrite = true;
-            _states.AlphaBlend = true;
-            _states.TexBlend = 2; // MODULATE
-            _states.SrcBlend = GL_SRC_ALPHA;
-
-            if (flags & RFLAGS_LUMTRACY)
-                _states.DstBlend = GL_ONE;
-            else
-                _states.DstBlend = GL_ONE_MINUS_SRC_ALPHA;
-
-            _states.Shaded = true;
-            _states.Stipple = false;
-        }
-    }
     
     if (flags & RFLAGS_COMPUTED_COLOR)
         useComputedColor = true;
@@ -1292,25 +1250,7 @@ void GFXEngine::RenderingMesh(TRenderNode *nod)
         _states.Fog = false;
         _states.Shaded = true;
     }
-    else if (flags & RFLAGS_FALLOFF)
-    {
-        _states.Zwrite = true;
-        _states.AlphaBlend = true;
-        _states.TexBlend = 2; // MODULATE
-        _states.SrcBlend = GL_SRC_ALPHA;
 
-        if (flags & RFLAGS_LUMTRACY)
-            _states.DstBlend = GL_ONE;
-        else
-            _states.DstBlend = GL_ONE_MINUS_SRC_ALPHA;
-
-        _states.Shaded = true;
-        _states.Stipple = false;
-        
-        _states.AFog = true; 
-        _states.AFogStart = System::IniConf::GfxSkyDistance.Get<int>();
-        _states.AFogLength = System::IniConf::GfxSkyLength.Get<int>();
-    }
     
     if (flags & RFLAGS_DISABLE_ZWRITE)
         _states.Zwrite = false;

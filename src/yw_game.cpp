@@ -2512,8 +2512,6 @@ void NC_STACK_ypaworld::yw_renderSky(baseRender_msg *rndr_params)
 
         rndr_params->maxZ = 32000.0;
         rndr_params->flags = GFX::RFLAGS_SKY | GFX::RFLAGS_COMPUTED_COLOR;
-        if ( System::IniConf::GfxNewSky.Get<bool>() )
-            rndr_params->flags |= GFX::RFLAGS_DISABLE_ZWRITE;
 
         _skyObject->Render(rndr_params, NULL);
 
@@ -3497,8 +3495,9 @@ void NC_STACK_ypaworld::RenderGame(base_64arg *bs64, int a2)
     }
     else
     {
-        // Classic-sky safe clip: draw slightly past the full-black fog end, but stay inside the vanilla sky dome.
-        rndrs.maxZ = 3300.0;
+        // Classic-sky safe clip: push the terrain view near the vanilla sky-dome limit.
+        // The normal fog reaches full darkness before this clip, so the last distance band stays as a strong dark horizon.
+        rndrs.maxZ = 3600.0;
     }
 
     int v6 = _renderSectors - 1;
