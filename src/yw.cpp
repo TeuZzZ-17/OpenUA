@@ -1750,6 +1750,7 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_pitch = bacto->_soundcarrier.Sounds[0].Pitch;
         bacto->_volume = bacto->_soundcarrier.Sounds[0].Volume;
         bacto->_base_snd_normal_pitch = bacto->_soundcarrier.Sounds[World::TVhclProto::SND_NORMAL].Pitch;
+        bacto->_base_snd_fire_pitch = bacto->_soundcarrier.Sounds[World::TVhclProto::SND_FIRE].Pitch;
         bacto->_base_snd_wait_pitch = bacto->_soundcarrier.Sounds[World::TVhclProto::SND_WAIT].Pitch;
 
         bacto->SetParameters(vhcl.initParams);

@@ -688,6 +688,7 @@ public:
     int _pitch;
     float _pitch_max;
     int _base_snd_normal_pitch;
+    int _base_snd_fire_pitch;
     int _base_snd_wait_pitch;
     int _energy;
     int _energy_max;

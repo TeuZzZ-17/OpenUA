@@ -401,22 +401,25 @@ static void ypabact_ApplyDamagedSoundPitch(NC_STACK_ypabact *bact)
         pitchMult *= ypabact_SafeDamageMult(bact->_active_debuff.snd_pitch_mult);
 
     // OpenUA Black Sect clone balance: imperfect grey clones (owner 5) emit their
-    // engine/idle loops at a slightly lower pitch, reinforcing the clone identity.
+    // engine/idle/fire loops at a slightly lower pitch, reinforcing the clone identity.
     // Folded into the same per-frame pitch chain as the damaged/debuff multipliers,
     // recomputed from the prototype base pitch each frame (never compounds).
     if ( World::CloneBalance::IsCloneActor(bact) )
         pitchMult *= World::CloneBalance::DownFactor();
 
     TSoundSource &normal = bact->_soundcarrier.Sounds[World::TVhclProto::SND_NORMAL];
+    TSoundSource &fire = bact->_soundcarrier.Sounds[World::TVhclProto::SND_FIRE];
     TSoundSource &wait = bact->_soundcarrier.Sounds[World::TVhclProto::SND_WAIT];
 
     if ( pitchMult != 1.0 )
     {
         normal.Pitch = ypabact_ScaledPitch(normal, normal.Pitch, pitchMult);
+        fire.Pitch = ypabact_ScaledPitch(fire, bact->_base_snd_fire_pitch, pitchMult);
 
         // SND_WAIT can be the active loop for heli hover/idle. Unlike SND_NORMAL,
-        // it is not always rebuilt by Move(), so scale it from the prototype base
-        // pitch instead of repeatedly scaling the previous frame's pitch.
+        // SND_FIRE/SND_WAIT are not always rebuilt by Move(), so scale them from
+        // the prototype base pitch instead of repeatedly scaling the previous
+        // frame's pitch.
         wait.Pitch = ypabact_ScaledPitch(wait, bact->_base_snd_wait_pitch, pitchMult);
     }
 }
@@ -1040,6 +1043,7 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _pitch = 0;
     _pitch_max = 0.0;
     _base_snd_normal_pitch = 0;
+    _base_snd_fire_pitch = 0;
     _base_snd_wait_pitch = 0;
     _energy = 0;
     _energy_max = 0;
@@ -1289,6 +1293,7 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _energy = 10000;
     _shield = 0;
     _base_snd_normal_pitch = 0;
+    _base_snd_fire_pitch = 0;
     _base_snd_wait_pitch = 0;
     _heading_speed = 0.7;
     _yls_time = 3000;
