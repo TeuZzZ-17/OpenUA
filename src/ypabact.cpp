@@ -15,6 +15,8 @@
 #include "ypamissile.h"
 #include "yw_net.h"
 
+#include "world/clonebalance.h"
+
 #include "log.h"
 
 
@@ -347,6 +349,18 @@ static void ypabact_ApplyDamagedRuntime(NC_STACK_ypabact *bact, bool active)
         maxrotMult *= ypabact_DebuffMalusToMult(bact->_active_debuff.maxrot_malus);
     }
 
+    // OpenUA Black Sect clone balance: imperfect grey clones (owner 5) get slightly
+    // weaker thrust and turn rate. This runs every frame and always recomputes the
+    // effective _force/_maxrot from the unmodified _base_force/_base_maxrot, so the
+    // clone malus is folded into the same multiplier chain as the debuff/damaged
+    // maluses and can never accumulate over time or across save/load/respawn.
+    if ( World::CloneBalance::IsCloneActor(bact) )
+    {
+        float cloneFactor = World::CloneBalance::DownFactor();
+        forceMult *= cloneFactor;
+        maxrotMult *= cloneFactor;
+    }
+
     bact->_force = bact->_base_force * forceMult;
     bact->_maxrot = bact->_base_maxrot * maxrotMult;
 }
@@ -385,6 +399,13 @@ static void ypabact_ApplyDamagedSoundPitch(NC_STACK_ypabact *bact)
 
     if ( bact->_active_debuff.active )
         pitchMult *= ypabact_SafeDamageMult(bact->_active_debuff.snd_pitch_mult);
+
+    // OpenUA Black Sect clone balance: imperfect grey clones (owner 5) emit their
+    // engine/idle loops at a slightly lower pitch, reinforcing the clone identity.
+    // Folded into the same per-frame pitch chain as the damaged/debuff multipliers,
+    // recomputed from the prototype base pitch each frame (never compounds).
+    if ( World::CloneBalance::IsCloneActor(bact) )
+        pitchMult *= World::CloneBalance::DownFactor();
 
     TSoundSource &normal = bact->_soundcarrier.Sounds[World::TVhclProto::SND_NORMAL];
     TSoundSource &wait = bact->_soundcarrier.Sounds[World::TVhclProto::SND_WAIT];
@@ -2695,6 +2716,13 @@ void NC_STACK_ypabact::UpdateAoePush(update_msg *arg)
 
 void NC_STACK_ypabact::Render(baseRender_msg *arg)
 {
+    // OpenUA Black Sect clone balance: imperfect grey clones (owner 5) always wear the
+    // grey clone identity tint. In V1 this deliberately overrides any manual per-prototype
+    // visual_tint so the clone is always visually readable. This is render-only: it reads
+    // the cached config and never mutates _visual_tint or the shared prototype.
+    const World::TVisualTint effectiveTint =
+        World::CloneBalance::IsCloneActor(this) ? World::CloneBalance::Tint() : _visual_tint;
+
     auto shouldApplyVisualScale = [this](NC_STACK_base *base)
     {
         if ( _visual_scale_vec.x == 1.0 && _visual_scale_vec.y == 1.0 && _visual_scale_vec.z == 1.0 )
@@ -2712,9 +2740,10 @@ void NC_STACK_ypabact::Render(baseRender_msg *arg)
 
     // OpenUA custom visual_tint: same eligible visual prototypes as visual_scale.
     // Tint is a visual-only per-instance RGBA multiplier; never affects gameplay.
-    auto shouldApplyVisualTint = [this](NC_STACK_base *base)
+    // effectiveTint already folds in the Black Sect grey clone override (see above).
+    auto shouldApplyVisualTint = [this, &effectiveTint](NC_STACK_base *base)
     {
-        if ( _visual_tint.IsNeutral() )
+        if ( effectiveTint.IsNeutral() )
             return false;
 
         if ( _bact_type == BACT_TYPES_MISSLE )
@@ -2725,10 +2754,10 @@ void NC_STACK_ypabact::Render(baseRender_msg *arg)
 
     // Apply the tint only around eligible visual prototypes, then restore the
     // neutral default so nothing else rendered with this message gets tinted.
-    auto setTint = [this, arg](bool on)
+    auto setTint = [&effectiveTint, arg](bool on)
     {
         if ( on )
-            arg->tint = GFX::TGLColor(_visual_tint.r, _visual_tint.g, _visual_tint.b, _visual_tint.a);
+            arg->tint = GFX::TGLColor(effectiveTint.r, effectiveTint.g, effectiveTint.b, effectiveTint.a);
         else
             arg->tint = GFX::TGLColor(1.0, 1.0, 1.0, 1.0);
     };
@@ -9040,6 +9069,12 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
                 v4 = cooldownProto.salve_delay;
         }
 
+        // OpenUA Black Sect clone balance: imperfect grey clones (owner 5) fire a
+        // little slower. We stretch the *effective* cooldown (shot_time * malus%) only;
+        // the weapon prototype's shot_time is never modified.
+        if ( World::CloneBalance::IsCloneActor(this) )
+            v4 = (int)((float)v4 * World::CloneBalance::AttackTimeFactor());
+
         if ( arg->g_time - _weapon_time < v4 )
             return 0;
     }
@@ -9486,6 +9521,13 @@ float NC_STACK_ypabact::GetEffectiveShieldWithAdditionalMalus(float additionalMa
 
     mult *= ypabact_DebuffMalusToMult(additionalMalus);
 
+    // OpenUA Black Sect clone balance: imperfect grey clones (owner 5) have a
+    // slightly lower effective defense. This scales the *effective* shield only;
+    // the stored _shield (and the shared prototype) are never modified, so the
+    // malus is recomputed each call and never compounds on save/load/respawn.
+    if ( World::CloneBalance::IsCloneActor(this) )
+        mult *= World::CloneBalance::DownFactor();
+
     if ( mult < 0.0f )
         mult = 0.0f;
 
@@ -9499,6 +9541,21 @@ float NC_STACK_ypabact::GetEffectiveShield() const
 
 void NC_STACK_ypabact::ModifyEnergy(bact_arg84 *arg)
 {
+    // OpenUA Black Sect clone balance: when the *attacker* is an imperfect grey
+    // clone (owner 5), its outgoing final damage is reduced by the malus. This is
+    // the single choke point every damage source funnels through (direct weapons,
+    // missiles, lasers, guns, AoE...), so the malus is applied exactly once per hit
+    // and never compounds. Only actual damage (negative delta) from a real attacker
+    // is scaled; healing/energy transfer and prototype values stay untouched.
+    if ( arg->energy < 0 && World::CloneBalance::IsCloneActor(arg->unit) )
+    {
+        int scaled = (int)((float)arg->energy * World::CloneBalance::DownFactor());
+        // Never let rounding turn a real hit into zero damage.
+        if ( scaled == 0 )
+            scaled = -1;
+        arg->energy = scaled;
+    }
+
     if ( _invulnerable && arg->energy < 0 )
         return;
 
@@ -11410,6 +11467,14 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
             else
                 v45 = v47;
         }
+
+        // OpenUA Black Sect clone balance: imperfect grey clones (owner 5) fire their
+        // machine gun slower. The effective shot_time (cooldown between visible shots)
+        // is stretched by the malus % (game.black_sect_clone_malus_percent), exactly
+        // like the main weapon. Runtime-only; the weapon prototype's shot_time is never
+        // modified, and only owner-5 combat units are affected.
+        if ( World::CloneBalance::IsCloneActor(this) )
+            v45 = (int)((float)v45 * World::CloneBalance::AttackTimeFactor());
 
         if ( arg->field_10 - _mgun_time > v45 )
         {

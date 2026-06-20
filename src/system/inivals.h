@@ -204,6 +204,12 @@ public:
     static Common::Ini::Key GameRoboBuildingCollisionDamagePercent;
     static Common::Ini::Key GameFixedSimulationTick; // OpenUA: game.fixed_simulation_tick (default no) — INI-only frame-rate-independent gameplay speed (render stays at gfx.maxfps)
 
+    // OpenUA: Black Sect "imperfect grey clone" runtime balance (owner/faction 5 only).
+    // Pure runtime maluses applied to live actors; never mutate shared prototypes.
+    static Common::Ini::Key GameBlackSectCloneBalance;     // game.black_sect_clone_balance (default no)
+    static Common::Ini::Key GameBlackSectCloneMalusPercent; // game.black_sect_clone_malus_percent (default 5)
+    static Common::Ini::Key GameBlackSectCloneTint;         // game.black_sect_clone_tint (default 140_140_140_255)
+
     static Common::Ini::Key NetGameExclusiveGem;
     static Common::Ini::Key NetWaitStart;
     static Common::Ini::Key NetKickoff;

@@ -43,6 +43,7 @@
 #include "gui/uaempty.h"
 #include "system/movie.h"
 #include "system/inivals.h"
+#include "world/clonebalance.h"
 #include "obj3d.h"
 
 
@@ -844,6 +845,9 @@ int main(int argc, char *argv[])
 
     // OpenUA experimental: read the INI-only frame-rate-independent gameplay flag once (default no). Not in the UI.
     g_frameRateIndependent = System::IniConf::GameFixedSimulationTick.Get<bool>();
+
+    // OpenUA: cache the Black Sect clone-balance config once, after the INI is parsed.
+    World::CloneBalance::Init();
 
     uint32_t ticks = 0;
 

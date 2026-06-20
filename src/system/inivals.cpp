@@ -212,6 +212,18 @@ Common::Ini::Key IniConf::GameRoboBuildingCollisionDamagePercent("game.robo_buil
 // game.fixed_simulation_tick = no ; Experimental: keep gameplay at real-time speed while allowing render FPS above 60. INI-only, not shown in options menu.
 Common::Ini::Key IniConf::GameFixedSimulationTick("game.fixed_simulation_tick", Common::Ini::KT_BOOL, false);
 
+// OpenUA custom: Black Sect "imperfect grey clone" runtime balance (owner/faction 5).
+// When enabled, live Black Sect actors get a small malus (default 5%) to effective
+// defense, attack speed, outgoing damage, force, maxrot and sound pitch, plus an
+// automatic grey identity tint. These are RUNTIME-only effective-value adjustments:
+// they never modify the shared vehicle/weapon prototypes and never touch energy/maxHP.
+// game.black_sect_clone_balance = no    ; master switch (default off, vanilla behavior)
+Common::Ini::Key IniConf::GameBlackSectCloneBalance("game.black_sect_clone_balance", Common::Ini::KT_BOOL, false);
+// game.black_sect_clone_malus_percent = 5 ; malus magnitude in percent (defense/damage/force/maxrot/pitch -p%, shot_time +p%)
+Common::Ini::Key IniConf::GameBlackSectCloneMalusPercent("game.black_sect_clone_malus_percent", Common::Ini::KT_DIGIT, (int32_t)5);
+// game.black_sect_clone_tint = 140_140_140_255 ; grey clone identity tint, R_G_B_A each 0..255
+Common::Ini::Key IniConf::GameBlackSectCloneTint("game.black_sect_clone_tint", Common::Ini::KT_WORD, std::string("140_140_140_255"));
+
 // Ypaworld keys
 Common::Ini::Key IniConf::NetGameExclusiveGem("netgame.exclusivegem", Common::Ini::KT_BOOL, true);
 Common::Ini::Key IniConf::NetWaitStart("net.waitstart", Common::Ini::KT_DIGIT, (int32_t)150000);
@@ -396,6 +408,9 @@ void IniConf::Init()
         , &GameSpectatorOwner1AI
         , &GameRoboBuildingCollisionDamagePercent
         , &GameFixedSimulationTick
+        , &GameBlackSectCloneBalance
+        , &GameBlackSectCloneMalusPercent
+        , &GameBlackSectCloneTint
 
         , &NetGameExclusiveGem
         , &NetWaitStart
