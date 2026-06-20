@@ -22,8 +22,8 @@ namespace World
 //
 // Energy / max HP is intentionally left untouched, because energy is also tied to
 // unit cost / economy. See the call sites in ypabact.cpp for the exact effective
-// values that are adjusted (defense, shot_time, outgoing damage, force, maxrot,
-// sound pitch) and the grey identity tint applied at render time.
+// values that are adjusted (defense, shot_time, outgoing unit/sector damage,
+// force, maxrot, sound pitch) and the grey identity tint applied at render time.
 namespace CloneBalance
 {
     // Black Sect faction/owner id (the imperfect grey clones).
@@ -49,10 +49,10 @@ namespace CloneBalance
     // The single gate every runtime malus funnels through. True only when:
     //   * the clone balance is enabled, AND
     //   * the actor is a Black Sect (owner 5) actor, AND
-    //   * the actor is an actual combat UNIT (tank/flyer/ufo/car/gun).
+    //   * the actor is an actual combat UNIT (bact/tank/flyer/ufo/car/gun/hover).
     // Exempt actors (return false even for owner 5):
-    //   * the Host Station (BACT_TYPES_ROBO) — the faction command base, not a clone;
-    //   * projectiles (BACT_TYPES_MISSLE) — they keep vanilla flight/pitch/visuals.
+    //   * the Host Station (BACT_TYPES_ROBO) - the faction command base, not a clone;
+    //   * projectiles (BACT_TYPES_MISSLE) - they keep vanilla flight/pitch/visuals.
     //     The reduced firing rate lives on the firing unit (shot_time) and the
     //     outgoing-damage malus is charged to the emitter unit in ModifyEnergy.
     bool IsCloneActor(const NC_STACK_ypabact *bact);

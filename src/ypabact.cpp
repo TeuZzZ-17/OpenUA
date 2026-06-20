@@ -13435,6 +13435,16 @@ void NC_STACK_ypabact::ChangeSectorEnergy(yw_arg129 *arg)
     if ( _world && _world->IsSpectatorBact(this) )
         return;
 
+    // OpenUA Black Sect clone balance: sector/building damage uses ChangeSectorEnergy
+    // instead of ModifyEnergy, so apply the same attacker-side damage malus here.
+    if ( arg->field_10 > 0 && World::CloneBalance::IsCloneActor(arg->unit) )
+    {
+        int scaled = (int)((float)arg->field_10 * World::CloneBalance::DownFactor());
+        if ( scaled == 0 )
+            scaled = 1;
+        arg->field_10 = scaled;
+    }
+
     arg->OwnerID = World::OWNER_RECALC;
 
     _world->ypaworld_func129(arg);

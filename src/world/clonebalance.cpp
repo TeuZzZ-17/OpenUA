@@ -1,10 +1,12 @@
-#include <cstdio>
+#include <cerrno>
 #include <cstdint>
+#include <cstdlib>
 #include <string>
 
 #include "clonebalance.h"
-#include "../ypabact.h"          // NC_STACK_ypabact, BACT_TYPES_ROBO
+#include "../ypabact.h"          // NC_STACK_ypabact, BACT_TYPES_*
 #include "../system/inivals.h"
+#include "../log.h"
 
 namespace World
 {
@@ -18,13 +20,52 @@ static float       s_downFactor       = 0.95f; // 1 - 5/100
 static float       s_attackTimeFactor = 1.05f; // 1 + 5/100
 static TVisualTint s_tint;                      // overwritten by Init()
 
-// Parse "R_G_B_A" (each component 0..255, alpha optional -> 255) into a normalized
-// 0..1 TVisualTint. Mirrors the visual_tint script parser so the INI value uses the
-// same human-readable format as the per-prototype visual_tint param.
+static bool ParseTintComponent(const char *&pos, int *out)
+{
+    errno = 0;
+    char *end = NULL;
+    long value = std::strtol(pos, &end, 10);
+
+    if ( end == pos || errno == ERANGE )
+        return false;
+
+    *out = (int)value;
+    pos = end;
+    return true;
+}
+
+static bool ParseTintComponents(const std::string &str, int comp[4])
+{
+    const char *pos = str.c_str();
+
+    for (int i = 0; i < 4; i++)
+    {
+        if ( !ParseTintComponent(pos, &comp[i]) )
+            return false;
+
+        if ( i < 3 )
+        {
+            if ( *pos != '_' )
+                return false;
+
+            pos++;
+        }
+    }
+
+    return *pos == '\0';
+}
+
+// Parse "R_G_B_A" (each component 0..255) into a normalized 0..1 TVisualTint.
+// Malformed values fall back to the documented grey clone tint and emit a warning.
 static TVisualTint ParseTint(const std::string &str)
 {
-    int comp[4] = { 255, 255, 255, 255 };
-    std::sscanf(str.c_str(), "%d_%d_%d_%d", &comp[0], &comp[1], &comp[2], &comp[3]);
+    int comp[4] = { 140, 140, 140, 255 };
+
+    if ( !ParseTintComponents(str, comp) )
+    {
+        ypa_log_out("Warning: invalid game.black_sect_clone_tint '%s', using 140_140_140_255\n",
+                    str.c_str());
+    }
 
     auto clamp255 = [](int v) -> float
     {
@@ -70,20 +111,20 @@ bool IsCloneActor(const NC_STACK_ypabact *bact)
     if ( bact->_owner != OWNER_BLACK_SECT )
         return false;
 
-    // The Host Station (BACT_TYPES_ROBO mobile base) is the faction command center,
-    // not a disposable grey clone: it keeps full prototype stats.
-    if ( bact->_bact_type == BACT_TYPES_ROBO )
-        return false;
+    switch ( bact->_bact_type )
+    {
+    case BACT_TYPES_BACT:
+    case BACT_TYPES_TANK:
+    case BACT_TYPES_FLYER:
+    case BACT_TYPES_UFO:
+    case BACT_TYPES_CAR:
+    case BACT_TYPES_GUN:
+    case BACT_TYPES_HOVER:
+        return true;
 
-    // Projectiles (BACT_TYPES_MISSLE) are not clone units: they must keep vanilla
-    // flight (force/maxrot), pitch and visuals. The only weapon-side malus is the
-    // firing/reload rate, which lives on the firing UNIT (shot_time), and the
-    // outgoing-damage malus is charged to the emitter unit in ModifyEnergy — so
-    // excluding the projectile here changes none of those.
-    if ( bact->_bact_type == BACT_TYPES_MISSLE )
+    default:
         return false;
-
-    return true;
+    }
 }
 
 }
