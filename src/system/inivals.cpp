@@ -206,6 +206,11 @@ Common::Ini::Key IniConf::GameSpectatorMode("game.spectator_mode", Common::Ini::
 Common::Ini::Key IniConf::GameSpectatorVehicleID("game.spectator_vehicle_id", Common::Ini::KT_DIGIT, (int32_t)0);
 Common::Ini::Key IniConf::GameSpectatorOwner1AI("game.spectator_owner1_ai", Common::Ini::KT_STRING, std::string("balanced"));
 Common::Ini::Key IniConf::GameRoboBuildingCollisionDamagePercent("game.robo_building_collision_damage_percent", Common::Ini::KT_DIGIT, (int32_t)8);
+// OpenUA custom (experimental, INI-only): decouple gameplay speed from render FPS by making the timestep
+// frame-rate-independent (drops the per-frame Period++ bias during gameplay). Render FPS stays at gfx.maxfps
+// with native fluidity; gameplay runs at real-time speed instead of speeding up at high refresh rates.
+// game.fixed_simulation_tick = no ; Experimental: keep gameplay at real-time speed while allowing render FPS above 60. INI-only, not shown in options menu.
+Common::Ini::Key IniConf::GameFixedSimulationTick("game.fixed_simulation_tick", Common::Ini::KT_BOOL, false);
 
 // Ypaworld keys
 Common::Ini::Key IniConf::NetGameExclusiveGem("netgame.exclusivegem", Common::Ini::KT_BOOL, true);
@@ -390,6 +395,7 @@ void IniConf::Init()
         , &GameSpectatorVehicleID
         , &GameSpectatorOwner1AI
         , &GameRoboBuildingCollisionDamagePercent
+        , &GameFixedSimulationTick
 
         , &NetGameExclusiveGem
         , &NetWaitStart

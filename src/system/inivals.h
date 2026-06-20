@@ -202,7 +202,8 @@ public:
     static Common::Ini::Key GameSpectatorVehicleID;
     static Common::Ini::Key GameSpectatorOwner1AI;
     static Common::Ini::Key GameRoboBuildingCollisionDamagePercent;
-    
+    static Common::Ini::Key GameFixedSimulationTick; // OpenUA: game.fixed_simulation_tick (default no) — INI-only frame-rate-independent gameplay speed (render stays at gfx.maxfps)
+
     static Common::Ini::Key NetGameExclusiveGem;
     static Common::Ini::Key NetWaitStart;
     static Common::Ini::Key NetKickoff;

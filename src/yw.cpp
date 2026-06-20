@@ -569,7 +569,10 @@ size_t NC_STACK_ypaworld::Process(base_64arg *arg)
         _updateMessage.frameTime = arg->DTime;
         _updateMessage.units_count = 0;
         _updateMessage.inpt = arg->field_8;
-        _FPS = 1024 / arg->DTime;
+        // OpenUA: with frame-rate-independent gameplay (game.fixed_simulation_tick) the measured frame time
+        // can round to DTime==0 above ~1024 FPS; keep the previous FPS reading and avoid a divide-by-zero.
+        if ( arg->DTime )
+            _FPS = 1024 / arg->DTime;
         _profileVals[PFID_FPS] = _FPS;
 
         HistoryEventAdd(World::History::Frame(_timeStamp));

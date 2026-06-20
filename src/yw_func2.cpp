@@ -2871,14 +2871,24 @@ static std::string db_weapon_model_display_name(const World::TWeapProto &p)
     }
 }
 
-static bool db_weapon_has_aoe(const World::TWeapProto &p)
+static std::string db_weapon_aoe_atk_display(const World::TWeapProto &p)
 {
-    return p.aoe_unit_energy != 0 ||
-           p.aoe_building_energy != 0 ||
-           p.aoe_sector_energy != 0 ||
-           p.aoe_unit_radius > 0.0f ||
-           p.aoe_building_radius > 0.0f ||
-           p.aoe_sector_radius > 0.0f;
+    if ( p.aoe_unit_energy <= 0 )
+        return "None";
+
+    // Keep the same player-facing damage scale used by the normal ATK row.
+    return fmt::sprintf("%d", p.aoe_unit_energy / 100);
+}
+
+static std::string db_weapon_debuff_display(const World::TWeapProto &p)
+{
+    if ( !p.debuff.allow )
+        return "None";
+
+    if ( p.debuff.name.empty() )
+        return "Unnamed";
+
+    return db_trunc(p.debuff.name, 18);
 }
 
 static std::string db_building_model_display_name(const World::TBuildingProto &p)
@@ -3511,8 +3521,8 @@ void UserData::PopulateDetailPane()
         const World::TWeapProto &p = wpns[pid];
         statLines[0] = "Model: " + db_trunc(db_weapon_model_display_name(p), 18);
         statLines[1] = fmt::sprintf("ATK: %d", p.energy / 100);
-        statLines[2] = std::string("AoE: ") + (db_weapon_has_aoe(p) ? "yes" : "no");
-        statLines[3] = " ";
+        statLines[2] = "AoE ATK: " + db_weapon_aoe_atk_display(p);
+        statLines[3] = "Debuff: " + db_weapon_debuff_display(p);
     }
     else
     {
