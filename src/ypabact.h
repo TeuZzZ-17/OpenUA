@@ -456,6 +456,9 @@ public:
     void UpdateLaser(update_msg *arg);
     void RequestLaserFire(int weaponId, bact_arg79 *arg);
     void StopLaser(); // disconnect: reset tick state, stop loop sound, hide beam
+    void UpdateVerticalLaser(update_msg *arg); // OpenUA custom: model = vertical_laser downward beam
+    void RequestVerticalLaserFire(int weaponId, bact_arg79 *arg);
+    void StopVerticalLaser();
     void UpdateDamageFX(update_msg *arg);
     void UpdateDecorationFX(update_msg *arg);
     void AddAoePush(const vec3d &dir, float distance); // queue aoe_unit_push knockback
@@ -775,6 +778,7 @@ public:
     TSndCarrier _debuff_soundcarrier;
     TSndCarrier _damaged_shake_carrier;
     TSndCarrier _laser_soundcarrier; // OpenUA custom: managed loop sound for model = laser
+    TSndCarrier _vertical_laser_soundcarrier; // OpenUA custom: managed loop sound for model = vertical_laser
     int _vp_active;
     extra_vproto _vp_extra[3];
     int _vp_extra_mode;
@@ -939,6 +943,15 @@ public:
     int _laser_next_beam_vp_time = 0;      // next _clock at which the VP beam body may be refreshed
     std::vector<TLaserBeamRequest> _laser_requests;
     std::vector<TLaserBeamRuntime> _laser_beams;
+    // OpenUA custom: separate downward beam runtime for model = vertical_laser.
+    bool _vertical_laser_active = false;
+    bool _vertical_laser_fire_request = false;
+    int _vertical_laser_weapon = -1;
+    NC_STACK_ypabact *_vertical_laser_request_target = NULL;
+    vec3d _vertical_laser_request_start;
+    int _vertical_laser_next_beam_vp_time = 0;
+    TLaserBeamRuntime _vertical_laser_beam;
+    std::vector<TLaserBeamRuntime> _vertical_laser_beams;
     int _seek_and_explode;
     int _seek_and_explode_weapon;
     float _seek_and_explode_trigger_radius;

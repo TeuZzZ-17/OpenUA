@@ -2370,6 +2370,7 @@ bool WeaponProtoParser::IsScope(ScriptParser::Parser &parser, const std::string 
         _wpn->laser_chain_radius = 0.0;
         _wpn->laser_chain_damage_mult = 1.0;
         _wpn->laser_multi_target = 1;
+        _wpn->vertical_laser_fire_radius = 300.0;
         _wpn->vp_normal = 0;
         _wpn->vp_fire = 1;
         _wpn->vp_megadeth = 2;
@@ -2447,6 +2448,8 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
             _wpn->_weaponFlags = TWeapProto::WEAPON_FLAGS_MORTAR;
         else if ( !StriCmp(p2, "laser") )
             _wpn->_weaponFlags = TWeapProto::WEAPON_FLAGS_LASER;
+        else if ( !StriCmp(p2, "vertical_laser") )
+            _wpn->_weaponFlags = TWeapProto::WEAPON_FLAGS_VERTICAL_LASER;
         else if ( !StriCmp(p2, "bomb") || !StriCmp(p2, "special") )
             _wpn->_weaponFlags = TWeapProto::WEAPON_FLAGS_BOMB;
         else
@@ -2859,6 +2862,11 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     {
         int maxTargets = parser.stol(p2, NULL, 0);
         _wpn->laser_multi_target = maxTargets > 1 ? maxTargets : 1;
+    }
+    else if ( !StriCmp(p1, "vertical_laser_fire_radius") )
+    {
+        float radius = parser.stof(p2, 0);
+        _wpn->vertical_laser_fire_radius = radius > 0.0 ? radius : 300.0;
     }
     else if ( !StriCmp(p1, "snd_loop_sample") )
     {

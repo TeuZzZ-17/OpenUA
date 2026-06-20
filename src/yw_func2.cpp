@@ -2855,6 +2855,8 @@ static std::string db_weapon_model_display_name(const World::TWeapProto &p)
 {
     if ( p.IsLaser() )
         return "laser";
+    if ( p.IsVerticalLaser() )
+        return "vertical_laser";
     if ( p.IsMortar() )
         return "mortar";
     if ( p.IsHomingBomb() )

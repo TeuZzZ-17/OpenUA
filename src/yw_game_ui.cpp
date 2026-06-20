@@ -9545,11 +9545,12 @@ void yw_RenderInfoReloadbar(NC_STACK_ypaworld *yw, sklt_wis *wis, CmdStream *cur
         if ( bact )
         {
 
-            int v10 = wpn->IsLaser() ? wpn->laser_energy_tick_time_user : wpn->shot_time_user;
+            bool laserLike = wpn->IsLaser() || wpn->IsVerticalLaser();
+            int v10 = laserLike ? wpn->laser_energy_tick_time_user : wpn->shot_time_user;
             if ( v10 <= 0 )
-                v10 = wpn->IsLaser() ? 150 : 1000;
+                v10 = laserLike ? 150 : 1000;
 
-            if ( !wpn->IsLaser() && wpn->salve_shots )
+            if ( !laserLike && wpn->salve_shots )
             {
                 if ( bact->_salve_counter >= wpn->salve_shots )
                     v10 = wpn->salve_delay;
@@ -9580,10 +9581,10 @@ void yw_RenderInfoWeaponInf(NC_STACK_ypaworld *yw, sklt_wis *wis, CmdStream *cur
     {
         std::string txt2;
 
-        // OpenUA custom: model = laser uses the same public damage readout as
+        // OpenUA custom: laser-like beam weapons use the same public damage readout as
         // vanilla weapons (energy / 100), plus a trailing "+" when connected
         // ticks ramp up laser_energy_increment_rate.
-        if ( weap->IsLaser() )
+        if ( weap->IsLaser() || weap->IsVerticalLaser() )
         {
             txt2 = fmt::sprintf("%d", weap->energy / 100);
 

@@ -511,6 +511,7 @@ struct TWeapProto
         WEAPON_FLAG_HOMING_BOMB = 32,
         WEAPON_FLAG_MORTAR = 64, // OpenUA custom: radar-guided ballistic barrage
         WEAPON_FLAG_LASER = 128, // OpenUA custom: continuous targeted beam weapon
+        WEAPON_FLAG_VERTICAL_LASER = 256, // OpenUA custom: downward continuous beam weapon
 
         WEAPON_FLAGS_BOMB = WEAPON_FLAG_PROJECTILE,
         WEAPON_FLAGS_ROCKET = WEAPON_FLAG_PROJECTILE | WEAPON_FLAG_DIRECT,
@@ -522,7 +523,8 @@ struct TWeapProto
         // Laser keeps PROJECTILE|DIRECT|TARGETED so the AI/aim/lock logic treats it
         // like a normal targeted weapon, but the LASER bit reroutes firing to the
         // continuous-beam path (UpdateLaser) instead of spawning a projectile.
-        WEAPON_FLAGS_LASER = WEAPON_FLAG_PROJECTILE | WEAPON_FLAG_DIRECT | WEAPON_FLAG_TARGETED | WEAPON_FLAG_LASER
+        WEAPON_FLAGS_LASER = WEAPON_FLAG_PROJECTILE | WEAPON_FLAG_DIRECT | WEAPON_FLAG_TARGETED | WEAPON_FLAG_LASER,
+        WEAPON_FLAGS_VERTICAL_LASER = WEAPON_FLAG_PROJECTILE | WEAPON_FLAG_VERTICAL_LASER
     };
 
     int8_t unitID = 0;
@@ -546,9 +548,15 @@ struct TWeapProto
         return (_weaponFlags & WEAPON_FLAG_LASER) != 0;
     }
 
+    // OpenUA custom: true only for weapons declared as "model = vertical_laser".
+    bool IsVerticalLaser() const
+    {
+        return (_weaponFlags & WEAPON_FLAG_VERTICAL_LASER) != 0;
+    }
+
     bool IsBombLike() const
     {
-        return _weaponFlags == WEAPON_FLAGS_BOMB || IsHomingBomb();
+        return _weaponFlags == WEAPON_FLAGS_BOMB || IsHomingBomb() || IsVerticalLaser();
     }
 
     int GetFireControlFlags() const
@@ -603,10 +611,9 @@ struct TWeapProto
     int salve_delay = 0;
     int missile_multi_target = 0;
     int homing_bomb_multi_target = 0; // OpenUA: multi-target spread, only on model = homing_bomb
-    // OpenUA custom: dedicated continuous beam weapon ("model = laser").
-    // Vanilla-safe: these are only consulted when IsLaser() is true. For a laser
-    // weapon, "energy" is static base damage per tick; the class multipliers below
-    // (energy_heli/tank/flyer/robo) are applied like normal projectile weapons.
+    // OpenUA custom: shared continuous beam parameters for model = laser and
+    // model = vertical_laser. "energy" is static base damage per tick; the class
+    // multipliers below (energy_heli/tank/flyer/robo) are applied like normal weapons.
     int   laser_energy_tick_time = 250;        // ms between damage ticks for AI/non-player fire
     int   laser_energy_tick_time_user = 150;   // ms between damage ticks for player-controlled fire
     float laser_energy_increment_rate = 0.0;   // extra base damage added after each connected tick
@@ -617,6 +624,7 @@ struct TWeapProto
     float laser_chain_radius = 0.0;            // search radius around the last chained unit
     float laser_chain_damage_mult = 1.0;       // cumulative damage multiplier per chain jump
     int   laser_multi_target = 1;              // total direct shooter-to-target laser beams (<=1 = off)
+    float vertical_laser_fire_radius = 300.0;  // X/Z distance required before AI fires downward
     float energy_heli = 0.0;
     float energy_tank = 0.0;
     float energy_flyer = 0.0;

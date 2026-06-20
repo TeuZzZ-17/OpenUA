@@ -1184,6 +1184,7 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _mortar_has_pending = false;
     _mortar_pending_target = vec3d(0.0, 0.0, 0.0);
     StopLaser();
+    StopVerticalLaser();
     _seek_and_explode = 0;
     _seek_and_explode_weapon = 0;
     _seek_and_explode_trigger_radius = 0.0;
@@ -1341,6 +1342,7 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _mortar_has_pending = false;
     _mortar_pending_target = vec3d(0.0, 0.0, 0.0);
     StopLaser();
+    StopVerticalLaser();
     _seek_and_explode = 0;
     _seek_and_explode_weapon = 0;
     _seek_and_explode_trigger_radius = 0.0;
@@ -1492,6 +1494,7 @@ size_t NC_STACK_ypabact::Deinit()
     SFXEngine::SFXe.StopCarrier(&_debuff_soundcarrier);
     SFXEngine::SFXe.StopCarrier(&_damaged_shake_carrier);
     SFXEngine::SFXe.StopCarrier(&_laser_soundcarrier);
+    SFXEngine::SFXe.StopCarrier(&_vertical_laser_soundcarrier);
     _active_debuff.Clear();
 
     _status_flg |= BACT_STFLAG_CLEAN;
@@ -2225,6 +2228,7 @@ void NC_STACK_ypabact::Update(update_msg *arg)
     UpdateMortar(arg);
     AI_layer1(arg);
     UpdateLaser(arg); // OpenUA custom: process this frame's laser fire request (must run after AI_layer1 firing)
+    UpdateVerticalLaser(arg);
     UpdateAoePush(arg);
     UpdateSeekAndExplode(arg);
     UpdateUnitGuns(arg);
@@ -7584,6 +7588,16 @@ static bool ypabact_LaserTargetInList(NC_STACK_ypabact *target, const std::vecto
     return std::find(targets.begin(), targets.end(), target) != targets.end();
 }
 
+static bool ypabact_IsLaserFriendlyToShooter(NC_STACK_ypabact *shooter, NC_STACK_ypabact *unit)
+{
+    return shooter && unit && unit->_owner != World::OWNER_0 && unit->_owner == shooter->_owner;
+}
+
+static bool ypabact_IsLaserEnemyToShooter(NC_STACK_ypabact *shooter, NC_STACK_ypabact *unit)
+{
+    return shooter && unit && unit->_owner != World::OWNER_0 && unit->_owner != shooter->_owner;
+}
+
 // Shared owner/validity filter for laser secondary targets. Used both for direct
 // multi-target beams and for chain jumps (identical logic); "friendly" selects
 // same-owner vs enemy-owner targets.
@@ -7597,9 +7611,9 @@ static bool ypabact_IsLaserSecondaryTargetCandidate(NC_STACK_ypabact *shooter, N
         return false;
 
     if ( friendly )
-        return unit->_owner == shooter->_owner;
+        return ypabact_IsLaserFriendlyToShooter(shooter, unit);
 
-    return unit->_owner != shooter->_owner;
+    return ypabact_IsLaserEnemyToShooter(shooter, unit);
 }
 
 static NC_STACK_ypabact *ypabact_FindNearestLaserMultiTarget(NC_STACK_ypabact *shooter, const vec3d &origin,
@@ -7751,6 +7765,33 @@ static void ypabact_AddLaserMultiTargetRequests(NC_STACK_ypabact *shooter, const
 
         requests->push_back(request);
         selectedTargets.push_back(target);
+    }
+}
+
+static void ypabact_ApplyLaserLoopNormalFX(TSoundSource &snd, World::TWeapProto &wproto)
+{
+    World::TVhclSound &normalFx = wproto.sndFXes[World::TWeapProto::SND_NORMAL];
+
+    if ( normalFx.sndPrm.slot )
+    {
+        snd.PPFx = &normalFx.sndPrm;
+        snd.SetPFx(true);
+    }
+    else
+    {
+        snd.PPFx = NULL;
+        snd.SetPFx(false);
+    }
+
+    if ( normalFx.sndPrm_shk.slot )
+    {
+        snd.PShkFx = &normalFx.sndPrm_shk;
+        snd.SetShk(true);
+    }
+    else
+    {
+        snd.PShkFx = NULL;
+        snd.SetShk(false);
     }
 }
 
@@ -8090,6 +8131,7 @@ void NC_STACK_ypabact::UpdateLaser(update_msg *arg)
         _laser_beams.resize(requests.size());
     size_t activeBeamCount = requests.size();
     NC_STACK_ypabact *primaryHitTarget = NULL;
+    NC_STACK_ypabact *primaryChainGroupTarget = NULL;
     std::vector<NC_STACK_ypabact *> directHitTargets;
     directHitTargets.reserve(requests.size());
 
@@ -8163,17 +8205,27 @@ void NC_STACK_ypabact::UpdateLaser(update_msg *arg)
 
         if ( i == 0 )
         {
+            NC_STACK_ypabact *requestedGroupTarget =
+                (request.target && request.target->_owner != World::OWNER_0 &&
+                 ypabact_IsLaserDamageTarget(this, request.target))
+                    ? request.target
+                    : NULL;
+
             _laser_beam_start = beam.start;
             _laser_beam_end = beam.end;
             _laser_request_start = request.start;
             _laser_request_dir = dir;
             _laser_target = target;
             primaryHitTarget = target;
+            primaryChainGroupTarget = requestedGroupTarget ? requestedGroupTarget : target;
             request.target = target;
 
-            bool friendlyMultiTargets = target && target->_owner == _owner;
-            ypabact_AddLaserMultiTargetRequests(this, wproto, &requests, range,
-                                                friendlyMultiTargets, playerControlled);
+            if ( primaryChainGroupTarget && primaryChainGroupTarget->_owner != World::OWNER_0 )
+            {
+                bool friendlyMultiTargets = ypabact_IsLaserFriendlyToShooter(this, primaryChainGroupTarget);
+                ypabact_AddLaserMultiTargetRequests(this, wproto, &requests, range,
+                                                    friendlyMultiTargets, playerControlled);
+            }
             ypabact_StoreHUDLaserMultiLockTargets(this, requests);
         }
 
@@ -8281,63 +8333,70 @@ void NC_STACK_ypabact::UpdateLaser(update_msg *arg)
          primaryHitTarget->_owner != World::OWNER_0 &&
          ypabact_IsLaserDamageTarget(this, primaryHitTarget) )
     {
-        bool friendlyChain = primaryHitTarget->_owner == _owner;
-        std::vector<NC_STACK_ypabact *> chainHits;
-        chainHits.reserve(directHitTargets.size() + (size_t)wproto.laser_chain_max_jumps + 1);
-        chainHits = directHitTargets;
-        if ( !ypabact_LaserTargetInList(primaryHitTarget, chainHits) )
-            chainHits.push_back(primaryHitTarget);
+        NC_STACK_ypabact *chainGroupTarget = primaryChainGroupTarget ? primaryChainGroupTarget : primaryHitTarget;
+        bool friendlyChain = ypabact_IsLaserFriendlyToShooter(this, chainGroupTarget);
+        bool canRunChain = (!friendlyChain || playerControlled) &&
+                           ypabact_IsLaserSecondaryTargetCandidate(this, primaryHitTarget, friendlyChain);
 
-        NC_STACK_ypabact *from = primaryHitTarget;
-        float chainDamageMult = 1.0f;
-        float perJumpMult = wproto.laser_chain_damage_mult > 0.0f ? wproto.laser_chain_damage_mult : 1.0f;
-
-        for (int jump = 0; jump < wproto.laser_chain_max_jumps; jump++)
+        if ( canRunChain )
         {
-            NC_STACK_ypabact *target = ypabact_FindLaserChainTarget(this, from, wproto.laser_chain_radius,
-                                                                    friendlyChain, chainHits);
-            if ( !target )
-                break;
+            std::vector<NC_STACK_ypabact *> chainHits;
+            chainHits.reserve(directHitTargets.size() + (size_t)wproto.laser_chain_max_jumps + 1);
+            chainHits = directHitTargets;
+            if ( !ypabact_LaserTargetInList(primaryHitTarget, chainHits) )
+                chainHits.push_back(primaryHitTarget);
 
-            size_t beamIndex = activeBeamCount++;
-            if ( _laser_beams.size() <= beamIndex )
-                _laser_beams.resize(beamIndex + 1);
+            NC_STACK_ypabact *from = primaryHitTarget;
+            float chainDamageMult = 1.0f;
+            float perJumpMult = wproto.laser_chain_damage_mult > 0.0f ? wproto.laser_chain_damage_mult : 1.0f;
 
-            TLaserBeamRuntime &beam = _laser_beams[beamIndex];
-            bool beamWasActive = wasActive && beamIndex < oldBeamCount;
-
-            beam.start = from->_position;
-            beam.end = target->_position;
-
-            vec3d dir = beam.end - beam.start;
-            if ( dir.normalise() < 0.001f )
-                dir = _rotation.AxisZ();
-
-            if ( !beamWasActive || target->_gid != beam.target_gid )
+            for (int jump = 0; jump < wproto.laser_chain_max_jumps; jump++)
             {
-                beam.energy_ticks = 0;
-                beam.next_damage_time = 0;
-                beam.next_fx_time = 0;
+                NC_STACK_ypabact *target = ypabact_FindLaserChainTarget(this, from, wproto.laser_chain_radius,
+                                                                        friendlyChain, chainHits);
+                if ( !target )
+                    break;
+
+                size_t beamIndex = activeBeamCount++;
+                if ( _laser_beams.size() <= beamIndex )
+                    _laser_beams.resize(beamIndex + 1);
+
+                TLaserBeamRuntime &beam = _laser_beams[beamIndex];
+                bool beamWasActive = wasActive && beamIndex < oldBeamCount;
+
+                beam.start = from->_position;
+                beam.end = target->_position;
+
+                vec3d dir = beam.end - beam.start;
+                if ( dir.normalise() < 0.001f )
+                    dir = _rotation.AxisZ();
+
+                if ( !beamWasActive || target->_gid != beam.target_gid )
+                {
+                    beam.energy_ticks = 0;
+                    beam.next_damage_time = 0;
+                    beam.next_fx_time = 0;
+                }
+                beam.target_gid = target->_gid;
+
+                chainDamageMult *= perJumpMult;
+
+                if ( spawnBeamVPs )
+                    ypabact_SpawnLaserBeamVPs(this, wproto, beam.start, beam.end);
+
+                ypabact_ApplyLaserUnitTick(this, wproto, target, beam, playerControlled, chainDamageMult);
+
+                if ( _clock >= beam.next_fx_time )
+                {
+                    int impactVP = wproto.vp_dead > 0 ? wproto.vp_dead : wproto.vp_megadeth;
+                    if ( impactVP > 0 )
+                        _world->SpawnTransientVP(impactVP, beam.end, ypabact_LaserRotationFromDir(dir, _rotation), 90);
+                    beam.next_fx_time = _clock + 160;
+                }
+
+                chainHits.push_back(target);
+                from = target;
             }
-            beam.target_gid = target->_gid;
-
-            chainDamageMult *= perJumpMult;
-
-            if ( spawnBeamVPs )
-                ypabact_SpawnLaserBeamVPs(this, wproto, beam.start, beam.end);
-
-            ypabact_ApplyLaserUnitTick(this, wproto, target, beam, playerControlled, chainDamageMult);
-
-            if ( _clock >= beam.next_fx_time )
-            {
-                int impactVP = wproto.vp_dead > 0 ? wproto.vp_dead : wproto.vp_megadeth;
-                if ( impactVP > 0 )
-                    _world->SpawnTransientVP(impactVP, beam.end, ypabact_LaserRotationFromDir(dir, _rotation), 90);
-                beam.next_fx_time = _clock + 160;
-            }
-
-            chainHits.push_back(target);
-            from = target;
         }
     }
 
@@ -8381,10 +8440,7 @@ void NC_STACK_ypabact::UpdateLaser(update_msg *arg)
         snd.PriorityBias = 0;
         snd.SetLoop(true);
         snd.SetFragmented(false);
-        snd.PPFx = NULL;
-        snd.SetPFx(false);
-        snd.PShkFx = NULL;
-        snd.SetShk(false);
+        ypabact_ApplyLaserLoopNormalFX(snd, wproto);
 
         _laser_soundcarrier.Position = _laser_beam_start;
         _laser_soundcarrier.Vector = _fly_dir * _fly_dir_length;
@@ -8393,6 +8449,454 @@ void NC_STACK_ypabact::UpdateLaser(update_msg *arg)
             SFXEngine::SFXe.startSound(&_laser_soundcarrier, 0);
 
         SFXEngine::SFXe.UpdateSoundCarrier(&_laser_soundcarrier);
+    }
+}
+
+static float ypabact_VerticalLaserFireRadius(const World::TWeapProto &wproto)
+{
+    return wproto.vertical_laser_fire_radius > 0.0f ? wproto.vertical_laser_fire_radius : 300.0f;
+}
+
+static vec3d ypabact_VerticalLaserSourceOrigin(NC_STACK_ypabact *bact, const bact_arg79 *arg)
+{
+    if ( !bact )
+        return vec3d(0.0, 0.0, 0.0);
+
+    vec3d localOffset = arg ? arg->start_point : bact->_fire_pos;
+    return bact->_position + bact->_rotation.Transpose().Transform(localOffset);
+}
+
+static bool ypabact_IsVerticalLaserMultiCandidate(NC_STACK_ypabact *shooter, NC_STACK_ypabact *unit,
+                                                  bool friendlyTargets, const vec3d &origin,
+                                                  float range, float fireRadius,
+                                                  const std::vector<NC_STACK_ypabact *> &excluded)
+{
+    if ( !ypabact_IsLaserSecondaryTargetCandidate(shooter, unit, friendlyTargets) )
+        return false;
+    if ( ypabact_LaserTargetInList(unit, excluded) )
+        return false;
+
+    vec3d to = unit->_position - origin;
+    if ( to.y < 0.0f || to.y > range )
+        return false;
+
+    return to.XZ().length() <= fireRadius;
+}
+
+static NC_STACK_ypabact *ypabact_FindNearestVerticalLaserTarget(NC_STACK_ypabact *shooter,
+                                                               const vec3d &origin,
+                                                               float range, float fireRadius,
+                                                               bool friendlyTargets,
+                                                               const std::vector<NC_STACK_ypabact *> &excluded)
+{
+    if ( !shooter || !shooter->getBACT_pWorld() || range <= 0.0f || fireRadius <= 0.0f )
+        return NULL;
+
+    NC_STACK_ypaworld *world = shooter->getBACT_pWorld();
+    int sectorRadius = (int)(fireRadius / World::CVSectorLength) + 2;
+    Common::Point center = World::PositionToSectorID(origin);
+
+    NC_STACK_ypabact *best = NULL;
+    float bestDist = fireRadius + 1.0f;
+
+    for (int y = center.y - sectorRadius; y <= center.y + sectorRadius; y++)
+    {
+        for (int x = center.x - sectorRadius; x <= center.x + sectorRadius; x++)
+        {
+            Common::Point cellId(x, y);
+            if ( !world->IsSector(cellId) )
+                continue;
+
+            cellArea &cell = world->SectorAt(cellId);
+
+            for (NC_STACK_ypabact *bct : cell.unitsList)
+            {
+                if ( !ypabact_IsVerticalLaserMultiCandidate(shooter, bct, friendlyTargets,
+                                                            origin, range, fireRadius, excluded) )
+                    continue;
+
+                float dist = (bct->_position.XZ() - origin.XZ()).length();
+                if ( dist < bestDist )
+                {
+                    bestDist = dist;
+                    best = bct;
+                }
+            }
+        }
+    }
+
+    return best;
+}
+
+static NC_STACK_ypabact *ypabact_UpdateVerticalLaserBeam(NC_STACK_ypabact *shooter,
+                                                        World::TWeapProto &wproto,
+                                                        NC_STACK_ypabact::TLaserBeamRuntime &beam,
+                                                        const vec3d &start, const vec3d &down,
+                                                        float range, bool beamWasActive,
+                                                        bool spawnBeamVPs, bool playerControlled,
+                                                        float damageMult)
+{
+    NC_STACK_ypaworld *world = shooter ? shooter->getBACT_pWorld() : NULL;
+    if ( !world )
+        return NULL;
+
+    TLaserUnitHit unitHit;
+    bool hasUnitHit = ypabact_LaserHitscan(shooter, wproto, start, down, range, &unitHit);
+
+    vec3d worldHitPoint;
+    bool worldHit = ypabact_LaserWorldHit(shooter, start, down, range, &worldHitPoint);
+    float worldAlong = range + 1.0f;
+    if ( worldHit )
+    {
+        worldAlong = (worldHitPoint - start).dot(down);
+        if ( worldAlong < 0.0f )
+            worldHit = false;
+    }
+
+    bool useWorldHit = worldHit && (!hasUnitHit || worldAlong <= unitHit.along);
+    NC_STACK_ypabact *target = (!useWorldHit && hasUnitHit) ? unitHit.target : NULL;
+
+    beam.start = start;
+    if ( target )
+        beam.end = unitHit.hitPoint;
+    else if ( useWorldHit )
+        beam.end = worldHitPoint;
+    else
+        beam.end = start + down * range;
+
+    if ( !beamWasActive && wproto.vp_launch > 0 )
+        world->SpawnTransientVP(wproto.vp_launch, beam.start,
+                                ypabact_LaserRotationFromDir(down, shooter->_rotation), 90);
+
+    if ( spawnBeamVPs )
+        ypabact_SpawnLaserBeamVPs(shooter, wproto, beam.start, beam.end);
+
+    if ( target )
+    {
+        if ( !beamWasActive || target->_gid != beam.target_gid )
+        {
+            beam.energy_ticks = 0;
+            beam.next_damage_time = 0;
+            beam.next_fx_time = 0;
+        }
+
+        beam.target_gid = target->_gid;
+        ypabact_ApplyLaserUnitTick(shooter, wproto, target, beam, playerControlled, damageMult);
+
+        if ( shooter->_clock >= beam.next_fx_time )
+        {
+            int impactVP = wproto.vp_dead > 0 ? wproto.vp_dead : wproto.vp_megadeth;
+            if ( impactVP > 0 )
+                world->SpawnTransientVP(impactVP, beam.end,
+                                        ypabact_LaserRotationFromDir(down, shooter->_rotation), 90);
+            beam.next_fx_time = shooter->_clock + 160;
+        }
+    }
+    else
+    {
+        TLaserWorldHit sectorHit;
+        bool hasSectorHit = false;
+
+        if ( useWorldHit )
+        {
+            hasSectorHit = ypabact_LaserGetSectorHit(world, worldHitPoint + down * 5.0f, &sectorHit);
+            if ( !hasSectorHit )
+                hasSectorHit = ypabact_LaserGetSectorHit(world, worldHitPoint, &sectorHit);
+        }
+
+        if ( hasSectorHit )
+        {
+            int32_t sectorTargetId = ypabact_LaserSectorTargetId(sectorHit);
+            if ( !beamWasActive || sectorTargetId != beam.target_gid )
+            {
+                beam.energy_ticks = 0;
+                beam.next_damage_time = 0;
+                beam.next_fx_time = 0;
+            }
+            beam.target_gid = sectorTargetId;
+
+            if ( beam.next_damage_time <= 0 || shooter->_clock >= beam.next_damage_time )
+            {
+                int applyNow = ypabact_LaserTickSectorEnergy(wproto, beam.energy_ticks);
+
+                NC_STACK_ypabact *userHost = world->getYW_userHostStation();
+                bool canApplyDamage = !world->_isNetGame ||
+                                      (userHost && userHost->_owner == shooter->_owner);
+
+                if ( applyNow > 0 && canApplyDamage )
+                {
+                    yw_arg129 dmg;
+                    dmg.field_0 = 0;
+                    dmg.pos = sectorHit.damagePos;
+                    dmg.field_10 = applyNow;
+                    dmg.unit = shooter;
+                    shooter->ChangeSectorEnergy(&dmg);
+                }
+
+                beam.energy_ticks++;
+                beam.next_damage_time = shooter->_clock + ypabact_LaserDamageInterval(wproto, playerControlled);
+            }
+        }
+        else
+        {
+            beam.energy_ticks = 0;
+            beam.target_gid = 0;
+            beam.next_damage_time = 0;
+        }
+
+        if ( useWorldHit && shooter->_clock >= beam.next_fx_time )
+        {
+            int impactVP = wproto.vp_megadeth > 0 ? wproto.vp_megadeth : wproto.vp_dead;
+            if ( impactVP > 0 )
+                world->SpawnTransientVP(impactVP, beam.end,
+                                        ypabact_LaserRotationFromDir(down, shooter->_rotation), 90);
+            beam.next_fx_time = shooter->_clock + 160;
+        }
+    }
+
+    return target;
+}
+
+void NC_STACK_ypabact::RequestVerticalLaserFire(int weaponId, bact_arg79 *arg)
+{
+    _vertical_laser_weapon = weaponId;
+    _vertical_laser_fire_request = true;
+    _vertical_laser_request_target = (arg && arg->tgType == BACT_TGT_TYPE_UNIT) ? arg->target.pbact : NULL;
+    _vertical_laser_request_start = ypabact_VerticalLaserSourceOrigin(this, arg);
+}
+
+void NC_STACK_ypabact::StopVerticalLaser()
+{
+    if ( !_vertical_laser_soundcarrier.Sounds.empty() &&
+         _vertical_laser_soundcarrier.Sounds[0].IsEnabled() )
+    {
+        SFXEngine::SFXe.StopCarrier(&_vertical_laser_soundcarrier);
+    }
+
+    _vertical_laser_active = false;
+    _vertical_laser_fire_request = false;
+    _vertical_laser_weapon = -1;
+    _vertical_laser_request_target = NULL;
+    _vertical_laser_request_start = vec3d(0.0, 0.0, 0.0);
+    _vertical_laser_next_beam_vp_time = 0;
+    _vertical_laser_beam = TLaserBeamRuntime();
+    _vertical_laser_beams.clear();
+}
+
+void NC_STACK_ypabact::UpdateVerticalLaser(update_msg *arg)
+{
+    (void)arg;
+
+    bool requested = _vertical_laser_fire_request;
+    _vertical_laser_fire_request = false;
+
+    if ( !requested || !_world || _vertical_laser_weapon < 0 ||
+         (size_t)_vertical_laser_weapon >= _world->GetWeaponsProtos().size() )
+    {
+        StopVerticalLaser();
+        return;
+    }
+
+    World::TWeapProto &wproto = _world->GetWeaponsProtos().at(_vertical_laser_weapon);
+    if ( !wproto.IsVerticalLaser() )
+    {
+        StopVerticalLaser();
+        return;
+    }
+
+    // UA world coordinates use +Y as "down" toward terrain/buildings.
+    const vec3d down(0.0, 1.0, 0.0);
+    float range = ypabact_LaserRange(wproto);
+    float fireRadius = ypabact_VerticalLaserFireRadius(wproto);
+    bool playerControlled = getBACT_inputting() || getBACT_viewer();
+    bool wasActive = _vertical_laser_active;
+    size_t oldBeamCount = _vertical_laser_beams.size();
+    bool spawnBeamVPs = (_vertical_laser_next_beam_vp_time <= 0 ||
+                         _clock >= _vertical_laser_next_beam_vp_time);
+
+    _vertical_laser_active = true;
+
+    if ( _vertical_laser_beams.empty() )
+        _vertical_laser_beams.resize(1);
+
+    size_t activeBeamCount = 0;
+    std::vector<NC_STACK_ypabact *> directHitTargets;
+    directHitTargets.reserve((size_t)wproto.laser_multi_target + 1);
+
+    NC_STACK_ypabact *primaryHitTarget =
+        ypabact_UpdateVerticalLaserBeam(this, wproto, _vertical_laser_beams[0],
+                                        _vertical_laser_request_start, down, range,
+                                        wasActive && oldBeamCount > 0,
+                                        spawnBeamVPs, playerControlled, 1.0f);
+    activeBeamCount = 1;
+
+    NC_STACK_ypabact *primaryChainGroupTarget =
+        (_vertical_laser_request_target && _vertical_laser_request_target->_owner != World::OWNER_0 &&
+         ypabact_IsLaserDamageTarget(this, _vertical_laser_request_target))
+            ? _vertical_laser_request_target
+            : primaryHitTarget;
+
+    if ( primaryHitTarget && primaryHitTarget->_owner != World::OWNER_0 &&
+         ypabact_IsLaserDamageTarget(this, primaryHitTarget) )
+    {
+        directHitTargets.push_back(primaryHitTarget);
+    }
+
+    bool friendlyMultiTargets = ypabact_IsLaserFriendlyToShooter(this, primaryChainGroupTarget);
+    bool allowFriendlyExtraTargets = !friendlyMultiTargets || playerControlled;
+
+    if ( primaryChainGroupTarget && primaryChainGroupTarget->_owner != World::OWNER_0 &&
+         wproto.laser_multi_target > 1 && allowFriendlyExtraTargets )
+    {
+        std::vector<NC_STACK_ypabact *> selectedTargets = directHitTargets;
+
+        while ( activeBeamCount < (size_t)wproto.laser_multi_target )
+        {
+            NC_STACK_ypabact *extraTarget =
+                ypabact_FindNearestVerticalLaserTarget(this, _vertical_laser_request_start,
+                                                       range, fireRadius, friendlyMultiTargets,
+                                                       selectedTargets);
+            if ( !extraTarget )
+                break;
+
+            if ( _vertical_laser_beams.size() <= activeBeamCount )
+                _vertical_laser_beams.resize(activeBeamCount + 1);
+
+            vec3d extraDir = extraTarget->_position - _vertical_laser_request_start;
+            if ( extraDir.normalise() < 0.001f )
+                extraDir = down;
+
+            NC_STACK_ypabact *hitTarget =
+                ypabact_UpdateVerticalLaserBeam(this, wproto, _vertical_laser_beams[activeBeamCount],
+                                                _vertical_laser_request_start, extraDir, range,
+                                                wasActive && activeBeamCount < oldBeamCount,
+                                                spawnBeamVPs, playerControlled, 1.0f);
+
+            selectedTargets.push_back(extraTarget);
+            if ( hitTarget && hitTarget->_owner != World::OWNER_0 &&
+                 ypabact_IsLaserDamageTarget(this, hitTarget) &&
+                 !ypabact_LaserTargetInList(hitTarget, directHitTargets) )
+            {
+                directHitTargets.push_back(hitTarget);
+            }
+
+            activeBeamCount++;
+        }
+    }
+
+    if ( wproto.laser_chain_allow && wproto.laser_chain_max_jumps > 0 &&
+         wproto.laser_chain_radius > 0.0f && primaryHitTarget &&
+         primaryHitTarget->_owner != World::OWNER_0 &&
+         ypabact_IsLaserDamageTarget(this, primaryHitTarget) )
+    {
+        NC_STACK_ypabact *chainGroupTarget = primaryChainGroupTarget ? primaryChainGroupTarget : primaryHitTarget;
+        bool friendlyChain = ypabact_IsLaserFriendlyToShooter(this, chainGroupTarget);
+        bool canRunChain = (!friendlyChain || playerControlled) &&
+                           ypabact_IsLaserSecondaryTargetCandidate(this, primaryHitTarget, friendlyChain);
+
+        if ( canRunChain )
+        {
+            std::vector<NC_STACK_ypabact *> chainHits = directHitTargets;
+            if ( !ypabact_LaserTargetInList(primaryHitTarget, chainHits) )
+                chainHits.push_back(primaryHitTarget);
+
+            NC_STACK_ypabact *from = primaryHitTarget;
+            float chainDamageMult = 1.0f;
+            float perJumpMult = wproto.laser_chain_damage_mult > 0.0f ? wproto.laser_chain_damage_mult : 1.0f;
+
+            for (int jump = 0; jump < wproto.laser_chain_max_jumps; jump++)
+            {
+                NC_STACK_ypabact *chainTarget =
+                    ypabact_FindLaserChainTarget(this, from, wproto.laser_chain_radius,
+                                                 friendlyChain, chainHits);
+                if ( !chainTarget )
+                    break;
+
+                if ( _vertical_laser_beams.size() <= activeBeamCount )
+                    _vertical_laser_beams.resize(activeBeamCount + 1);
+
+                TLaserBeamRuntime &chainBeam = _vertical_laser_beams[activeBeamCount];
+                bool beamWasActive = wasActive && activeBeamCount < oldBeamCount;
+
+                chainBeam.start = from->_position;
+                chainBeam.end = chainTarget->_position;
+
+                vec3d chainDir = chainBeam.end - chainBeam.start;
+                if ( chainDir.normalise() < 0.001f )
+                    chainDir = _rotation.AxisZ();
+
+                if ( !beamWasActive || chainTarget->_gid != chainBeam.target_gid )
+                {
+                    chainBeam.energy_ticks = 0;
+                    chainBeam.next_damage_time = 0;
+                    chainBeam.next_fx_time = 0;
+                }
+                chainBeam.target_gid = chainTarget->_gid;
+
+                chainDamageMult *= perJumpMult;
+
+                if ( spawnBeamVPs )
+                    ypabact_SpawnLaserBeamVPs(this, wproto, chainBeam.start, chainBeam.end);
+
+                ypabact_ApplyLaserUnitTick(this, wproto, chainTarget, chainBeam,
+                                           playerControlled, chainDamageMult);
+
+                if ( _clock >= chainBeam.next_fx_time )
+                {
+                    int impactVP = wproto.vp_dead > 0 ? wproto.vp_dead : wproto.vp_megadeth;
+                    if ( impactVP > 0 )
+                        _world->SpawnTransientVP(impactVP, chainBeam.end,
+                                                 ypabact_LaserRotationFromDir(chainDir, _rotation), 90);
+                    chainBeam.next_fx_time = _clock + 160;
+                }
+
+                chainHits.push_back(chainTarget);
+                from = chainTarget;
+                activeBeamCount++;
+            }
+        }
+    }
+
+    if ( _vertical_laser_beams.size() > activeBeamCount )
+        _vertical_laser_beams.resize(activeBeamCount);
+
+    if ( !_vertical_laser_beams.empty() )
+        _vertical_laser_beam = _vertical_laser_beams[0];
+
+    if ( spawnBeamVPs )
+        _vertical_laser_next_beam_vp_time = _clock + 1;
+
+    wproto.snd_loop.LoadSamples();
+
+    TSampleData *psample = wproto.snd_loop.MainSample.Sample
+                         ? wproto.snd_loop.MainSample.Sample->GetSampleData()
+                         : NULL;
+
+    if ( psample )
+    {
+        if ( _vertical_laser_soundcarrier.Sounds.empty() )
+            _vertical_laser_soundcarrier.Resize(1);
+
+        TSoundSource &snd = _vertical_laser_soundcarrier.Sounds[0];
+        snd.PSample = psample;
+        snd.SampleVariants.clear();
+        snd.SampleVariants.push_back(psample);
+        snd.Volume = wproto.snd_loop.volume ? wproto.snd_loop.volume : 120;
+        snd.Pitch = wproto.snd_loop.pitch;
+        snd.PriorityBias = 0;
+        snd.SetLoop(true);
+        snd.SetFragmented(false);
+        ypabact_ApplyLaserLoopNormalFX(snd, wproto);
+
+        _vertical_laser_soundcarrier.Position = _vertical_laser_beams.empty()
+                                              ? _vertical_laser_request_start
+                                              : _vertical_laser_beams[0].start;
+        _vertical_laser_soundcarrier.Vector = down;
+
+        if ( !snd.IsEnabled() )
+            SFXEngine::SFXe.startSound(&_vertical_laser_soundcarrier, 0);
+
+        SFXEngine::SFXe.UpdateSoundCarrier(&_vertical_laser_soundcarrier);
     }
 }
 
@@ -8512,6 +9016,12 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
     if ( cooldownProto.IsLaser() )
     {
         RequestLaserFire(cooldownWeapon, arg);
+        return 0;
+    }
+
+    if ( cooldownProto.IsVerticalLaser() )
+    {
+        RequestVerticalLaserFire(cooldownWeapon, arg);
         return 0;
     }
 
@@ -10338,6 +10848,7 @@ void NC_STACK_ypabact::Renew()
     _mortar_has_pending = false;
     _mortar_pending_target = vec3d(0.0, 0.0, 0.0);
     StopLaser();
+    StopVerticalLaser();
     _seek_and_explode = 0;
     _seek_and_explode_weapon = 0;
     _seek_and_explode_trigger_radius = 0.0;
@@ -10543,6 +11054,15 @@ size_t NC_STACK_ypabact::CheckFireAI(bact_arg101 *arg)
             return 0;
 
         v36 = 2;
+    }
+
+    if ( v8 && v8->IsVerticalLaser() )
+    {
+        vec3d fireOrigin = _position + _rotation.Transpose().Transform(_fire_pos);
+        if ( arg->pos.y < fireOrigin.y )
+            return 0;
+
+        return (arg->pos.XZ() - fireOrigin.XZ()).length() <= ypabact_VerticalLaserFireRadius(*v8);
     }
 
     if ( arg->unkn == 2 )
