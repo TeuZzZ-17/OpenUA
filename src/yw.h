@@ -650,11 +650,9 @@ public:
     bool confSpectatorMode;
 
     // OpenUA: modern graphics options shown in the Options menu.
-    int confVisualFilterStrength; // 0..100 in the UI, persisted as gfx.visual_filter_strength 0.00..1.00
-    int confVsync;                // gfx.vsync     0=Off 1=On 2=Adaptive
-    int confMaxFps;               // gfx.maxfps    30/60/120/144/165/240
     int confBlending;             // gfx.blending  0=Default 1=Additive 2=Sharp
     bool confMoviePlayer;         // gfx.movie_player
+    bool confVhsFilter;           // gfx.vhs_filter
 
     int _settingsChangeOptions;
     
@@ -899,7 +897,7 @@ public:
     void UpdatePaletteThemeText();
     bool SavePaletteThemeToNucleusIni();
     // OpenUA: modern graphics options helpers
-    void UpdateGfxOptionTexts();   // refresh VSync/FPS/Blending/Atmosphere-Strength captions
+    void UpdateGfxOptionTexts();   // refresh Blending/Atmosphere-Strength captions
     bool SaveKeyToNucleusIni(const std::string &key, const std::string &value);
     bool SavePlayerRoboAIBehaviorToNucleusIni();
     bool SaveSpectatorModeToNucleusIni();

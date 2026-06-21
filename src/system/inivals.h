@@ -32,7 +32,6 @@ public:
     static Common::Ini::Key GfxBlending;
     static Common::Ini::Key GfxSolidFont;
     static Common::Ini::Key GfxVsync;
-    static Common::Ini::Key GfxMaxFps;
     static Common::Ini::Key GfxAdditionalModes;
     
     static Common::Ini::Key GfxMode;
@@ -42,6 +41,11 @@ public:
     static Common::Ini::Key GfxPaletteTheme;       // DEPRECATED/inert: legacy SET palette-theme remap (bypassed)
     static Common::Ini::Key GfxVisualFilter;       // OpenUA: fullscreen visual filter name (Data/Filters/*.pal), "Standard" = none
     static Common::Ini::Key GfxVisualFilterStrength; // OpenUA: visual filter blend strength 0.0..1.0 (default 0.65)
+    static Common::Ini::Key GfxVhsFilter;          // OpenUA experimental: optional VHS post-process filter
+    static Common::Ini::Key GfxVhsFilterName;
+    static Common::Ini::Key GfxVhsFilterShader;
+    static Common::Ini::Key GfxVhsFilterShaderVbo;
+    static Common::Ini::Key GfxVhsFilterStrength;
     static Common::Ini::Key GfxDisplay;
     static Common::Ini::Key GfxDisplay2;
     
@@ -202,7 +206,6 @@ public:
     static Common::Ini::Key GameSpectatorVehicleID;
     static Common::Ini::Key GameSpectatorOwner1AI;
     static Common::Ini::Key GameRoboBuildingCollisionDamagePercent;
-    static Common::Ini::Key GameFixedSimulationTick; // OpenUA: game.fixed_simulation_tick (default no) — INI-only frame-rate-independent gameplay speed (render stays at gfx.maxfps)
 
     // OpenUA: Black Sect "imperfect grey clone" runtime balance (owner/faction 5 only).
     // Pure runtime maluses applied to live actors; never mutate shared prototypes.

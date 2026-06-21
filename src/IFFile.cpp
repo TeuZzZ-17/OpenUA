@@ -985,6 +985,12 @@ bool IFFile::FindSetLooseEmrsPngOverride(const std::string &filename, const std:
     if ( assetPath.find(':') != std::string::npos )
         return false;
 
+    std::string assetBase = setLooseLower(setLooseFileName(assetPath));
+    if ( assetBase == "fx1.ilbm" || assetBase == "fx1.ilb" ||
+         assetBase == "fx2.ilbm" || assetBase == "fx2.ilb" ||
+         assetBase == "fx3.ilbm" || assetBase == "fx3.ilb" )
+        return false;
+
     std::string ext = setLooseExtension(assetPath);
     if ( ext != "ilbm" && ext != "ilb" )
         return false;
@@ -1016,6 +1022,67 @@ bool IFFile::FindSetLooseEmrsPngOverride(const std::string &filename, const std:
                 out->emrs = true;
                 out->emrsClass = className;
                 out->embeddedPayload = payload;
+            }
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool IFFile::FindSetHiEffectPngOverride(const std::string &filename, const std::string &mode, SetLooseOverride *out, const char *sourceFunction)
+{
+    if (out)
+        *out = SetLooseOverride();
+
+    if ( !setLooseIsReadMode(mode) )
+        return false;
+
+    int32_t setId = setLooseCurrentSetId();
+    if ( !setId )
+        return false;
+
+    std::string assetPath = setLooseTrimResourceName(setLooseStripLeadingSlashes(setLooseNormalizeSlashes(filename)));
+    if ( assetPath.empty() || assetPath.find(':') != std::string::npos )
+        return false;
+
+    std::string assetLower = setLooseLower(assetPath);
+    if ( assetLower.compare(0, 3, "hi/") != 0 )
+        return false;
+
+    std::string assetBase = setLooseFileName(assetPath);
+    std::string assetBaseLower = setLooseLower(assetBase);
+    if ( assetBaseLower != "fx1.ilbm" && assetBaseLower != "fx1.ilb" &&
+         assetBaseLower != "fx2.ilbm" && assetBaseLower != "fx2.ilb" &&
+         assetBaseLower != "fx3.ilbm" && assetBaseLower != "fx3.ilb" )
+        return false;
+
+    if ( !setLooseEnsureReport(setId) )
+        return false;
+
+    std::string setRoot = "Data/Set" + std::to_string(setId) + "/";
+    std::vector<std::string> candidates;
+    candidates.push_back(setRoot + setLooseReplaceExtension(assetPath, ".PNG"));
+
+    std::string lowerCandidate = setRoot + setLooseReplaceExtension(assetPath, ".png");
+    if ( setLooseNormalizeSlashes(lowerCandidate) != setLooseNormalizeSlashes(candidates.front()) )
+        candidates.push_back(lowerCandidate);
+
+    for (const std::string &candidate : candidates)
+    {
+        std::string openPath;
+        if ( setLooseResolveReadableFile(candidate, &openPath) )
+        {
+            if (out)
+            {
+                out->active = true;
+                out->setId = setId;
+                out->requested = assetPath;
+                out->resolvedPath = openPath;
+                out->extensionForm = "HI PNG effect override";
+                out->vanillaPath = setLooseNormalizeSlashes(correctSeparatorAndExt(Common::Env.ApplyPrefix("rsrc:" + assetPath)));
+                out->embedded = false;
+                out->sourceFunction = sourceFunction ? sourceFunction : "NC_STACK_ilbm::rsrc_func64";
             }
             return true;
         }

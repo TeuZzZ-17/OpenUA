@@ -23,7 +23,6 @@ Common::Ini::Key IniConf::GfxExportWindowMode("gfx.export_window_mode", Common::
 Common::Ini::Key IniConf::GfxBlending("gfx.blending", Common::Ini::KT_DIGIT, (int32_t) 0);
 Common::Ini::Key IniConf::GfxSolidFont("gfx.solidfont", Common::Ini::KT_BOOL, false);
 Common::Ini::Key IniConf::GfxVsync("gfx.vsync", Common::Ini::KT_DIGIT, (int32_t)1);
-Common::Ini::Key IniConf::GfxMaxFps("gfx.maxfps", Common::Ini::KT_DIGIT, (int32_t)60);
 Common::Ini::Key IniConf::GfxAdditionalModes("gfx.custommodes", Common::Ini::KT_STRING);
 
 // Gfx Engine
@@ -35,6 +34,11 @@ Common::Ini::Key IniConf::GfxPaletteTheme("gfx.palette_theme", Common::Ini::KT_W
 // OpenUA custom: modern fullscreen visual filter (replaces the legacy palette-theme remap).
 Common::Ini::Key IniConf::GfxVisualFilter("gfx.visual_filter", Common::Ini::KT_WORD, std::string("Standard"));
 Common::Ini::Key IniConf::GfxVisualFilterStrength("gfx.visual_filter_strength", Common::Ini::KT_WORD, std::string("0.30"));
+Common::Ini::Key IniConf::GfxVhsFilter("gfx.vhs_filter", Common::Ini::KT_BOOL, false);
+Common::Ini::Key IniConf::GfxVhsFilterName("gfx.vhs_filter_name", Common::Ini::KT_WORD, std::string("VHS"));
+Common::Ini::Key IniConf::GfxVhsFilterShader("gfx.vhs_filter_shader", Common::Ini::KT_STRING, std::string("res/vhs.ps"));
+Common::Ini::Key IniConf::GfxVhsFilterShaderVbo("gfx.vhs_filter_shader_vbo", Common::Ini::KT_STRING, std::string("res/vhs_vbo.ps"));
+Common::Ini::Key IniConf::GfxVhsFilterStrength("gfx.vhs_filter_strength", Common::Ini::KT_WORD, std::string("0.20"));
 Common::Ini::Key IniConf::GfxDisplay("gfx.display", Common::Ini::KT_WORD);
 Common::Ini::Key IniConf::GfxDisplay2("gfx.display2", Common::Ini::KT_WORD);
 
@@ -206,11 +210,6 @@ Common::Ini::Key IniConf::GameSpectatorMode("game.spectator_mode", Common::Ini::
 Common::Ini::Key IniConf::GameSpectatorVehicleID("game.spectator_vehicle_id", Common::Ini::KT_DIGIT, (int32_t)0);
 Common::Ini::Key IniConf::GameSpectatorOwner1AI("game.spectator_owner1_ai", Common::Ini::KT_STRING, std::string("balanced"));
 Common::Ini::Key IniConf::GameRoboBuildingCollisionDamagePercent("game.robo_building_collision_damage_percent", Common::Ini::KT_DIGIT, (int32_t)8);
-// OpenUA custom (experimental, INI-only): decouple gameplay speed from render FPS by making the timestep
-// frame-rate-independent (drops the per-frame Period++ bias during gameplay). Render FPS stays at gfx.maxfps
-// with native fluidity; gameplay runs at real-time speed instead of speeding up at high refresh rates.
-// game.fixed_simulation_tick = no ; Experimental: keep gameplay at real-time speed while allowing render FPS above 60. INI-only, not shown in options menu.
-Common::Ini::Key IniConf::GameFixedSimulationTick("game.fixed_simulation_tick", Common::Ini::KT_BOOL, false);
 
 // OpenUA custom: Black Sect "imperfect grey clone" runtime balance (owner/faction 5).
 // When enabled, live Black Sect actors get a small malus (default 5%) to effective
@@ -257,7 +256,6 @@ void IniConf::Init()
         , &GfxBlending
         , &GfxSolidFont
         , &GfxVsync
-        , &GfxMaxFps
         , &GfxMode
         , &GfxXRes
         , &GfxYRes
@@ -407,7 +405,6 @@ void IniConf::Init()
         , &GameSpectatorVehicleID
         , &GameSpectatorOwner1AI
         , &GameRoboBuildingCollisionDamagePercent
-        , &GameFixedSimulationTick
         , &GameBlackSectCloneBalance
         , &GameBlackSectCloneMalusPercent
         , &GameBlackSectCloneTint
@@ -440,6 +437,11 @@ void IniConf::Init()
                   
         , &GfxAdditionalModes
         , &GfxVBO
+        , &GfxVhsFilter
+        , &GfxVhsFilterName
+        , &GfxVhsFilterShader
+        , &GfxVhsFilterShaderVbo
+        , &GfxVhsFilterStrength
 
         , &UiHideMenuHints
 

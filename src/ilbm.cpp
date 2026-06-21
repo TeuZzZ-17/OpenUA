@@ -514,7 +514,73 @@ static SDL_RWops *ILBM_PngRwFromFile(FSMgr::FileHandle *fil)
     return rwops;
 }
 
-static rsrc *ILBM_ReadPngOverride(NC_STACK_ilbm *obj, IDVList &stak, const std::string &path)
+static UA_PALETTE *ILBM_CopyPngPalette(SDL_Surface *loaded)
+{
+    UA_PALETTE *pal = new UA_PALETTE;
+    if ( !pal )
+        return NULL;
+
+    UA_PALETTE *fallback = GFX::Engine.GetPalette();
+    if ( fallback )
+        *pal = *fallback;
+    else
+    {
+        for (SDL_Color &clr : *pal)
+            clr = {0, 0, 0, 255};
+    }
+
+    if ( loaded->format->palette )
+    {
+        int colors = std::min(loaded->format->palette->ncolors, 256);
+        for (int i = 0; i < colors; i++)
+        {
+            pal->at(i) = loaded->format->palette->colors[i];
+            pal->at(i).a = 255;
+        }
+    }
+
+    return pal;
+}
+
+static SDL_Surface *ILBM_NormalizeIndexedPngSurface(SDL_Surface *loaded, UA_PALETTE *pal, int alphaPalette, int transp)
+{
+    if ( !loaded || !loaded->format->palette )
+        return loaded;
+
+    SDL_Surface *indexed = SDL_CreateRGBSurface(0, loaded->w, loaded->h, 8, 0, 0, 0, 0);
+    if ( !indexed )
+        return NULL;
+
+    SDL_LockSurface(loaded);
+    SDL_LockSurface(indexed);
+    for (int y = 0; y < loaded->h; y++)
+    {
+        uint8_t *src = (uint8_t *)loaded->pixels + y * loaded->pitch;
+        uint8_t *dst = (uint8_t *)indexed->pixels + y * indexed->pitch;
+        memcpy(dst, src, loaded->w);
+    }
+    SDL_UnlockSurface(indexed);
+    SDL_UnlockSurface(loaded);
+
+    if ( indexed->format->palette && pal )
+    {
+        if ( alphaPalette )
+        {
+            UA_PALETTE tmp;
+            GFX::Engine.ConvAlphaPalette(&tmp, *pal, transp);
+            SDL_SetPaletteColors(indexed->format->palette, tmp.data(), 0, 256);
+        }
+        else
+        {
+            SDL_SetPaletteColors(indexed->format->palette, pal->data(), 0, 256);
+        }
+    }
+
+    SDL_FreeSurface(loaded);
+    return indexed;
+}
+
+static rsrc *ILBM_ReadPngOverride(NC_STACK_ilbm *obj, IDVList &stak, const std::string &path, int transp)
 {
     FSMgr::FileHandle *fil = FSMgr::iDir::openFileAlloc(path, "rb");
     if ( !fil )
@@ -537,6 +603,12 @@ static rsrc *ILBM_ReadPngOverride(NC_STACK_ilbm *obj, IDVList &stak, const std::
     if ( !loaded )
         return NULL;
 
+    if ( loaded->w <= 0 || loaded->h <= 0 )
+    {
+        SDL_FreeSurface(loaded);
+        return NULL;
+    }
+
     rsrc *res = obj->NC_STACK_rsrc::rsrc_func64(stak);
     if ( !res )
     {
@@ -554,18 +626,21 @@ static rsrc *ILBM_ReadPngOverride(NC_STACK_ilbm *obj, IDVList &stak, const std::
 
     bitm->width = loaded->w;
     bitm->height = loaded->h;
-    bitm->swTex = loaded;
     res->data = bitm;
 
     if ( loaded->format->palette )
     {
-        bitm->palette = new UA_PALETTE;
-        if ( bitm->palette )
+        bitm->palette = ILBM_CopyPngPalette(loaded);
+        int alphaPalette = stak.Get<int32_t>(NC_STACK_ilbm::ATT_ALPHAPALETTE, 1);
+        bitm->swTex = ILBM_NormalizeIndexedPngSurface(loaded, bitm->palette, alphaPalette, transp);
+        if ( !bitm->swTex )
         {
-            for (int i = 0; i < loaded->format->palette->ncolors && i < 256; i++)
-                bitm->palette->at(i) = loaded->format->palette->colors[i];
+            obj->NC_STACK_rsrc::rsrc_func65(res);
+            return NULL;
         }
     }
+    else
+        bitm->swTex = loaded;
 
     int convertColor = stak.Get<int32_t>(NC_STACK_bitmap::BMD_ATT_CONVCOLOR, 0);
     if ( convertColor )
@@ -623,7 +698,7 @@ rsrc * NC_STACK_ilbm::rsrc_func64(IDVList &stak)
         return NULL;
 
     if ( !setLoosePngPath.empty() )
-        return ILBM_ReadPngOverride(this, stak, setLoosePngPath);
+        return ILBM_ReadPngOverride(this, stak, setLoosePngPath, 0);
 
     if ( GFX::Engine.can_destblend )
     {
@@ -657,12 +732,31 @@ rsrc * NC_STACK_ilbm::rsrc_func64(IDVList &stak)
 
     if ( reassignName )
     {
+        IFFile::SetLooseOverride pngOverrideInfo;
+        if ( IFFile::FindSetHiEffectPngOverride(reassignName, "rb", &pngOverrideInfo, "NC_STACK_ilbm::rsrc_func64") )
+        {
+            if ( mfile )
+                stak.Add(BMD_ATT_CONVCOLOR, (int32_t)1);
+
+            rsrc *pngRes = ILBM_ReadPngOverride(this, stak, pngOverrideInfo.resolvedPath, 1);
+            if ( pngRes )
+            {
+                IFFile::ReportSetLooseOverrideUsed(pngOverrideInfo);
+
+                if ( mfile )
+                    ILBM_SkipEmbeddedChunk(mfile);
+
+                return pngRes;
+            }
+
+            IFFile::ReportSetLooseOverrideFailed(pngOverrideInfo, "HI PNG effect override existed but failed to load; HI ILBM fallback used.");
+        }
+
         if ( mfile )
         {
             stak.Add(BMD_ATT_CONVCOLOR, (int32_t)1);
 
-            mfile->parse();
-            mfile->skipChunk();
+            ILBM_SkipEmbeddedChunk(mfile);
         }
 
         return ILBM_ReadOpenedOrVanilla(this, stak, reassignName, 1);

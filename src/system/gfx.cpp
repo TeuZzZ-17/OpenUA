@@ -487,7 +487,7 @@ size_t GFXEngine::windd_func0(IDVList &stak)
             break;
     }
 
-    fpsLimitter(System::IniConf::GfxMaxFps.Get<int>());
+    fpsLimitter(60); // OpenUA: hard-locked to 60Hz.
 
     LoadFontByDescr("MS Sans Serif,12,400,0");
 
@@ -1817,7 +1817,40 @@ void GFXEngine::BeginFrame()
 
 void GFXEngine::EndFrame()
 {       
-    if (_colorEffects > 1)
+    if (_vhsFilterActive)
+    {
+        Gui::Root::Instance.Draw(Screen());
+        DrawScreenSurface();
+        Gui::Root::Instance.HwCompose();
+
+        Common::Point scrSz = System::GetResolution();
+        if (EnsureVhsFilterTexture(scrSz))
+        {
+            Glext::GLBindFramebuffer(GL_FRAMEBUFFER, _vhsFbo);
+            glViewport(0, 0, scrSz.x, scrSz.y);
+            glClearColor(0, 0, 0, 0);
+            glClear(GL_COLOR_BUFFER_BIT);
+            DrawFBO();
+
+            Glext::GLBindFramebuffer(GL_FRAMEBUFFER, _vhsOutFbo);
+            glViewport(0, 0, scrSz.x, scrSz.y);
+            glClearColor(0, 0, 0, 0);
+            glClear(GL_COLOR_BUFFER_BIT);
+            DrawVhsEffect();
+
+            Glext::GLBindFramebuffer(GL_FRAMEBUFFER, 0);
+            DrawVhsFilter();
+        }
+        else
+        {
+            Glext::GLBindFramebuffer(GL_FRAMEBUFFER, 0);
+            DrawFBO();
+        }
+
+        System::Flip();
+        return;
+    }
+    else if (_colorEffects > 1)
     {
         Glext::GLBindFramebuffer(GL_FRAMEBUFFER, 0);   
         DrawFBO();
@@ -1827,7 +1860,7 @@ void GFXEngine::EndFrame()
     DrawScreenSurface();
     Gui::Root::Instance.HwCompose();
     
-    if (_colorEffects == 1)
+    if (_colorEffects == 1 && !_vhsFilterActive)
     {
         Glext::GLBindFramebuffer(GL_FRAMEBUFFER, 0);   
         DrawFBO();
@@ -1896,6 +1929,8 @@ bool GFXEngine::AllocTexture(ResBitmap *bitm)
         else
         {
             SDL_Surface *conv = ConvertSDLSurface(bitm->swTex, _pixfmt);
+            if ( !conv )
+                return false;
             
             SDL_LockSurface(conv);
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, bitm->width, bitm->height, 0, _glPixfmt, _glPixtype, conv->pixels);
@@ -2811,6 +2846,9 @@ void GFXEngine::Init()
     // OpenUA custom: load the fullscreen visual filter selected in nucleus.ini.
     // Safe no-op when "Standard"/empty or when the file is missing.
     ApplyVisualFilterFromConfig();
+
+    // OpenUA experimental: optional VHS pass, loaded from its own INI shader path.
+    ApplyVhsFilterFromConfig();
 }
 
 void GFXEngine::Deinit()
@@ -2867,6 +2905,19 @@ void GFXEngine::Deinit()
         glDeleteTextures(1, &_visualFilterLut);
     _visualFilterLut = 0;
     _visualFilterActive = false;
+
+    FreeVhsFilterShader();
+    if (_vhsCopyTex)
+        glDeleteTextures(1, &_vhsCopyTex);
+    if (_vhsOutTex)
+        glDeleteTextures(1, &_vhsOutTex);
+    _vhsFbo = 0;
+    _vhsOutFbo = 0;
+    _vhsFboReady = false;
+    _vhsCopyTex = 0;
+    _vhsOutTex = 0;
+    _vhsCopyTexSize = Common::Point();
+    _vhsFilterActive = false;
 }
 
 GFXEngine::~GFXEngine()
@@ -3150,30 +3201,8 @@ std::string GFXEngine::GetPaletteThemeOverridePath(const std::string &palette_il
 }
 
 // OpenUA custom: read gfx.visual_filter_strength ("0.0".."1.0") with a safe default.
-// The Options menu also writes env:visual_filter_strength.txt as a tiny runtime cache,
-// mirroring env:visual_filter.txt. This avoids the slider falling back to the default
-// value when the legacy shell/config path reloads before nucleus.ini state is refreshed.
-static std::string ReadVisualFilterStrengthCache()
-{
-    FSMgr::FileHandle *fil = uaOpenFileAlloc("env:visual_filter_strength.txt", "r");
-    if (!fil)
-        return std::string();
-
-    std::string line;
-    bool ok = fil->ReadLine(&line);
-    delete fil;
-
-    if (!ok)
-        return std::string();
-
-    size_t first = line.find_first_not_of(" \t\r\n");
-    if (first == std::string::npos)
-        return std::string();
-
-    size_t last = line.find_last_not_of(" \t\r\n");
-    return line.substr(first, last - first + 1);
-}
-
+// NUCLEUS.INI is the single source of truth; missing/empty/invalid values only fall
+// back in memory and are not rewritten unless the user saves Options.
 static float ParseVisualFilterStrength(std::string s, float fallback)
 {
     if (s.empty())
@@ -3181,7 +3210,15 @@ static float ParseVisualFilterStrength(std::string s, float fallback)
 
     try
     {
-        float strength = std::stof(s);
+        if (s.find(',') != std::string::npos)
+            return fallback;
+
+        size_t pos = 0;
+        float strength = std::stof(s, &pos);
+        size_t rest = s.find_first_not_of(" \t\r\n", pos);
+        if (rest != std::string::npos)
+            return fallback;
+
         if (strength < 0.0f) strength = 0.0f;
         if (strength > 1.0f) strength = 1.0f;
         return strength;
@@ -3194,11 +3231,7 @@ static float ParseVisualFilterStrength(std::string s, float fallback)
 
 static float ReadVisualFilterStrength()
 {
-    const float defaultStrength = 0.30f; // default if missing/invalid (matches the Atmosphere Strength slider)
-
-    std::string cached = ReadVisualFilterStrengthCache();
-    if (!cached.empty())
-        return ParseVisualFilterStrength(cached, defaultStrength);
+    const float defaultStrength = 0.30f; // default if missing/invalid
 
     return ParseVisualFilterStrength(System::IniConf::GfxVisualFilterStrength.Get<std::string>(), defaultStrength);
 }
@@ -3398,6 +3431,203 @@ void GFXEngine::SetVisualFilter(const std::string &filterName)
 void GFXEngine::ApplyVisualFilterFromConfig()
 {
     SetVisualFilter(System::IniConf::GfxVisualFilter.Get<std::string>());
+}
+
+static float ParseVhsFilterStrength(std::string s, float fallback)
+{
+    if (s.empty())
+        return fallback;
+
+    try
+    {
+        float strength = std::stof(s);
+        if (strength < 0.0f) strength = 0.0f;
+        if (strength > 1.0f) strength = 1.0f;
+        return strength;
+    }
+    catch (...)
+    {
+        return fallback;
+    }
+}
+
+static std::string TrimConfigString(std::string s)
+{
+    size_t first = s.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos)
+        return std::string();
+
+    size_t last = s.find_last_not_of(" \t\r\n");
+    return s.substr(first, last - first + 1);
+}
+
+static std::string VhsBlendShaderText(bool vbo)
+{
+    if (vbo)
+    {
+        return
+            "#version 140\n"
+            "uniform sampler2D texture;\n"
+            "uniform sampler2D vhsTexture;\n"
+            "uniform float vhsStrength;\n"
+            "in vec2 texCoords;\n"
+            "void main()\n"
+            "{\n"
+            "    vec4 base = texture2D(texture, texCoords);\n"
+            "    vec4 vhs = texture2D(vhsTexture, texCoords);\n"
+            "    gl_FragColor = mix(base, vhs, clamp(vhsStrength, 0.0, 1.0));\n"
+            "}\n";
+    }
+
+    return
+        "#version 120\n"
+        "uniform sampler2D texture;\n"
+        "uniform sampler2D vhsTexture;\n"
+        "uniform float vhsStrength;\n"
+        "void main()\n"
+        "{\n"
+        "    vec2 uv = gl_TexCoord[0].xy;\n"
+        "    vec4 base = texture2D(texture, uv);\n"
+        "    vec4 vhs = texture2D(vhsTexture, uv);\n"
+        "    gl_FragColor = mix(base, vhs, clamp(vhsStrength, 0.0, 1.0));\n"
+        "}\n";
+}
+
+void GFXEngine::SetVhsFilterEnabled(bool enabled)
+{
+    _vhsFilterEnabled = enabled;
+    _vhsFilterStrength = ParseVhsFilterStrength(System::IniConf::GfxVhsFilterStrength.Get<std::string>(), 0.20f);
+
+    if (!enabled)
+    {
+        _vhsFilterActive = false;
+        return;
+    }
+
+    if (_vhsFilterStrength <= 0.0f)
+    {
+        _vhsFilterActive = false;
+        ypa_log_out("VHS filter: disabled because gfx.vhs_filter_strength is 0\n");
+        return;
+    }
+
+    if (!_glext)
+    {
+        _vhsFilterActive = false;
+        ypa_log_out("WARNING: VHS filter requested but GL extensions are unavailable; continuing without VHS.\n");
+        return;
+    }
+
+    if (_colorEffects <= 0)
+    {
+        _vhsFilterActive = false;
+        ypa_log_out("WARNING: VHS filter requested but gfx.color_effects=0 disables the post-process framebuffer; continuing without VHS.\n");
+        return;
+    }
+
+    if (!LoadVhsFilterShader())
+    {
+        _vhsFilterActive = false;
+        return;
+    }
+
+    _vhsFilterActive = true;
+    ypa_log_out("VHS filter: ENABLED name=[%s] shader=[%s] strength=%.2f pass=after_visual_filter_before_ui\n",
+                System::IniConf::GfxVhsFilterName.Get<std::string>().c_str(),
+                _vhsFilterShaderPath.c_str(),
+                _vhsFilterStrength);
+}
+
+void GFXEngine::ApplyVhsFilterFromConfig()
+{
+    SetVhsFilterEnabled(System::IniConf::GfxVhsFilter.Get<bool>());
+}
+
+void GFXEngine::FreeVhsFilterShader()
+{
+    if (_vhsBlendProg.ID)
+        Glext::GLDeleteProgram(_vhsBlendProg.ID);
+    if (_vhsFilterProg.ID)
+        Glext::GLDeleteProgram(_vhsFilterProg.ID);
+    if (_vhsBlendPsShader)
+        Glext::GLDeleteShader(_vhsBlendPsShader);
+    if (_vhsPsShader)
+        Glext::GLDeleteShader(_vhsPsShader);
+    if (_vhsVsShader)
+        Glext::GLDeleteShader(_vhsVsShader);
+
+    _vhsFilterProg = TVhsFilterProg();
+    _vhsBlendProg = TVhsBlendProg();
+    _vhsBlendPsShader = 0;
+    _vhsPsShader = 0;
+    _vhsVsShader = 0;
+}
+
+bool GFXEngine::LoadVhsFilterShader()
+{
+    std::string shaderPath = TrimConfigString(_vbo
+                           ? System::IniConf::GfxVhsFilterShaderVbo.Get<std::string>()
+                           : System::IniConf::GfxVhsFilterShader.Get<std::string>());
+
+    if (_vhsFilterProg.ID && !StriCmp(shaderPath, _vhsFilterShaderPath))
+        return true;
+
+    FreeVhsFilterShader();
+    _vhsFilterShaderPath = shaderPath;
+
+    _vhsPsShader = LoadShader(GL_FRAGMENT_SHADER, shaderPath);
+    if (!_vhsPsShader)
+    {
+        ypa_log_out("WARNING: VHS filter shader [%s] is missing or failed to compile; continuing without VHS.\n",
+                    shaderPath.c_str());
+        return false;
+    }
+
+    const std::string vertexPath = _vbo ? "res/clreff_vbo.vs" : "res/clreff.vs";
+    _vhsVsShader = LoadShader(GL_VERTEX_SHADER, vertexPath);
+    if (!_vhsVsShader)
+    {
+        ypa_log_out("WARNING: VHS filter vertex shader [%s] is missing or failed to compile; continuing without VHS.\n",
+                    vertexPath.c_str());
+        FreeVhsFilterShader();
+        return false;
+    }
+
+    uint32_t progID = Glext::GLCreateProgram();
+    Glext::GLAttachShader(progID, _vhsPsShader);
+    Glext::GLAttachShader(progID, _vhsVsShader);
+    Glext::GLLinkProgram(progID);
+
+    _vhsFilterProg = TVhsFilterProg(progID);
+
+    _vhsBlendPsShader = CompileShader(GL_FRAGMENT_SHADER, VhsBlendShaderText(_vbo));
+    if (!_vhsBlendPsShader)
+    {
+        ypa_log_out("WARNING: VHS filter blend shader failed to compile; continuing without VHS.\n");
+        FreeVhsFilterShader();
+        return false;
+    }
+
+    uint32_t blendProgID = Glext::GLCreateProgram();
+    Glext::GLAttachShader(blendProgID, _vhsBlendPsShader);
+    Glext::GLAttachShader(blendProgID, _vhsVsShader);
+    Glext::GLLinkProgram(blendProgID);
+
+    _vhsBlendProg = TVhsBlendProg(blendProgID);
+
+    if (_vbo)
+    {
+        BindVBOParameters(_vhsFilterProg);
+        BindVBOParameters(_vhsBlendProg);
+    }
+
+    if (_vhsFilterProg.StrengthLoc < 0)
+    {
+        ypa_log_out("WARNING: VHS filter shader [%s] loaded but does not expose uniform vhsStrength; strength control is unavailable for this shader.\n",
+                    shaderPath.c_str());
+    }
+
+    return true;
 }
 
 uint8_t *GFXEngine::MakeScreenCopy(int *ow, int *oh)
@@ -4360,6 +4590,169 @@ void GFXEngine::DrawFBO()
     _states = save;
 }
 
+bool GFXEngine::EnsureVhsFilterTexture(const Common::Point &scrSz)
+{
+    if (!_vhsCopyTex)
+    {
+        glGenTextures(1, &_vhsCopyTex);
+        _vhsCopyTexSize = Common::Point();
+    }
+
+    if (!_vhsFbo)
+        Glext::GLGenFramebuffers(1, &_vhsFbo);
+    if (!_vhsOutFbo)
+        Glext::GLGenFramebuffers(1, &_vhsOutFbo);
+    if (!_vhsOutTex)
+        glGenTextures(1, &_vhsOutTex);
+
+    if (_vhsCopyTexSize == scrSz && _vhsFboReady)
+        return true;
+
+    glBindTexture(GL_TEXTURE_2D, _vhsCopyTex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexImage2D(GL_TEXTURE_2D, 0, FBOTEXTYPE, scrSz.x, scrSz.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    glBindTexture(GL_TEXTURE_2D, _vhsOutTex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexImage2D(GL_TEXTURE_2D, 0, FBOTEXTYPE, scrSz.x, scrSz.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    Glext::GLBindFramebuffer(GL_FRAMEBUFFER, _vhsFbo);
+    Glext::GLFrameBufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, _vhsCopyTex, 0);
+
+    GLenum fboStatus = Glext::GLCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (fboStatus == GL_FRAMEBUFFER_COMPLETE)
+    {
+        Glext::GLBindFramebuffer(GL_FRAMEBUFFER, _vhsOutFbo);
+        Glext::GLFrameBufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, _vhsOutTex, 0);
+        fboStatus = Glext::GLCheckFramebufferStatus(GL_FRAMEBUFFER);
+    }
+    Glext::GLBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    if (fboStatus != GL_FRAMEBUFFER_COMPLETE)
+    {
+        ypa_log_out("WARNING: VHS filter framebuffer is incomplete (status=0x%X); disabling VHS and keeping the visual filter path.\n",
+                    (unsigned int)fboStatus);
+        _vhsFilterActive = false;
+        _vhsFboReady = false;
+        return false;
+    }
+
+    _vhsCopyTexSize = scrSz;
+    _vhsFboReady = true;
+    return true;
+}
+
+void GFXEngine::DrawVhsEffect()
+{
+    if (!_vhsFilterActive || !_vhsFilterProg.ID || _vhsFilterStrength <= 0.0f)
+        return;
+
+    GfxStates save = _states;
+
+    Common::Point scrSz = System::GetResolution();
+    if (!EnsureVhsFilterTexture(scrSz))
+        return;
+
+    glViewport(0, 0, scrSz.x, scrSz.y);
+
+    SetProjectionMatrix( mat4x4f() );
+    SetModelViewMatrix( mat4x4f() );
+
+    _states.DepthTest = false;
+    _states.Zwrite = false;
+    _states.AlphaBlend = false;
+    _states.Tex = _vhsCopyTex;
+    _states.TexBlend = 2;
+    _states.Prog = _vhsFilterProg;
+    _states.AlphaTest = false;
+    _states.Shaded = true;
+    _states.LinearFilter = true;
+
+    SetRenderStates(0);
+
+    if (_vhsFilterProg.RandLoc >= 0)
+        Glext::GLUniform1i(_vhsFilterProg.RandLoc, rand());
+
+    if (_vhsFilterProg.ScrSizeLoc >= 0)
+        Glext::GLUniform2i(_vhsFilterProg.ScrSizeLoc, scrSz.x, scrSz.y);
+
+    if (_vhsFilterProg.MillisecsLoc >= 0)
+        Glext::GLUniform1i(_vhsFilterProg.MillisecsLoc, SDL_GetTicks());
+
+    if (_vhsFilterProg.StrengthLoc >= 0)
+        Glext::GLUniform1f(_vhsFilterProg.StrengthLoc, _vhsFilterStrength);
+
+    static std::array<TVertex, 4> vtx = {
+        GFX::TVertex( vec3f(-1.0,  1.0, 0.0), tUtV(0.0, 1.0) ),
+        GFX::TVertex( vec3f(-1.0, -1.0, 0.0), tUtV(0.0, 0.0) ),
+        GFX::TVertex( vec3f( 1.0, -1.0, 0.0), tUtV(1.0, 0.0) ),
+        GFX::TVertex( vec3f( 1.0,  1.0, 0.0), tUtV(1.0, 1.0) )
+    };
+
+    DrawVtxQuad(vtx);
+
+    _states = save;
+}
+
+void GFXEngine::DrawVhsFilter()
+{
+    if (!_vhsFilterActive || !_vhsBlendProg.ID || _vhsFilterStrength <= 0.0f)
+        return;
+
+    GfxStates save = _states;
+
+    Common::Point scrSz = System::GetResolution();
+    if (!EnsureVhsFilterTexture(scrSz))
+        return;
+
+    glViewport(0, 0, scrSz.x, scrSz.y);
+
+    SetProjectionMatrix( mat4x4f() );
+    SetModelViewMatrix( mat4x4f() );
+
+    _states.DepthTest = false;
+    _states.Zwrite = false;
+    _states.AlphaBlend = false;
+    _states.Tex = _vhsCopyTex;
+    _states.TexBlend = 2;
+    _states.Prog = _vhsBlendProg;
+    _states.AlphaTest = false;
+    _states.Shaded = true;
+    _states.LinearFilter = true;
+
+    SetRenderStates(0);
+
+    if (_vhsBlendProg.VhsTexLoc >= 0)
+    {
+        Glext::GLUniform1i(_vhsBlendProg.VhsTexLoc, 1);
+        Glext::GLActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, _vhsOutTex);
+        Glext::GLActiveTexture(GL_TEXTURE0);
+    }
+
+    if (_vhsBlendProg.StrengthLoc >= 0)
+        Glext::GLUniform1f(_vhsBlendProg.StrengthLoc, _vhsFilterStrength);
+
+    static std::array<TVertex, 4> vtx = {
+        GFX::TVertex( vec3f(-1.0,  1.0, 0.0), tUtV(0.0, 1.0) ),
+        GFX::TVertex( vec3f(-1.0, -1.0, 0.0), tUtV(0.0, 0.0) ),
+        GFX::TVertex( vec3f( 1.0, -1.0, 0.0), tUtV(1.0, 0.0) ),
+        GFX::TVertex( vec3f( 1.0,  1.0, 0.0), tUtV(1.0, 1.0) )
+    };
+
+    DrawVtxQuad(vtx);
+
+    _states = save;
+}
+
 void GFXEngine::SetFBOBlending(int mode)
 {
     _fboBlend = mode;
@@ -4379,6 +4772,10 @@ void GFXEngine::UpdateFBOSizes()
         Glext::GLBindRenderbuffer(GL_RENDERBUFFER, _fbod);
         Glext::GLRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, scrSz.x, scrSz.y);
         Glext::GLBindRenderbuffer(GL_RENDERBUFFER, 0);
+
+        if (_vhsCopyTex)
+            _vhsCopyTexSize = Common::Point();
+        _vhsFboReady = false;
     }
 }
 
@@ -4673,6 +5070,22 @@ TColorEffectsProg::TColorEffectsProg(uint32_t id)
     // OpenUA custom: fullscreen visual filter
     FilterLutLoc = Glext::GLGetUniformLocation(ID, "filterLut");
     FilterStrengthLoc = Glext::GLGetUniformLocation(ID, "filterStrength");
+}
+
+TVhsFilterProg::TVhsFilterProg(uint32_t id)
+: TShaderProg(id)
+{
+    RandLoc = Glext::GLGetUniformLocation(ID, "randval");
+    ScrSizeLoc = Glext::GLGetUniformLocation(ID, "screenSize");
+    MillisecsLoc = Glext::GLGetUniformLocation(ID, "millisecs");
+    StrengthLoc = Glext::GLGetUniformLocation(ID, "vhsStrength");
+}
+
+TVhsBlendProg::TVhsBlendProg(uint32_t id)
+: TShaderProg(id)
+{
+    VhsTexLoc = Glext::GLGetUniformLocation(ID, "vhsTexture");
+    StrengthLoc = Glext::GLGetUniformLocation(ID, "vhsStrength");
 }
 
 }

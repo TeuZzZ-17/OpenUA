@@ -121,7 +121,7 @@ size_t NC_STACK_embed::LoadingFromIFF(IFFile **file)
                     {
                         NC_STACK_rsrc *png_class = Nucleus::CTFInit<NC_STACK_rsrc>(classname,
                            {{NC_STACK_rsrc::RSRC_ATT_NAME, resname},
-                            {NC_STACK_rsrc::RSRC_ATT_TRYSHARED, (int32_t)0},
+                            {NC_STACK_rsrc::RSRC_ATT_TRYSHARED, (int32_t)1},
                             {NC_STACK_rsrc::RSRC_ATT_SET_LOOSE_PNG_PATH, pngOverrideInfo.resolvedPath},
                             {NC_STACK_rsrc::RSRC_ATT_SKIP_SET_LOOSE_OVERRIDE, (int32_t)1}});
 

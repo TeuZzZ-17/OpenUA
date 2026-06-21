@@ -328,6 +328,26 @@ struct TColorEffectsProg : TShaderProg
     TColorEffectsProg(uint32_t id);
 };
 
+struct TVhsFilterProg : TShaderProg
+{
+    int32_t RandLoc = -1;
+    int32_t ScrSizeLoc = -1;
+    int32_t MillisecsLoc = -1;
+    int32_t StrengthLoc = -1;
+
+    TVhsFilterProg() = default;
+    TVhsFilterProg(uint32_t id);
+};
+
+struct TVhsBlendProg : TShaderProg
+{
+    int32_t VhsTexLoc = -1;
+    int32_t StrengthLoc = -1;
+
+    TVhsBlendProg() = default;
+    TVhsBlendProg(uint32_t id);
+};
+
 
 struct GfxStates
 {
@@ -531,6 +551,8 @@ public:
     
     void SetFBOBlending(int mode);
     void DrawFBO();
+    void DrawVhsFilter();
+    void DrawVhsEffect();
     void UpdateFBOSizes();
     
     
@@ -566,6 +588,8 @@ public:
     // "Standard"/empty/strength 0 produce no change at all.
     void SetVisualFilter(const std::string &filterName);
     void ApplyVisualFilterFromConfig();
+    void SetVhsFilterEnabled(bool enabled);
+    void ApplyVhsFilterFromConfig();
     bool IsVisualFilterActive() const { return _visualFilterActive; }
     float GetVisualFilterStrength() const { return _visualFilterStrength; }
     const std::string &GetVisualFilterName() const { return _visualFilterName; }
@@ -747,6 +771,9 @@ protected:
     void ApplyResolution();
 
     bool SetResVariables(Common::Point res);
+    bool LoadVhsFilterShader();
+    void FreeVhsFilterShader();
+    bool EnsureVhsFilterTexture(const Common::Point &scrSz);
     
 
 public:
@@ -895,6 +922,23 @@ protected:
     float _visualFilterStrength = 0.0f;   // effective blend strength (0 => off)
     bool _visualFilterActive = false;     // true only when a real filter LUT is loaded
     std::string _visualFilterName;        // selected filter file name ("Standard" when none)
+
+    // OpenUA experimental: optional VHS post-process stacked after the visual filter.
+    uint32_t _vhsPsShader = 0;
+    uint32_t _vhsVsShader = 0;
+    uint32_t _vhsBlendPsShader = 0;
+    uint32_t _vhsFbo = 0;
+    uint32_t _vhsOutFbo = 0;
+    uint32_t _vhsCopyTex = 0;
+    uint32_t _vhsOutTex = 0;
+    Common::Point _vhsCopyTexSize;
+    bool _vhsFboReady = false;
+    TVhsFilterProg _vhsFilterProg;
+    TVhsBlendProg _vhsBlendProg;
+    bool _vhsFilterEnabled = false;
+    bool _vhsFilterActive = false;
+    float _vhsFilterStrength = 0.0f;
+    std::string _vhsFilterShaderPath;
 
     static std::vector<TGFXDeviceInfo> _devices;
 };

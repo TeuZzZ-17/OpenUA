@@ -66,10 +66,6 @@ enum GAME_SCREEN_MODE {
 GAME_SCREEN_MODE GameScreenMode;
 UserData userdata;
 
-// OpenUA experimental: cached value of game.fixed_simulation_tick. When enabled, gameplay speed is made
-// frame-rate-independent (see ProcessNextFrame) so render FPS can go high without speeding up the game.
-static bool g_frameRateIndependent = false;
-
 int ProcessGameplayFrame()
 {
     ypaworld->Process(&world_update_arg);
@@ -442,19 +438,7 @@ int ProcessNextFrame()
         userdata.ResetInputPeriod = false;
     }
 
-    // OpenUA experimental (game.fixed_simulation_tick): make gameplay speed frame-rate-independent.
-    // The engine already scales physics by frameTime; the high-FPS speed-up comes from the per-frame
-    // "Period++" bias (extra game-time every rendered frame). In gameplay we keep the true measured frame
-    // time instead, so the simulation advances in real time at whatever FPS rendering runs at: render FPS
-    // stays high AND each frame is a genuinely new world state (native fluidity), without running fast.
-    // Off / menu / replay / network keep the original biased behavior byte-for-byte. The rare DTime==0 at
-    // >1024 FPS is covered by the divide guard in Process().
-    bool frameRateIndependent = g_frameRateIndependent
-                             && GameScreenMode == GAME_SCREEN_MODE_GAME
-                             && userdata.EnvMode != ENVMODE_NETPLAY;
-
-    if ( !frameRateIndependent )
-        input_states.Period++;
+    input_states.Period++;
 
     world_update_arg.DTime = input_states.Period;
     world_update_arg.field_8 = &input_states;
@@ -842,9 +826,6 @@ int main(int argc, char *argv[])
         return 0;
 
     System::IniConf::ReadFromNucleusIni();
-
-    // OpenUA experimental: read the INI-only frame-rate-independent gameplay flag once (default no). Not in the UI.
-    g_frameRateIndependent = System::IniConf::GameFixedSimulationTick.Get<bool>();
 
     // OpenUA: cache the Black Sect clone-balance config once, after the INI is parsed.
     World::CloneBalance::Init();

@@ -569,10 +569,7 @@ size_t NC_STACK_ypaworld::Process(base_64arg *arg)
         _updateMessage.frameTime = arg->DTime;
         _updateMessage.units_count = 0;
         _updateMessage.inpt = arg->field_8;
-        // OpenUA: with frame-rate-independent gameplay (game.fixed_simulation_tick) the measured frame time
-        // can round to DTime==0 above ~1024 FPS; keep the previous FPS reading and avoid a divide-by-zero.
-        if ( arg->DTime )
-            _FPS = 1024 / arg->DTime;
+        _FPS = 1024 / arg->DTime;
         _profileVals[PFID_FPS] = _FPS;
 
         HistoryEventAdd(World::History::Frame(_timeStamp));
@@ -4354,165 +4351,17 @@ bool NC_STACK_ypaworld::CreateVideoControls()
     }
 
     // ===== OpenUA: modern graphics options =====================================
-    // Atmosphere Strength (slider, row 6) + VSync / FPS Limit / Blending
-    // (cycle-buttons, two columns, rows 7-8). Hardcoded captions, like "Atmosphere".
+    // Blending (cycle-button) and VHS Filter. Palette strength is INI-only.
+    // Hardcoded captions, like "Atmosphere".
     {
-        int gw = dword_5A50B2 - 5 * buttonsSpace;   // same width base as the volume sliders
-        int colW = (gw - buttonsSpace) / 2;          // one column of the cycle-button grid
-        int colLblW = colW * 0.45;
-        int colBtnW = colW - colLblW;
-        int col2X = colW + buttonsSpace;
-
-        // --- Atmosphere Strength label (row 6) ---
+        // --- Blending label + cycle-button (row 6, left column) ---
         btn_64arg.tileset_down = 16;
         btn_64arg.tileset_up = 16;
         btn_64arg.field_3A = 16;
         btn_64arg.button_type = NC_STACK_button::TYPE_CAPTION;
         btn_64arg.xpos = 0;
         btn_64arg.ypos = 6 * (_fontH + vertMenuSpace);
-        btn_64arg.width = v98; // align with Atmosphere/Resolution labels (0.4 width), avoids text/slider overlap
-        btn_64arg.caption = "Atmosphere Strength";
-        btn_64arg.caption2.clear();
-        btn_64arg.downCode = 0;
-        btn_64arg.upCode = 0;
-        btn_64arg.pressedCode = 0;
-        btn_64arg.button_id = 2;
-        btn_64arg.flags = NC_STACK_button::FLAG_TEXT;
-        btn_64arg.txt_r = _iniColors[60].r;
-        btn_64arg.txt_g = _iniColors[60].g;
-        btn_64arg.txt_b = _iniColors[60].b;
-
-        if ( !_GameShell->video_button->Add(&btn_64arg) )
-        {
-            ypa_log_out("Unable to add Atmosphere Strength label\n");
-            return false;
-        }
-
-        // --- Atmosphere Strength slider (0..100) ---
-        NC_STACK_button::Slider strSlider;
-        strSlider.min = 0;
-        strSlider.max = 100;
-        strSlider.value = _GameShell->confVisualFilterStrength;
-
-        btn_64arg.tileset_down = 18;
-        btn_64arg.tileset_up = 18;
-        btn_64arg.field_3A = 30;
-        btn_64arg.button_type = NC_STACK_button::TYPE_SLIDER;
-        btn_64arg.button_id = 1180;
-        btn_64arg.xpos = buttonsSpace + v294 * 0.4; // align slider under the Atmosphere/Resolution controls
-        btn_64arg.width = v294 * 0.6;
-        btn_64arg.caption = " ";
-        btn_64arg.caption2.clear();
-        btn_64arg.downCode = 1301;
-        btn_64arg.upCode = 1303;
-        btn_64arg.pressedCode = 1302;
-        btn_64arg.field_34 = &strSlider;
-        btn_64arg.flags = 0;
-
-        if ( !_GameShell->video_button->Add(&btn_64arg) )
-        {
-            ypa_log_out("Unable to add Atmosphere Strength slider\n");
-            return false;
-        }
-
-        // --- VSync label + cycle-button (row 7, left column) ---
-        btn_64arg.tileset_down = 16;
-        btn_64arg.tileset_up = 16;
-        btn_64arg.field_3A = 16;
-        btn_64arg.button_type = NC_STACK_button::TYPE_CAPTION;
-        btn_64arg.xpos = 0;
-        btn_64arg.ypos = 7 * (_fontH + vertMenuSpace);
-        btn_64arg.width = colLblW;
-        btn_64arg.caption = "VSync";
-        btn_64arg.caption2.clear();
-        btn_64arg.downCode = 0;
-        btn_64arg.upCode = 0;
-        btn_64arg.pressedCode = 0;
-        btn_64arg.button_id = 2;
-        btn_64arg.flags = NC_STACK_button::FLAG_TEXT;
-        btn_64arg.txt_r = _iniColors[60].r;
-        btn_64arg.txt_g = _iniColors[60].g;
-        btn_64arg.txt_b = _iniColors[60].b;
-
-        if ( !_GameShell->video_button->Add(&btn_64arg) )
-        {
-            ypa_log_out("Unable to add VSync label\n");
-            return false;
-        }
-
-        btn_64arg.tileset_down = 19;
-        btn_64arg.tileset_up = 18;
-        btn_64arg.field_3A = 30;
-        btn_64arg.button_type = NC_STACK_button::TYPE_BUTTON;
-        btn_64arg.xpos = colLblW;
-        btn_64arg.width = colBtnW;
-        btn_64arg.caption = "On";
-        btn_64arg.caption2.clear();
-        btn_64arg.downCode = 0;
-        btn_64arg.upCode = 1304;
-        btn_64arg.pressedCode = 0;
-        btn_64arg.button_id = 1181;
-        btn_64arg.flags = NC_STACK_button::FLAG_BORDER | NC_STACK_button::FLAG_CENTER | NC_STACK_button::FLAG_TEXT;
-        btn_64arg.txt_r = _iniColors[68].r;
-        btn_64arg.txt_g = _iniColors[68].g;
-        btn_64arg.txt_b = _iniColors[68].b;
-
-        if ( !_GameShell->video_button->Add(&btn_64arg) )
-        {
-            ypa_log_out("Unable to add VSync button\n");
-            return false;
-        }
-
-        // --- FPS Limit label + cycle-button (row 7, right column) ---
-        btn_64arg.tileset_down = 16;
-        btn_64arg.tileset_up = 16;
-        btn_64arg.field_3A = 16;
-        btn_64arg.button_type = NC_STACK_button::TYPE_CAPTION;
-        btn_64arg.xpos = col2X;
-        btn_64arg.width = colLblW;
-        btn_64arg.caption = "FPS Limit";
-        btn_64arg.caption2.clear();
-        btn_64arg.button_id = 2;
-        btn_64arg.flags = NC_STACK_button::FLAG_TEXT;
-        btn_64arg.txt_r = _iniColors[60].r;
-        btn_64arg.txt_g = _iniColors[60].g;
-        btn_64arg.txt_b = _iniColors[60].b;
-
-        if ( !_GameShell->video_button->Add(&btn_64arg) )
-        {
-            ypa_log_out("Unable to add FPS Limit label\n");
-            return false;
-        }
-
-        btn_64arg.tileset_down = 19;
-        btn_64arg.tileset_up = 18;
-        btn_64arg.field_3A = 30;
-        btn_64arg.button_type = NC_STACK_button::TYPE_BUTTON;
-        btn_64arg.xpos = col2X + colLblW;
-        btn_64arg.width = colBtnW;
-        btn_64arg.caption = "60";
-        btn_64arg.caption2.clear();
-        btn_64arg.upCode = 1305;
-        btn_64arg.button_id = 1182;
-        btn_64arg.flags = NC_STACK_button::FLAG_BORDER | NC_STACK_button::FLAG_CENTER | NC_STACK_button::FLAG_TEXT;
-        btn_64arg.txt_r = _iniColors[68].r;
-        btn_64arg.txt_g = _iniColors[68].g;
-        btn_64arg.txt_b = _iniColors[68].b;
-
-        if ( !_GameShell->video_button->Add(&btn_64arg) )
-        {
-            ypa_log_out("Unable to add FPS Limit button\n");
-            return false;
-        }
-
-        // --- Blending label + cycle-button (row 8, left column) ---
-        btn_64arg.tileset_down = 16;
-        btn_64arg.tileset_up = 16;
-        btn_64arg.field_3A = 16;
-        btn_64arg.button_type = NC_STACK_button::TYPE_CAPTION;
-        btn_64arg.xpos = 0;
-        btn_64arg.ypos = 8 * (_fontH + vertMenuSpace);
-        btn_64arg.width = colLblW;
+        btn_64arg.width = v98;
         btn_64arg.caption = "Blending";
         btn_64arg.caption2.clear();
         btn_64arg.button_id = 2;
@@ -4531,8 +4380,8 @@ bool NC_STACK_ypaworld::CreateVideoControls()
         btn_64arg.tileset_up = 18;
         btn_64arg.field_3A = 30;
         btn_64arg.button_type = NC_STACK_button::TYPE_BUTTON;
-        btn_64arg.xpos = colLblW;
-        btn_64arg.width = colBtnW;
+        btn_64arg.xpos = buttonsSpace + v294 * 0.4;
+        btn_64arg.width = v294 * 0.6;
         btn_64arg.caption = "Default";
         btn_64arg.caption2.clear();
         btn_64arg.upCode = 1306;
@@ -4545,6 +4394,54 @@ bool NC_STACK_ypaworld::CreateVideoControls()
         if ( !_GameShell->video_button->Add(&btn_64arg) )
         {
             ypa_log_out("Unable to add Blending button\n");
+            return false;
+        }
+
+        int gv117 = dword_5A50B2 - 6 * buttonsSpace - 2 * checkBoxWidth;
+        int gv120 = gv117 / 2;
+
+        // --- VHS Filter checkbox (row 8, left column, above Sky) ---
+        btn_64arg.tileset_down = 19;
+        btn_64arg.tileset_up = 18;
+        btn_64arg.field_3A = 30;
+        btn_64arg.button_type = NC_STACK_button::TYPE_CHECKBX;
+        btn_64arg.xpos = 0;
+        btn_64arg.ypos = 8 * (_fontH + vertMenuSpace);
+        btn_64arg.width = checkBoxWidth;
+        btn_64arg.caption = "g";
+        btn_64arg.caption2 = "g";
+        btn_64arg.downCode = 1309;
+        btn_64arg.upCode = 1310;
+        btn_64arg.pressedCode = 0;
+        btn_64arg.button_id = 1185;
+        btn_64arg.flags = 0;
+
+        if ( !_GameShell->video_button->Add(&btn_64arg) )
+        {
+            ypa_log_out("Unable to add VHS Filter checkbox\n");
+            return false;
+        }
+
+        btn_64arg.tileset_down = 16;
+        btn_64arg.tileset_up = 16;
+        btn_64arg.field_3A = 16;
+        btn_64arg.button_type = NC_STACK_button::TYPE_CAPTION;
+        btn_64arg.xpos = checkBoxWidth + buttonsSpace;
+        btn_64arg.width = gv120;
+        btn_64arg.caption = "VHS Filter";
+        btn_64arg.caption2.clear();
+        btn_64arg.downCode = 0;
+        btn_64arg.upCode = 0;
+        btn_64arg.pressedCode = 0;
+        btn_64arg.button_id = 2;
+        btn_64arg.flags = NC_STACK_button::FLAG_TEXT;
+        btn_64arg.txt_r = _iniColors[60].r;
+        btn_64arg.txt_g = _iniColors[60].g;
+        btn_64arg.txt_b = _iniColors[60].b;
+
+        if ( !_GameShell->video_button->Add(&btn_64arg) )
+        {
+            ypa_log_out("Unable to add VHS Filter label\n");
             return false;
         }
     }
@@ -6828,43 +6725,16 @@ void NC_STACK_ypaworld::UpdateGameShell()
     _GameShell->video_button->SetState(&v16);
 
     // OpenUA: modern graphics options initial state (read from config)
-    _GameShell->confVsync = System::IniConf::GfxVsync.Get<int32_t>();
-    _GameShell->confMaxFps = System::IniConf::GfxMaxFps.Get<int32_t>();
     _GameShell->confBlending = System::IniConf::GfxBlending.Get<int32_t>();
     _GameShell->confMoviePlayer = System::IniConf::GfxMoviePlayer.Get<bool>();
-    {
-        std::string strengthText;
-        FSMgr::FileHandle *fil = uaOpenFileAlloc("env:visual_filter_strength.txt", "r");
-        if (fil)
-        {
-            if (fil->ReadLine(&strengthText))
-            {
-                size_t first = strengthText.find_first_not_of(" \t\r\n");
-                if (first != std::string::npos)
-                {
-                    size_t last = strengthText.find_last_not_of(" \t\r\n");
-                    strengthText = strengthText.substr(first, last - first + 1);
-                }
-                else
-                {
-                    strengthText.clear();
-                }
-            }
-            delete fil;
-        }
-
-        if (strengthText.empty())
-            strengthText = System::IniConf::GfxVisualFilterStrength.Get<std::string>();
-
-        float st = 0.30f;
-        if (!strengthText.empty()) { try { st = std::stof(strengthText); } catch (...) { st = 0.30f; } }
-        if (st < 0.0f) st = 0.0f;
-        if (st > 1.0f) st = 1.0f;
-        _GameShell->confVisualFilterStrength = (int)(st * 100.0f + 0.5f);
-    }
+    _GameShell->confVhsFilter = System::IniConf::GfxVhsFilter.Get<bool>();
 
     v16.butID = 1184; // Intro Movies checkbox
     v16.field_4 = (!_GameShell->confMoviePlayer) + 1;
+    _GameShell->video_button->SetState(&v16);
+
+    v16.butID = 1185; // VHS Filter checkbox
+    v16.field_4 = (!_GameShell->confVhsFilter) + 1;
     _GameShell->video_button->SetState(&v16);
 
     _GameShell->video_button->SetText(1156, _GameShell->p_YW->_gfxMode.name);
