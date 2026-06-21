@@ -18,6 +18,21 @@ bool IsSetLooseEmrsOverrideClass(const std::string &classname)
            classname == "sklt.class" ||
            classname == "bmpanim.class";
 }
+
+bool SkipCurrentOrNextPayload(IFFile *mfile, int payloadParse)
+{
+    if ( payloadParse == IFFile::IFF_ERR_EOC )
+    {
+        if ( !mfile->parse() )
+            return mfile->skipChunk();
+        return false;
+    }
+
+    if ( !payloadParse )
+        return mfile->skipChunk();
+
+    return false;
+}
 }
 
 // Create embed resource node and fill rsrc field data
@@ -87,20 +102,60 @@ size_t NC_STACK_embed::LoadingFromIFF(IFFile **file)
 
             if ( IsSetLooseEmrsOverrideClass(classname) )
             {
+                std::string payload = "unknown";
+                if ( payloadParse == IFFile::IFF_ERR_EOC )
+                    payload = mfile->PeekNextChunkLabel();
+                else if ( !payloadParse )
+                    payload = IFFile::ChunkLabel(mfile->GetCurrentChunk());
+
+                if ( classname == "ilbm.class" )
+                {
+                    IFFile::SetLooseOverride pngOverrideInfo;
+                    if ( IFFile::FindSetLooseEmrsPngOverride(resname,
+                                                              "rb",
+                                                              classname,
+                                                              payload,
+                                                              &pngOverrideInfo,
+                                                              "NC_STACK_embed::LoadingFromIFF",
+                                                              emrsOffset) )
+                    {
+                        NC_STACK_rsrc *png_class = Nucleus::CTFInit<NC_STACK_rsrc>(classname,
+                           {{NC_STACK_rsrc::RSRC_ATT_NAME, resname},
+                            {NC_STACK_rsrc::RSRC_ATT_TRYSHARED, (int32_t)0},
+                            {NC_STACK_rsrc::RSRC_ATT_SET_LOOSE_PNG_PATH, pngOverrideInfo.resolvedPath},
+                            {NC_STACK_rsrc::RSRC_ATT_SKIP_SET_LOOSE_OVERRIDE, (int32_t)1}});
+
+                        if ( png_class )
+                        {
+                            if ( SkipCurrentOrNextPayload(mfile, payloadParse) )
+                            {
+                                IFFile::ReportSetLooseOverrideUsed(pngOverrideInfo);
+                                ypa_log_out("OpenUA SET loose PNG override used: %s -> %s\n", resname.c_str(), pngOverrideInfo.resolvedPath.c_str());
+                                _resources.push_back(png_class);
+                                continue;
+                            }
+
+                            png_class->Delete();
+                            IFFile::ReportSetLooseOverrideFailed(pngOverrideInfo, "PNG override loaded but embedded payload skip failed; embedded payload fallback used.");
+                            ypa_log_out("WARNING: OpenUA SET loose PNG override failed for %s (%s); falling back to ILBM/embedded payload.\n", resname.c_str(), pngOverrideInfo.resolvedPath.c_str());
+                        }
+                        else
+                        {
+                            IFFile::ReportSetLooseOverrideFailed(pngOverrideInfo, "PNG override existed but failed to load; ILBM/embedded payload fallback used.");
+                            ypa_log_out("WARNING: OpenUA SET loose PNG override failed for %s (%s); falling back to ILBM/embedded payload.\n", resname.c_str(), pngOverrideInfo.resolvedPath.c_str());
+                        }
+                    }
+                }
+
                 IFFile::SetLooseOverride overrideInfo;
                 if ( IFFile::FindSetLooseEmrsOverride(resname,
                                                        "rb",
                                                        classname,
-                                                       "unknown",
+                                                       payload,
                                                        &overrideInfo,
                                                        "NC_STACK_embed::LoadingFromIFF",
                                                        emrsOffset) )
                 {
-                    std::string payload = "unknown";
-                    if ( payloadParse == IFFile::IFF_ERR_EOC )
-                        payload = mfile->PeekNextChunkLabel();
-                    else if ( !payloadParse )
-                        payload = IFFile::ChunkLabel(mfile->GetCurrentChunk());
                     overrideInfo.embeddedPayload = payload;
 
                     FSMgr::FileHandle looseHandle = FSMgr::iDir::openFile(overrideInfo.resolvedPath, "rb");
@@ -115,16 +170,7 @@ size_t NC_STACK_embed::LoadingFromIFF(IFFile **file)
 
                         if ( override_class )
                         {
-                            bool payloadSkipped = false;
-                            if ( payloadParse == IFFile::IFF_ERR_EOC )
-                            {
-                                if ( !mfile->parse() )
-                                    payloadSkipped = mfile->skipChunk();
-                            }
-                            else if ( !payloadParse )
-                            {
-                                payloadSkipped = mfile->skipChunk();
-                            }
+                            bool payloadSkipped = SkipCurrentOrNextPayload(mfile, payloadParse);
 
                             if ( payloadSkipped )
                             {

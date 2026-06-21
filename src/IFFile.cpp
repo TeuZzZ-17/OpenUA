@@ -235,6 +235,17 @@ std::string setLooseStripLeadingSlashes(std::string path)
     return path;
 }
 
+std::string setLooseTrimResourceName(std::string path)
+{
+    while (!path.empty() && (unsigned char)path.front() <= 32)
+        path.erase(path.begin());
+
+    while (!path.empty() && (unsigned char)path.back() <= 32)
+        path.pop_back();
+
+    return path;
+}
+
 bool setLooseIsReadMode(const std::string &mode)
 {
     return mode.find('r') != std::string::npos &&
@@ -303,6 +314,70 @@ std::string setLooseExtension(const std::string &path)
         return std::string();
 
     return setLooseLower(path.substr(dotPos + 1));
+}
+
+std::string setLooseReplaceExtension(const std::string &path, const std::string &newExt)
+{
+    size_t slashPos = path.find_last_of("/\\");
+    size_t dotPos = path.rfind('.');
+
+    if (dotPos == std::string::npos || (slashPos != std::string::npos && dotPos < slashPos))
+        return path + newExt;
+
+    return path.substr(0, dotPos) + newExt;
+}
+
+std::string setLooseFileName(const std::string &path)
+{
+    size_t slashPos = path.find_last_of("/\\");
+    if (slashPos == std::string::npos)
+        return path;
+    return path.substr(slashPos + 1);
+}
+
+std::string setLooseDirName(const std::string &path)
+{
+    size_t slashPos = path.find_last_of("/\\");
+    if (slashPos == std::string::npos)
+        return std::string();
+    return path.substr(0, slashPos);
+}
+
+bool setLooseCanOpenDiskFile(const std::string &path)
+{
+    FSMgr::FileHandle fil(path, "rb");
+    return fil.OK();
+}
+
+bool setLooseResolveReadableFile(const std::string &virtualPath, std::string *openPath)
+{
+    if ( FSMgr::iDir::fileExist(virtualPath) )
+    {
+        if (openPath)
+            *openPath = virtualPath;
+        return true;
+    }
+
+    std::string dirName = setLooseDirName(virtualPath);
+    std::string fileName = setLooseFileName(virtualPath);
+    if ( dirName.empty() || fileName.empty() )
+        return false;
+
+    FSMgr::iNode *dirNode = FSMgr::iDir::findNode(dirName);
+    if ( !dirNode || dirNode->getType() != FSMgr::iNode::NTYPE_DIR )
+        return false;
+
+    std::string diskPath = setLooseNormalizeSlashes(dirNode->getPath());
+    if ( !diskPath.empty() && diskPath.back() != '/' )
+        diskPath += "/";
+    diskPath += fileName;
+
+    if ( !setLooseCanOpenDiskFile(diskPath) )
+        return false;
+
+    if (openPath)
+        *openPath = diskPath;
+    return true;
 }
 
 bool setLooseSupportedExtension(const std::string &assetPath)
@@ -872,6 +947,70 @@ bool IFFile::FindSetLooseEmrsOverride(const std::string &filename, const std::st
                 out->requested = assetPath;
                 out->resolvedPath = candidate.path;
                 out->extensionForm = candidate.extensionForm;
+                out->embedded = true;
+                out->sourceFunction = sourceFunction ? sourceFunction : "NC_STACK_embed::LoadingFromIFF";
+                out->emrs = true;
+                out->emrsClass = className;
+                out->embeddedPayload = payload;
+            }
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool IFFile::FindSetLooseEmrsPngOverride(const std::string &filename, const std::string &mode, const std::string &className, const std::string &payload, SetLooseOverride *out, const char *sourceFunction, size_t currentOffset)
+{
+    (void)currentOffset;
+
+    if (out)
+        *out = SetLooseOverride();
+
+    if ( !setLooseIsReadMode(mode) )
+        return false;
+
+    if ( setLooseLower(className) != "ilbm.class" )
+        return false;
+
+    int32_t setId = setLooseCurrentSetId();
+    if ( !setId )
+        return false;
+
+    std::string assetPath = setLooseEmbeddedAssetFromRequest(filename, setId);
+    if ( assetPath.empty() )
+        return false;
+
+    assetPath = setLooseTrimResourceName(setLooseStripLeadingSlashes(setLooseNormalizeSlashes(assetPath)));
+    if ( assetPath.find(':') != std::string::npos )
+        return false;
+
+    std::string ext = setLooseExtension(assetPath);
+    if ( ext != "ilbm" && ext != "ilb" )
+        return false;
+
+    if ( !setLooseEnsureReport(setId) )
+        return false;
+
+    std::string looseRoot = "Data/Set" + std::to_string(setId) + "/Loose/";
+    std::vector<std::string> candidates;
+    candidates.push_back(looseRoot + setLooseReplaceExtension(assetPath, ".PNG"));
+    std::string lowerCandidate = looseRoot + setLooseReplaceExtension(assetPath, ".png");
+    if ( setLooseNormalizeSlashes(lowerCandidate) != setLooseNormalizeSlashes(candidates.front()) )
+        candidates.push_back(lowerCandidate);
+
+    for (const std::string &candidate : candidates)
+    {
+        std::string openPath;
+        if ( setLooseResolveReadableFile(candidate, &openPath) )
+        {
+            if (out)
+            {
+                out->active = true;
+                out->setId = setId;
+                out->requested = assetPath;
+                out->resolvedPath = openPath;
+                out->extensionForm = "PNG texture override";
                 out->embedded = true;
                 out->sourceFunction = sourceFunction ? sourceFunction : "NC_STACK_embed::LoadingFromIFF";
                 out->emrs = true;

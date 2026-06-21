@@ -1,3 +1,4 @@
+#include <SDL2/SDL_image.h>
 #include "includes.h"
 #include "nucleas.h"
 #include "rsrc.h"
@@ -238,7 +239,7 @@ rsrc * NC_STACK_ilbm::READ_ILBM(IDVList &stak, IFFile *mfil, int transp)
     VBMP_type vbmp;
     
     rsrc *res = NC_STACK_rsrc::rsrc_func64(stak);
-    int convertColor = stak.Get<int32_t>(BMD_ATT_CONVCOLOR, 0);
+    int convertColor = stak.Get<int32_t>(NC_STACK_bitmap::BMD_ATT_CONVCOLOR, 0);
     int alphaPalette = stak.Get<int32_t>(ATT_ALPHAPALETTE, 1);
     
     if (!res)
@@ -450,6 +451,141 @@ static rsrc *ILBM_ReadOpenedOrVanilla(NC_STACK_ilbm *obj, IDVList &stak, const s
     return NULL;
 }
 
+static Sint64 ILBM_PngRwSize(SDL_RWops *context)
+{
+    FSMgr::FileHandle *fil = (FSMgr::FileHandle *)context->hidden.unknown.data2;
+    size_t curr = fil->tell();
+    fil->seek(0, SEEK_END);
+    size_t sz = fil->tell();
+    fil->seek(curr, SEEK_SET);
+    return sz;
+}
+
+static Sint64 ILBM_PngRwSeek(SDL_RWops *context, Sint64 offset, int whence)
+{
+    FSMgr::FileHandle *fil = (FSMgr::FileHandle *)context->hidden.unknown.data2;
+    int origin = SEEK_SET;
+    if ( whence == RW_SEEK_CUR )
+        origin = SEEK_CUR;
+    else if ( whence == RW_SEEK_END )
+        origin = SEEK_END;
+    else if ( whence != RW_SEEK_SET )
+        return -1;
+
+    if ( fil->seek(offset, origin) != 0 )
+        return -1;
+    return fil->tell();
+}
+
+static size_t ILBM_PngRwRead(SDL_RWops *context, void *ptr, size_t size, size_t maxnum)
+{
+    FSMgr::FileHandle *fil = (FSMgr::FileHandle *)context->hidden.unknown.data2;
+    if (!size)
+        return 0;
+    return fil->read(ptr, size * maxnum) / size;
+}
+
+static size_t ILBM_PngRwWrite(SDL_RWops *, const void *, size_t, size_t)
+{
+    return 0;
+}
+
+static int ILBM_PngRwClose(SDL_RWops *context)
+{
+    FSMgr::FileHandle *fil = (FSMgr::FileHandle *)context->hidden.unknown.data2;
+    delete fil;
+    SDL_FreeRW(context);
+    return 0;
+}
+
+static SDL_RWops *ILBM_PngRwFromFile(FSMgr::FileHandle *fil)
+{
+    SDL_RWops *rwops = SDL_AllocRW();
+    if (!rwops)
+        return NULL;
+
+    rwops->size = ILBM_PngRwSize;
+    rwops->seek = ILBM_PngRwSeek;
+    rwops->read = ILBM_PngRwRead;
+    rwops->write = ILBM_PngRwWrite;
+    rwops->close = ILBM_PngRwClose;
+    rwops->type = 0x4F55504E;
+    rwops->hidden.unknown.data2 = fil;
+    return rwops;
+}
+
+static rsrc *ILBM_ReadPngOverride(NC_STACK_ilbm *obj, IDVList &stak, const std::string &path)
+{
+    FSMgr::FileHandle *fil = FSMgr::iDir::openFileAlloc(path, "rb");
+    if ( !fil )
+        fil = new FSMgr::FileHandle(path, "rb");
+
+    if ( !fil || !fil->OK() )
+    {
+        delete fil;
+        return NULL;
+    }
+
+    SDL_RWops *rwops = ILBM_PngRwFromFile(fil);
+    if ( !rwops )
+    {
+        delete fil;
+        return NULL;
+    }
+
+    SDL_Surface *loaded = IMG_Load_RW(rwops, 1);
+    if ( !loaded )
+        return NULL;
+
+    rsrc *res = obj->NC_STACK_rsrc::rsrc_func64(stak);
+    if ( !res )
+    {
+        SDL_FreeSurface(loaded);
+        return NULL;
+    }
+
+    ResBitmap *bitm = new ResBitmap;
+    if ( !bitm )
+    {
+        SDL_FreeSurface(loaded);
+        obj->NC_STACK_rsrc::rsrc_func65(res);
+        return NULL;
+    }
+
+    bitm->width = loaded->w;
+    bitm->height = loaded->h;
+    bitm->swTex = loaded;
+    res->data = bitm;
+
+    if ( loaded->format->palette )
+    {
+        bitm->palette = new UA_PALETTE;
+        if ( bitm->palette )
+        {
+            for (int i = 0; i < loaded->format->palette->ncolors && i < 256; i++)
+                bitm->palette->at(i) = loaded->format->palette->colors[i];
+        }
+    }
+
+    int convertColor = stak.Get<int32_t>(NC_STACK_bitmap::BMD_ATT_CONVCOLOR, 0);
+    if ( convertColor )
+    {
+        SDL_Surface *screenFmt = GFX::Engine.ConvertToScreenFormat(bitm->swTex);
+        if ( screenFmt )
+        {
+            SDL_FreeSurface(bitm->swTex);
+            bitm->swTex = screenFmt;
+            if ( bitm->palette )
+            {
+                delete bitm->palette;
+                bitm->palette = NULL;
+            }
+        }
+    }
+
+    return res;
+}
+
 static void ILBM_SkipEmbeddedChunk(IFFile *mfile)
 {
     if ( mfile && !mfile->parse() )
@@ -480,10 +616,14 @@ static rsrc *ILBM_ReadEmbeddedOverride(NC_STACK_ilbm *obj, IDVList &stak, const 
 rsrc * NC_STACK_ilbm::rsrc_func64(IDVList &stak)
 {
     const std::string resName = stak.Get<std::string>(RSRC_ATT_NAME, "");
+    const std::string setLoosePngPath = stak.Get<std::string>(RSRC_ATT_SET_LOOSE_PNG_PATH, "");
     const char *reassignName = NULL;
 
     if ( resName.empty() )
         return NULL;
+
+    if ( !setLoosePngPath.empty() )
+        return ILBM_ReadPngOverride(this, stak, setLoosePngPath);
 
     if ( GFX::Engine.can_destblend )
     {
