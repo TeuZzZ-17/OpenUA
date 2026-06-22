@@ -1457,6 +1457,11 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
         float radius = parser.stof(p2, 0);
         _vhcl->seek_and_explode_trigger_radius = radius > 0.0 ? radius : 0.0;
     }
+    else if ( !StriCmp(p1, "ai_max_active_at_once") )
+    {
+        int maxActive = parser.stol(p2, NULL, 0);
+        _vhcl->ai_max_active_at_once = maxActive > 0 ? maxActive : 0;
+    }
     else if ( ParseVisualScaleParam(parser, p1, p2,
                                     _vhcl->visual_scale,
                                     _vhcl->visual_scale_mode,
@@ -2251,6 +2256,7 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->seek_and_explode = 0;
         _vhcl->seek_and_explode_weapon = 0;
         _vhcl->seek_and_explode_trigger_radius = 0.0;
+        _vhcl->ai_max_active_at_once = 0;
         _vhcl->shield = 50;
         _vhcl->energy = 10000;
         _vhcl->adist_sector = 800.0;

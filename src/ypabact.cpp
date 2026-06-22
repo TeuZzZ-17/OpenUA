@@ -5742,6 +5742,9 @@ static bool ypabact_IsValidMissileMultiTarget(NC_STACK_ypabact *launcher, NC_STA
     if ( !launcher || !target || launcher == target || target->_isDummy || !launcher->getBACT_pWorld() )
         return false;
 
+    if ( target->IsInvisibleUnrevealed() )
+        return false;
+
     if ( target->getBACT_pWorld() != launcher->getBACT_pWorld() )
         return false;
 
@@ -7685,6 +7688,9 @@ static bool ypabact_IsLaserSecondaryTargetCandidate(NC_STACK_ypabact *shooter, N
     if ( !ypabact_IsLaserDamageTarget(shooter, unit) )
         return false;
 
+    if ( unit->IsInvisibleUnrevealed() )
+        return false;
+
     if ( !shooter || unit->_owner == World::OWNER_0 )
         return false;
 
@@ -8992,6 +8998,7 @@ void NC_STACK_ypabact::UpdateSeekAndExplode(update_msg *)
         return;
 
     _seek_and_explode_triggered = true;
+    RevealInvisibleOnAttack();
 
     if ( _seek_and_explode_weapon > 0 )
     {
@@ -11490,6 +11497,7 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
 
     World::TWeapProto &mgunProto = _world->GetWeaponsProtos().at(_mgun);
     int mgunShots = _num_mguns > 0 ? _num_mguns : 1;
+    RevealInvisibleOnAttack();
 
     int v107 = 0;
     if ( _bact_type == BACT_TYPES_GUN )
@@ -11545,10 +11553,6 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
         {
             _mgun_time = arg->field_10;
             spawnVisual = true;
-
-            // OpenUA invisible: a visible machine-gun shot is being fired this frame ->
-            // reveal the cloaked unit (or its carrier when fired by an attached gun).
-            RevealInvisibleOnAttack();
         }
     }
 
@@ -11950,6 +11954,9 @@ size_t NC_STACK_ypabact::UserTargeting(bact_arg106 *arg)
                         {
                             if ( bct->_bact_type != BACT_TYPES_MISSLE && bct->_status != BACT_STATUS_DEAD )
                             {
+                                if ( bct->IsInvisibleUnrevealed() )
+                                    continue;
+
                                 int v53 = 0;
                                 if (bct->_bact_type == BACT_TYPES_GUN)
                                 {

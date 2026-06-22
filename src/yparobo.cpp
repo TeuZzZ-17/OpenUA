@@ -11,10 +11,13 @@
 #include "system/inivals.h"
 
 #include <math.h>
+#include <unordered_set>
 
 
 
 int dword_5B1128 = 1;
+
+static bool yparobo_IsAiActiveVehicleCapReached(NC_STACK_yparobo *robo, int vehicleId);
 
 robo_t2 stru_5B0628[100];
 int dword_515138[8];
@@ -484,6 +487,15 @@ void NC_STACK_yparobo::InitForce(NC_STACK_ypabact *unit)
     
     if ( v6 > (signed int)v23 )
     {
+        if ( yparobo_IsAiActiveVehicleCapReached(this, unit->_vehicleID) )
+        {
+            // The force commander already exists and counts toward the cap.
+            // Do not add more members of the same capped prototype through the
+            // force-fill path; finish the force cleanly instead.
+            sub_4A9F24(unit);
+            return;
+        }
+
         ypaworld_arg146 arg146;
         arg146.vehicle_id = unit->_vehicleID;
         arg146.pos = _position + _roboDockPos;
@@ -2896,6 +2908,85 @@ void NC_STACK_yparobo::changePlace()
     }
 }
 
+static bool yparobo_IsAliveForAiActiveCap(NC_STACK_ypabact *unit)
+{
+    return unit &&
+           unit->_status != BACT_STATUS_NOPE &&
+           unit->_status != BACT_STATUS_DEAD &&
+           !(unit->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2));
+}
+
+static int yparobo_CountAiActiveVehicleRecursive(NC_STACK_ypabact *unit, int owner, int vehicleId,
+                                                 std::unordered_set<NC_STACK_ypabact *> &visited)
+{
+    if ( !unit || visited.count(unit) )
+        return 0;
+
+    visited.insert(unit);
+
+    int count = 0;
+
+    if ( yparobo_IsAliveForAiActiveCap(unit) &&
+         unit->_owner == owner &&
+         unit->_vehicleID == vehicleId )
+    {
+        count++;
+    }
+
+    for ( NC_STACK_ypabact *kid : unit->GetKidList() )
+        count += yparobo_CountAiActiveVehicleRecursive(kid, owner, vehicleId, visited);
+
+    return count;
+}
+
+static int yparobo_CountAiActiveVehicle(NC_STACK_ypaworld *world, int owner, int vehicleId)
+{
+    if ( !world || vehicleId <= 0 )
+        return 0;
+
+    int count = 0;
+    std::unordered_set<NC_STACK_ypabact *> visited;
+
+    // _unitsList mostly contains root/major BACTs, while sector cell lists contain
+    // many live regular units. Scan both and deduplicate pointers so capped AI
+    // production cannot bypass the count through force members or sector units.
+    for ( NC_STACK_ypabact *unit : world->_unitsList )
+        count += yparobo_CountAiActiveVehicleRecursive(unit, owner, vehicleId, visited);
+
+    for ( cellArea &cell : world->Sectors() )
+    {
+        for ( NC_STACK_ypabact *unit : cell.unitsList )
+            count += yparobo_CountAiActiveVehicleRecursive(unit, owner, vehicleId, visited);
+    }
+
+    return count;
+}
+
+static bool yparobo_IsAiActiveVehicleCapReached(NC_STACK_yparobo *robo, int vehicleId,
+                                                const World::TVhclProto &proto)
+{
+    if ( !robo || proto.ai_max_active_at_once <= 0 )
+        return false;
+
+    NC_STACK_ypaworld *world = robo->getBACT_pWorld();
+    if ( !world )
+        return false;
+
+    return yparobo_CountAiActiveVehicle(world, robo->_owner, vehicleId) >= proto.ai_max_active_at_once;
+}
+
+static bool yparobo_IsAiActiveVehicleCapReached(NC_STACK_yparobo *robo, int vehicleId)
+{
+    if ( !robo || vehicleId <= 0 )
+        return false;
+
+    NC_STACK_ypaworld *world = robo->getBACT_pWorld();
+    if ( !world || (size_t)vehicleId >= world->GetVhclProtos().size() )
+        return false;
+
+    return yparobo_IsAiActiveVehicleCapReached(robo, vehicleId, world->GetVhclProtos().at(vehicleId));
+}
+
 
 NC_STACK_ypabact *NC_STACK_yparobo::AllocForce(robo_loct1 *arg)
 {
@@ -2999,7 +3090,8 @@ NC_STACK_ypabact *NC_STACK_yparobo::AllocForce(robo_loct1 *arg)
                 {
                     if ( proto.model_id != BACT_TYPES_ROBO && proto.model_id != BACT_TYPES_GUN && proto.model_id != BACT_TYPES_MISSLE )
                     {
-                        if ( v67 > ((float)proto.energy * v73) )
+                        if ( v67 > ((float)proto.energy * v73) &&
+                             !yparobo_IsAiActiveVehicleCapReached(this, i, proto) )
                         {
                             int v80 = _world->TestVehicle(i, arg->job);
 
@@ -3071,6 +3163,23 @@ NC_STACK_ypabact *NC_STACK_yparobo::AllocForce(robo_loct1 *arg)
         else
         {
             v33 = v87;
+        }
+
+        if ( yparobo_IsAiActiveVehicleCapReached(this, v33) )
+        {
+            if ( selectedCommander )
+            {
+                setTarget_msg arg67_2;
+                arg67_2.tgt_pos = arg->tgt_pos;
+                arg67_2.priority = 0;
+                arg67_2.tgt.pbact = arg->tgt_bact;
+                arg67_2.tgt_type = arg->tgType;
+
+                selectedCommander->SetTarget(&arg67_2);
+                selectedCommander->setBACT_aggression(arg->aggr);
+            }
+
+            return selectedCommander;
         }
 
         ypaworld_arg146 arg146;

@@ -491,6 +491,11 @@ void yw_write_energymap(NC_STACK_ypaworld *yw, FSMgr::FileHandle *fil)
 
 int yw_write_bact(NC_STACK_ypabact *bct, FSMgr::FileHandle *fil)
 {
+    bool saveInvisibleState = bct->IsInvisibleUnrevealed();
+    NC_STACK_ypaworld *world = bct->getBACT_pWorld();
+    if ( world && bct->_vehicleID >= 0 && (size_t)bct->_vehicleID < world->GetVhclProtos().size() )
+        saveInvisibleState = saveInvisibleState || world->GetVhclProtos().at(bct->_vehicleID).invisible;
+
     if ( bct->getBACT_viewer() )
         fil->printf("    viewer         = yes\n");
     else
@@ -545,6 +550,9 @@ int yw_write_bact(NC_STACK_ypabact *bct, FSMgr::FileHandle *fil)
     fil->printf("    extrastate     = %d\n", bct->_status_flg);
     fil->printf("    ident          = %d\n", bct->_gid);
     fil->printf("    killerowner    = %d\n", bct->_killer_owner);
+
+    if ( saveInvisibleState )
+        fil->printf("    invisible_unrevealed = %s\n", bct->IsInvisibleUnrevealed() ? "yes" : "no");
 
     if ( bct->_primTtype == BACT_TGT_TYPE_UNIT )
         fil->printf("    primary        = %d_%d_%2.2f_%2.2f_%d\n", bct->_primTtype, bct->_primT.pbact->_gid, bct->_primTpos.x, bct->_primTpos.z, bct->_primT_cmdID);

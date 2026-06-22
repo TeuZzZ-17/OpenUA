@@ -423,6 +423,7 @@ struct TVhclProto
     int seek_and_explode = 0;
     int seek_and_explode_weapon = 0;
     float seek_and_explode_trigger_radius = 0.0;
+    int ai_max_active_at_once = 0;
     std::vector<DestFX> dest_fx;      // dest_fx
     std::vector<DestFX>    ExtDestroyFX; // ext_dest_fx
     std::array<TVhclSound, SND_MAX> sndFX;

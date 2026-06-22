@@ -228,6 +228,10 @@ bool SaveBact::SaveBactParser(ScriptParser::Parser &parser, NC_STACK_ypabact *b,
     {
         b->_killer_owner = parser.stoi(p2);
     }
+    else if ( !StriCmp(p1, "invisible_unrevealed") )
+    {
+        b->_invisibleUnrevealed = StrGetBool(p2);
+    }
     else if ( !StriCmp(p1, "ident") )
     {
         b->_gid = parser.stoi(p2);
