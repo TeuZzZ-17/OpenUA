@@ -82,7 +82,9 @@ static bool ypabact_CanUseGameplayStatusMechanics(NC_STACK_ypabact *bact)
 
 static bool ypabact_CanSpawnDecorationFX(NC_STACK_ypabact *bact)
 {
+    // OpenUA invisible: cloaked stealth units spawn no visible/audible decoration FX.
     return bact &&
+           !bact->IsInvisibleUnrevealed() &&
            bact->getBACT_pWorld() &&
            bact->_energy > 0 &&
            bact->_status != BACT_STATUS_DEAD &&
@@ -607,6 +609,11 @@ static bool ypabact_IsCarrierSpawnEnemy(NC_STACK_ypabact *carrier, NC_STACK_ypab
     if ( unit->_owner == World::OWNER_0 || unit->_owner == carrier->_owner )
         return false;
 
+    // OpenUA invisible: cloaked stealth units are ignored by carrier spawn-trigger and
+    // proximity-defense scans (both go through this predicate).
+    if ( !unit->CanBeSeenByAIOrRadar() )
+        return false;
+
     return true;
 }
 
@@ -639,6 +646,12 @@ static bool ypabact_IsLaserAimTarget(NC_STACK_ypabact *shooter, NC_STACK_ypabact
         return true;
 
     if ( unit->_owner == World::OWNER_0 || unit->_owner == shooter->_owner )
+        return false;
+
+    // OpenUA invisible: AI laser auto-lock never picks a cloaked stealth unit as its aim
+    // target (the damage predicate above stays unfiltered so a beam still burns one if it
+    // happens to physically cross it).
+    if ( !unit->CanBeSeenByAIOrRadar() )
         return false;
 
     return true;
@@ -1657,6 +1670,9 @@ void NC_STACK_ypabact::UpdateUnitGuns(update_msg *)
                 gunObj->_aggr = 60;
                 gunObj->_isUnitGunChild = true;
                 gunObj->_gunDisplayName = gun.robo_gun_name;
+                // OpenUA invisible: attached guns inherit the carrier's current stealth
+                // state so the whole unit cloaks/reveals as one.
+                gunObj->_invisibleUnrevealed = _invisibleUnrevealed;
 
                 if ( _world->_isNetGame )
                 {
@@ -1843,6 +1859,8 @@ void NC_STACK_ypabact::UpdateUnitDummies(update_msg *)
                 dummyObj->_host_station = NULL;
                 dummyObj->_aggr = 0;
                 dummyObj->_isUnitGunChild = true; // hide from strategic UI/minimap/squad
+                // OpenUA invisible: dummy modules inherit the carrier's stealth state.
+                dummyObj->_invisibleUnrevealed = _invisibleUnrevealed;
                 dummyObj->setBACT_bactCollisions(false); // decorative module: no unit-vs-unit shove
 
                 if ( _world->_isNetGame )
@@ -2316,9 +2334,19 @@ void NC_STACK_ypabact::Update(update_msg *arg)
     ypabact_ApplyDamagedSoundPitch(this);
     BeforeSoundCarrierUpdate();
 
-    SFXEngine::SFXe.UpdateSoundCarrier(&_soundcarrier);
-    ypabact_UpdateStatusSoundCarrier(this, &_debuff_soundcarrier);
-    ypabact_UpdateStatusSoundCarrier(this, &_damaged_shake_carrier);
+    // OpenUA invisible: a still-cloaked stealth unit emits no loop/idle/engine/ambient
+    // or status sounds. Keep the carrier hard-stopped instead of updating it; once the
+    // unit reveals (after its first attack) the normal sound update resumes.
+    if ( IsInvisibleUnrevealed() )
+    {
+        SFXEngine::SFXe.StopCarrier(&_soundcarrier);
+    }
+    else
+    {
+        SFXEngine::SFXe.UpdateSoundCarrier(&_soundcarrier);
+        ypabact_UpdateStatusSoundCarrier(this, &_debuff_soundcarrier);
+        ypabact_UpdateStatusSoundCarrier(this, &_damaged_shake_carrier);
+    }
 }
 
 void NC_STACK_ypabact::ClearActiveDebuff()
@@ -2721,6 +2749,11 @@ void NC_STACK_ypabact::UpdateAoePush(update_msg *arg)
 
 void NC_STACK_ypabact::Render(baseRender_msg *arg)
 {
+    // OpenUA invisible: a still-cloaked stealth unit is never drawn in the 3D world.
+    // Physics/control/collision keep running elsewhere; only the visual body is skipped.
+    if ( IsInvisibleUnrevealed() )
+        return;
+
     // OpenUA Black Sect clone balance: imperfect grey clones (owner 5) always wear the
     // grey clone identity tint. In V1 this deliberately overrides any manual per-prototype
     // visual_tint so the clone is always visually readable. This is render-only: it reads
@@ -6145,6 +6178,9 @@ static bool ypabact_FireProximityDefenseShot(NC_STACK_ypabact *unit, int shotInd
 
     shotDir = shotDir / shotDirLen;
 
+    // OpenUA invisible: a proximity-defense shot is a real attack -> reveal the unit.
+    unit->RevealInvisibleOnAttack();
+
     ypaworld_arg146 arg147;
     arg147.vehicle_id = unit->_proximity_defense_weapon;
     arg147.pos = unit->_position + unit->_rotation.Transpose().Transform(unit->_proximity_defense_fire_pos);
@@ -6836,6 +6872,10 @@ static bool ypabact_IsMortarEnemy(NC_STACK_ypabact *unit, NC_STACK_ypabact *cand
     if ( cand->_isDummy ) // dummy attachments must never be preferred targets
         return false;
 
+    // OpenUA invisible: cloaked stealth units are not valid mortar barrage targets.
+    if ( !cand->CanBeSeenByAIOrRadar() )
+        return false;
+
     NC_STACK_ypaworld *world = unit->getBACT_pWorld();
     if ( world && world->IsSpectatorBact(cand) )
         return false;
@@ -6959,6 +6999,10 @@ static bool ypabact_FireMortarShell(NC_STACK_ypabact *unit, int weaponId, const 
         if ( gnd.isect )
             landing.y = gnd.isectPos.y;
     }
+
+    // OpenUA invisible: launching a mortar shell is a real attack -> reveal the firing
+    // unit (covers manual, auto-AI and barrage-followup shells, which all land here).
+    unit->RevealInvisibleOnAttack();
 
     ypabact_AimMortarLauncherVisual(unit, wproto, targetCenter, 0, true);
     ypabact_TriggerMortarFireVisual(unit);
@@ -8074,6 +8118,10 @@ static void ypabact_SpawnLaserBeamVPs(NC_STACK_ypabact *bact, const World::TWeap
 
 void NC_STACK_ypabact::RequestLaserFire(int weaponId, bact_arg79 *arg)
 {
+    // OpenUA invisible: firing the continuous laser is a real attack -> reveal now,
+    // in the same frame the beam is requested.
+    RevealInvisibleOnAttack();
+
     _laser_weapon = weaponId;
     _laser_fire_request = true;
 
@@ -8693,6 +8741,9 @@ static NC_STACK_ypabact *ypabact_UpdateVerticalLaserBeam(NC_STACK_ypabact *shoot
 
 void NC_STACK_ypabact::RequestVerticalLaserFire(int weaponId, bact_arg79 *arg)
 {
+    // OpenUA invisible: firing the vertical laser is a real attack -> reveal now.
+    RevealInvisibleOnAttack();
+
     _vertical_laser_weapon = weaponId;
     _vertical_laser_fire_request = true;
     _vertical_laser_request_target = (arg && arg->tgType == BACT_TGT_TYPE_UNIT) ? arg->target.pbact : NULL;
@@ -9096,6 +9147,10 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
     // barrage AI. Never fire them through the normal direct/missile path.
     if ( wproto.IsMortar() )
         return 0;
+
+    // OpenUA invisible: committed to firing the primary weapon this frame -> reveal now
+    // (before the projectile spawns) so a cloaked unit never launches an invisible shot.
+    RevealInvisibleOnAttack();
 
     if ( _salve_counter < wproto.salve_shots )
         _salve_counter += 1;
@@ -10325,6 +10380,11 @@ NC_STACK_ypabact * NC_STACK_ypabact::GetEnemyCandidateInSector(const cellArea &c
         if ( cel_unit->_isDummy )
             continue;
 
+        // OpenUA invisible: a still-cloaked stealth unit is never a voluntary AI target.
+        // (It can still be caught by AoE/crossfire damage, which uses separate predicates.)
+        if ( !cel_unit->CanBeSeenByAIOrRadar() )
+            continue;
+
         // Do not target same fraction unit or owner == 0
         if ( cel_unit->_owner == _owner || cel_unit->_owner == World::OWNER_0 )
             continue;
@@ -11485,6 +11545,10 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
         {
             _mgun_time = arg->field_10;
             spawnVisual = true;
+
+            // OpenUA invisible: a visible machine-gun shot is being fired this frame ->
+            // reveal the cloaked unit (or its carrier when fired by an attached gun).
+            RevealInvisibleOnAttack();
         }
     }
 
@@ -14260,15 +14324,55 @@ bool NC_STACK_ypabact::IsHiddenFor(uint8_t owner) const
 {
     if (owner == _owner) // Own unit can be seen
         return false;
-    
+
     if (_pSector && _pSector->IsUnhideFor(owner))
         return false;
-    
+
     if (_hidden)
         return true;
-    
+
     if (_world && _world->IsHidden(_owner))
         return true;
-    
+
     return false;
+}
+
+// OpenUA custom: permanently reveal an "invisible" stealth unit the moment it makes a
+// real attack. Attached unit-gun / dummy children fire on behalf of their carrier, so a
+// child attack reveals the carrier (which in turn reveals all its attached children).
+// No-op for units that were never invisible or are already revealed.
+void NC_STACK_ypabact::RevealInvisibleOnAttack()
+{
+    // Attached guns/dummies: redirect the reveal to the carrying unit.
+    if ( (_isUnitGunChild || _isDummy) && _parent && _parent != this )
+    {
+        _parent->RevealInvisibleOnAttack();
+        return;
+    }
+
+    if ( !_invisibleUnrevealed )
+        return;
+
+    _invisibleUnrevealed = false;
+
+    if ( _invisible_reveal_vp > 0 )
+    {
+        NC_STACK_ypaworld *world = getBACT_pWorld();
+        if ( world )
+            world->SpawnTransientVP(_invisible_reveal_vp, _position, _rotation, 1000);
+    }
+
+    // Reveal attached guns/dummies together with their carrier so the whole unit
+    // becomes visible/targettable in the same frame.
+    for ( World::TRoboGun &gun : _unitGuns )
+    {
+        if ( gun.gun_obj )
+            gun.gun_obj->_invisibleUnrevealed = false;
+    }
+
+    for ( World::TUnitDummy &dmy : _unitDummies )
+    {
+        if ( dmy.dummy_obj )
+            dmy.dummy_obj->_invisibleUnrevealed = false;
+    }
 }

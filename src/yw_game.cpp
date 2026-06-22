@@ -7185,6 +7185,10 @@ void NC_STACK_ypaworld::debug_draw_coll_spheres()
             return;
         if (unit->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2 | BACT_STFLAG_CLEAN))
             return;
+        // OpenUA invisible: cloaked stealth units are excluded from the F10 collision/
+        // radius debug overlay (radius rings + labels) just like any other UI.
+        if (unit->IsInvisibleUnrevealed())
+            return;
         for (NC_STACK_ypabact *old : objs)
             if (old == unit)
                 return;

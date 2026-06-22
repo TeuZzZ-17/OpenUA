@@ -2111,6 +2111,18 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
         if (IsModsAllow(true))
             _vhcl->hidden = StrGetBool(p2);
     }
+    else if ( !StriCmp(p1, "invisible") )
+    {
+        // OpenUA custom: vehicle-only total-stealth-until-first-attack flag.
+        // Deliberately separate from the legacy "hidden"/"unhide_radar" system.
+        if (IsModsAllow(true))
+            _vhcl->invisible = StrGetBool(p2);
+    }
+    else if ( !StriCmp(p1, "invisible_reveal_vp") )
+    {
+        if (IsModsAllow(true))
+            _vhcl->invisible_reveal_vp = (int16_t)parser.stol(p2, NULL, 0);
+    }
     else if ( !StriCmp(p1, "unhide_radar") )
     {
         if (IsModsAllow(true))

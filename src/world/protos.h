@@ -478,7 +478,14 @@ struct TVhclProto
     
     bool hidden = false;
     int8_t unhideRadar = 0;
-    
+
+    // OpenUA custom: vehicle-only "invisible" stealth. When true every new instance
+    // spawns fully cloaked (no render/radar/UI/sound/AI-target) until its first real
+    // attack, after which it is permanently revealed. Independent from the legacy
+    // owner-based `hidden`/`unhide_radar` system above. Default off.
+    bool invisible = false;
+    int16_t invisible_reveal_vp = 0;
+
     TRoboProto *RoboProto = NULL;
     std::vector<TRoboGun> unit_guns;
 

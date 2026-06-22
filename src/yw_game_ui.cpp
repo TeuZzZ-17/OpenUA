@@ -810,6 +810,10 @@ static void yw_RenderMortarCooldownRadarBars(NC_STACK_ypaworld *yw, int cellX0, 
                 if ( !bact || bact->ShouldHideFromStrategicUI() || bact->_bact_type == BACT_TYPES_MISSLE )
                     continue;
 
+                // OpenUA invisible: no mortar-cooldown radar bar for a cloaked unit.
+                if ( bact->IsInvisibleUnrevealed() )
+                    continue;
+
                 int iconW = 7;
                 int iconH = 7;
 
@@ -1048,6 +1052,9 @@ void NC_STACK_ypaworld::RenderLaserMapBeams(int mapTilesetId)
                     continue;
                 if ( bact->_status == BACT_STATUS_DEAD || bact->ShouldHideFromStrategicUI() )
                     continue;
+                // OpenUA invisible: a cloaked unit projects no laser beam onto the map.
+                if ( bact->IsInvisibleUnrevealed() )
+                    continue;
                 if ( bact->IsHiddenFor(GetPlayerOwner()) )
                     continue;
                 if ( std::find(drawn.begin(), drawn.end(), bact) != drawn.end() )
@@ -1274,6 +1281,10 @@ void sub_4F6980(CmdStream *cur, float a1, float a2, char a3, int a4, int a5)
 void sub_4F72E8(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact)
 {
     if ( !bact || bact->ShouldHideFromStrategicUI() )
+        return;
+
+    // OpenUA invisible: do not draw strategic target/command lines for a cloaked unit.
+    if ( bact->IsInvisibleUnrevealed() )
         return;
 
     // Keep this renderer close to vanilla. Spectator target filtering belongs in
@@ -1836,7 +1847,9 @@ void sb_0x4f8f64__sub2(NC_STACK_ypaworld *yw, CmdStream *cur)
 
 void sub_4F6DFC(NC_STACK_ypaworld *yw, CmdStream *cur, int height, int width, NC_STACK_ypabact *bact, int a6)
 {
-    if ( bact->_status != BACT_STATUS_DEAD && !bact->IsHiddenFor( yw->GetPlayerOwner() ) )
+    // OpenUA invisible: cloaked stealth units never appear on the strategic map / radar
+    // (icon, view triangle and health bar are all drawn from here).
+    if ( bact->_status != BACT_STATUS_DEAD && !bact->IsInvisibleUnrevealed() && !bact->IsHiddenFor( yw->GetPlayerOwner() ) )
     {
         int v8;
 
@@ -2063,6 +2076,10 @@ void sub_4F7BE8(NC_STACK_ypaworld *yw, CmdStream *cur, NC_STACK_ypabact *bact, i
     if ( bact )
     {
         if ( bact->ShouldHideFromStrategicUI() )
+            return;
+
+        // OpenUA invisible: no strategic-map marker dots for a cloaked unit/squad member.
+        if ( bact->IsInvisibleUnrevealed() )
             return;
 
         FontUA::select_tileset(cur, a2);
@@ -10094,6 +10111,10 @@ void sb_0x4d7c08__sub0__sub4__sub0__sub0(NC_STACK_ypaworld *yw, CmdStream *cur, 
 
 void yw_RenderUnitLifeBar(NC_STACK_ypaworld *yw, CmdStream *cur, NC_STACK_ypabact *bact)
 {
+    // OpenUA invisible: no HP/shield/status bar or fraction triangle over a cloaked unit.
+    if ( bact && bact->IsInvisibleUnrevealed() )
+        return;
+
     // Render fraction triangles above units
 
     float v6 = bact->_position.x - yw->_viewerPosition.x;
@@ -10678,6 +10699,10 @@ void yw_RenderHUDTarget(NC_STACK_ypaworld *yw, sklt_wis *wis)
 
 void yw_RenderCursorOverUnit(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact)
 {
+    // OpenUA invisible: never draw the targeting cursor/box over a cloaked stealth unit.
+    if ( bact && bact->IsInvisibleUnrevealed() )
+        return;
+
     float v6 = bact->_position.x - yw->_viewerPosition.x;
     float v4 = bact->_position.y - yw->_viewerPosition.y;
     float v8 = bact->_position.z - yw->_viewerPosition.z;

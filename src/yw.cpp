@@ -1675,6 +1675,11 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_hidden = vhcl.hidden;
         bacto->_unhideRadar = vhcl.unhideRadar;
 
+        // OpenUA custom: seed the per-instance invisible/stealth state from the proto.
+        // A unit with `invisible = 1` spawns cloaked and stays so until its first attack.
+        bacto->_invisibleUnrevealed = vhcl.invisible;
+        bacto->_invisible_reveal_vp = vhcl.invisible_reveal_vp;
+
         for (int i = 0; vhcl.scale_fx_pXX[ i ]; i++ )
         {
             bacto->_vp_fx_models[i] = _vhclModels.at( vhcl.scale_fx_pXX[ i ] );

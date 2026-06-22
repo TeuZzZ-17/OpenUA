@@ -516,6 +516,17 @@ public:
     virtual bool IsHiddenFor(uint8_t owner) const;
     bool ShouldHideFromStrategicUI() const;
 
+    // OpenUA custom: vehicle-only "invisible" stealth-until-first-attack.
+    // IsInvisibleUnrevealed()  -> true while the unit is still cloaked (no render,
+    //                             radar/map/UI, sound, decoration FX, AI targeting).
+    // CanBeSeenByAIOrRadar()   -> convenience inverse used by AI/radar candidate filters.
+    // RevealInvisibleOnAttack()-> permanently reveals this unit (and, for attached
+    //                             unit-gun/dummy children, their carrier) the moment it
+    //                             performs a real attack. No-op once revealed/normal.
+    bool IsInvisibleUnrevealed() const { return _invisibleUnrevealed; }
+    bool CanBeSeenByAIOrRadar() const { return !_invisibleUnrevealed; }
+    void RevealInvisibleOnAttack();
+
     NC_STACK_ypabact();
     virtual ~NC_STACK_ypabact();
     
@@ -996,7 +1007,13 @@ public:
     
     bool _hidden = false;
     int8_t _unhideRadar = 0;
-    
+
+    // OpenUA custom: per-instance "invisible" stealth state. Seeded from the vehicle
+    // prototype's `invisible` flag at spawn; cleared permanently by the first real
+    // attack via RevealInvisibleOnAttack(). Gameplay/physics/control stay active while set.
+    bool _invisibleUnrevealed = false;
+    int16_t _invisible_reveal_vp = 0;
+
 protected:
     NC_STACK_ypaworld *_world;
 };
