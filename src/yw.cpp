@@ -1788,7 +1788,9 @@ NC_STACK_ypamissile * NC_STACK_ypaworld::ypaworld_func147(ypaworld_arg146 *arg)
     wobj->_shield = 0;
     wobj->_mass = wproto.mass;
     wobj->_force = wproto.force;
-    wobj->_maxrot = wproto.maxrot;
+    wobj->_base_force = wproto.force;    // OpenUA fix: ypabact_ApplyDamagedRuntime() recomputes
+    wobj->_maxrot = wproto.maxrot;       // _force = _base_force * mult every frame, so missiles must seed
+    wobj->_base_maxrot = wproto.maxrot;  // _base_force/_base_maxrot too, or they crawl at the 5000/0.5 defaults.
     wobj->_height = wproto.heightStd;
     wobj->_radius = wproto.radius;
     wobj->_viewer_radius = wproto.vwr_radius;
