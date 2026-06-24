@@ -3482,23 +3482,17 @@ void NC_STACK_ypaworld::RenderGame(base_64arg *bs64, int a2)
 
     baseRender_msg rndrs;
 
-    rndrs.flags = 0;
+    rndrs.flags = (_skyRender && _skyObject) ? GFX::RFLAGS_ALPHA_FOG : 0;
     rndrs.frameTime = bs64->DTime;
     rndrs.globTime = bs64->TimeStamp;
     rndrs.adeCount = 0;
 
     rndrs.minZ = 1.0;
 
-    if ( _renderSectors <= 5 )
-    {
+    if ( _renderSectors == 5 )
         rndrs.maxZ = 1500.0;
-    }
     else
-    {
-        // Classic-sky safe clip: push the terrain view near the vanilla sky-dome limit.
-        // The normal fog reaches full darkness before this clip, so the last distance band stays as a strong dark horizon.
-        rndrs.maxZ = 3600.0;
-    }
+        rndrs.maxZ = 3500.0;
 
     int v6 = _renderSectors - 1;
 

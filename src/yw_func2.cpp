@@ -1040,14 +1040,18 @@ void UserData::sub_46D960()
 
 void NC_STACK_ypaworld::SetFarView(bool farvw)
 {
-    // OpenUA modern UI hides the old Horizon Depth checkbox.
-    // Always keep farview enabled and use only the classic UA sky + strong black horizon fog.
-    // Stronger incremental tuning: the dark horizon band starts closer to the player and reaches black earlier.
-    (void)farvw;
-
-    setYW_visSectors(9);
-    setYW_normVisLimit(2800);
-    setYW_fadeLength(1800);
+    if ( farvw )
+    {
+        setYW_visSectors(9);
+        setYW_normVisLimit(3100);
+        setYW_fadeLength(2600);
+    }
+    else
+    {
+        setYW_visSectors(5);
+        setYW_normVisLimit(1400);
+        setYW_fadeLength(600);
+    }
 }
 
 

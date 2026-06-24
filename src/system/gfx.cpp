@@ -80,6 +80,31 @@ bool TRenderNode::CompareDistance(TRenderNode* a, TRenderNode* b)
     return a->Distance < b->Distance;
 }
 
+static float HorizonAlphaFogStart(float fogStart, float fogLength)
+{
+    // OpenUA: aggressive classic horizon dissolve.
+    // Keep draw distance unchanged, but start the final dark fade much earlier.
+    return fogStart + fogLength * 0.25f;
+}
+
+static float HorizonAlphaFogLength(float fogLength)
+{
+    return fogLength * 0.75f;
+}
+
+static float HorizonDarkFogStart(float fogStart, float fogLength)
+{
+    // The dark matte must live inside the same dissolve band, not in front of it.
+    return HorizonAlphaFogStart(fogStart, fogLength);
+}
+
+static float HorizonDarkFogLength(float fogLength)
+{
+    // Reach full black before the alpha fade disappears completely, otherwise
+    // the world fades to the bright sky and the classic UA horizon darkness vanishes.
+    return HorizonAlphaFogLength(fogLength) * 0.45f;
+}
+
 bool TRenderParams::operator==(const TRenderParams &b)
 {
     if (Flags != b.Flags)
@@ -1101,6 +1126,31 @@ void GFXEngine::RenderingMeshOld(TRenderNode *nod)
     if (flags & RFLAGS_COMPUTED_COLOR)
         useComputedColor = true;
 
+    if ((flags & RFLAGS_ALPHA_FOG) && (flags & RFLAGS_FOG) && !(flags & RFLAGS_SKY) && nod->FogLength > 0.0f)
+    {
+        _states.Fog = true;
+        _states.FogStart = HorizonDarkFogStart(nod->FogStart, nod->FogLength);
+        _states.FogLength = HorizonDarkFogLength(nod->FogLength);
+        _states.AlphaBlend = true;
+        _states.SrcBlend = GL_SRC_ALPHA;
+        _states.DstBlend = GL_ONE_MINUS_SRC_ALPHA;
+
+        float alphaStart = HorizonAlphaFogStart(nod->FogStart, nod->FogLength);
+        float alphaLength = HorizonAlphaFogLength(nod->FogLength);
+
+        for (TVertex &v : mesh->Vertexes)
+        {
+            TGLColor src = useComputedColor ? v.ComputedColor : v.Color;
+            float f = 1.0f - (nod->TForm.Transform(v.Pos).z - alphaStart) / alphaLength;
+            if (f > 1.0f) f = 1.0f;
+            if (f < 0.0f) f = 0.0f;
+
+            v.ComputedColor = src;
+            v.ComputedColor.a = src.a * f;
+        }
+        useComputedColor = true;
+    }
+
     // OpenUA custom visual_tint: per-node color multiplier (fixed-function path).
     // Computed into the scratch ComputedColor right before the draw, so the shared
     // mesh's base vertex colors are never permanently modified.
@@ -1254,6 +1304,19 @@ void GFXEngine::RenderingMesh(TRenderNode *nod)
     
     if (flags & RFLAGS_DISABLE_ZWRITE)
         _states.Zwrite = false;
+
+    if ((flags & RFLAGS_ALPHA_FOG) && (flags & RFLAGS_FOG) && !(flags & RFLAGS_SKY) && nod->FogLength > 0.0f)
+    {
+        _states.Fog = true;
+        _states.FogStart = HorizonDarkFogStart(nod->FogStart, nod->FogLength);
+        _states.FogLength = HorizonDarkFogLength(nod->FogLength);
+        _states.AFog = true;
+        _states.AFogStart = HorizonAlphaFogStart(nod->FogStart, nod->FogLength);
+        _states.AFogLength = HorizonAlphaFogLength(nod->FogLength);
+        _states.AlphaBlend = true;
+        _states.SrcBlend = GL_SRC_ALPHA;
+        _states.DstBlend = GL_ONE_MINUS_SRC_ALPHA;
+    }
 
     // OpenUA custom visual_tint: enable a local alpha blend when the tint lowers alpha.
     if ( nod->ColorMul.a < 1.0 && !_states.AlphaBlend )

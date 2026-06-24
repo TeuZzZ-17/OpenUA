@@ -542,6 +542,87 @@ static UA_PALETTE *ILBM_CopyPngPalette(SDL_Surface *loaded)
     return pal;
 }
 
+static uint8_t ILBM_ClampByte(int value)
+{
+    if ( value < 0 )
+        return 0;
+    if ( value > 255 )
+        return 255;
+    return (uint8_t)value;
+}
+
+static uint8_t ILBM_MaxRgb(uint8_t r, uint8_t g, uint8_t b)
+{
+    return (uint8_t)((r >= g) ? (r > b ? r : b) : (g > b ? g : b));
+}
+
+static SDL_Surface *ILBM_PrepareTruecolorPngSurface(SDL_Surface *loaded, int transp)
+{
+    if ( !loaded || loaded->format->palette || !transp )
+        return loaded;
+
+    SDL_Surface *rgba = SDL_ConvertSurfaceFormat(loaded, SDL_PIXELFORMAT_ABGR8888, 0);
+    if ( !rgba )
+        return loaded;
+
+    SDL_LockSurface(rgba);
+    for (int y = 0; y < rgba->h; y++)
+    {
+        uint8_t *row = (uint8_t *)rgba->pixels + y * rgba->pitch;
+        for (int x = 0; x < rgba->w; x++)
+        {
+            uint32_t *pixel = (uint32_t *)(row + x * rgba->format->BytesPerPixel);
+
+            uint8_t r, g, b, a;
+            SDL_GetRGBA(*pixel, rgba->format, &r, &g, &b, &a);
+
+            const bool chromaTransparent = (r == 255 && g == 255 && b == 0);
+            if ( chromaTransparent || a == 0 )
+            {
+                r = 0;
+                g = 0;
+                b = 0;
+                a = 0;
+            }
+            else if ( !GFX::Engine.can_destblend && GFX::Engine.can_srcblend )
+            {
+                // Match GFXEngine::ConvAlphaPalette() for legacy HI/gamma ILBM:
+                // source-alpha mode derives alpha from pixel brightness and
+                // normalizes RGB. This keeps PNG FX visually equivalent to ILBM FX.
+                int mx = ILBM_MaxRgb(r, g, b);
+                if ( mx <= 8 )
+                {
+                    r = 0;
+                    g = 0;
+                    b = 0;
+                    a = 0;
+                }
+                else
+                {
+                    r = ILBM_ClampByte((int)(255.0f * ((float)r / (float)mx)));
+                    g = ILBM_ClampByte((int)(255.0f * ((float)g / (float)mx)));
+                    b = ILBM_ClampByte((int)(255.0f * ((float)b / (float)mx)));
+                    a = ILBM_ClampByte(((int)a * mx + 127) / 255);
+                }
+            }
+            else
+            {
+                // Match legacy HI alpha/beta ILBM behavior. In additive/stipple
+                // modes dark pixels are part of the effect texture: do not erase
+                // them or blue/black energy barriers disappear. Only transparent
+                // index/chroma pixels are removed above.
+                a = 255;
+            }
+
+            *pixel = SDL_MapRGBA(rgba->format, r, g, b, a);
+        }
+    }
+    SDL_UnlockSurface(rgba);
+
+    SDL_FreeSurface(loaded);
+    return rgba;
+}
+
 static SDL_Surface *ILBM_NormalizeIndexedPngSurface(SDL_Surface *loaded, UA_PALETTE *pal, int alphaPalette, int transp)
 {
     if ( !loaded || !loaded->format->palette )
@@ -640,7 +721,7 @@ static rsrc *ILBM_ReadPngOverride(NC_STACK_ilbm *obj, IDVList &stak, const std::
         }
     }
     else
-        bitm->swTex = loaded;
+        bitm->swTex = ILBM_PrepareTruecolorPngSurface(loaded, transp);
 
     int convertColor = stak.Get<int32_t>(NC_STACK_bitmap::BMD_ATT_CONVCOLOR, 0);
     if ( convertColor )

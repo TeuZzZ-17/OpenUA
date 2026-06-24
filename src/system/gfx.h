@@ -118,6 +118,7 @@ enum RFLAGS
     RFLAGS_SKY       =      (1 << 6),
     RFLAGS_COMPUTED_COLOR = (1 << 9),
     RFLAGS_DISABLE_ZWRITE = (1 << 10),
+    RFLAGS_ALPHA_FOG =      (1 << 11),
 };    
 
 struct __attribute__((packed)) TGLColor
