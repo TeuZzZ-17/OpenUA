@@ -768,15 +768,16 @@ static bool ParseVisualScaleParam(ScriptParser::Parser &parser,
     return false;
 }
 
-// OpenUA custom: parse "visual_tint = R_G_B_A" (each component 0..255).
+// OpenUA custom: parse "*_tint = R_G_B_A" (each component 0..255).
 // Alpha is optional and defaults to 255. Out-of-range values are clamped.
-// Stored as normalized 0..1 float multipliers. Neutral default = no visual change.
-static bool ParseVisualTintParam(ScriptParser::Parser &parser,
-                                 const std::string &p1,
-                                 const std::string &p2,
-                                 TVisualTint &tint)
+// Stored as normalized 0..1 float multipliers. Neutral default = no change.
+static bool ParseTintParam(ScriptParser::Parser &parser,
+                           const std::string &paramName,
+                           const std::string &p1,
+                           const std::string &p2,
+                           TVisualTint &tint)
 {
-    if ( StriCmp(p1, "visual_tint") )
+    if ( StriCmp(p1, paramName) )
         return false;
 
     std::vector<std::string> parts = Stok::Split(p2, "_");
@@ -799,6 +800,22 @@ static bool ParseVisualTintParam(ScriptParser::Parser &parser,
     tint.b = clamp255(comp[2]);
     tint.a = clamp255(comp[3]);
     return true;
+}
+
+static bool ParseVisualTintParam(ScriptParser::Parser &parser,
+                                 const std::string &p1,
+                                 const std::string &p2,
+                                 TVisualTint &tint)
+{
+    return ParseTintParam(parser, "visual_tint", p1, p2, tint);
+}
+
+static bool ParseWireframeTintParam(ScriptParser::Parser &parser,
+                                    const std::string &p1,
+                                    const std::string &p2,
+                                    TVisualTint &tint)
+{
+    return ParseTintParam(parser, "wireframe_tint", p1, p2, tint);
 }
 
 static World::TChainFXConfig::Trigger ParseChainFXTrigger(const std::string &name, bool weaponPrototype)
@@ -1366,6 +1383,11 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
         int time = parser.stol(p2, NULL, 0);
         _vhcl->spawn_at_death_immunity_time = time > 0 ? time : 0;
     }
+    else if ( !StriCmp(p1, "death_damage") )
+    {
+        int damage = parser.stol(p2, NULL, 0);
+        _vhcl->death_damage = damage > 0 ? damage : 0;
+    }
     else if ( !StriCmp(p1, "proximity_defense_enable") )
     {
         _vhcl->proximity_defense_enable = parser.stol(p2, NULL, 0) ? 1 : 0;
@@ -1471,6 +1493,9 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     {
     }
     else if ( ParseVisualTintParam(parser, p1, p2, _vhcl->visual_tint) )
+    {
+    }
+    else if ( ParseWireframeTintParam(parser, p1, p2, _vhcl->wireframe_tint) )
     {
     }
     else if ( !StriCmp(p1, "invulnerable") )
@@ -2209,6 +2234,7 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->visual_scale_random_max = 1.0;
         _vhcl->visual_scale_axis = vec3d(1.0, 1.0, 1.0);
         _vhcl->visual_tint = TVisualTint();
+        _vhcl->wireframe_tint = TVisualTint();
         _vhcl->damaged_fx = TDamagedFXConfig();
         _vhcl->damaged_icon.clear();
         _vhcl->regen_icon.clear();
@@ -2237,6 +2263,7 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->spawn_at_death_random_pos = 0.0;
         _vhcl->spawn_at_death_instant = 0;
         _vhcl->spawn_at_death_immunity_time = 0;
+        _vhcl->death_damage = 0;
         _vhcl->proximity_defense_enable = 0;
         _vhcl->proximity_defense_weapon = 0;
         _vhcl->proximity_defense_trigger_radius = 0.0;
@@ -2402,6 +2429,7 @@ bool WeaponProtoParser::IsScope(ScriptParser::Parser &parser, const std::string 
         _wpn->visual_scale_random_max = 1.0;
         _wpn->visual_scale_axis = vec3d(1.0, 1.0, 1.0);
         _wpn->visual_tint = TVisualTint();
+        _wpn->wireframe_tint = TVisualTint();
         _wpn->type_icon = 65;
         _wpn->debuff = TWeaponDebuffConfig();
         _wpn->debuff.tick_snd.volume = 120;
@@ -2963,6 +2991,9 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     {
     }
     else if ( ParseVisualTintParam(parser, p1, p2, _wpn->visual_tint) )
+    {
+    }
+    else if ( ParseWireframeTintParam(parser, p1, p2, _wpn->wireframe_tint) )
     {
     }
     else if ( ParseDecorationFXParam(parser, p1, p2, _wpn->decoration_fx) )

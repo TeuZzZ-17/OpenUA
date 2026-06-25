@@ -31,8 +31,8 @@ enum VisualScaleMode
     VISUAL_SCALE_AXIS = 2
 };
 
-// OpenUA custom: visual-only RGBA tint multiplier (see visual_tint script param).
-// Stored as normalized 0..1 float multipliers. Neutral default = no visual change.
+// OpenUA custom: RGBA tint multiplier (see visual_tint / wireframe_tint script params).
+// Stored as normalized 0..1 float multipliers. Neutral default = no change.
 struct TVisualTint
 {
     float r = 1.0;
@@ -375,6 +375,7 @@ struct TVhclProto
     float visual_scale_random_max = 1.0;
     vec3d visual_scale_axis = vec3d(1.0, 1.0, 1.0);
     TVisualTint visual_tint; // OpenUA custom: visual-only RGBA tint multiplier
+    TVisualTint wireframe_tint; // OpenUA custom: UI wireframe-only RGBA tint multiplier
     TDamagedFXConfig damaged_fx;
     TDecorationFXConfig decoration_fx;
     std::string damaged_icon;
@@ -404,6 +405,7 @@ struct TVhclProto
     float spawn_at_death_random_pos = 0.0;
     int spawn_at_death_instant = 0;
     int spawn_at_death_immunity_time = 0;
+    int death_damage = 0; // OpenUA custom: direct radius damage applied on death phases
     int proximity_defense_enable = 0;
     int proximity_defense_weapon = 0;
     float proximity_defense_trigger_radius = 0.0;
@@ -587,6 +589,7 @@ struct TWeapProto
     float visual_scale_random_max = 1.0;
     vec3d visual_scale_axis = vec3d(1.0, 1.0, 1.0);
     TVisualTint visual_tint; // OpenUA custom: visual-only RGBA tint multiplier
+    TVisualTint wireframe_tint; // OpenUA custom: UI wireframe-only RGBA tint multiplier
     std::vector<DestFX> dfx;
     std::vector<DestFX> ExtDestroyFX; // ext_dest_fx
     std::array<TVhclSound, SND_MAX> sndFXes;

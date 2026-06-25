@@ -82,6 +82,30 @@ bool StatusIconAdd(StatusIconList &icons, int &count, const std::string &path)
     return true;
 }
 
+static uint8_t ApplyWireframeTintComponent(uint8_t value, float tint)
+{
+    float scaled = (float)value * tint;
+
+    if ( scaled < 0.0f )
+        scaled = 0.0f;
+    else if ( scaled > 255.0f )
+        scaled = 255.0f;
+
+    return (uint8_t)(scaled + 0.5f);
+}
+
+static SDL_Color ApplyWireframeTint(SDL_Color color, const World::TVisualTint *tint)
+{
+    if ( !tint || tint->IsNeutral() )
+        return color;
+
+    color.r = ApplyWireframeTintComponent(color.r, tint->r);
+    color.g = ApplyWireframeTintComponent(color.g, tint->g);
+    color.b = ApplyWireframeTintComponent(color.b, tint->b);
+    color.a = ApplyWireframeTintComponent(color.a, tint->a);
+    return color;
+}
+
 NC_STACK_bitmap *StatusIconLoad(const std::string &path)
 {
     auto it = g_statusIconCache.find(path);
@@ -9217,7 +9241,7 @@ void wis_color(NC_STACK_ypaworld *yw, float x1, float y1, float x2, float y2, SD
 
 
 
-void yw_RenderVector2D(NC_STACK_ypaworld *yw, UAskeleton::Data *wire, float posX, float posY, float m00, float m01, float m10, float m11, float scaleX, float scaleY, SDL_Color coloooor, wis_color_func color_func, wis_color_func color_func2, bool aspectCorrection)
+void yw_RenderVector2D(NC_STACK_ypaworld *yw, UAskeleton::Data *wire, float posX, float posY, float m00, float m01, float m10, float m11, float scaleX, float scaleY, SDL_Color coloooor, wis_color_func color_func, wis_color_func color_func2, bool aspectCorrection, const World::TVisualTint *wireframeTint)
 {
     float CW = 1.0, CH = 1.0;
 
@@ -9226,7 +9250,7 @@ void yw_RenderVector2D(NC_STACK_ypaworld *yw, UAskeleton::Data *wire, float posX
 
     if ( wire )
     {
-        GFX::Engine.raster_func217(coloooor);
+        GFX::Engine.raster_func217(ApplyWireframeTint(coloooor, wireframeTint));
 
         for (size_t i = 0; i < wire->POO.size(); i++)
         {
@@ -9256,7 +9280,7 @@ void yw_RenderVector2D(NC_STACK_ypaworld *yw, UAskeleton::Data *wire, float posX
 
                     color_func(yw,  v29.x1 - posX,   v29.y1 - posY,   v29.x2 - posX,   v29.y2 - posY, &v32, &v31);
 
-                    GFX::Engine.raster_func217(v32);
+                    GFX::Engine.raster_func217(ApplyWireframeTint(v32, wireframeTint));
                 }
                 else if ( color_func2 )
                 {
@@ -9266,7 +9290,7 @@ void yw_RenderVector2D(NC_STACK_ypaworld *yw, UAskeleton::Data *wire, float posX
                     color_func2(yw, v29.x1, v29.y1, v29.x2, v29.y2, &v34, &v33);
 
 
-                    GFX::Engine.raster_func217(v34);
+                    GFX::Engine.raster_func217(ApplyWireframeTint(v34, wireframeTint));
                 }
 
                 GFX::Engine.raster_func200(v29);
@@ -9306,7 +9330,7 @@ void yw_RenderInfoVehicleWire(NC_STACK_ypaworld *yw, sklt_wis *wis, World::TVhcl
         yw->_hud.cl2_b = color_25.b;
         yw->_hud.cl2_g = color_25.g;
 
-        yw_RenderVector2D(yw, wairufureimu, a4, a5, 1.0, 0.0, 0.0, 1.0, a9, v15, color_34, NULL, func, true);
+        yw_RenderVector2D(yw, wairufureimu, a4, a5, 1.0, 0.0, 0.0, 1.0, a9, v15, color_34, NULL, func, true, &vhcl->wireframe_tint);
     }
 }
 
@@ -9548,7 +9572,7 @@ void yw_RenderInfoWeaponWire(NC_STACK_ypaworld *yw, sklt_wis *wis, World::TWeapP
             yw->_hud.cl2_b = v9.b;
             yw->_hud.cl2_g = v9.g;
 
-            yw_RenderVector2D(yw, wairufureimu, xpos, ypos, 1.0, 0.0, 0.0, 1.0, 0.0415, 0.05, v10, NULL, func, true);
+            yw_RenderVector2D(yw, wairufureimu, xpos, ypos, 1.0, 0.0, 0.0, 1.0, 0.0415, 0.05, v10, NULL, func, true, &wpn->wireframe_tint);
         }
     }
 }

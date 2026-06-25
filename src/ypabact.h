@@ -881,6 +881,9 @@ public:
     bool _spawn_at_death_done;
     int _spawn_at_death_protection_end_time;
     bool _spawn_at_death_restore_vulnerable;
+    int _death_damage;
+    bool _death_damage_applied_dead;
+    bool _death_damage_applied_megadeth;
     int _carrier_spawn_root_gid;
     int _carrier_spawn_root_vehicle;
     std::vector<int32_t> _carrier_spawned_gids;

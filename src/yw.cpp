@@ -1610,6 +1610,9 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_spawn_at_death_done = false;
         bacto->_spawn_at_death_protection_end_time = 0;
         bacto->_spawn_at_death_restore_vulnerable = false;
+        bacto->_death_damage = vhcl.death_damage > 0 ? vhcl.death_damage : 0;
+        bacto->_death_damage_applied_dead = false;
+        bacto->_death_damage_applied_megadeth = false;
         bacto->_carrier_spawn_root_gid = 0;
         bacto->_carrier_spawn_root_vehicle = 0;
         bacto->_carrier_spawned_gids.clear();

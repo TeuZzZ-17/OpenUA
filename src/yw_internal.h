@@ -1,6 +1,8 @@
 #ifndef  YWINT_H_INCLUDED
 #define YWINT_H_INCLUDED
 
+namespace World { struct TVisualTint; }
+
 struct TSectorCollision
 {
     NC_STACK_skeleton *sklt = NULL;
@@ -345,7 +347,7 @@ void ypaworld_func151__sub1(NC_STACK_ypaworld *yw);
 NC_STACK_bitmap * loadDisk_screen(NC_STACK_ypaworld *yw);
 void draw_splashScreen(NC_STACK_ypaworld *yw, NC_STACK_bitmap *splashScreen);
 
-void yw_RenderVector2D(NC_STACK_ypaworld *yw, UAskeleton::Data *wire, float a3, float a4, float a5, float a6, float a7, float a8, float a9, float a10, SDL_Color coloooor, wis_color_func color_func, wis_color_func color_func2, bool aspectCorrection = false);
+void yw_RenderVector2D(NC_STACK_ypaworld *yw, UAskeleton::Data *wire, float a3, float a4, float a5, float a6, float a7, float a8, float a9, float a10, SDL_Color coloooor, wis_color_func color_func, wis_color_func color_func2, bool aspectCorrection = false, const World::TVisualTint *wireframeTint = NULL);
 void yw_debriefUpdate(NC_STACK_ypaworld *yw, TInputState *inpt);
 
 int sub_4C885C();

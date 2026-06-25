@@ -25,6 +25,7 @@ extern int dword_5B1128;
 
 static bool ypabact_IsSeekAndExplodeArmed(NC_STACK_ypabact *unit);
 static void ypabact_FireProximityDefenseAtDeath(NC_STACK_ypabact *unit);
+static void ypabact_ApplyDeathDamage(NC_STACK_ypabact *unit, bool megadethPhase);
 
 static void ypabact_ResetDamagedFX(NC_STACK_ypabact *bact)
 {
@@ -695,6 +696,72 @@ static bool ypabact_HasEnemyNearby(NC_STACK_ypabact *carrier, float radius)
     return false;
 }
 
+static bool ypabact_IsDeathDamageTarget(NC_STACK_ypabact *source, NC_STACK_ypabact *target)
+{
+    return source &&
+           target &&
+           source != target &&
+           source->getBACT_pWorld() == target->getBACT_pWorld() &&
+           target->_energy > 0 &&
+           target->_energy_max > 0 &&
+           target->_bact_type != BACT_TYPES_MISSLE &&
+           target->_status != BACT_STATUS_DEAD &&
+           target->_status != BACT_STATUS_CREATE &&
+           target->_status != BACT_STATUS_BEAM &&
+           !(target->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2 | BACT_STFLAG_NORENDER));
+}
+
+static void ypabact_ApplyDeathDamage(NC_STACK_ypabact *unit, bool megadethPhase)
+{
+    if ( !unit || !unit->getBACT_pWorld() || unit->_death_damage <= 0 || unit->_radius <= 0.0 )
+        return;
+
+    bool &applied = megadethPhase ? unit->_death_damage_applied_megadeth : unit->_death_damage_applied_dead;
+    if ( applied )
+        return;
+
+    applied = true;
+
+    NC_STACK_ypaworld *world = unit->getBACT_pWorld();
+    float radiusSq = unit->_radius * unit->_radius;
+    int sectorRadius = (int)(unit->_radius / World::CVSectorLength) + 2;
+    Common::Point center = World::PositionToSectorID(unit->_position);
+    std::vector<NC_STACK_ypabact *> targets;
+
+    for (int y = center.y - sectorRadius; y <= center.y + sectorRadius; y++)
+    {
+        for (int x = center.x - sectorRadius; x <= center.x + sectorRadius; x++)
+        {
+            Common::Point cellId(x, y);
+
+            if ( !world->IsSector(cellId) )
+                continue;
+
+            cellArea &cell = world->SectorAt(cellId);
+            for (NC_STACK_ypabact *target : cell.unitsList)
+            {
+                if ( !ypabact_IsDeathDamageTarget(unit, target) )
+                    continue;
+
+                vec3d delta = target->_position - unit->_position;
+                if ( delta.dot(delta) <= radiusSq )
+                    targets.push_back(target);
+            }
+        }
+    }
+
+    for (NC_STACK_ypabact *target : targets)
+    {
+        if ( !ypabact_IsDeathDamageTarget(unit, target) )
+            continue;
+
+        bact_arg84 damage;
+        damage.energy = -unit->_death_damage;
+        damage.unit = unit;
+        target->ModifyEnergy(&damage);
+    }
+}
+
 static bool ypabact_CarrierHasEnemyNearby(NC_STACK_ypabact *carrier)
 {
     return ypabact_HasEnemyNearby(carrier, carrier->_spawn_trigger_radius);
@@ -1189,6 +1256,9 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _spawn_at_death_done = false;
     _spawn_at_death_protection_end_time = 0;
     _spawn_at_death_restore_vulnerable = false;
+    _death_damage = 0;
+    _death_damage_applied_dead = false;
+    _death_damage_applied_megadeth = false;
     _carrier_spawn_root_gid = 0;
     _carrier_spawn_root_vehicle = 0;
     _carrier_spawned_gids.clear();
@@ -1348,6 +1418,9 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _spawn_at_death_done = false;
     _spawn_at_death_protection_end_time = 0;
     _spawn_at_death_restore_vulnerable = false;
+    _death_damage = 0;
+    _death_damage_applied_dead = false;
+    _death_damage_applied_megadeth = false;
     _carrier_spawn_root_gid = 0;
     _carrier_spawn_root_vehicle = 0;
     _carrier_spawned_gids.clear();
@@ -5309,6 +5382,7 @@ void NC_STACK_ypabact::Die()
     _primTtype = BACT_TGT_TYPE_NONE;
 
     ypabact_FireProximityDefenseAtDeath(this);
+    ypabact_ApplyDeathDamage(this, false);
     ypabact_TrySpawnAtDeath(this);
 
     _status = BACT_STATUS_DEAD;
@@ -10944,6 +11018,9 @@ void NC_STACK_ypabact::Renew()
     _spawn_at_death_done = false;
     _spawn_at_death_protection_end_time = 0;
     _spawn_at_death_restore_vulnerable = false;
+    _death_damage = 0;
+    _death_damage_applied_dead = false;
+    _death_damage_applied_megadeth = false;
     _carrier_spawn_root_gid = 0;
     _carrier_spawn_root_vehicle = 0;
     _carrier_spawned_gids.clear();
@@ -13450,6 +13527,8 @@ size_t NC_STACK_ypabact::SetStateInternal(setState_msg *arg)
 
         if ( _vp_active != 3 )
         {
+            ypabact_ApplyDeathDamage(this, true);
+
             SetVP(_vp_megadeth);
             _vp_active = 3;
 
