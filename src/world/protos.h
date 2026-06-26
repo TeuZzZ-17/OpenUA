@@ -12,23 +12,10 @@ namespace World
 {
 struct TRoboProto;
 
-struct TDecorationFXConfig
+enum DecorationFXMode
 {
-    int16_t vp = 0;
-    int interval_min = 0;
-    int interval_max = 0;
-    int count_min = 0;
-    int count_max = 0;
-    float random_pos = 0.0;
-    float scale = 1.0;
-    vec3d offset;
-};
-
-enum VisualScaleMode
-{
-    VISUAL_SCALE_FIXED = 0,
-    VISUAL_SCALE_RANDOM = 1,
-    VISUAL_SCALE_AXIS = 2
+    DECORATION_FX_PERIODIC = 0,
+    DECORATION_FX_PERSISTENT = 1
 };
 
 // OpenUA custom: RGBA tint multiplier (see visual_tint / wireframe_tint script params).
@@ -53,6 +40,29 @@ struct TVisualTint
         b = cl(b);
         a = cl(a);
     }
+};
+
+struct TDecorationFXConfig
+{
+    uint8_t mode = DECORATION_FX_PERIODIC;
+    int16_t vp = 0;
+    int interval_min = 0;
+    int interval_max = 0;
+    int count_min = 0;
+    int count_max = 0;
+    int duration = 1000;
+    float random_pos = 0.0;
+    float scale = 1.0;
+    vec3d offset;
+    bool has_tint = false;
+    TVisualTint tint;
+};
+
+enum VisualScaleMode
+{
+    VISUAL_SCALE_FIXED = 0,
+    VISUAL_SCALE_RANDOM = 1,
+    VISUAL_SCALE_AXIS = 2
 };
 
 struct DestFX

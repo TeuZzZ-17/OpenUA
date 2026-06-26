@@ -27,16 +27,18 @@ protected:
         vec3d Vec;
         
         int32_t Age = 0;
+        GFX::TGLColor Tint = GFX::TGLColor(1.0, 1.0, 1.0, 1.0);
+        float Scale = 1.0;
         
-        Frak(NC_STACK_particle *base, const vec3d& pos, const vec3d& vec, int32_t age = 0)
-        : pParticleGen(base), Pos(pos), Vec(vec), Age(age) 
+        Frak(NC_STACK_particle *base, const vec3d& pos, const vec3d& vec, int32_t age = 0, const GFX::TGLColor &tint = GFX::TGLColor(1.0, 1.0, 1.0, 1.0), float scale = 1.0)
+        : pParticleGen(base), Pos(pos), Vec(vec), Age(age), Tint(tint), Scale(scale > 0.0 ? scale : 1.0)
         {};
     };
     
 public:
     ParticleSystem();
     
-    void AddParticle(NC_STACK_particle *base, const vec3d& pos, const vec3d& vec, int32_t age = 0);
+    void AddParticle(NC_STACK_particle *base, const vec3d& pos, const vec3d& vec, int32_t age = 0, const GFX::TGLColor &tint = GFX::TGLColor(1.0, 1.0, 1.0, 1.0), float scale = 1.0);
     
     void UpdateRender(area_arg_65 *rndrParams, int32_t delta);
     

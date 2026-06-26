@@ -12,10 +12,10 @@ ParticleSystem::ParticleSystem()
 {
 }
     
-void ParticleSystem::AddParticle(NC_STACK_particle *base, const vec3d& pos, const vec3d& vec, int32_t age)
+void ParticleSystem::AddParticle(NC_STACK_particle *base, const vec3d& pos, const vec3d& vec, int32_t age, const GFX::TGLColor &tint, float scale)
 {
     if (!_disableAdd && (int32_t)_particles.size() < System::IniConf::ParticlesLimit.Get<int32_t>())
-        _particles.emplace_back( base, pos, vec, age );
+        _particles.emplace_back( base, pos, vec, age, tint, scale );
 }
 
 void ParticleSystem::UpdateRender(area_arg_65 *rndrParams, int32_t delta)
@@ -44,7 +44,7 @@ void ParticleSystem::UpdateRender(area_arg_65 *rndrParams, int32_t delta)
         
         f.Vec += f.pParticleGen->_accelStart + f.pParticleGen->_accelDelta * f.Age;
         f.Pos += f.Vec * fsec + NC_STACK_particle::RandVec() * f.pParticleGen->_noisePower;
-        float scl = f.pParticleGen->_scaleStart + f.pParticleGen->_scaleDelta * f.Age;
+        float scl = (f.pParticleGen->_scaleStart + f.pParticleGen->_scaleDelta * f.Age) * f.Scale;
         
         Render(&f, scl, rndrParams);
         
@@ -99,6 +99,7 @@ void ParticleSystem::Render(Frak *p, float scale, area_arg_65 *rndrParams)
             rend.Distance = pos.length();
             rend.Flags = mesh.Mat.Flags | rndrParams->flags;
             rend.Color = mesh.Mat.Color;
+            rend.ColorMul = p->Tint;
 
             if ((mesh.Mat.Flags & GFX::RFLAGS_DYNAMIC_TEXTURE) && mesh.Mat.TexSource)
             {

@@ -469,7 +469,8 @@ bool NC_STACK_ypaworld::yw_createRobos(const std::vector<MapRobo> &Robos)
     if ( _levelInfo.Mode != 1 )
     {
         _levelInfo.OwnerMask = 0;
-        _levelInfo.UserMask = 2;
+        int firstOwner = Robos.empty() ? 0 : Robos[0].Owner;
+        _levelInfo.UserMask = (firstOwner >= 0 && firstOwner < (int)World::CVFractionsCount) ? (1 << firstOwner) : 0;
         
         bool first = true;
 
@@ -2760,22 +2761,27 @@ void NC_STACK_ypaworld::RenderFillers(baseRender_msg *arg)
     }
 }
 
-void NC_STACK_ypaworld::SpawnTransientVP(int32_t modelId, const vec3d &pos, const mat3x3 &rot, int32_t lifeTime, float scale, const World::TVisualTint &tint, const vec3d &axisScale)
+int32_t NC_STACK_ypaworld::SpawnTransientVP(int32_t modelId, const vec3d &pos, const mat3x3 &rot, int32_t lifeTime, float scale, const World::TVisualTint &tint, const vec3d &axisScale)
 {
-    if ( modelId <= 0 || modelId >= (int32_t)_vhclModels.size() || lifeTime <= 0 )
-        return;
+    if ( modelId <= 0 || modelId >= (int32_t)_vhclModels.size() || lifeTime < 0 )
+        return 0;
 
     NC_STACK_base *base = _vhclModels.at(modelId);
 
     if ( base )
     {
         _transientVPs.emplace_back(base, pos, rot, lifeTime);
-        _transientVPs.back().scale = scale > 0.0f ? scale : 1.0f;
-        _transientVPs.back().axisScale = vec3d(axisScale.x > 0.0f ? axisScale.x : 1.0f,
-                                               axisScale.y > 0.0f ? axisScale.y : 1.0f,
-                                               axisScale.z > 0.0f ? axisScale.z : 1.0f);
-        _transientVPs.back().tint = tint;
+        TTransientVP &fx = _transientVPs.back();
+        fx.id = _nextTransientVPId++;
+        fx.scale = scale > 0.0f ? scale : 1.0f;
+        fx.axisScale = vec3d(axisScale.x > 0.0f ? axisScale.x : 1.0f,
+                             axisScale.y > 0.0f ? axisScale.y : 1.0f,
+                             axisScale.z > 0.0f ? axisScale.z : 1.0f);
+        fx.tint = tint;
+        return fx.id;
     }
+
+    return 0;
 }
 
 void NC_STACK_ypaworld::SpawnChainFX(const World::TChainFXConfig &config, const vec3d &pos, const mat3x3 &rot)
@@ -2847,12 +2853,12 @@ bool NC_STACK_ypaworld::UpdateRandomFXTimer(int intervalMin, int intervalMax, in
     return true;
 }
 
-void NC_STACK_ypaworld::SpawnRandomizedTransientVP(int32_t modelId, const vec3d &ownerPos, float randomPos)
+int32_t NC_STACK_ypaworld::SpawnRandomizedTransientVP(int32_t modelId, const vec3d &ownerPos, float randomPos, const World::TVisualTint &tint, int32_t lifeTime, float scale, const vec3d &offset)
 {
     if ( modelId <= 0 )
-        return;
+        return 0;
 
-    vec3d pos = ownerPos;
+    vec3d pos = ownerPos + offset;
     if ( randomPos > 0.0 )
     {
         pos.x += (((float)rand() / (float)RAND_MAX) * 2.0 - 1.0) * randomPos;
@@ -2860,11 +2866,33 @@ void NC_STACK_ypaworld::SpawnRandomizedTransientVP(int32_t modelId, const vec3d 
         pos.z += (((float)rand() / (float)RAND_MAX) * 2.0 - 1.0) * randomPos;
     }
 
-    SpawnTransientVP(modelId, pos, mat3x3::Ident(), 1000);
+    return SpawnTransientVP(modelId, pos, mat3x3::Ident(), lifeTime, scale, tint);
 }
 
-void NC_STACK_ypaworld::UpdateDecorationFX(const World::TDecorationFXConfig &config, int32_t &nextTime, const vec3d &ownerPos)
+void NC_STACK_ypaworld::UpdateDecorationFX(const World::TDecorationFXConfig &config, int32_t &nextTime, const vec3d &ownerPos, int32_t *persistentId)
 {
+    const World::TVisualTint tint = config.has_tint ? config.tint : World::TVisualTint();
+    const float scale = config.scale > 0.0 ? config.scale : 1.0;
+
+    if ( config.mode == World::DECORATION_FX_PERSISTENT )
+    {
+        nextTime = 0;
+
+        if ( !persistentId || config.vp <= 0 )
+            return;
+
+        if ( !HasTransientVP(*persistentId) )
+            *persistentId = SpawnTransientVP(config.vp, ownerPos + config.offset, mat3x3::Ident(), 0, scale, tint);
+
+        return;
+    }
+
+    if ( persistentId && *persistentId > 0 )
+    {
+        RemoveTransientVP(*persistentId);
+        *persistentId = 0;
+    }
+
     int countMin = std::max(0, std::min(config.count_min, 32));
     int countMax = std::max(0, std::min(config.count_max, 32));
 
@@ -2882,30 +2910,66 @@ void NC_STACK_ypaworld::UpdateDecorationFX(const World::TDecorationFXConfig &con
 
     int spawnCount = yw_RandomInRange(countMin, countMax);
     for (int i = 0; i < spawnCount; i++)
-        SpawnRandomizedTransientVP(config.vp, ownerPos, config.random_pos);
+        SpawnRandomizedTransientVP(config.vp, ownerPos, config.random_pos,
+                                   tint,
+                                   config.duration > 0 ? config.duration : 1000,
+                                   scale,
+                                   config.offset);
 }
 
-void NC_STACK_ypaworld::SpawnAttachedTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime, float scale, bool useOwnerTransform)
+int32_t NC_STACK_ypaworld::SpawnAttachedTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime, float scale, bool useOwnerTransform, const World::TVisualTint &tint)
 {
     if ( !owner || modelId <= 0 || modelId >= (int32_t)_vhclModels.size() )
-        return;
+        return 0;
 
-    if ( lifeTime <= 0 )
-        return;
+    if ( lifeTime < 0 )
+        return 0;
 
     NC_STACK_base *base = _vhclModels.at(modelId);
 
     if ( !base )
-        return;
+        return 0;
 
     _transientVPs.emplace_back(base, owner->_position, owner->_rotation, lifeTime);
 
     TTransientVP &fx = _transientVPs.back();
+    fx.id = _nextTransientVPId++;
     fx.followOwner = true;
     fx.followOwnerGid = owner->_gid;
     fx.followLocalOffset = localOffset;
     fx.followUseOwnerTransform = useOwnerTransform;
     fx.scale = scale > 0.0 ? scale : 1.0;
+    fx.tint = tint;
+    return fx.id;
+}
+
+bool NC_STACK_ypaworld::HasTransientVP(int32_t id) const
+{
+    if ( id <= 0 )
+        return false;
+
+    for (const TTransientVP &fx : _transientVPs)
+    {
+        if ( fx.id == id )
+            return true;
+    }
+
+    return false;
+}
+
+void NC_STACK_ypaworld::RemoveTransientVP(int32_t id)
+{
+    if ( id <= 0 )
+        return;
+
+    for (auto it = _transientVPs.begin(); it != _transientVPs.end(); ++it)
+    {
+        if ( it->id == id )
+        {
+            _transientVPs.erase(it);
+            return;
+        }
+    }
 }
 
 static NC_STACK_ypabact *yw_FindLiveBactByGidInList(World::RefBactList &list, int32_t gid);
@@ -3387,7 +3451,7 @@ static void yw_RenderTransientVPs(NC_STACK_ypaworld *world, std::list<NC_STACK_y
 {
     for (auto it = effects->begin(); it != effects->end();)
     {
-        if ( !it->vp || it->age >= it->lifeTime )
+        if ( !it->vp || (it->lifeTime > 0 && it->age >= it->lifeTime) )
         {
             it = effects->erase(it);
             continue;
@@ -3454,8 +3518,11 @@ static void yw_RenderTransientVPs(NC_STACK_ypaworld *world, std::list<NC_STACK_y
         it->vp->Bas->TForm().Pos = it->pos;
         it->vp->Bas->TForm().SclRot = it->rot.Transpose() * mat3x3::Scale(it->axisScale * scale);
 
-        // OpenUA custom visual_tint: tint only this transient model (e.g. laser beam body).
-        // Restore the neutral default right after so other effects stay untinted.
+        // OpenUA custom visual_tint/scale: affect only this transient model and
+        // particles emitted by it, then restore neutral defaults for other effects.
+        float oldParticleScale = arg->particleScale;
+        arg->particleScale = scale > 0.0 ? scale : 1.0;
+
         bool tinted = !it->tint.IsNeutral();
         if ( tinted )
             arg->tint = GFX::TGLColor(it->tint.r, it->tint.g, it->tint.b, it->tint.a);
@@ -3464,6 +3531,7 @@ static void yw_RenderTransientVPs(NC_STACK_ypaworld *world, std::list<NC_STACK_y
 
         if ( tinted )
             arg->tint = GFX::TGLColor(1.0, 1.0, 1.0, 1.0);
+        arg->particleScale = oldParticleScale;
 
         it->age += arg->frameTime;
         ++it;
@@ -3637,6 +3705,7 @@ void NC_STACK_ypaworld::sb_0x456384(const Common::Point &cellId, int ownerid2, i
         cell.PurposeIndex = blg_id;
         cell.DecorationFX = bld->DecorationFX;
         cell.DecorationFXNextTime = 0;
+        cell.DecorationFXPersistentId = 0;
 
         int v49;
 
@@ -4024,13 +4093,15 @@ void NC_STACK_ypaworld::BuildingDecorationFXUpdate()
     {
         if ( !yw_IsActiveBuildingSpawnerCell(cell) )
         {
+            RemoveTransientVP(cell.DecorationFXPersistentId);
+            cell.DecorationFXPersistentId = 0;
             cell.DecorationFXNextTime = 0;
             cell.BuildingSpawnLastTime = 0;
             cell.BuildingSpawnedGids.clear();
             continue;
         }
 
-        UpdateDecorationFX(cell.DecorationFX, cell.DecorationFXNextTime, cell.CenterPos);
+        UpdateDecorationFX(cell.DecorationFX, cell.DecorationFXNextTime, cell.CenterPos, &cell.DecorationFXPersistentId);
 
         if ( cell.PurposeIndex >= 0 && (size_t)cell.PurposeIndex < _buildProtos.size() )
             yw_UpdateBuildingSpawner(this, cell, _buildProtos[cell.PurposeIndex]);

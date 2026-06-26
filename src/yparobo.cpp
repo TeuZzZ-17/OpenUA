@@ -1326,7 +1326,12 @@ void NC_STACK_yparobo::AI_doMove(update_msg *arg)
                         _fly_dir_length *= 0.35;
                 }
 
-                if ( v14 && _roboWFlags & 2 )
+                // robo_does_flux must stay unchanged: it is useful for the
+                // final settling motion when the player Host Station uses
+                // AI-style movement. Only robo_does_twist is suppressed while
+                // the player is directly inside the Host Station or one of its
+                // attached guns, because that rotates the camera/view.
+                if ( v14 && (_roboWFlags & 2) && !IsPlayerDirectlyControllingThisRobo() )
                 {
                     sub_4A1014(_maxrot * 0.3 * v49);
                 }
@@ -1515,11 +1520,10 @@ bool NC_STACK_yparobo::ShouldUsePlayerMobileMove() const
 
 bool NC_STACK_yparobo::ShouldUsePlayerRoboIdleMotion() const
 {
-    // Vanilla disables robo_does_twist / robo_does_flux while the player is
-    // inside the Host Station or one of its guns, because the player Robo uses
-    // the simple wallow() idle path. In robo_player_ai_behavior mode we deliberately
-    // allow the real Robo idle motion too, so the player Host Station behaves
-    // like AI Host Stations when standing still.
+    // This helper means: may the player Host Station use the AI-style idle
+    // motion code path at all? Do not suppress it just because the player is
+    // currently inside the Host Station: robo_does_flux must keep working there
+    // to avoid broken-looking settling after AI-style movement finishes.
     return _playerRoboAIBehavior &&
            !_playerRoboAIBehaviorMoveActive &&
            IsPlayerRobo() &&
@@ -1528,6 +1532,25 @@ bool NC_STACK_yparobo::ShouldUsePlayerRoboIdleMotion() const
            _status == BACT_STATUS_NORMAL &&
            (_roboWFlags & 3) &&
            !(_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2));
+}
+
+bool NC_STACK_yparobo::IsPlayerDirectlyControllingThisRobo() const
+{
+    if ( !IsPlayerRobo() || !_world || this != _world->getYW_userHostStation() )
+        return false;
+
+    NC_STACK_ypabact *userVehicle = _world->getYW_userVehicle();
+
+    if ( userVehicle == this )
+        return true;
+
+    for (const World::TRoboGun &gun : _roboGuns)
+    {
+        if ( gun.gun_obj && gun.gun_obj == userVehicle )
+            return true;
+    }
+
+    return false;
 }
 
 int NC_STACK_yparobo::CalcPlayerMobileMoveEnergyCost(update_msg *arg) const

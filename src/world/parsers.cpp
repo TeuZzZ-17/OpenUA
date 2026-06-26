@@ -634,6 +634,12 @@ static void ResetVehicleScaleFX(TVhclProto *vhcl)
     vhcl->scale_fx_pXX.fill(0);
 }
 
+static bool ParseTintParam(ScriptParser::Parser &parser,
+                           const std::string &paramName,
+                           const std::string &p1,
+                           const std::string &p2,
+                           TVisualTint &tint);
+
 static bool ParseDecorationFXParam(ScriptParser::Parser &parser,
                                    const std::string &p1,
                                    const std::string &p2,
@@ -643,6 +649,16 @@ static bool ParseDecorationFXParam(ScriptParser::Parser &parser,
     {
         int vp = parser.stol(p2, NULL, 0);
         config.vp = vp > 0 ? vp : 0;
+        return true;
+    }
+
+    if ( !StriCmp(p1, "decoration_fx_mode") )
+    {
+        if ( !StriCmp(p2, "persistent") )
+            config.mode = World::DECORATION_FX_PERSISTENT;
+        else
+            config.mode = World::DECORATION_FX_PERIODIC;
+
         return true;
     }
 
@@ -669,6 +685,13 @@ static bool ParseDecorationFXParam(ScriptParser::Parser &parser,
     {
         int count = parser.stol(p2, NULL, 0);
         config.count_max = std::max(0, std::min(count, 32));
+        return true;
+    }
+
+    if ( !StriCmp(p1, "decoration_fx_duration") )
+    {
+        int duration = parser.stol(p2, NULL, 0);
+        config.duration = duration > 0 ? duration : 1000;
         return true;
     }
 
@@ -704,6 +727,11 @@ static bool ParseDecorationFXParam(ScriptParser::Parser &parser,
         return true;
     }
 
+    if ( ParseTintParam(parser, "decoration_fx_tint", p1, p2, config.tint) )
+    {
+        config.has_tint = true;
+        return true;
+    }
 
     return false;
 }

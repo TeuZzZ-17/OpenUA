@@ -1173,6 +1173,7 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     ypabact_ResetDamagedFX(this);
     _decoration_fx = World::TDecorationFXConfig();
     _decoration_fx_next_time = 0;
+    _decoration_fx_persistent_id = 0;
     _damaged_force_malus = 0.0;
     _damaged_maxrot_malus = 0.0;
     _damaged_snd_pitch_mult = 1.0;
@@ -1389,6 +1390,7 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _visual_tint = World::TVisualTint();
     _decoration_fx = World::TDecorationFXConfig();
     _decoration_fx_next_time = 0;
+    _decoration_fx_persistent_id = 0;
     _damaged_force_malus = 0.0;
     _damaged_maxrot_malus = 0.0;
     _damaged_snd_pitch_mult = 1.0;
@@ -2661,9 +2663,10 @@ static void ypabact_SpawnDecorationFXEvent(NC_STACK_ypabact *bact)
         world->SpawnAttachedTransientVP(bact->_decoration_fx.vp,
                                         bact,
                                         localOffset,
-                                        1000,
+                                        bact->_decoration_fx.duration > 0 ? bact->_decoration_fx.duration : 1000,
                                         bact->_decoration_fx.scale,
-                                        true);
+                                        true,
+                                        bact->_decoration_fx.has_tint ? bact->_decoration_fx.tint : World::TVisualTint());
     }
 }
 
@@ -2700,8 +2703,33 @@ void NC_STACK_ypabact::UpdateDecorationFX(update_msg *)
     if ( !ypabact_CanSpawnDecorationFX(this) || _decoration_fx.vp <= 0 )
     {
         _decoration_fx_next_time = 0;
+        if ( _world )
+            _world->RemoveTransientVP(_decoration_fx_persistent_id);
+        _decoration_fx_persistent_id = 0;
         return;
     }
+
+    if ( _decoration_fx.mode == World::DECORATION_FX_PERSISTENT )
+    {
+        _decoration_fx_next_time = 0;
+
+        if ( !_world->HasTransientVP(_decoration_fx_persistent_id) )
+        {
+            _decoration_fx_persistent_id =
+                _world->SpawnAttachedTransientVP(_decoration_fx.vp,
+                                                 this,
+                                                 _decoration_fx.offset,
+                                                 0,
+                                                 _decoration_fx.scale,
+                                                 true,
+                                                 _decoration_fx.has_tint ? _decoration_fx.tint : World::TVisualTint());
+        }
+
+        return;
+    }
+
+    _world->RemoveTransientVP(_decoration_fx_persistent_id);
+    _decoration_fx_persistent_id = 0;
 
     if ( !_world->UpdateRandomFXTimer(_decoration_fx.interval_min, _decoration_fx.interval_max, _decoration_fx_next_time) )
         return;
@@ -2849,6 +2877,18 @@ void NC_STACK_ypabact::Render(baseRender_msg *arg)
         return base == _vp_normal || base == _vp_fire || base == _vp_wait || base == _vp_genesis;
     };
 
+    auto visualParticleScale = [this]() -> float
+    {
+        float scale = _visual_scale_vec.x;
+
+        if ( _visual_scale_vec.y > scale )
+            scale = _visual_scale_vec.y;
+        if ( _visual_scale_vec.z > scale )
+            scale = _visual_scale_vec.z;
+
+        return scale > 0.0 ? scale : 1.0;
+    };
+
     // OpenUA custom visual_tint: same eligible visual prototypes as visual_scale.
     // Tint is a visual-only per-instance RGBA multiplier; never affects gameplay.
     // effectiveTint already folds in the Black Sect grey clone override (see above).
@@ -2882,14 +2922,19 @@ void NC_STACK_ypabact::Render(baseRender_msg *arg)
                 _current_vp->Bas->TForm().Pos = _tForm.Pos;
                 _current_vp->Bas->TForm().SclRot = _tForm.SclRot;
 
-                if ( shouldApplyVisualScale(_current_vp->Bas) )
+                bool scaled = shouldApplyVisualScale(_current_vp->Bas);
+                if ( scaled )
                     _current_vp->Bas->TForm().SclRot *= mat3x3::Scale(_visual_scale_vec);
 
                 bool tinted = shouldApplyVisualTint(_current_vp->Bas);
+                float oldParticleScale = arg->particleScale;
+                if ( scaled )
+                    arg->particleScale = visualParticleScale();
                 setTint(tinted);
                 _current_vp->Bas->Render(arg, _current_vp);
                 if ( tinted )
                     setTint(false);
+                arg->particleScale = oldParticleScale;
             }
         }
     }
@@ -2909,14 +2954,19 @@ void NC_STACK_ypabact::Render(baseRender_msg *arg)
                 else
                     bd->vp->Bas->TForm().SclRot = bd->rotate.Transpose();
 
-                if ( shouldApplyVisualScale(bd->vp->Bas) )
+                bool scaled = shouldApplyVisualScale(bd->vp->Bas);
+                if ( scaled )
                     bd->vp->Bas->TForm().SclRot *= mat3x3::Scale(_visual_scale_vec);
 
                 bool tinted = shouldApplyVisualTint(bd->vp->Bas);
+                float oldParticleScale = arg->particleScale;
+                if ( scaled )
+                    arg->particleScale = visualParticleScale();
                 setTint(tinted);
                 bd->vp->Bas->Render(arg, bd->vp);
                 if ( tinted )
                     setTint(false);
+                arg->particleScale = oldParticleScale;
             }
         }
     }

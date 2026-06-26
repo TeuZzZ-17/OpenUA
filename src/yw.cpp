@@ -363,6 +363,7 @@ size_t NC_STACK_ypaworld::Init(IDVList &stak)
     _guiActive.clear();
     _deadCacheList.clear();
     _transientVPs.clear();
+    _nextTransientVPId = 1;
 
 
     _fxLimit = 16;
@@ -2351,6 +2352,7 @@ void NC_STACK_ypaworld::DeleteLevel()
         _deadCacheList.front()->Delete();
 
     _transientVPs.clear();
+    _nextTransientVPId = 1;
 
     ProtosFreeSounds();
 
@@ -3074,7 +3076,19 @@ bool NC_STACK_ypaworld::CreateSubBarControls(){
 
                         if ( _GameShell->sub_bar_button->Add(&btn_64arg) )
                         {
-                            v70 = 1;
+                            int playAsWidth = _screenSize.x * 0.36;
+
+                            btn_64arg.xpos = (_screenSize.x - playAsWidth) / 2;
+                            btn_64arg.width = playAsWidth;
+                            btn_64arg.caption = "Play As";
+                            btn_64arg.caption2.clear();
+                            btn_64arg.pressedCode = 0;
+                            btn_64arg.downCode = 1251;
+                            btn_64arg.button_id = 1027;
+                            btn_64arg.upCode = 1027;
+
+                            if ( _GameShell->sub_bar_button->Add(&btn_64arg) )
+                                v70 = 1;
                         }
                     }
                 }
@@ -3102,6 +3116,9 @@ bool NC_STACK_ypaworld::CreateSubBarControls(){
     _GameShell->sub_bar_button->Disable(&v228);
 
     v228.butID = 1011;
+    _GameShell->sub_bar_button->Disable(&v228);
+
+    v228.butID = 1027;
     _GameShell->sub_bar_button->Disable(&v228);
 
     _GameShell->sub_bar_button->HideScreen();
@@ -6358,7 +6375,9 @@ size_t NC_STACK_ypaworld::ypaworld_func161(yw_arg161 *arg)
             {
                 if ( LoadHightMap(mapp.HgtStr) )
                 {
-                    if ( yw_createRobos(mapp.Robos) )
+                    std::vector<MapRobo> playAsRobos = BriefingReorderRobosForPlayAs(mapp.Robos);
+
+                    if ( yw_createRobos(playAsRobos) )
                     {
                         if ( LoadBlgMap(mapp.BlgStr) )
                         {

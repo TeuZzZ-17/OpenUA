@@ -35,6 +35,10 @@ struct area_arg_65
     float fadeLength;
     int ambientLight;
     uint32_t flags;
+    // OpenUA custom: per-emitter tint copied to particles spawned during this render.
+    GFX::TGLColor tint = GFX::TGLColor(1.0, 1.0, 1.0, 1.0);
+    // OpenUA custom: per-emitter visual scale copied to particles spawned during this render.
+    float particleScale = 1.0;
 
     area_arg_65()
     {
@@ -49,6 +53,8 @@ struct area_arg_65
         fadeLength = 0.0;
         ambientLight = 0;
         flags = 0;
+        tint = GFX::TGLColor(1.0, 1.0, 1.0, 1.0);
+        particleScale = 1.0;
     }
 };
 
@@ -62,6 +68,8 @@ struct baseRender_msg
     uint32_t flags = 0;
     // OpenUA custom: per-render visual_tint multiplier. Neutral (1,1,1,1) = no change.
     GFX::TGLColor tint = GFX::TGLColor(1.0, 1.0, 1.0, 1.0);
+    // OpenUA custom: per-render particle size multiplier inherited by emitted particles.
+    float particleScale = 1.0;
 };
 
 

@@ -1286,6 +1286,170 @@ void NC_STACK_ypaworld::FreeBriefing()
     stru_5C91D0.Free();
 }
 
+static const char *yw_BriefingPlayAsOwnerName(int owner)
+{
+    switch ( owner )
+    {
+    case 1:
+        return "Resistance";
+    case 2:
+        return "Sulgogar";
+    case 3:
+        return "Mykonian";
+    case 4:
+        return "Taerkasten";
+    case 5:
+        return "Black Sect";
+    case 6:
+        return "Ghorkov";
+    default:
+        return "Unknown";
+    }
+}
+
+static bool yw_BriefingPlayAsOwnerValid(int owner)
+{
+    return owner >= 1 && owner <= 6;
+}
+
+void NC_STACK_ypaworld::BriefingInitPlayAsOwners()
+{
+    _briefScreen.PlayAsOwners.clear();
+    _briefScreen.PlayAsSelectedIndex = 0;
+    _briefScreen.PlayAsLevelID = _levelInfo.LevelID;
+
+    std::string ownersLog;
+
+    for ( const MapRobo &robo : _briefScreen.Desc.Robos )
+    {
+        if ( !yw_BriefingPlayAsOwnerValid(robo.Owner) )
+            continue;
+
+        bool alreadyAdded = false;
+        for ( int16_t owner : _briefScreen.PlayAsOwners )
+        {
+            if ( owner == robo.Owner )
+            {
+                alreadyAdded = true;
+                break;
+            }
+        }
+
+        if ( alreadyAdded )
+            continue;
+
+        if ( !ownersLog.empty() )
+            ownersLog += ", ";
+
+        ownersLog += fmt::sprintf("%d=%s", robo.Owner, yw_BriefingPlayAsOwnerName(robo.Owner));
+        _briefScreen.PlayAsOwners.push_back(robo.Owner);
+    }
+
+    ypa_log_out("Play As: detected begin_robo owners: %s\n", ownersLog.empty() ? "<none>" : ownersLog.c_str());
+
+    if ( !_briefScreen.Desc.Robos.empty() )
+    {
+        int firstOwner = _briefScreen.Desc.Robos[0].Owner;
+        for ( size_t i = 0; i < _briefScreen.PlayAsOwners.size(); i++ )
+        {
+            if ( _briefScreen.PlayAsOwners[i] == firstOwner )
+            {
+                _briefScreen.PlayAsSelectedIndex = i;
+                break;
+            }
+        }
+    }
+}
+
+bool NC_STACK_ypaworld::BriefingHasPlayAsChoices() const
+{
+    return _briefScreen.PlayAsOwners.size() > 1;
+}
+
+int16_t NC_STACK_ypaworld::BriefingSelectedPlayAsOwner() const
+{
+    if ( _briefScreen.PlayAsOwners.empty() )
+        return 0;
+
+    int32_t idx = _briefScreen.PlayAsSelectedIndex;
+    if ( idx < 0 || idx >= (int32_t)_briefScreen.PlayAsOwners.size() )
+        idx = 0;
+
+    return _briefScreen.PlayAsOwners[idx];
+}
+
+void NC_STACK_ypaworld::BriefingCyclePlayAsOwner()
+{
+    if ( !BriefingHasPlayAsChoices() )
+        return;
+
+    _briefScreen.PlayAsSelectedIndex++;
+    if ( _briefScreen.PlayAsSelectedIndex >= (int32_t)_briefScreen.PlayAsOwners.size() )
+        _briefScreen.PlayAsSelectedIndex = 0;
+
+    int owner = BriefingSelectedPlayAsOwner();
+    ypa_log_out("Play As: selected owner %d (%s)\n", owner, yw_BriefingPlayAsOwnerName(owner));
+}
+
+std::vector<MapRobo> NC_STACK_ypaworld::BriefingReorderRobosForPlayAs(const std::vector<MapRobo> &Robos) const
+{
+    if ( _briefScreen.PlayAsLevelID != _levelInfo.LevelID )
+        return Robos;
+
+    int owner = BriefingSelectedPlayAsOwner();
+
+    if ( !yw_BriefingPlayAsOwnerValid(owner) || Robos.empty() )
+        return Robos;
+
+    ypa_log_out("Play As: start mission selected owner %d (%s)\n", owner, yw_BriefingPlayAsOwnerName(owner));
+
+    size_t selectedIndex = Robos.size();
+    for ( size_t i = 0; i < Robos.size(); i++ )
+    {
+        if ( Robos[i].Owner == owner )
+        {
+            selectedIndex = i;
+            break;
+        }
+    }
+
+    if ( selectedIndex == Robos.size() )
+    {
+        ypa_log_out("Play As: selected owner not found in runtime begin_robo list; vanilla order kept.\n");
+        return Robos;
+    }
+
+    if ( selectedIndex == 0 )
+    {
+        ypa_log_out("Play As: runtime begin_robo order unchanged; selected owner is already first.\n");
+        return Robos;
+    }
+
+    std::vector<MapRobo> reordered;
+    reordered.reserve(Robos.size());
+    reordered.push_back(Robos[selectedIndex]);
+
+    for ( size_t i = 0; i < Robos.size(); i++ )
+    {
+        if ( i != selectedIndex )
+            reordered.push_back(Robos[i]);
+    }
+
+    ypa_log_out("Play As: runtime begin_robo reorder moved owner %d from index %d to index 0.\n", owner, (int)selectedIndex);
+
+    return reordered;
+}
+
+std::string NC_STACK_ypaworld::BriefingPlayAsButtonText() const
+{
+    int owner = BriefingSelectedPlayAsOwner();
+
+    if ( !yw_BriefingPlayAsOwnerValid(owner) )
+        return "Play As";
+
+    return fmt::sprintf("Play As: %s", yw_BriefingPlayAsOwnerName(owner));
+}
+
 void NC_STACK_ypaworld::FreeDebrief()
 {
     _briefScreen.Clear();
@@ -1602,6 +1766,8 @@ bool NC_STACK_ypaworld::InitBriefing(int lvlid)
 
     if ( !_briefScreen.Desc.IsOk() )
         goto ON_ERR;
+
+    BriefingInitPlayAsOwners();
 
     _briefScreen.BriefingText = Locale::Text::MissionText(_levelInfo.LevelID, "<NO INFO AVAILABLE>");
 

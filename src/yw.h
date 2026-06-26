@@ -1039,6 +1039,7 @@ struct cellArea
     Common::PlaneArray<NC_STACK_base::Instance *, 3, 3> BldVPOpts = Common::PlaneArray<NC_STACK_base::Instance *, 3, 3>::ArrayInit(NULL);
     World::TDecorationFXConfig DecorationFX;
     int32_t DecorationFXNextTime = 0;
+    int32_t DecorationFXPersistentId = 0;
     int32_t BuildingSpawnLastTime = 0;
     std::vector<int32_t> BuildingSpawnedGids;
     uint8_t BuildingSpawnInitialOwner = 0;
@@ -1543,6 +1544,9 @@ struct TBriefengScreen
     std::array<World::TPlayerStatus, World::CVFractionsCount> StatsIngame;
     std::string MovieStr;
     std::vector<World::History::Upgrade> Upgrades;
+    std::vector<int16_t> PlayAsOwners;
+    int32_t PlayAsSelectedIndex = 0;
+    int32_t PlayAsLevelID = 0;
     
     ~TBriefengScreen()
     {
@@ -1618,6 +1622,9 @@ struct TBriefengScreen
 
         MovieStr.clear();
         Upgrades.clear();
+        PlayAsOwners.clear();
+        PlayAsSelectedIndex = 0;
+        PlayAsLevelID = 0;
     }
 };
 
@@ -2224,6 +2231,12 @@ public:
     int sub_4DA41C(TLevelDescription *mapp, const std::string &fname);
     bool InitBriefing(int lvlid);
     void FreeBriefing();
+    void BriefingInitPlayAsOwners();
+    bool BriefingHasPlayAsChoices() const;
+    int16_t BriefingSelectedPlayAsOwner() const;
+    void BriefingCyclePlayAsOwner();
+    std::vector<MapRobo> BriefingReorderRobosForPlayAs(const std::vector<MapRobo> &Robos) const;
+    std::string BriefingPlayAsButtonText() const;
     void FreeBriefDataSet();
     int ypaworld_func158__sub4__sub1__sub3__sub0();
     void yw_ActivateWunderstein(cellArea *cell, int a3);
@@ -2482,12 +2495,14 @@ public:
     
     void FreeGameDataCursors();
 
-    void SpawnTransientVP(int32_t modelId, const vec3d &pos, const mat3x3 &rot, int32_t lifeTime, float scale = 1.0, const World::TVisualTint &tint = World::TVisualTint(), const vec3d &axisScale = vec3d(1.0, 1.0, 1.0));
+    int32_t SpawnTransientVP(int32_t modelId, const vec3d &pos, const mat3x3 &rot, int32_t lifeTime, float scale = 1.0, const World::TVisualTint &tint = World::TVisualTint(), const vec3d &axisScale = vec3d(1.0, 1.0, 1.0));
     void SpawnChainFX(const World::TChainFXConfig &config, const vec3d &pos, const mat3x3 &rot);
-    void SpawnAttachedTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime, float scale = 1.0, bool useOwnerTransform = false);
+    int32_t SpawnAttachedTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime, float scale = 1.0, bool useOwnerTransform = false, const World::TVisualTint &tint = World::TVisualTint());
     bool UpdateRandomFXTimer(int intervalMin, int intervalMax, int32_t &nextTime);
-    void SpawnRandomizedTransientVP(int32_t modelId, const vec3d &ownerPos, float randomPos);
-    void UpdateDecorationFX(const World::TDecorationFXConfig &config, int32_t &nextTime, const vec3d &ownerPos);
+    int32_t SpawnRandomizedTransientVP(int32_t modelId, const vec3d &ownerPos, float randomPos, const World::TVisualTint &tint = World::TVisualTint(), int32_t lifeTime = 1000, float scale = 1.0, const vec3d &offset = vec3d(0.0, 0.0, 0.0));
+    bool HasTransientVP(int32_t id) const;
+    void RemoveTransientVP(int32_t id);
+    void UpdateDecorationFX(const World::TDecorationFXConfig &config, int32_t &nextTime, const vec3d &ownerPos, int32_t *persistentId = NULL);
     
     void SetCmdrIdToSelect(int32_t id) { _cmdrIdToSelect = id; };
         
@@ -2529,6 +2544,7 @@ public:
     struct TTransientVP
     {
         std::unique_ptr<NC_STACK_base::Instance> vp;
+        int32_t id = 0;
         vec3d pos;
         mat3x3 rot;
         int32_t age = 0;
@@ -2584,6 +2600,7 @@ public:
     
     std::list<NC_STACK_base *> _overrideModels;
     std::list<TTransientVP> _transientVPs;
+    int32_t _nextTransientVPId = 1;
     
     std::map<int32_t, TConstructInfo> _inBuildProcess; // Buildings in creation process
     std::array<int16_t, 256> _buildHealthModelId = Common::ArrayInit<int16_t, 256>(0);

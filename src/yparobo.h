@@ -261,6 +261,7 @@ protected:
     bool TryStartPlayerMobileMove(update_msg *arg);
     bool ShouldUsePlayerMobileMove() const;
     bool ShouldUsePlayerRoboIdleMotion() const;
+    bool IsPlayerDirectlyControllingThisRobo() const;
     bool UpdatePlayerMobileMove(update_msg *arg);
     bool UpdatePlayerRoboIdleMotion(update_msg *arg);
     int CalcPlayerMobileMoveEnergyCost(update_msg *arg) const;

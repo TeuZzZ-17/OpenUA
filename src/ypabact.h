@@ -782,6 +782,7 @@ public:
     int32_t _damaged_fx_next_time;
     World::TDecorationFXConfig _decoration_fx;
     int32_t _decoration_fx_next_time = 0;
+    int32_t _decoration_fx_persistent_id = 0;
     float _damaged_force_malus;
     float _damaged_maxrot_malus;
     float _damaged_snd_pitch_mult;
