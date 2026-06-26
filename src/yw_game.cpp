@@ -469,7 +469,8 @@ bool NC_STACK_ypaworld::yw_createRobos(const std::vector<MapRobo> &Robos)
     if ( _levelInfo.Mode != 1 )
     {
         _levelInfo.OwnerMask = 0;
-        _levelInfo.UserMask = 2;
+        int firstOwner = Robos.empty() ? 0 : Robos[0].Owner;
+        _levelInfo.UserMask = (firstOwner >= 0 && firstOwner < (int)World::CVFractionsCount) ? (1 << firstOwner) : 0;
         
         bool first = true;
 

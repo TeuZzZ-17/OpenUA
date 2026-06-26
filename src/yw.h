@@ -1543,6 +1543,9 @@ struct TBriefengScreen
     std::array<World::TPlayerStatus, World::CVFractionsCount> StatsIngame;
     std::string MovieStr;
     std::vector<World::History::Upgrade> Upgrades;
+    std::vector<int16_t> PlayAsOwners;
+    int32_t PlayAsSelectedIndex = 0;
+    int32_t PlayAsLevelID = 0;
     
     ~TBriefengScreen()
     {
@@ -1618,6 +1621,9 @@ struct TBriefengScreen
 
         MovieStr.clear();
         Upgrades.clear();
+        PlayAsOwners.clear();
+        PlayAsSelectedIndex = 0;
+        PlayAsLevelID = 0;
     }
 };
 
@@ -2224,6 +2230,12 @@ public:
     int sub_4DA41C(TLevelDescription *mapp, const std::string &fname);
     bool InitBriefing(int lvlid);
     void FreeBriefing();
+    void BriefingInitPlayAsOwners();
+    bool BriefingHasPlayAsChoices() const;
+    int16_t BriefingSelectedPlayAsOwner() const;
+    void BriefingCyclePlayAsOwner();
+    std::vector<MapRobo> BriefingReorderRobosForPlayAs(const std::vector<MapRobo> &Robos) const;
+    std::string BriefingPlayAsButtonText() const;
     void FreeBriefDataSet();
     int ypaworld_func158__sub4__sub1__sub3__sub0();
     void yw_ActivateWunderstein(cellArea *cell, int a3);

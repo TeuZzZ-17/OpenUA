@@ -3563,6 +3563,8 @@ void UserData::GameShellUiHandleInput()
     sub_bar_button->Disable(&v410);
     v410.butID = 1020;
     sub_bar_button->Disable(&v410);
+    v410.butID = 1027;
+    sub_bar_button->Disable(&v410);
 
     v410.butID = UIWidgets::MAIN_MENU_WIDGET_IDS::BTN_INPUT_SETTINGS;
     titel_button->Disable(&v410);
@@ -3631,6 +3633,20 @@ void UserData::GameShellUiHandleInput()
 
         v410.butID = 1019;
         sub_bar_button->Enable(&v410);
+
+        if ( p_YW->_levelInfo.State == TLevelInfo::STATE_BRIEFING && p_YW->BriefingHasPlayAsChoices() )
+        {
+            int playAsWidth = p_YW->_screenSize.x * 0.36;
+
+            v410.butID = 1027;
+            sub_bar_button->Enable(&v410);
+
+            v393.butID = 1027;
+            v393.xpos = (p_YW->_screenSize.x - playAsWidth) / 2;
+            v393.width = playAsWidth;
+            sub_bar_button->setXYWidth(&v393);
+            sub_bar_button->SetText(1027, p_YW->BriefingPlayAsButtonText());
+        }
 
         button_input_button->HideScreen();
         video_button->HideScreen();
@@ -4004,6 +4020,11 @@ void UserData::GameShellUiHandleInput()
 
         case 1020:
             ShowInputSettings1(p_YW);
+            break;
+
+        case 1027:
+            p_YW->BriefingCyclePlayAsOwner();
+            sub_bar_button->SetText(1027, p_YW->BriefingPlayAsButtonText());
             break;
 
         case 1026:
