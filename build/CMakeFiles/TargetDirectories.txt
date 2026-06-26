@@ -1,0 +1,3 @@
+C:/Users/proto/Desktop/UA_source/build/CMakeFiles/UA_source.dir
+C:/Users/proto/Desktop/UA_source/build/CMakeFiles/edit_cache.dir
+C:/Users/proto/Desktop/UA_source/build/CMakeFiles/rebuild_cache.dir
