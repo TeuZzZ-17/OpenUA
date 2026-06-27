@@ -1819,6 +1819,8 @@ NC_STACK_ypamissile * NC_STACK_ypaworld::ypaworld_func147(ypaworld_arg146 *arg)
                                                     wproto.visual_scale_random_max,
                                                     wproto.visual_scale_axis);
     wobj->_visual_tint = wproto.visual_tint;
+    wobj->_projectile_spin = wproto.projectile_spin;
+    wobj->_projectile_spin_speed = wproto.projectile_spin_speed;
 
     wobj->_destroyFX = wproto.dfx;
     wobj->_extDestroyFX = wproto.ExtDestroyFX;

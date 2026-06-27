@@ -2458,6 +2458,8 @@ bool WeaponProtoParser::IsScope(ScriptParser::Parser &parser, const std::string 
         _wpn->visual_scale_axis = vec3d(1.0, 1.0, 1.0);
         _wpn->visual_tint = TVisualTint();
         _wpn->wireframe_tint = TVisualTint();
+        _wpn->projectile_spin = 0;
+        _wpn->projectile_spin_speed = vec3d(0.0, 0.0, 0.0);
         _wpn->type_icon = 65;
         _wpn->debuff = TWeaponDebuffConfig();
         _wpn->debuff.tick_snd.volume = 120;
@@ -3023,6 +3025,22 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     }
     else if ( ParseWireframeTintParam(parser, p1, p2, _wpn->wireframe_tint) )
     {
+    }
+    else if ( !StriCmp(p1, "projectile_spin") )
+    {
+        _wpn->projectile_spin = parser.stol(p2, NULL, 0) != 0 ? 1 : 0;
+    }
+    else if ( !StriCmp(p1, "projectile_spin_x") )
+    {
+        _wpn->projectile_spin_speed.x = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "projectile_spin_y") )
+    {
+        _wpn->projectile_spin_speed.y = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "projectile_spin_z") )
+    {
+        _wpn->projectile_spin_speed.z = parser.stof(p2, 0);
     }
     else if ( ParseDecorationFXParam(parser, p1, p2, _wpn->decoration_fx) )
     {

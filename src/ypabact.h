@@ -772,6 +772,8 @@ public:
     float _visual_scale = 1.0;
     vec3d _visual_scale_vec = vec3d(1.0, 1.0, 1.0);
     World::TVisualTint _visual_tint; // OpenUA custom: visual-only RGBA tint multiplier
+    int _projectile_spin = 0;
+    vec3d _projectile_spin_speed = vec3d(0.0, 0.0, 0.0);
     NC_STACK_base *_vp_normal;
     NC_STACK_base *_vp_fire;
     NC_STACK_base *_vp_wait;

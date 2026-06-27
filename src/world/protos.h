@@ -600,6 +600,8 @@ struct TWeapProto
     vec3d visual_scale_axis = vec3d(1.0, 1.0, 1.0);
     TVisualTint visual_tint; // OpenUA custom: visual-only RGBA tint multiplier
     TVisualTint wireframe_tint; // OpenUA custom: UI wireframe-only RGBA tint multiplier
+    int projectile_spin = 0; // OpenUA custom: visual-only projectile model spin
+    vec3d projectile_spin_speed = vec3d(0.0, 0.0, 0.0); // degrees per second, local X/Y/Z
     std::vector<DestFX> dfx;
     std::vector<DestFX> ExtDestroyFX; // ext_dest_fx
     std::array<TVhclSound, SND_MAX> sndFXes;

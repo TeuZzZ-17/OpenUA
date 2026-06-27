@@ -38,6 +38,34 @@ static bool ypabact_IsDamagedFXSystemDisabled(const NC_STACK_ypabact *bact)
     return bact->_damaged_fx.threshold <= 0.0 || bact->_damaged_fx.threshold >= 1.0;
 }
 
+static bool ypabact_ShouldApplyProjectileSpin(NC_STACK_ypabact *bact, NC_STACK_base *base)
+{
+    if ( !bact->_projectile_spin || bact->_bact_type != BACT_TYPES_MISSLE )
+        return false;
+
+    if ( base != bact->_vp_normal && base != bact->_vp_fire && base != bact->_vp_wait )
+        return false;
+
+    return bact->_projectile_spin_speed.x != 0.0 ||
+           bact->_projectile_spin_speed.y != 0.0 ||
+           bact->_projectile_spin_speed.z != 0.0;
+}
+
+static mat3x3 ypabact_BuildProjectileSpinMatrix(const NC_STACK_ypabact *bact)
+{
+    vec3d angle = bact->_projectile_spin_speed * ((float)bact->_clock * 0.001f * C_PI_180);
+    mat3x3 spin = mat3x3::Ident();
+
+    if ( angle.x != 0.0 )
+        spin *= mat3x3::RotateX(angle.x);
+    if ( angle.y != 0.0 )
+        spin *= mat3x3::RotateY(angle.y);
+    if ( angle.z != 0.0 )
+        spin *= mat3x3::RotateZ(angle.z);
+
+    return spin;
+}
+
 static float ypabact_GetDamagedThreshold(const NC_STACK_ypabact *bact)
 {
     float threshold = bact->_damaged_fx.threshold;
@@ -1388,6 +1416,8 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _visual_scale = 1.0;
     _visual_scale_vec = vec3d(1.0, 1.0, 1.0);
     _visual_tint = World::TVisualTint();
+    _projectile_spin = 0;
+    _projectile_spin_speed = vec3d(0.0, 0.0, 0.0);
     _decoration_fx = World::TDecorationFXConfig();
     _decoration_fx_next_time = 0;
     _decoration_fx_persistent_id = 0;
@@ -2923,6 +2953,9 @@ void NC_STACK_ypabact::Render(baseRender_msg *arg)
                 _current_vp->Bas->TForm().SclRot = _tForm.SclRot;
 
                 bool scaled = shouldApplyVisualScale(_current_vp->Bas);
+                if ( ypabact_ShouldApplyProjectileSpin(this, _current_vp->Bas) )
+                    _current_vp->Bas->TForm().SclRot *= ypabact_BuildProjectileSpinMatrix(this);
+
                 if ( scaled )
                     _current_vp->Bas->TForm().SclRot *= mat3x3::Scale(_visual_scale_vec);
 
