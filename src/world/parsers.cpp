@@ -796,6 +796,53 @@ static bool ParseVisualScaleParam(ScriptParser::Parser &parser,
     return false;
 }
 
+static bool ParseVisualOrientationParam(ScriptParser::Parser &parser,
+                                        const std::string &p1,
+                                        const std::string &p2,
+                                        vec3d &visualRotation)
+{
+    if ( !StriCmp(p1, "visual_orientation") )
+    {
+        if ( !StriCmp(p2, "normal") )
+            visualRotation = vec3d(0.0, 0.0, 0.0);
+        else if ( !StriCmp(p2, "upside_down") )
+            visualRotation = vec3d(180.0, 0.0, 0.0);
+        else if ( !StriCmp(p2, "half_turn") )
+            visualRotation = vec3d(0.0, 180.0, 0.0);
+        else if ( !StriCmp(p2, "sideways_left") )
+            visualRotation = vec3d(0.0, 0.0, 90.0);
+        else if ( !StriCmp(p2, "sideways_right") )
+            visualRotation = vec3d(0.0, 0.0, 270.0);
+        else
+        {
+            ypa_log_out("Unknown visual_orientation '%s', using normal\n", p2.c_str());
+            visualRotation = vec3d(0.0, 0.0, 0.0);
+        }
+
+        return true;
+    }
+
+    if ( !StriCmp(p1, "visual_rotation_x") )
+    {
+        visualRotation.x = parser.stof(p2, 0);
+        return true;
+    }
+
+    if ( !StriCmp(p1, "visual_rotation_y") )
+    {
+        visualRotation.y = parser.stof(p2, 0);
+        return true;
+    }
+
+    if ( !StriCmp(p1, "visual_rotation_z") )
+    {
+        visualRotation.z = parser.stof(p2, 0);
+        return true;
+    }
+
+    return false;
+}
+
 // OpenUA custom: parse "*_tint = R_G_B_A" (each component 0..255).
 // Alpha is optional and defaults to 255. Out-of-range values are clamped.
 // Stored as normalized 0..1 float multipliers. Neutral default = no change.
@@ -1524,6 +1571,9 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     {
     }
     else if ( ParseWireframeTintParam(parser, p1, p2, _vhcl->wireframe_tint) )
+    {
+    }
+    else if ( ParseVisualOrientationParam(parser, p1, p2, _vhcl->visual_rotation) )
     {
     }
     else if ( !StriCmp(p1, "invulnerable") )
@@ -2263,6 +2313,7 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->visual_scale_axis = vec3d(1.0, 1.0, 1.0);
         _vhcl->visual_tint = TVisualTint();
         _vhcl->wireframe_tint = TVisualTint();
+        _vhcl->visual_rotation = vec3d(0.0, 0.0, 0.0);
         _vhcl->damaged_fx = TDamagedFXConfig();
         _vhcl->damaged_icon.clear();
         _vhcl->regen_icon.clear();
@@ -2458,6 +2509,7 @@ bool WeaponProtoParser::IsScope(ScriptParser::Parser &parser, const std::string 
         _wpn->visual_scale_axis = vec3d(1.0, 1.0, 1.0);
         _wpn->visual_tint = TVisualTint();
         _wpn->wireframe_tint = TVisualTint();
+        _wpn->visual_rotation = vec3d(0.0, 0.0, 0.0);
         _wpn->projectile_spin = 0;
         _wpn->projectile_spin_speed = vec3d(0.0, 0.0, 0.0);
         _wpn->type_icon = 65;
@@ -3024,6 +3076,9 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     {
     }
     else if ( ParseWireframeTintParam(parser, p1, p2, _wpn->wireframe_tint) )
+    {
+    }
+    else if ( ParseVisualOrientationParam(parser, p1, p2, _wpn->visual_rotation) )
     {
     }
     else if ( !StriCmp(p1, "projectile_spin") )

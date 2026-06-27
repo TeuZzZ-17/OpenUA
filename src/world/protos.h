@@ -386,6 +386,7 @@ struct TVhclProto
     vec3d visual_scale_axis = vec3d(1.0, 1.0, 1.0);
     TVisualTint visual_tint; // OpenUA custom: visual-only RGBA tint multiplier
     TVisualTint wireframe_tint; // OpenUA custom: UI wireframe-only RGBA tint multiplier
+    vec3d visual_rotation = vec3d(0.0, 0.0, 0.0); // OpenUA custom: visual-only local rotation, degrees
     TDamagedFXConfig damaged_fx;
     TDecorationFXConfig decoration_fx;
     std::string damaged_icon;
@@ -600,6 +601,7 @@ struct TWeapProto
     vec3d visual_scale_axis = vec3d(1.0, 1.0, 1.0);
     TVisualTint visual_tint; // OpenUA custom: visual-only RGBA tint multiplier
     TVisualTint wireframe_tint; // OpenUA custom: UI wireframe-only RGBA tint multiplier
+    vec3d visual_rotation = vec3d(0.0, 0.0, 0.0); // OpenUA custom: visual-only local rotation, degrees
     int projectile_spin = 0; // OpenUA custom: visual-only projectile model spin
     vec3d projectile_spin_speed = vec3d(0.0, 0.0, 0.0); // degrees per second, local X/Y/Z
     std::vector<DestFX> dfx;

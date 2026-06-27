@@ -51,6 +51,34 @@ static bool ypabact_ShouldApplyProjectileSpin(NC_STACK_ypabact *bact, NC_STACK_b
            bact->_projectile_spin_speed.z != 0.0;
 }
 
+static bool ypabact_ShouldApplyVisualRotation(NC_STACK_ypabact *bact, NC_STACK_base *base)
+{
+    if ( bact->_visual_rotation.x == 0.0 &&
+         bact->_visual_rotation.y == 0.0 &&
+         bact->_visual_rotation.z == 0.0 )
+        return false;
+
+    if ( bact->_bact_type == BACT_TYPES_MISSLE )
+        return base == bact->_vp_normal || base == bact->_vp_fire || base == bact->_vp_wait;
+
+    return base == bact->_vp_normal || base == bact->_vp_fire || base == bact->_vp_wait || base == bact->_vp_genesis;
+}
+
+static mat3x3 ypabact_BuildVisualRotationMatrix(const vec3d &degrees)
+{
+    vec3d angle = degrees * C_PI_180;
+    mat3x3 rot = mat3x3::Ident();
+
+    if ( angle.x != 0.0 )
+        rot *= mat3x3::RotateX(angle.x);
+    if ( angle.y != 0.0 )
+        rot *= mat3x3::RotateY(angle.y);
+    if ( angle.z != 0.0 )
+        rot *= mat3x3::RotateZ(angle.z);
+
+    return rot;
+}
+
 static mat3x3 ypabact_BuildProjectileSpinMatrix(const NC_STACK_ypabact *bact)
 {
     vec3d angle = bact->_projectile_spin_speed * ((float)bact->_clock * 0.001f * C_PI_180);
@@ -1416,6 +1444,7 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _visual_scale = 1.0;
     _visual_scale_vec = vec3d(1.0, 1.0, 1.0);
     _visual_tint = World::TVisualTint();
+    _visual_rotation = vec3d(0.0, 0.0, 0.0);
     _projectile_spin = 0;
     _projectile_spin_speed = vec3d(0.0, 0.0, 0.0);
     _decoration_fx = World::TDecorationFXConfig();
@@ -2953,6 +2982,9 @@ void NC_STACK_ypabact::Render(baseRender_msg *arg)
                 _current_vp->Bas->TForm().SclRot = _tForm.SclRot;
 
                 bool scaled = shouldApplyVisualScale(_current_vp->Bas);
+                if ( ypabact_ShouldApplyVisualRotation(this, _current_vp->Bas) )
+                    _current_vp->Bas->TForm().SclRot *= ypabact_BuildVisualRotationMatrix(_visual_rotation);
+
                 if ( ypabact_ShouldApplyProjectileSpin(this, _current_vp->Bas) )
                     _current_vp->Bas->TForm().SclRot *= ypabact_BuildProjectileSpinMatrix(this);
 
