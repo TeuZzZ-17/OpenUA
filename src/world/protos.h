@@ -219,6 +219,7 @@ struct TWeaponDebuffConfig
 struct TWeaponClusterConfig
 {
     bool enable = false;
+    bool mayhem = false;
     int count = 0;
     int16_t weapon_id = 0;
     int trigger_time = 0;
@@ -235,6 +236,24 @@ struct TWeaponChainConfig
     float radius = 0.0;
     float damage_mult = 1.0;
     int jump_delay = 0;
+};
+
+struct TImpactScarColor
+{
+    uint8_t r = 20;
+    uint8_t g = 18;
+    uint8_t b = 14;
+    uint8_t a = 160;
+};
+
+struct TWeaponImpactScarConfig
+{
+    float radius = 0.0;
+    int duration = 10000;
+    int fade_time = 2000;
+    float edge_fade = 0.75;
+    TImpactScarColor color;
+    bool terrain = false;
 };
 
 struct TRoboGun
@@ -609,6 +628,7 @@ struct TWeapProto
     TWeaponDebuffConfig debuff;
     TWeaponClusterConfig cluster;
     TWeaponChainConfig chain;
+    TWeaponImpactScarConfig impact_scar;
     TDecorationFXConfig decoration_fx;
 //    int field_870 = 0;
 //    int field_874 = 0;

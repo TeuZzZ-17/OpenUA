@@ -137,6 +137,10 @@ size_t NC_STACK_ypamissile::Init(IDVList &stak)
     _mislAttachTargetGid = 0;
     _mislAttachOffset = vec3d(0.0, 0.0, 0.0);
     _mislLastAttachedPosition = vec3d(0.0, 0.0, 0.0);
+    _mislImpactScarPending = false;
+    _mislImpactScarPos = vec3d(0.0, 0.0, 0.0);
+    _mislImpactScarNormal = vec3d(0.0, -1.0, 0.0);
+    _mislImpactScarSpawned = false;
     _mislClusterSoundCarrier.Clear();
 
     for( auto& it : stak )
@@ -380,7 +384,7 @@ bool NC_STACK_ypamissile::TryClusterSplit()
         vec3d childDir = ypamissile_ApplyDirectionalSpread(_rotation, baseDir, cluster.spread_x, cluster.spread_y);
 
         child->SetLauncherBact(_mislEmitter);
-        child->SetClusterSpawnedChild(true);
+        child->SetClusterSpawnedChild(!cluster.mayhem);
         child->SetStartHeight(arg147.pos.y);
         child->_owner = _owner;
         child->_host_station = _host_station;
@@ -1156,6 +1160,11 @@ const char *NC_STACK_ypamissile::GetAreaPushSkipReason(NC_STACK_ypabact *bct, bo
     if ( bct->_bact_type == BACT_TYPES_ROBO )
         return "robo";
 
+    // OpenUA custom: all flak/turret actors use model = gun / BACT_TYPES_GUN.
+    // They are static defenses and should never be knocked away by weapon push.
+    if ( bct->_bact_type == BACT_TYPES_GUN )
+        return "gun";
+
     // Final death-FX wreck: do not disturb (same guard as legacy Impact()).
     if ( bct->_status_flg & BACT_STFLAG_DEATH2 )
         return "death2";
@@ -1636,7 +1645,110 @@ void NC_STACK_ypamissile::ApplyAttachedDirectHitDamage()
     NC_STACK_ypabact *target = FindAttachedTarget();
 
     if ( target )
+    {
         ApplyDirectHitToBact(target);
+    }
+}
+
+void NC_STACK_ypamissile::RememberImpactScar(const vec3d &pos, const vec3d &normal)
+{
+    _mislImpactScarPending = false;
+
+    if ( _mislImpactScarSpawned || !_world || _vehicleID < 0 )
+        return;
+
+    std::vector<World::TWeapProto> &weapons = _world->GetWeaponsProtos();
+    if ( (size_t)_vehicleID >= weapons.size() )
+        return;
+
+    const World::TWeaponImpactScarConfig &scar = weapons.at(_vehicleID).impact_scar;
+    if ( scar.radius <= 0.0 || !scar.terrain )
+        return;
+
+    _mislImpactScarPending = true;
+    _mislImpactScarPos = pos;
+    _mislImpactScarNormal = normal;
+    if ( _mislImpactScarNormal.normalise() <= 0.001 )
+        _mislImpactScarNormal = vec3d(0.0, -1.0, 0.0);
+}
+
+bool NC_STACK_ypamissile::SpawnPendingWorldImpactScar()
+{
+    if ( !_mislImpactScarPending || _mislImpactScarSpawned || !_world || _vehicleID < 0 )
+        return false;
+
+    std::vector<World::TWeapProto> &weapons = _world->GetWeaponsProtos();
+    if ( (size_t)_vehicleID < weapons.size() )
+    {
+        _world->AddImpactScar(weapons.at(_vehicleID).impact_scar,
+                              _mislImpactScarPos,
+                              _mislImpactScarNormal);
+        _mislImpactScarSpawned = true;
+    }
+
+    _mislImpactScarPending = false;
+    return _mislImpactScarSpawned;
+}
+
+bool NC_STACK_ypamissile::SpawnImpactScarNearWorldSurface(const vec3d &pos, float searchDistance)
+{
+    if ( _mislImpactScarSpawned || !_world || _vehicleID < 0 || searchDistance <= 0.0 )
+        return false;
+
+    std::vector<World::TWeapProto> &weapons = _world->GetWeaponsProtos();
+    if ( (size_t)_vehicleID >= weapons.size() )
+        return false;
+
+    const World::TWeaponImpactScarConfig &scar = weapons.at(_vehicleID).impact_scar;
+    if ( scar.radius <= 0.0 || scar.duration <= 0 || !scar.terrain )
+        return false;
+
+    ypaworld_arg136 best;
+    bool found = false;
+    float bestDist = 0.0;
+
+    auto testRay = [&](const vec3d &start, const vec3d &vect)
+    {
+        ypaworld_arg136 ray;
+        ray.stPos = start;
+        ray.vect = vect;
+        ray.flags = 0;
+        _world->ypaworld_func136(&ray);
+
+        if ( !ray.isect )
+            return;
+
+        if ( !_world->IsImpactScarTerrainHit(ray) )
+            return;
+
+        float dist = (ray.isectPos - pos).length();
+        if ( !found || dist < bestDist )
+        {
+            best = ray;
+            bestDist = dist;
+            found = true;
+        }
+    };
+
+    vec3d up(0.0, searchDistance, 0.0);
+    testRay(pos - up * 0.5, up);
+    testRay(pos + up * 0.5, -up);
+
+    vec3d dir = _fly_dir;
+    if ( dir.normalise() > 0.001 )
+    {
+        vec3d ray = dir * searchDistance;
+        testRay(pos - ray * 0.5, ray);
+        testRay(pos + ray * 0.5, -ray);
+    }
+
+    if ( !found )
+        return false;
+
+    vec3d normal = best.skel->polygons[best.polyID].Normal();
+    _world->AddImpactScar(scar, best.isectPos, normal);
+    _mislImpactScarSpawned = true;
+    return true;
 }
 
 vec3d NC_STACK_ypamissile::CalcForceVector()
@@ -1777,6 +1889,8 @@ void NC_STACK_ypamissile::AI_layer3(update_msg *arg)
                 _mislAttachTargetGid = 0;
             }
 
+            SpawnPendingWorldImpactScar();
+
             Impact();
 
             _status = BACT_STATUS_DEAD;
@@ -1885,7 +1999,8 @@ void NC_STACK_ypamissile::AI_layer3(update_msg *arg)
 
             if ( arg136.isect )
             {
-                AlignMissileByNormal( arg136.skel->polygons[ arg136.polyID ].Normal() );
+                vec3d impactNormal = arg136.skel->polygons[ arg136.polyID ].Normal();
+                AlignMissileByNormal( impactNormal );
 
                 _position = arg136.isectPos;
 
@@ -1893,6 +2008,11 @@ void NC_STACK_ypamissile::AI_layer3(update_msg *arg)
 
                 _mislType = MISL_INTERNAL;
                 _mislFlags |= FLAG_MISL_COUNTDELAY;
+
+                // OpenUA custom: impact scars are visual terrain-impact decals.
+                // Building scars were removed; the world guard rejects roofs/buildings.
+                if ( _world->IsImpactScarTerrainHit(arg136) )
+                    RememberImpactScar(_position, -impactNormal);
 
                 if ( !_mislDelayTime )
                 {
@@ -1907,6 +2027,8 @@ void NC_STACK_ypamissile::AI_layer3(update_msg *arg)
                     }
 
                     Impact();
+
+                    SpawnPendingWorldImpactScar();
 
                     _status = BACT_STATUS_DEAD;
 
@@ -1992,7 +2114,7 @@ void NC_STACK_ypamissile::User_layer(update_msg *arg)
 }
 
 void NC_STACK_ypamissile::SetupMortarShell(const vec3d &startPos, const vec3d &targetPos,
-                                           int flightTime, float arcHeight, const vec3d &driftVec)
+                                           int flightTime, float arcHeight, const vec3d &driftVec, bool impactOnSurface)
 {
     _isMortarProjectile = true;
     _mortarStartPos     = startPos;
@@ -2001,6 +2123,7 @@ void NC_STACK_ypamissile::SetupMortarShell(const vec3d &startPos, const vec3d &t
     _mortarArcHeight    = arcHeight;
     _mortarFlightTime   = flightTime > 0 ? flightTime : 2500;
     _mortarElapsed      = 0;
+    _mortarImpactOnSurface = impactOnSurface;
 
     _position = startPos;
     _old_pos  = startPos;
@@ -2099,6 +2222,9 @@ void NC_STACK_ypamissile::UpdateMortarBallistic(update_msg *arg)
         RememberDirectHitSectorAt(directDamagePos);
     }
 
+    if ( _mortarImpactOnSurface )
+        SpawnImpactScarNearWorldSurface(_position, 1800.0);
+
     Impact();
 
     _status = BACT_STATUS_DEAD;
@@ -2195,6 +2321,10 @@ void NC_STACK_ypamissile::Renew()
     _mislAttachTargetGid = 0;
     _mislAttachOffset = vec3d(0.0, 0.0, 0.0);
     _mislLastAttachedPosition = vec3d(0.0, 0.0, 0.0);
+    _mislImpactScarPending = false;
+    _mislImpactScarPos = vec3d(0.0, 0.0, 0.0);
+    _mislImpactScarNormal = vec3d(0.0, -1.0, 0.0);
+    _mislImpactScarSpawned = false;
     SFXEngine::SFXe.StopCarrier(&_mislClusterSoundCarrier);
     _mislClusterSoundCarrier.Clear();
 
@@ -2206,6 +2336,7 @@ void NC_STACK_ypamissile::Renew()
     _mortarElapsed    = 0;
     _mortarFlightTime = 0;
     _mortarArcHeight  = 0.0;
+    _mortarImpactOnSurface = false;
 
     setBACT_yourLastSeconds(3000);
 }
@@ -2254,6 +2385,8 @@ size_t NC_STACK_ypamissile::SetStateInternal(setState_msg *arg)
     if ( arg->setFlags == BACT_STFLAG_DEATH2 )
     {
         _status = BACT_STATUS_DEAD;
+
+        SpawnPendingWorldImpactScar();
 
         SetVP(_vp_megadeth);
 
@@ -2480,6 +2613,11 @@ NC_STACK_ypamissile::NC_STACK_ypamissile()
     _mislRadiusTank = 0.;
     _mislRadiusFlyer = 0.;
     _mislRadiusRobo = 0.;
+    _mislImpactScarPending = false;
+    _mislImpactScarPos = vec3d(0.0, 0.0, 0.0);
+    _mislImpactScarNormal = vec3d(0.0, -1.0, 0.0);
+    _mislImpactScarSpawned = false;
+    _mortarImpactOnSurface = false;
 }
 
 

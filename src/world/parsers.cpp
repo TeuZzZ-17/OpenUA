@@ -893,6 +893,43 @@ static bool ParseWireframeTintParam(ScriptParser::Parser &parser,
     return ParseTintParam(parser, "wireframe_tint", p1, p2, tint);
 }
 
+static uint8_t ParseByteComponent(ScriptParser::Parser &parser, const std::string &text)
+{
+    long v = parser.stol(text, 0, 10);
+    if ( v < 0 )
+        v = 0;
+    if ( v > 255 )
+        v = 255;
+    return (uint8_t)v;
+}
+
+static bool ParseImpactScarColor(ScriptParser::Parser &parser,
+                                 const std::string &p2,
+                                 TImpactScarColor &color)
+{
+    Stok stok(p2, "_ \t");
+    std::string part;
+
+    if ( !stok.GetNext(&part) )
+        return false;
+    color.r = ParseByteComponent(parser, part);
+
+    if ( !stok.GetNext(&part) )
+        return false;
+    color.g = ParseByteComponent(parser, part);
+
+    if ( !stok.GetNext(&part) )
+        return false;
+    color.b = ParseByteComponent(parser, part);
+
+    if ( stok.GetNext(&part) )
+        color.a = ParseByteComponent(parser, part);
+    else
+        color.a = 160;
+
+    return true;
+}
+
 static World::TChainFXConfig::Trigger ParseChainFXTrigger(const std::string &name, bool weaponPrototype)
 {
     if ( weaponPrototype )
@@ -2525,6 +2562,7 @@ bool WeaponProtoParser::IsScope(ScriptParser::Parser &parser, const std::string 
         _wpn->cluster = TWeaponClusterConfig();
         _wpn->cluster.snd.volume = 120;
         _wpn->chain = TWeaponChainConfig();
+        _wpn->impact_scar = TWeaponImpactScarConfig();
 
         for (TVhclSound &fx : _wpn->sndFXes)
         {
@@ -2826,6 +2864,10 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     {
         _wpn->cluster.enable = parser.stol(p2, NULL, 0) != 0;
     }
+    else if ( !StriCmp(p1, "cluster_mayhem") )
+    {
+        _wpn->cluster.mayhem = parser.stol(p2, NULL, 0) != 0;
+    }
     else if ( !StriCmp(p1, "cluster_count") )
     {
         int count = parser.stol(p2, NULL, 0);
@@ -2891,6 +2933,35 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     {
         int delay = parser.stol(p2, NULL, 0);
         _wpn->chain.jump_delay = delay > 0 ? delay : 0;
+    }
+    else if ( !StriCmp(p1, "impact_scar_radius") )
+    {
+        float radius = parser.stof(p2, 0);
+        _wpn->impact_scar.radius = radius > 0.0 ? radius : 0.0;
+    }
+    else if ( !StriCmp(p1, "impact_scar_duration") )
+    {
+        int duration = parser.stol(p2, NULL, 0);
+        _wpn->impact_scar.duration = duration > 0 ? duration : 10000;
+    }
+    else if ( !StriCmp(p1, "impact_scar_fade_time") )
+    {
+        int fadeTime = parser.stol(p2, NULL, 0);
+        _wpn->impact_scar.fade_time = fadeTime >= 0 ? fadeTime : 2000;
+    }
+    else if ( !StriCmp(p1, "impact_scar_edge_fade") )
+    {
+        float edgeFade = parser.stof(p2, 0);
+        _wpn->impact_scar.edge_fade = std::max(0.05f, std::min(edgeFade, 1.0f));
+    }
+    else if ( !StriCmp(p1, "impact_scar_color") )
+    {
+        if ( !ParseImpactScarColor(parser, p2, _wpn->impact_scar.color) )
+            return ScriptParser::RESULT_BAD_DATA;
+    }
+    else if ( !StriCmp(p1, "impact_scar_terrain") )
+    {
+        _wpn->impact_scar.terrain = parser.stol(p2, NULL, 0) != 0;
     }
     else if ( !StriCmp(p1, "life_time") )
     {

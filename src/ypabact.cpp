@@ -2835,6 +2835,12 @@ static bool ypabact_SnapAoePushGroundUnit(NC_STACK_ypabact *unit)
 
 void NC_STACK_ypabact::AddAoePush(const vec3d &dir, float distance)
 {
+    // OpenUA custom: flak/turret actors are static defenses. Keep every
+    // model = gun unit immune to the smooth residual knockback system too,
+    // even if a future caller bypasses the missile push filter.
+    if ( _bact_type == BACT_TYPES_GUN )
+        return;
+
     if ( distance <= 0.0f )
         return;
 
@@ -7228,7 +7234,7 @@ static bool ypabact_FireMortarShell(NC_STACK_ypabact *unit, int weaponId, const 
     // Use the same guarded flight time the shell clamps to internally, so the
     // trajectory and the lifetime/marker below agree even if mortar_flight_time <= 0.
     int flight = wproto.mortar_flight_time > 0 ? wproto.mortar_flight_time : 2500;
-    shell->SetupMortarShell(launchPos, landing, flight, wproto.mortar_arc_height, driftVec);
+    shell->SetupMortarShell(launchPos, landing, flight, wproto.mortar_arc_height, driftVec, !wproto.mortar_airburst);
 
     shell->_kidRef.Detach();
     shell->_parent = NULL;
@@ -11995,7 +12001,14 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
                         v69.unsetFlags = 0;
                         gunFireBact->SetStateInternal(&v69);
 
-                        gunFireBact->AlignMissileByNormal( v59.skel->polygons[ v59.polyID ].Normal() );
+                        if ( v59.skel && v59.polyID >= 0 && (size_t)v59.polyID < v59.skel->polygons.size() )
+                        {
+                            vec3d impactNormal = v59.skel->polygons[ v59.polyID ].Normal();
+                            gunFireBact->AlignMissileByNormal( impactNormal );
+
+                            if ( _world->IsImpactScarTerrainHit(v59) )
+                                _world->AddImpactScar(mgunProto.impact_scar, v59.isectPos, -impactNormal);
+                        }
                     }
                 }
             }

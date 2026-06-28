@@ -1868,6 +1868,8 @@ struct ypaworld_arg136
     int polyID;
     UAskeleton::Data *skel;
     int flags;
+    Common::Point hitCell;
+    int hitCollisionType;
 
     ypaworld_arg136()
     {
@@ -1876,6 +1878,8 @@ struct ypaworld_arg136
         polyID = 0;
         skel = NULL;
         flags = 0;
+        hitCell = Common::Point(0, 0);
+        hitCollisionType = 0;
     }
 };
 
@@ -2503,6 +2507,10 @@ public:
     bool HasTransientVP(int32_t id) const;
     void RemoveTransientVP(int32_t id);
     void UpdateDecorationFX(const World::TDecorationFXConfig &config, int32_t &nextTime, const vec3d &ownerPos, int32_t *persistentId = NULL);
+    bool IsImpactScarTerrainHit(const ypaworld_arg136 &hit);
+    void AddImpactScar(const World::TWeaponImpactScarConfig &config, const vec3d &pos, const vec3d &normal);
+    void RenderImpactScars(baseRender_msg *arg);
+    void ClearImpactScars();
     
     void SetCmdrIdToSelect(int32_t id) { _cmdrIdToSelect = id; };
         
@@ -2567,6 +2575,18 @@ public:
         {};
     };
 
+    struct TImpactScar
+    {
+        vec3d pos;
+        vec3d normal;
+        float radius = 0.0;
+        int32_t startTime = 0;
+        int32_t duration = 0;
+        int32_t fadeTime = 0;
+        uint32_t seed = 0;
+        GFX::TMesh mesh;
+    };
+
     
     
     UserData *_GameShell = NULL;
@@ -2601,6 +2621,7 @@ public:
     std::list<NC_STACK_base *> _overrideModels;
     std::list<TTransientVP> _transientVPs;
     int32_t _nextTransientVPId = 1;
+    std::list<TImpactScar> _impactScars;
     
     std::map<int32_t, TConstructInfo> _inBuildProcess; // Buildings in creation process
     std::array<int16_t, 256> _buildHealthModelId = Common::ArrayInit<int16_t, 256>(0);

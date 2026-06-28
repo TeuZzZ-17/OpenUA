@@ -51,7 +51,7 @@ public:
     // Once armed it follows a parametric arc (start->target) and force-impacts when
     // its flight timer expires, reusing the normal Impact()/AoE/FX path.
     void SetupMortarShell(const vec3d &startPos, const vec3d &targetPos,
-                          int flightTime, float arcHeight, const vec3d &driftVec);
+                          int flightTime, float arcHeight, const vec3d &driftVec, bool impactOnSurface);
     virtual void DetonateAtContact(NC_STACK_ypabact *directHit);
     virtual void DetonateSeekAndExplodePayload(NC_STACK_ypabact *directHit);
     virtual void AlignMissile(float dtime = 0.0);
@@ -164,6 +164,9 @@ protected:
     void RememberChainHit(NC_STACK_ypabact *target);
     bool IsChainHit(NC_STACK_ypabact *target) const;
     void UpdateMortarBallistic(update_msg *arg); // OpenUA custom: ballistic shell flight + timed impact
+    void RememberImpactScar(const vec3d &pos, const vec3d &normal);
+    bool SpawnPendingWorldImpactScar();
+    bool SpawnImpactScarNearWorldSurface(const vec3d &pos, float searchDistance);
 
     struct TBuildingHitRef
     {
@@ -215,6 +218,10 @@ protected:
     int32_t _mislAttachTargetGid = 0;
     vec3d _mislAttachOffset;
     vec3d _mislLastAttachedPosition;
+    bool _mislImpactScarPending  = false;
+    vec3d _mislImpactScarPos;
+    vec3d _mislImpactScarNormal;
+    bool _mislImpactScarSpawned  = false;
     TSndCarrier _mislClusterSoundCarrier;
     std::vector<int32_t> _mislChainHitGids;
     std::vector<NC_STACK_ypabact *> _mislDirectHitUnits;
@@ -234,6 +241,7 @@ protected:
     int   _mortarElapsed    = 0;
     int   _mortarFlightTime = 0;
     float _mortarArcHeight  = 0.0;
+    bool  _mortarImpactOnSurface = false;
 };
 
 #endif // YMISSILE_H_INCLUDED

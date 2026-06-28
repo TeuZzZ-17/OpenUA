@@ -364,6 +364,7 @@ size_t NC_STACK_ypaworld::Init(IDVList &stak)
     _deadCacheList.clear();
     _transientVPs.clear();
     _nextTransientVPId = 1;
+    ClearImpactScars();
 
 
     _fxLimit = 16;
@@ -2356,6 +2357,7 @@ void NC_STACK_ypaworld::DeleteLevel()
 
     _transientVPs.clear();
     _nextTransientVPId = 1;
+    ClearImpactScars();
 
     ProtosFreeSounds();
 
