@@ -369,9 +369,9 @@ size_t NC_STACK_ypaworld::Init(IDVList &stak)
     _fxLimit = 16;
     _renderSectors = stak.Get<int32_t>(YW_ATT_VISSECTORS, 9);
     _normalVizLimit = stak.Get<int32_t>(YW_ATT_NORMVISLIMIT, 3100);
-    _normalFadeLength = stak.Get<int32_t>(YW_ATT_FADELENGTH, 2600);
+    _normalFadeLength = stak.Get<int32_t>(YW_ATT_FADELENGTH, 2400);
     _skyVizLimit = stak.Get<int32_t>(YW_ATT_SKYVISLIMIT, 4200);
-    _skyFadeLength = stak.Get<int32_t>(YW_ATT_SKYFADELENGTH, 2800);
+    _skyFadeLength = stak.Get<int32_t>(YW_ATT_SKYFADELENGTH, 2600);
     _mapSize.x = stak.Get<int32_t>(YW_ATT_MAPMAX_X, 64);
     _mapSize.y = stak.Get<int32_t>(YW_ATT_MAPMAX_Y, 64);
     _skyHeight = stak.Get<int32_t>(YW_ATT_SKYHEIGHT, -550);
@@ -1821,7 +1821,6 @@ NC_STACK_ypamissile * NC_STACK_ypaworld::ypaworld_func147(ypaworld_arg146 *arg)
                                                     wproto.visual_scale_axis);
     wobj->_visual_tint = wproto.visual_tint;
     wobj->_visual_rotation = wproto.visual_rotation;
-    wobj->_projectile_spin = wproto.projectile_spin;
     wobj->_projectile_spin_speed = wproto.projectile_spin_speed;
 
     wobj->_destroyFX = wproto.dfx;

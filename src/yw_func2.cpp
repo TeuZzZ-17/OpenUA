@@ -1044,7 +1044,7 @@ void NC_STACK_ypaworld::SetFarView(bool farvw)
     {
         setYW_visSectors(9);
         setYW_normVisLimit(3100);
-        setYW_fadeLength(2600);
+        setYW_fadeLength(2400);
     }
     else
     {

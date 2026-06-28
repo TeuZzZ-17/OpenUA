@@ -82,27 +82,28 @@ bool TRenderNode::CompareDistance(TRenderNode* a, TRenderNode* b)
 
 static float HorizonAlphaFogStart(float fogStart, float fogLength)
 {
-    // OpenUA: aggressive classic horizon dissolve.
-    // Keep draw distance unchanged, but start the final dark fade much earlier.
-    return fogStart + fogLength * 0.25f;
+    // OpenUA: classic horizon dissolve, but not a near fog wall.
+    // Start the transparent fade a little farther from the player than the first pass.
+    return fogStart + fogLength * 0.33f;
 }
 
 static float HorizonAlphaFogLength(float fogLength)
 {
-    return fogLength * 0.75f;
+    // Slightly longer alpha ramp = softer/less pressuring fog at the horizon edge.
+    return fogLength * 0.82f;
 }
 
 static float HorizonDarkFogStart(float fogStart, float fogLength)
 {
-    // The dark matte must live inside the same dissolve band, not in front of it.
+    // Keep the black matte in the far horizon band, aligned with the softer alpha fade.
     return HorizonAlphaFogStart(fogStart, fogLength);
 }
 
 static float HorizonDarkFogLength(float fogLength)
 {
-    // Reach full black before the alpha fade disappears completely, otherwise
-    // the world fades to the bright sky and the classic UA horizon darkness vanishes.
-    return HorizonAlphaFogLength(fogLength) * 0.45f;
+    // Stronger black background: the far band reaches black faster, while the
+    // alpha fog itself starts farther away and stays less invasive near the player.
+    return HorizonAlphaFogLength(fogLength) * 0.30f;
 }
 
 bool TRenderParams::operator==(const TRenderParams &b)

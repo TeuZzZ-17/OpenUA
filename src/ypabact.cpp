@@ -40,7 +40,7 @@ static bool ypabact_IsDamagedFXSystemDisabled(const NC_STACK_ypabact *bact)
 
 static bool ypabact_ShouldApplyProjectileSpin(NC_STACK_ypabact *bact, NC_STACK_base *base)
 {
-    if ( !bact->_projectile_spin || bact->_bact_type != BACT_TYPES_MISSLE )
+    if ( bact->_bact_type != BACT_TYPES_MISSLE )
         return false;
 
     if ( base != bact->_vp_normal && base != bact->_vp_fire && base != bact->_vp_wait )
@@ -1445,7 +1445,6 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _visual_scale_vec = vec3d(1.0, 1.0, 1.0);
     _visual_tint = World::TVisualTint();
     _visual_rotation = vec3d(0.0, 0.0, 0.0);
-    _projectile_spin = 0;
     _projectile_spin_speed = vec3d(0.0, 0.0, 0.0);
     _decoration_fx = World::TDecorationFXConfig();
     _decoration_fx_next_time = 0;
@@ -11667,7 +11666,7 @@ static vec3d ypabact_ApplyDirectionalSpread(const mat3x3 &rotation, const vec3d 
 static float ypabact_GetMgunOffset(const NC_STACK_ypabact *bact, int shotId, int shotCount)
 {
     if ( shotCount <= 1 )
-        return 0.0;
+        return bact->_mgun_fire_x;
 
     // Matches primary num_weapons/fire_x distribution: -abs(x) ... +abs(x).
     float sideSpan = fabs(bact->_mgun_fire_x);
