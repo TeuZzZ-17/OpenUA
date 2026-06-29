@@ -2362,8 +2362,8 @@ size_t NC_STACK_ypamissile::SetStateInternal(setState_msg *arg)
 
         SFXEngine::SFXe.startSound(&_soundcarrier, 2);
 
-        if ( !StartChainFXByTrigger(World::TChainFXConfig::TRIGGER_DETONATE) )
-            StartDestFXByType(World::DestFX::FX_DEATH);
+        StartChainFXByTrigger(World::TChainFXConfig::TRIGGER_DETONATE);
+        StartDestFXByType(World::DestFX::FX_DEATH);
 
         _fly_dir_length = 0;
     }
@@ -2392,8 +2392,8 @@ size_t NC_STACK_ypamissile::SetStateInternal(setState_msg *arg)
 
         SFXEngine::SFXe.startSound(&_soundcarrier, 2);
 
-        if ( !StartChainFXByTrigger(World::TChainFXConfig::TRIGGER_IMPACT_WORLD) )
-            StartDestFXByType(World::DestFX::FX_MEGADETH);
+        StartChainFXByTrigger(World::TChainFXConfig::TRIGGER_IMPACT_WORLD);
+        StartDestFXByType(World::DestFX::FX_MEGADETH);
 
         _fly_dir_length = 0;
     }
@@ -2528,8 +2528,8 @@ void NC_STACK_ypamissile::DetonateSeekAndExplodePayload(NC_STACK_ypabact *direct
 
     SetState(&arg78);
 
-    if ( !StartChainFXByTrigger(World::TChainFXConfig::TRIGGER_IMPACT_WORLD) )
-        StartDestFXByType(World::DestFX::FX_MEGADETH);
+    StartChainFXByTrigger(World::TChainFXConfig::TRIGGER_IMPACT_WORLD);
+    StartDestFXByType(World::DestFX::FX_MEGADETH);
 }
 
 void NC_STACK_ypamissile::AlignMissile(float dtime)

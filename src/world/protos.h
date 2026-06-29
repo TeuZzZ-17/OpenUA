@@ -85,6 +85,12 @@ struct DestFX
 
 struct TChainFXConfig
 {
+    enum Mode
+    {
+        MODE_VISUAL = 0,
+        MODE_PHYSICAL
+    };
+
     enum Trigger
     {
         TRIGGER_NONE = 0,
@@ -94,12 +100,15 @@ struct TChainFXConfig
         TRIGGER_IMPACT_WORLD
     };
 
+    uint8_t mode = MODE_VISUAL;
     uint8_t trigger = TRIGGER_NONE;
     vec3d offset;
     float start_size = 1.0;
     float end_size = 0.0;
     int duration = 0;
     std::vector<int16_t> vp_models;
+    int physical_vehicle = 0;
+    bool inherit_velocity = false;
 };
 
 struct TRoboColl

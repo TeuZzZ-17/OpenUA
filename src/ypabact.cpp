@@ -13103,7 +13103,19 @@ bool NC_STACK_ypabact::StartChainFXByTrigger(uint8_t trigger)
         if ( fx.trigger != trigger )
             continue;
 
-        _world->SpawnChainFX(fx, _position, _rotation);
+        if ( fx.mode == World::TChainFXConfig::MODE_VISUAL )
+        {
+            _world->SpawnChainFX(fx, _position, _rotation);
+        }
+        else if ( fx.mode == World::TChainFXConfig::MODE_PHYSICAL )
+        {
+            World::DestFX tempFx;
+            tempFx.ModelID = fx.physical_vehicle;
+            tempFx.Pos = fx.offset;
+            tempFx.Accel = fx.inherit_velocity;
+            StartDestFX(tempFx);
+        }
+
         spawned = true;
     }
 
@@ -13483,8 +13495,8 @@ size_t NC_STACK_ypabact::SetStateInternal(setState_msg *arg)
 
         _soundFlags |= 0x80;
 
-        if ( !StartChainFXByTrigger(World::TChainFXConfig::TRIGGER_DESTROYED) )
-            StartDestFXByType(World::DestFX::FX_DEATH);
+        StartChainFXByTrigger(World::TChainFXConfig::TRIGGER_DESTROYED);
+        StartDestFXByType(World::DestFX::FX_DEATH);
 
         result = 1;
     }
@@ -13738,8 +13750,8 @@ size_t NC_STACK_ypabact::SetStateInternal(setState_msg *arg)
 
             SFXEngine::SFXe.startSound(&_soundcarrier, 4);
 
-            if ( !StartChainFXByTrigger(World::TChainFXConfig::TRIGGER_CRASH) )
-                StartDestFXByType(World::DestFX::FX_MEGADETH);
+            StartChainFXByTrigger(World::TChainFXConfig::TRIGGER_CRASH);
+            StartDestFXByType(World::DestFX::FX_MEGADETH);
 
             _fly_dir_length = 0;
 

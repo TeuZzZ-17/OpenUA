@@ -952,19 +952,34 @@ static World::TChainFXConfig::Trigger ParseChainFXTrigger(const std::string &nam
     return World::TChainFXConfig::TRIGGER_NONE;
 }
 
+static World::TChainFXConfig::Mode ParseChainFXMode(const std::string &name)
+{
+    if ( !StriCmp(name, "visual") )
+        return World::TChainFXConfig::MODE_VISUAL;
+
+    if ( !StriCmp(name, "physical") )
+        return World::TChainFXConfig::MODE_PHYSICAL;
+
+    return World::TChainFXConfig::MODE_VISUAL;
+}
+
 static int ParseChainFXBlock(ScriptParser::Parser &parser,
                              std::vector<World::TChainFXConfig> *out,
                              bool weaponPrototype)
 {
+    World::TChainFXConfig::Mode mode = World::TChainFXConfig::MODE_VISUAL;
     float startSize = 1.0;
     float endSize = 0.0;
     bool hasEndSize = false;
     vec3d offset;
     int duration = 0;
     std::vector<int16_t> vpModels;
+    int physicalVehicle = 0;
+    bool inheritVelocity = false;
     World::TChainFXConfig::Trigger trigger = World::TChainFXConfig::TRIGGER_NONE;
     bool hasTrigger = false;
     bool badTrigger = false;
+    bool badMode = false;
 
     std::string p1;
     std::string p2;
@@ -988,7 +1003,7 @@ static int ParseChainFXBlock(ScriptParser::Parser &parser,
 
         if ( !StriCmp(p1, "end") )
         {
-            if ( badTrigger )
+            if ( badTrigger || badMode )
                 return ScriptParser::RESULT_OK;
 
             if ( !hasTrigger )
@@ -1001,22 +1016,56 @@ static int ParseChainFXBlock(ScriptParser::Parser &parser,
             if ( !hasEndSize )
                 endSize = 0.0;
 
-            if ( duration > 0 && !vpModels.empty() )
+            if ( mode == World::TChainFXConfig::MODE_VISUAL )
             {
-                World::TChainFXConfig chain;
-                chain.trigger = trigger;
-                chain.offset = offset;
-                chain.start_size = startSize;
-                chain.end_size = endSize;
-                chain.duration = duration;
-                chain.vp_models = vpModels;
-                out->push_back(chain);
+                if ( duration > 0 && !vpModels.empty() )
+                {
+                    World::TChainFXConfig chain;
+                    chain.mode = mode;
+                    chain.trigger = trigger;
+                    chain.offset = offset;
+                    chain.start_size = startSize;
+                    chain.end_size = endSize;
+                    chain.duration = duration;
+                    chain.vp_models = vpModels;
+                    out->push_back(chain);
+                }
+            }
+            else if ( mode == World::TChainFXConfig::MODE_PHYSICAL )
+            {
+                if ( physicalVehicle > 0 )
+                {
+                    World::TChainFXConfig chain;
+                    chain.mode = mode;
+                    chain.trigger = trigger;
+                    chain.offset = offset;
+                    chain.physical_vehicle = physicalVehicle;
+                    chain.inherit_velocity = inheritVelocity;
+                    out->push_back(chain);
+                }
+                else
+                {
+                    ypa_log_out("WARNING: begin_chain_fx physical mode without physical_vehicle ignored\n");
+                }
             }
 
             return ScriptParser::RESULT_OK;
         }
 
-        if ( !StriCmp(p1, "trigger") )
+        if ( badMode )
+            continue;
+
+        if ( !StriCmp(p1, "mode") )
+        {
+            if ( !StriCmp(p2, "visual") || !StriCmp(p2, "physical") )
+                mode = ParseChainFXMode(p2);
+            else
+            {
+                ypa_log_out("WARNING: Unknown begin_chain_fx mode '%s' ignored\n", p2.c_str());
+                badMode = true;
+            }
+        }
+        else if ( !StriCmp(p1, "trigger") )
         {
             trigger = ParseChainFXTrigger(p2, weaponPrototype);
             hasTrigger = true;
@@ -1043,6 +1092,10 @@ static int ParseChainFXBlock(ScriptParser::Parser &parser,
             offset.z = parser.stof(p2, 0);
         else if ( !StriCmp(p1, "vp_model") )
             vpModels.push_back(parser.stol(p2, NULL, 0));
+        else if ( !StriCmp(p1, "physical_vehicle") )
+            physicalVehicle = parser.stol(p2, NULL, 0);
+        else if ( !StriCmp(p1, "inherit_velocity") )
+            inheritVelocity = parser.stol(p2, NULL, 0) != 0;
         else
             return ScriptParser::RESULT_UNKNOWN;
     }
