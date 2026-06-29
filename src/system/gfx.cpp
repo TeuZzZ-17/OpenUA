@@ -1883,18 +1883,31 @@ void GFXEngine::EndFrame()
 {       
     if (_vhsFilterActive)
     {
+        if (_colorEffects > 1)
+        {
+            Glext::GLBindFramebuffer(GL_FRAMEBUFFER, 0);
+            DrawFBO();
+        }
+
         Gui::Root::Instance.Draw(Screen());
         DrawScreenSurface();
         Gui::Root::Instance.HwCompose();
 
+        if (_colorEffects == 1)
+        {
+            Glext::GLBindFramebuffer(GL_FRAMEBUFFER, 0);
+            DrawFBO();
+        }
+
         Common::Point scrSz = System::GetResolution();
         if (EnsureVhsFilterTexture(scrSz))
         {
-            Glext::GLBindFramebuffer(GL_FRAMEBUFFER, _vhsFbo);
+            Glext::GLBindFramebuffer(GL_FRAMEBUFFER, 0);
             glViewport(0, 0, scrSz.x, scrSz.y);
-            glClearColor(0, 0, 0, 0);
-            glClear(GL_COLOR_BUFFER_BIT);
-            DrawFBO();
+            glReadBuffer(GL_BACK);
+            glBindTexture(GL_TEXTURE_2D, _vhsCopyTex);
+            glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, scrSz.x, scrSz.y);
+            glBindTexture(GL_TEXTURE_2D, 0);
 
             Glext::GLBindFramebuffer(GL_FRAMEBUFFER, _vhsOutFbo);
             glViewport(0, 0, scrSz.x, scrSz.y);
@@ -1903,12 +1916,10 @@ void GFXEngine::EndFrame()
             DrawVhsEffect();
 
             Glext::GLBindFramebuffer(GL_FRAMEBUFFER, 0);
+            glViewport(0, 0, scrSz.x, scrSz.y);
+            glClearColor(0, 0, 0, 0);
+            glClear(GL_COLOR_BUFFER_BIT);
             DrawVhsFilter();
-        }
-        else
-        {
-            Glext::GLBindFramebuffer(GL_FRAMEBUFFER, 0);
-            DrawFBO();
         }
 
         System::Flip();
@@ -3596,7 +3607,7 @@ void GFXEngine::SetVhsFilterEnabled(bool enabled)
     }
 
     _vhsFilterActive = true;
-    ypa_log_out("VHS filter: ENABLED name=[%s] shader=[%s] strength=%.2f pass=after_visual_filter_before_ui\n",
+    ypa_log_out("VHS filter: ENABLED name=[%s] shader=[%s] strength=%.2f pass=final_frame_after_visual_filter\n",
                 System::IniConf::GfxVhsFilterName.Get<std::string>().c_str(),
                 _vhsFilterShaderPath.c_str(),
                 _vhsFilterStrength);
