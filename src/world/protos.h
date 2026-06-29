@@ -408,6 +408,7 @@ struct TVhclProto
     vec3d visual_rotation = vec3d(0.0, 0.0, 0.0); // OpenUA custom: visual-only local rotation, degrees
     TDamagedFXConfig damaged_fx;
     TDecorationFXConfig decoration_fx;
+    TWeaponImpactScarConfig impact_scar;
     std::string damaged_icon;
     std::string regen_icon;
     std::string drain_icon;

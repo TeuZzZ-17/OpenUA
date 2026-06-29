@@ -2508,7 +2508,8 @@ public:
     void RemoveTransientVP(int32_t id);
     void UpdateDecorationFX(const World::TDecorationFXConfig &config, int32_t &nextTime, const vec3d &ownerPos, int32_t *persistentId = NULL);
     bool IsImpactScarTerrainHit(const ypaworld_arg136 &hit);
-    void AddImpactScar(const World::TWeaponImpactScarConfig &config, const vec3d &pos, const vec3d &normal);
+    bool AddImpactScar(const World::TWeaponImpactScarConfig &config, const vec3d &pos, const vec3d &normal);
+    bool AddImpactScarNearTerrain(const World::TWeaponImpactScarConfig &config, const vec3d &pos, float searchDistance);
     void RenderImpactScars(baseRender_msg *arg);
     void ClearImpactScars();
     

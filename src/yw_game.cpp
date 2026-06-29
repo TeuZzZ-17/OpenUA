@@ -3302,29 +3302,29 @@ bool NC_STACK_ypaworld::IsImpactScarTerrainHit(const ypaworld_arg136 &hit)
     return true;
 }
 
-void NC_STACK_ypaworld::AddImpactScar(const World::TWeaponImpactScarConfig &config, const vec3d &pos, const vec3d &normal)
+bool NC_STACK_ypaworld::AddImpactScar(const World::TWeaponImpactScarConfig &config, const vec3d &pos, const vec3d &normal)
 {
     if ( config.radius <= 0.0 || config.duration <= 0 )
-        return;
+        return false;
 
     if ( !config.terrain )
-        return;
+        return false;
 
     yw_130arg sect;
     sect.pos_x = pos.x;
     sect.pos_z = pos.z;
     if ( !GetSectorInfo(&sect) || !sect.pcell )
-        return;
+        return false;
     if ( !sect.pcell->IsGamePlaySector() ||
          sect.pcell->SectorType == 1 ||
          sect.pcell->PurposeType != cellArea::PT_NONE )
-        return;
+        return false;
     if ( fabs(pos.y - sect.pcell->height) > 260.0f )
-        return;
+        return false;
 
     float scarRadius = config.radius;
     if ( scarRadius <= 0.0f )
-        return;
+        return false;
 
     static const size_t IMPACT_SCAR_MAX = 128;
     while ( _impactScars.size() >= IMPACT_SCAR_MAX )
@@ -3347,7 +3347,58 @@ void NC_STACK_ypaworld::AddImpactScar(const World::TWeaponImpactScarConfig &conf
 
     yw_BuildImpactScarMesh(this, &scar, config);
     if ( scar.mesh.Vertexes.empty() )
+    {
         _impactScars.pop_back();
+        return false;
+    }
+
+    return true;
+}
+
+bool NC_STACK_ypaworld::AddImpactScarNearTerrain(const World::TWeaponImpactScarConfig &config, const vec3d &pos, float searchDistance)
+{
+    if ( config.radius <= 0.0 || config.duration <= 0 || !config.terrain || searchDistance <= 0.0 )
+        return false;
+
+    ypaworld_arg136 best;
+    bool found = false;
+    float bestDist = 0.0;
+
+    auto testRay = [&](const vec3d &start, const vec3d &vect)
+    {
+        ypaworld_arg136 ray;
+        ray.stPos = start;
+        ray.vect = vect;
+        ray.flags = 0;
+        ypaworld_func136(&ray);
+
+        if ( !ray.isect || !IsImpactScarTerrainHit(ray) )
+            return;
+
+        float dist = (ray.isectPos - pos).length();
+        if ( dist > searchDistance )
+            return;
+
+        if ( !found || dist < bestDist )
+        {
+            best = ray;
+            bestDist = dist;
+            found = true;
+        }
+    };
+
+    vec3d up(0.0, searchDistance, 0.0);
+    testRay(pos - up, up * 2.0);
+    testRay(pos + up, -up * 2.0);
+
+    if ( !found )
+        return false;
+
+    vec3d normal(0.0, -1.0, 0.0);
+    if ( best.skel && best.polyID >= 0 && (size_t)best.polyID < best.skel->polygons.size() )
+        normal = best.skel->polygons[best.polyID].Normal();
+
+    return AddImpactScar(config, best.isectPos, normal);
 }
 
 void NC_STACK_ypaworld::ClearImpactScars()

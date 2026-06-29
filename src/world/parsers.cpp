@@ -1324,6 +1324,35 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     else if ( ParseDecorationFXParam(parser, p1, p2, _vhcl->decoration_fx) )
     {
     }
+    else if ( !StriCmp(p1, "impact_scar_radius") )
+    {
+        float radius = parser.stof(p2, 0);
+        _vhcl->impact_scar.radius = radius > 0.0 ? radius : 0.0;
+    }
+    else if ( !StriCmp(p1, "impact_scar_duration") )
+    {
+        int duration = parser.stol(p2, NULL, 0);
+        _vhcl->impact_scar.duration = duration > 0 ? duration : 10000;
+    }
+    else if ( !StriCmp(p1, "impact_scar_fade_time") )
+    {
+        int fadeTime = parser.stol(p2, NULL, 0);
+        _vhcl->impact_scar.fade_time = fadeTime >= 0 ? fadeTime : 2000;
+    }
+    else if ( !StriCmp(p1, "impact_scar_edge_fade") )
+    {
+        float edgeFade = parser.stof(p2, 0);
+        _vhcl->impact_scar.edge_fade = std::max(0.05f, std::min(edgeFade, 1.0f));
+    }
+    else if ( !StriCmp(p1, "impact_scar_color") )
+    {
+        if ( !ParseImpactScarColor(parser, p2, _vhcl->impact_scar.color) )
+            return ScriptParser::RESULT_BAD_DATA;
+    }
+    else if ( !StriCmp(p1, "impact_scar_terrain") )
+    {
+        _vhcl->impact_scar.terrain = parser.stol(p2, NULL, 0) != 0;
+    }
     else if ( !StriCmp(p1, "damaged_icon") )
     {
         _vhcl->damaged_icon = p2;
@@ -2352,6 +2381,7 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->wireframe_tint = TVisualTint();
         _vhcl->visual_rotation = vec3d(0.0, 0.0, 0.0);
         _vhcl->damaged_fx = TDamagedFXConfig();
+        _vhcl->impact_scar = TWeaponImpactScarConfig();
         _vhcl->damaged_icon.clear();
         _vhcl->regen_icon.clear();
         _vhcl->drain_icon.clear();
