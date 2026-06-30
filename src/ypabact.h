@@ -637,7 +637,6 @@ public:
     void UpdateUnitGuns(update_msg *arg);
     void CleanupUnitGuns(bool releaseGuns, bool parentDying = false);
     void ClearUnitGunPointer(NC_STACK_ypabact *gun);
-    bool TrySpawnVehicleImpactScar();
 
     // OpenUA custom: modular dummy attachments (mirrors the unit-gun machinery)
     void SetUnitDummies(const std::vector<World::TUnitDummy> &dummies);
@@ -888,7 +887,6 @@ public:
     int _death_damage;
     bool _death_damage_applied_dead;
     bool _death_damage_applied_megadeth;
-    bool _impact_scar_spawned;
     int _carrier_spawn_root_gid;
     int _carrier_spawn_root_vehicle;
     std::vector<int32_t> _carrier_spawned_gids;

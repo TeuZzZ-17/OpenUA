@@ -10397,6 +10397,20 @@ void sb_0x4d7c08__sub0__sub4(NC_STACK_ypaworld *yw)
         }
     }
 
+    std::vector<NC_STACK_ypabact *> damageHoverTargets = yw->GetUserDamageHoverTargets();
+    if ( !yw->IsSpectatorControlled() )
+    {
+        for (NC_STACK_ypabact *damageHoverTarget : damageHoverTargets)
+        {
+            bool sameAsMouseHover = (yw->_guiActFlags & 0x20) && yw->_bactOnMouse == damageHoverTarget;
+            if ( !sameAsMouseHover )
+                yw_RenderCursorOverUnit(yw, damageHoverTarget);
+
+            if ( !sameAsMouseHover && yw->_guiVisor.field_18 != damageHoverTarget )
+                yw_RenderUnitLifeBar(yw, &buf, damageHoverTarget);
+        }
+    }
+
     if ( !yw->IsSpectatorControlled() && yw->_guiVisor.field_18 && !yw->_guiVisor.field_18->ShouldHideFromStrategicUI() )
         yw_RenderUnitLifeBar(yw, &buf, yw->_guiVisor.field_18);
 

@@ -280,6 +280,8 @@ static void ypabact_SafeDetachControlFrom(NC_STACK_ypabact *dying, NC_STACK_ypab
     if ( world->_guiVisor.field_18 == dying )
         world->_guiVisor.field_18 = NULL;
 
+    world->ClearUserDamageHoverTarget(dying);
+
     if ( hovered )
     {
         world->_bactOnMouse = NULL;
@@ -823,35 +825,6 @@ static bool ypabact_CarrierHasEnemyNearby(NC_STACK_ypabact *carrier)
     return ypabact_HasEnemyNearby(carrier, carrier->_spawn_trigger_radius);
 }
 
-bool NC_STACK_ypabact::TrySpawnVehicleImpactScar()
-{
-    if ( _impact_scar_spawned || !_world || _bact_type == BACT_TYPES_MISSLE )
-        return false;
-
-    if ( _status != BACT_STATUS_DEAD && !(_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2)) )
-        return false;
-
-    std::vector<World::TVhclProto> &protos = _world->GetVhclProtos();
-    if ( (size_t)_vehicleID >= protos.size() )
-        return false;
-
-    const World::TWeaponImpactScarConfig &scar = protos.at(_vehicleID).impact_scar;
-    if ( !scar.terrain || scar.radius <= 0.0 || scar.duration <= 0 )
-        return false;
-
-    float searchDistance = 450.0f;
-    if ( _status_flg & BACT_STFLAG_LAND )
-        searchDistance = 900.0f;
-
-    if ( _world->AddImpactScarNearTerrain(scar, _position, searchDistance) )
-    {
-        _impact_scar_spawned = true;
-        return true;
-    }
-
-    return false;
-}
-
 static bool ypabact_IsCarrierSpawnPositionValid(NC_STACK_ypabact *carrier, const vec3d &pos)
 {
     NC_STACK_ypaworld *world = carrier->getBACT_pWorld();
@@ -1345,7 +1318,6 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _death_damage = 0;
     _death_damage_applied_dead = false;
     _death_damage_applied_megadeth = false;
-    _impact_scar_spawned = false;
     _carrier_spawn_root_gid = 0;
     _carrier_spawn_root_vehicle = 0;
     _carrier_spawned_gids.clear();
@@ -1511,7 +1483,6 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _death_damage = 0;
     _death_damage_applied_dead = false;
     _death_damage_applied_megadeth = false;
-    _impact_scar_spawned = false;
     _carrier_spawn_root_gid = 0;
     _carrier_spawn_root_vehicle = 0;
     _carrier_spawned_gids.clear();
@@ -9923,6 +9894,9 @@ void NC_STACK_ypabact::ModifyEnergy(bact_arg84 *arg)
     }
     else
     {
+        if ( arg->energy < 0 && _world )
+            _world->NoteUserDamageHover(arg->unit, this);
+
         _energy += arg->energy;
 
         if ( _energy <= 0 )
@@ -10341,7 +10315,6 @@ size_t NC_STACK_ypabact::CrashOrLand(bact_arg86 *arg)
         }
         if ( _status_flg & BACT_STFLAG_LAND )
         {
-            TrySpawnVehicleImpactScar();
             return 1;
         }
     }
@@ -11175,7 +11148,6 @@ void NC_STACK_ypabact::Renew()
     _death_damage = 0;
     _death_damage_applied_dead = false;
     _death_damage_applied_megadeth = false;
-    _impact_scar_spawned = false;
     _carrier_spawn_root_gid = 0;
     _carrier_spawn_root_vehicle = 0;
     _carrier_spawned_gids.clear();
@@ -12037,13 +12009,7 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
                         gunFireBact->SetStateInternal(&v69);
 
                         if ( v59.skel && v59.polyID >= 0 && (size_t)v59.polyID < v59.skel->polygons.size() )
-                        {
-                            vec3d impactNormal = v59.skel->polygons[ v59.polyID ].Normal();
-                            gunFireBact->AlignMissileByNormal( impactNormal );
-
-                            if ( _world->IsImpactScarTerrainHit(v59) )
-                                _world->AddImpactScar(mgunProto.impact_scar, v59.isectPos, -impactNormal);
-                        }
+                            gunFireBact->AlignMissileByNormal( v59.skel->polygons[ v59.polyID ].Normal() );
                     }
                 }
             }
@@ -13701,8 +13667,6 @@ size_t NC_STACK_ypabact::SetStateInternal(setState_msg *arg)
 
         if ( _vp_active != 3 )
         {
-            TrySpawnVehicleImpactScar();
-
             ypabact_ApplyDeathDamage(this, true);
 
             SetVP(_vp_megadeth);

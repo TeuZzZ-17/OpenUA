@@ -364,9 +364,7 @@ size_t NC_STACK_ypaworld::Init(IDVList &stak)
     _deadCacheList.clear();
     _transientVPs.clear();
     _nextTransientVPId = 1;
-    ClearImpactScars();
-
-
+    _damageHoverTargets.clear();
     _fxLimit = 16;
     _renderSectors = stak.Get<int32_t>(YW_ATT_VISSECTORS, 9);
     _normalVizLimit = stak.Get<int32_t>(YW_ATT_NORMVISLIMIT, 3100);
@@ -2357,8 +2355,7 @@ void NC_STACK_ypaworld::DeleteLevel()
 
     _transientVPs.clear();
     _nextTransientVPId = 1;
-    ClearImpactScars();
-
+    _damageHoverTargets.clear();
     ProtosFreeSounds();
 
     sb_0x44ac24(this);
@@ -2387,6 +2384,74 @@ void NC_STACK_ypaworld::ypaworld_func153(bact_hudi *arg)
         _hudMissileMultiLockTargets.clear();
 
     _guiVisor = *arg;
+}
+
+void NC_STACK_ypaworld::NoteUserDamageHover(NC_STACK_ypabact *attacker, NC_STACK_ypabact *target)
+{
+    if ( !attacker || !target || attacker != _userUnit || attacker != _viewerBact || !attacker->getBACT_inputting() )
+        return;
+
+    if ( target == attacker ||
+         target->_bact_type == BACT_TYPES_MISSLE ||
+         target->_status == BACT_STATUS_DEAD ||
+         target->_status == BACT_STATUS_CREATE ||
+         target->_status == BACT_STATUS_BEAM ||
+         target->ShouldHideFromStrategicUI() )
+        return;
+
+    int32_t hoverUntil = _timeStamp + 800;
+    for (TDamageHoverTarget &hover : _damageHoverTargets)
+    {
+        if ( hover.target == target )
+        {
+            hover.until = hoverUntil;
+            return;
+        }
+    }
+
+    TDamageHoverTarget hover;
+    hover.target = target;
+    hover.until = hoverUntil;
+    _damageHoverTargets.push_back(hover);
+}
+
+std::vector<NC_STACK_ypabact *> NC_STACK_ypaworld::GetUserDamageHoverTargets()
+{
+    std::vector<NC_STACK_ypabact *> targets;
+
+    for (auto it = _damageHoverTargets.begin(); it != _damageHoverTargets.end(); )
+    {
+        NC_STACK_ypabact *target = it->target;
+        if ( !target ||
+             _timeStamp > it->until ||
+             target->_status == BACT_STATUS_DEAD ||
+             target->_status == BACT_STATUS_CREATE ||
+             target->_status == BACT_STATUS_BEAM ||
+             target->ShouldHideFromStrategicUI() )
+        {
+            it = _damageHoverTargets.erase(it);
+            continue;
+        }
+
+        targets.push_back(target);
+        ++it;
+    }
+
+    return targets;
+}
+
+void NC_STACK_ypaworld::ClearUserDamageHoverTarget(NC_STACK_ypabact *target)
+{
+    if ( !target )
+        return;
+
+    for (auto it = _damageHoverTargets.begin(); it != _damageHoverTargets.end(); )
+    {
+        if ( it->target == target )
+            it = _damageHoverTargets.erase(it);
+        else
+            ++it;
+    }
 }
 
 void UserData::sub_46D2B4()

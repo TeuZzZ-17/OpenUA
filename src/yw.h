@@ -1868,8 +1868,6 @@ struct ypaworld_arg136
     int polyID;
     UAskeleton::Data *skel;
     int flags;
-    Common::Point hitCell;
-    int hitCollisionType;
 
     ypaworld_arg136()
     {
@@ -1878,8 +1876,6 @@ struct ypaworld_arg136
         polyID = 0;
         skel = NULL;
         flags = 0;
-        hitCell = Common::Point(0, 0);
-        hitCollisionType = 0;
     }
 };
 
@@ -2507,12 +2503,9 @@ public:
     bool HasTransientVP(int32_t id) const;
     void RemoveTransientVP(int32_t id);
     void UpdateDecorationFX(const World::TDecorationFXConfig &config, int32_t &nextTime, const vec3d &ownerPos, int32_t *persistentId = NULL);
-    bool IsImpactScarTerrainHit(const ypaworld_arg136 &hit);
-    bool AddImpactScar(const World::TWeaponImpactScarConfig &config, const vec3d &pos, const vec3d &normal);
-    bool AddImpactScarNearTerrain(const World::TWeaponImpactScarConfig &config, const vec3d &pos, float searchDistance);
-    void RenderImpactScars(baseRender_msg *arg);
-    void ClearImpactScars();
-    
+    void NoteUserDamageHover(NC_STACK_ypabact *attacker, NC_STACK_ypabact *target);
+    std::vector<NC_STACK_ypabact *> GetUserDamageHoverTargets();
+    void ClearUserDamageHoverTarget(NC_STACK_ypabact *target);
     void SetCmdrIdToSelect(int32_t id) { _cmdrIdToSelect = id; };
         
     World::ParticleSystem &ParticleSystem() { return _particles; };
@@ -2576,20 +2569,12 @@ public:
         {};
     };
 
-    struct TImpactScar
+    struct TDamageHoverTarget
     {
-        vec3d pos;
-        vec3d normal;
-        float radius = 0.0;
-        int32_t startTime = 0;
-        int32_t duration = 0;
-        int32_t fadeTime = 0;
-        uint32_t seed = 0;
-        GFX::TMesh mesh;
+        NC_STACK_ypabact *target = NULL;
+        int32_t until = 0;
     };
 
-    
-    
     UserData *_GameShell = NULL;
     
     Common::Point _mapSize;
@@ -2622,8 +2607,7 @@ public:
     std::list<NC_STACK_base *> _overrideModels;
     std::list<TTransientVP> _transientVPs;
     int32_t _nextTransientVPId = 1;
-    std::list<TImpactScar> _impactScars;
-    
+    std::vector<TDamageHoverTarget> _damageHoverTargets;
     std::map<int32_t, TConstructInfo> _inBuildProcess; // Buildings in creation process
     std::array<int16_t, 256> _buildHealthModelId = Common::ArrayInit<int16_t, 256>(0);
     Common::PlaneArray<uint8_t, 64, 64> _sqrtTable = Common::PlaneArray<uint8_t, 64, 64>::ArrayInit(0);

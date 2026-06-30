@@ -164,9 +164,6 @@ protected:
     void RememberChainHit(NC_STACK_ypabact *target);
     bool IsChainHit(NC_STACK_ypabact *target) const;
     void UpdateMortarBallistic(update_msg *arg); // OpenUA custom: ballistic shell flight + timed impact
-    void RememberImpactScar(const vec3d &pos, const vec3d &normal);
-    bool SpawnPendingWorldImpactScar();
-    bool SpawnImpactScarNearWorldSurface(const vec3d &pos, float searchDistance);
 
     struct TBuildingHitRef
     {
@@ -201,6 +198,7 @@ protected:
     int _mislAoeUnitPush         = 0;
     int _mislDirectPush          = 0;
     int _mislClusterAge          = 0;
+    int _mislClusterGeneration   = 0;
     bool _mislClusterDone        = false;
     bool _mislClusterChild       = false;
     int  _mislChainDepth         = 0;
@@ -218,10 +216,6 @@ protected:
     int32_t _mislAttachTargetGid = 0;
     vec3d _mislAttachOffset;
     vec3d _mislLastAttachedPosition;
-    bool _mislImpactScarPending  = false;
-    vec3d _mislImpactScarPos;
-    vec3d _mislImpactScarNormal;
-    bool _mislImpactScarSpawned  = false;
     TSndCarrier _mislClusterSoundCarrier;
     std::vector<int32_t> _mislChainHitGids;
     std::vector<NC_STACK_ypabact *> _mislDirectHitUnits;
