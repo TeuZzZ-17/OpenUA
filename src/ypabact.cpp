@@ -1299,6 +1299,7 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _mgun_angle = 0.0;
     _mgun_power_set = false;
     _mgun_angle_set = false;
+    _mgun_vp_fire_end_time = 0;
     _weapon_spread_x = 0.0;
     _weapon_spread_y = 0.0;
     _mgun_spread_x = 0.0;
@@ -1480,6 +1481,7 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _damaged_shake_carrier.Clear();
     _mgun_soundcarrier.Clear();
     _mgun_sound_index = 0;
+    _mgun_vp_fire_end_time = 0;
 //    ypabact.field_3CE = 0;
     _height_max_user = 1600.0;
     _gun_radius = 5.0;
@@ -2526,6 +2528,13 @@ void NC_STACK_ypabact::Update(update_msg *arg)
             _mgun_soundcarrier.Position = _soundcarrier.Position;
             _mgun_soundcarrier.Vector = _soundcarrier.Vector;
             SFXEngine::SFXe.UpdateSoundCarrier(&_mgun_soundcarrier);
+        }
+        if ( _mgun_vp_fire_end_time > 0 && _clock >= _mgun_vp_fire_end_time &&
+             !(_status_flg & BACT_STFLAG_FIRE) && _vp_active == 7 && _status == BACT_STATUS_NORMAL )
+        {
+            SetVP(_vp_normal);
+            _vp_active = 1;
+            _mgun_vp_fire_end_time = 0;
         }
         ypabact_UpdateStatusSoundCarrier(this, &_debuff_soundcarrier);
         ypabact_UpdateStatusSoundCarrier(this, &_damaged_shake_carrier);
@@ -11184,6 +11193,7 @@ void NC_STACK_ypabact::Renew()
     _mgun_angle_set = false;
     _mgun_soundcarrier.Clear();
     _mgun_sound_index = 0;
+    _mgun_vp_fire_end_time = 0;
     _spawn_units = 0;
     _spawn_vehicle = 0;
     _spawn_interval = 5000;
@@ -11786,6 +11796,20 @@ static void ypabact_PlayVehicleMinigunPulse(NC_STACK_ypabact *bact)
     bact->_mgun_sound_index = (int)((soundIndex + 1) % soundCount);
 }
 
+static void ypabact_StartVehicleMinigunFireVP(NC_STACK_ypabact *bact, int now)
+{
+    if ( !bact || bact->_status != BACT_STATUS_NORMAL )
+        return;
+
+    bact->_mgun_vp_fire_end_time = now + 180;
+
+    if ( bact->_vp_active != 7 )
+    {
+        bact->_vp_active = 7;
+        bact->SetVP(bact->_vp_fire);
+    }
+}
+
 static vec3d ypabact_GetMinigunFireDir(NC_STACK_ypabact *bact, const vec3d &requestedDir)
 {
     if ( !bact || !bact->_mgun_angle_set )
@@ -11836,6 +11860,9 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
     int mgunShots = _num_mguns > 0 ? _num_mguns : 1;
     float mgunPower = GetMinigunPower();
     RevealInvisibleOnAttack();
+
+    if ( vehicleTimedMgun )
+        ypabact_StartVehicleMinigunFireVP(this, arg->field_10);
 
     int v107 = 0;
     if ( _bact_type == BACT_TYPES_GUN )

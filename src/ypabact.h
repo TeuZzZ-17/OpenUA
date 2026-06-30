@@ -801,6 +801,7 @@ public:
     TSndCarrier _vertical_laser_soundcarrier; // OpenUA custom: managed loop sound for model = vertical_laser
     TSndCarrier _mgun_soundcarrier; // OpenUA custom: one-shot pulse sound for vehicle-controlled MG
     int _mgun_sound_index;
+    int _mgun_vp_fire_end_time;
     int _vp_active;
     extra_vproto _vp_extra[3];
     int _vp_extra_mode;
