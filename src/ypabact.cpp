@@ -454,28 +454,37 @@ static void ypabact_ApplyDamagedSoundPitch(NC_STACK_ypabact *bact)
         return;
 
     float pitchMult = 1.0;
+    float firePitchMult = 1.0;
 
     if ( bact->_damaged_fx_active )
         pitchMult *= ypabact_SafeDamageMult(bact->_damaged_snd_pitch_mult);
 
     if ( bact->_active_debuff.active )
-        pitchMult *= ypabact_SafeDamageMult(bact->_active_debuff.snd_pitch_mult);
+    {
+        float debuffPitchMult = ypabact_SafeDamageMult(bact->_active_debuff.snd_pitch_mult);
+        pitchMult *= debuffPitchMult;
+        firePitchMult *= debuffPitchMult;
+    }
 
     // OpenUA Black Sect clone balance: imperfect grey clones (owner 5) emit their
     // engine/idle/fire loops at a slightly lower pitch, reinforcing the clone identity.
     // Folded into the same per-frame pitch chain as the damaged/debuff multipliers,
     // recomputed from the prototype base pitch each frame (never compounds).
     if ( World::CloneBalance::IsCloneActor(bact) )
-        pitchMult *= World::CloneBalance::DownFactor();
+    {
+        float clonePitchMult = World::CloneBalance::DownFactor();
+        pitchMult *= clonePitchMult;
+        firePitchMult *= clonePitchMult;
+    }
 
     TSoundSource &normal = bact->_soundcarrier.Sounds[World::TVhclProto::SND_NORMAL];
     TSoundSource &fire = bact->_soundcarrier.Sounds[World::TVhclProto::SND_FIRE];
     TSoundSource &wait = bact->_soundcarrier.Sounds[World::TVhclProto::SND_WAIT];
 
-    if ( pitchMult != 1.0 )
+    if ( pitchMult != 1.0 || firePitchMult != 1.0 )
     {
         normal.Pitch = ypabact_ScaledPitch(normal, normal.Pitch, pitchMult);
-        fire.Pitch = ypabact_ScaledPitch(fire, bact->_base_snd_fire_pitch, pitchMult);
+        fire.Pitch = ypabact_ScaledPitch(fire, bact->_base_snd_fire_pitch, firePitchMult);
 
         // SND_WAIT can be the active loop for heli hover/idle. Unlike SND_NORMAL,
         // SND_FIRE/SND_WAIT are not always rebuilt by Move(), so scale them from
