@@ -486,7 +486,7 @@ void NC_STACK_ypagun::User_layer(update_msg *arg)
                 else if ( _gunType == GUN_TYPE_PROTO )
                 {
 //            if ( ~(ypabact.field_3D6 & 0x100) ) CHECK IT
-                    if ( !(_status_flg & BACT_STFLAG_FIRE) )
+                    if ( !UsesVehicleMinigunTiming() && !(_status_flg & BACT_STFLAG_FIRE) )
                     {
                         setState_msg arg78;
                         arg78.unsetFlags = 0;
@@ -607,7 +607,7 @@ void NC_STACK_ypagun::FightWithBact(bact_arg75 *arg)
         }
         else if ( _gunType == GUN_TYPE_PROTO )
         {
-            if ( !(_status_flg & BACT_STFLAG_FIRE) )
+            if ( !UsesVehicleMinigunTiming() && !(_status_flg & BACT_STFLAG_FIRE) )
             {
                 setState_msg arg78;
                 arg78.unsetFlags = 0;
@@ -627,12 +627,15 @@ void NC_STACK_ypagun::FightWithBact(bact_arg75 *arg)
     }
     else if ( _gunType == GUN_TYPE_PROTO )
     {
-        setState_msg arg78;
-        arg78.setFlags = 0;
-        arg78.newStatus = BACT_STATUS_NOPE;
-        arg78.unsetFlags = BACT_STFLAG_FIRE;
+        if ( !UsesVehicleMinigunTiming() )
+        {
+            setState_msg arg78;
+            arg78.setFlags = 0;
+            arg78.newStatus = BACT_STATUS_NOPE;
+            arg78.unsetFlags = BACT_STFLAG_FIRE;
 
-        SetState(&arg78);
+            SetState(&arg78);
+        }
     }
 }
 

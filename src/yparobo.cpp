@@ -3350,7 +3350,7 @@ void NC_STACK_yparobo::buildConquer()
 
     for ( NC_STACK_ypabact* &cell_unit : arg130.pcell->unitsList )
     {
-        if ( _owner != cell_unit->_owner && cell_unit->_bact_type == BACT_TYPES_GUN && (cell_unit->_weapon != -1 || cell_unit->_mgun != -1) )
+        if ( _owner != cell_unit->_owner && cell_unit->_bact_type == BACT_TYPES_GUN && (cell_unit->_weapon != -1 || cell_unit->HasMinigun()) )
         {
             NC_STACK_ypagun *gun = dynamic_cast<NC_STACK_ypagun *>( cell_unit );
             int a4 = gun->IsRoboGun();
@@ -3451,7 +3451,7 @@ void NC_STACK_yparobo::buildDefense()
         if ( v18 < 15000 )
             v18 = 15000;
 
-        if ( arg132.tgt.pbact->_bact_type == BACT_TYPES_GUN && (arg132.tgt.pbact->_weapon != -1 || arg132.tgt.pbact->_mgun != -1) )
+        if ( arg132.tgt.pbact->_bact_type == BACT_TYPES_GUN && (arg132.tgt.pbact->_weapon != -1 || arg132.tgt.pbact->HasMinigun()) )
         {
             NC_STACK_ypagun *gun = dynamic_cast<NC_STACK_ypagun *>( arg132.tgt.pbact );
             int a4 = gun->IsRoboGun();
@@ -4590,7 +4590,7 @@ int NC_STACK_yparobo::yparobo_func70__sub6__sub8()
                     NC_STACK_ypagun *gun = dynamic_cast<NC_STACK_ypagun *>( bct );
                     int a4 = gun->IsRoboGun();
 
-                    if ( a4 == 0 && ( bct->_weapon != -1 || bct->_mgun != -1 ) )
+                    if ( a4 == 0 && ( bct->_weapon != -1 || bct->HasMinigun() ) )
                     {
                         v4++;
                         break;
@@ -4618,7 +4618,7 @@ int NC_STACK_yparobo::yparobo_func70__sub6__sub9()
                     NC_STACK_ypagun *gun = dynamic_cast<NC_STACK_ypagun *>( bct );
                     int a4 = gun->IsRoboGun();
 
-                    if ( a4 == 0 && bct->_weapon == -1 && bct->_mgun == -1 )
+                    if ( a4 == 0 && bct->_weapon == -1 && !bct->HasMinigun() )
                     {
                         v4++;
                         break;

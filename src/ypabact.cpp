@@ -27,6 +27,14 @@ static bool ypabact_IsSeekAndExplodeArmed(NC_STACK_ypabact *unit);
 static void ypabact_FireProximityDefenseAtDeath(NC_STACK_ypabact *unit);
 static void ypabact_ApplyDeathDamage(NC_STACK_ypabact *unit, bool megadethPhase);
 
+static bool ypabact_IsAirVehicle(const NC_STACK_ypabact *unit)
+{
+    return unit &&
+           (unit->_bact_type == BACT_TYPES_BACT ||
+            unit->_bact_type == BACT_TYPES_FLYER ||
+            unit->_bact_type == BACT_TYPES_UFO);
+}
+
 static void ypabact_ResetDamagedFX(NC_STACK_ypabact *bact)
 {
     bact->_damaged_fx = World::TDamagedFXConfig();
@@ -1283,18 +1291,22 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _weapon_flags = 0;
     _mgun = 0;
     _num_mguns = 1;
+    _mgun_shot_time = 0;
+    _mgun_shot_time_user = 0;
+    _mgun_vp_dead = 0;
+    _mgun_vp_megadeth = 0;
+    _mgun_power = 0.0;
+    _mgun_angle = 0.0;
+    _mgun_power_set = false;
+    _mgun_angle_set = false;
     _weapon_spread_x = 0.0;
     _weapon_spread_y = 0.0;
     _mgun_spread_x = 0.0;
     _mgun_spread_y = 0.0;
     _weapon_spread_x_user = 0.0;
     _weapon_spread_y_user = 0.0;
-    _mgun_spread_x_user = 0.0;
-    _mgun_spread_y_user = 0.0;
     _weapon_spread_x_user_set = false;
     _weapon_spread_y_user_set = false;
-    _mgun_spread_x_user_set = false;
-    _mgun_spread_y_user_set = false;
     _num_weapons = 0;
     _weapon_time = 0;
     _gun_angle = 0.0;
@@ -1302,7 +1314,6 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _gun_leftright = 0.0;
     _gun_radius = 0.0;
     _gun_power = 0.0;
-    _mgun_fire_x = 0.0;
     _mgun_time = 0;
     _salve_counter = 0;
     _kill_after_shot = 0;
@@ -1467,6 +1478,8 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _active_debuff.Clear();
     _debuff_soundcarrier.Clear();
     _damaged_shake_carrier.Clear();
+    _mgun_soundcarrier.Clear();
+    _mgun_sound_index = 0;
 //    ypabact.field_3CE = 0;
     _height_max_user = 1600.0;
     _gun_radius = 5.0;
@@ -1678,6 +1691,7 @@ size_t NC_STACK_ypabact::Deinit()
     SFXEngine::SFXe.StopCarrier(&_damaged_shake_carrier);
     SFXEngine::SFXe.StopCarrier(&_laser_soundcarrier);
     SFXEngine::SFXe.StopCarrier(&_vertical_laser_soundcarrier);
+    SFXEngine::SFXe.StopCarrier(&_mgun_soundcarrier);
     _active_debuff.Clear();
 
     _status_flg |= BACT_STFLAG_CLEAN;
@@ -2338,6 +2352,24 @@ void NC_STACK_ypabact::BeforeSoundCarrierUpdate()
 {
 }
 
+bool NC_STACK_ypabact::HasMinigun() const
+{
+    return _mgun != -1 || _mgun_shot_time > 0;
+}
+
+int NC_STACK_ypabact::GetMinigunShotTime(bool userControlled, int frameDeltaMs) const
+{
+    int shotTime = _mgun_shot_time;
+
+    if ( userControlled && _mgun_shot_time_user > 0 )
+        shotTime = _mgun_shot_time_user;
+
+    if ( shotTime < frameDeltaMs )
+        shotTime = frameDeltaMs;
+
+    return shotTime;
+}
+
 void NC_STACK_ypabact::Update(update_msg *arg)
 {
     if ( _kidRef.IsListType(World::BLIST_CACHE) ) // Do not update units in dead list
@@ -2484,10 +2516,17 @@ void NC_STACK_ypabact::Update(update_msg *arg)
     if ( IsInvisibleUnrevealed() )
     {
         SFXEngine::SFXe.StopCarrier(&_soundcarrier);
+        SFXEngine::SFXe.StopCarrier(&_mgun_soundcarrier);
     }
     else
     {
         SFXEngine::SFXe.UpdateSoundCarrier(&_soundcarrier);
+        if ( !_mgun_soundcarrier.Sounds.empty() )
+        {
+            _mgun_soundcarrier.Position = _soundcarrier.Position;
+            _mgun_soundcarrier.Vector = _soundcarrier.Vector;
+            SFXEngine::SFXe.UpdateSoundCarrier(&_mgun_soundcarrier);
+        }
         ypabact_UpdateStatusSoundCarrier(this, &_debuff_soundcarrier);
         ypabact_UpdateStatusSoundCarrier(this, &_damaged_shake_carrier);
     }
@@ -4366,9 +4405,9 @@ void NC_STACK_ypabact::User_layer(update_msg *arg)
             LaunchMissile(&v61);
         }
 
-        if ( _mgun != -1 )
+        if ( HasMinigun() )
         {
-            if ( _status_flg & BACT_STFLAG_FIRE )
+            if ( !UsesVehicleMinigunTiming() && (_status_flg & BACT_STFLAG_FIRE) )
             {
                 if ( !(arg->inpt->Buttons.Is(2)) )
                 {
@@ -4382,7 +4421,7 @@ void NC_STACK_ypabact::User_layer(update_msg *arg)
 
             if ( arg->inpt->Buttons.Is(2) )
             {
-                if ( !(_status_flg & BACT_STFLAG_FIRE) )
+                if ( !UsesVehicleMinigunTiming() && !(_status_flg & BACT_STFLAG_FIRE) )
                 {
                     arg78.unsetFlags = 0;
                     arg78.newStatus = BACT_STATUS_NOPE;
@@ -4835,14 +4874,14 @@ void NC_STACK_ypabact::FightWithBact(bact_arg75 *arg)
                     _status_flg &= ~BACT_STFLAG_ATTACK;
             }
 
-            if ( v45 < 1000.0 &&   _mgun != -1 &&   v40.dot(_rotation.AxisZ()) > 0.85 )
+            if ( v45 < 1000.0 &&   HasMinigun() &&   v40.dot(_rotation.AxisZ()) > 0.85 )
             {
                 if ( isSecTarget )
                     _status_flg |= BACT_STFLAG_FIGHT_S;
                 else
                     _status_flg |= BACT_STFLAG_FIGHT_P;
 
-                if ( !(_status_flg & BACT_STFLAG_FIRE) )
+                if ( !UsesVehicleMinigunTiming() && !(_status_flg & BACT_STFLAG_FIRE) )
                 {
                     setState_msg arg78;
                     arg78.unsetFlags = 0;
@@ -4860,7 +4899,7 @@ void NC_STACK_ypabact::FightWithBact(bact_arg75 *arg)
 
                 FireMinigun(&arg105);
             }
-            else if ( _status_flg & BACT_STFLAG_FIRE )
+            else if ( !UsesVehicleMinigunTiming() && (_status_flg & BACT_STFLAG_FIRE) )
             {
                 setState_msg arg78;
                 arg78.setFlags = 0;
@@ -11135,7 +11174,16 @@ void NC_STACK_ypabact::Renew()
     _lowhp_threshold = 0.30;
     _lowhp_weapon = 0;
     _num_mguns = 1;
-    _mgun_fire_x = 0.0;
+    _mgun_shot_time = 0;
+    _mgun_shot_time_user = 0;
+    _mgun_vp_dead = 0;
+    _mgun_vp_megadeth = 0;
+    _mgun_power = 0.0;
+    _mgun_angle = 0.0;
+    _mgun_power_set = false;
+    _mgun_angle_set = false;
+    _mgun_soundcarrier.Clear();
+    _mgun_sound_index = 0;
     _spawn_units = 0;
     _spawn_vehicle = 0;
     _spawn_interval = 5000;
@@ -11392,7 +11440,7 @@ size_t NC_STACK_ypabact::CheckFireAI(bact_arg101 *arg)
 
     if ( !v8 )
     {
-        if ( _mgun == -1 )
+        if ( !HasMinigun() )
             return 0;
 
         v36 = 2;
@@ -11685,14 +11733,89 @@ static vec3d ypabact_ApplyDirectionalSpread(const mat3x3 &rotation, const vec3d 
     return direction;
 }
 
-static float ypabact_GetMgunOffset(const NC_STACK_ypabact *bact, int shotId, int shotCount)
+static void ypabact_PlayVehicleMinigunPulse(NC_STACK_ypabact *bact)
 {
-    if ( shotCount <= 1 )
-        return bact->_mgun_fire_x;
+    static const size_t MGUN_PULSE_SOUND_SLOTS = 8;
 
-    // Matches primary num_weapons/fire_x distribution: -abs(x) ... +abs(x).
-    float sideSpan = fabs(bact->_mgun_fire_x);
-    return (shotId * 2) * sideSpan / (shotCount - 1) - sideSpan;
+    if ( !bact || bact->_soundcarrier.Sounds.size() <= World::TVhclProto::SND_FIRE )
+        return;
+
+    TSoundSource &src = bact->_soundcarrier.Sounds[World::TVhclProto::SND_FIRE];
+    if ( !src.PSample && src.SampleVariants.empty() )
+        return;
+
+    if ( bact->_mgun_soundcarrier.Sounds.empty() )
+    {
+        bact->_mgun_soundcarrier.Resize(MGUN_PULSE_SOUND_SLOTS);
+        bact->_mgun_sound_index = 0;
+    }
+
+    size_t soundCount = bact->_mgun_soundcarrier.Sounds.size();
+    size_t soundIndex = (size_t)bact->_mgun_sound_index % soundCount;
+
+    for (size_t i = 0; i < soundCount; i++)
+    {
+        size_t candidate = (soundIndex + i) % soundCount;
+        if ( !bact->_mgun_soundcarrier.Sounds[candidate].IsEnabled() )
+        {
+            soundIndex = candidate;
+            break;
+        }
+    }
+
+    TSoundSource &snd = bact->_mgun_soundcarrier.Sounds[soundIndex];
+    snd.PSample = src.PSample;
+    snd.SampleVariants = src.SampleVariants;
+    snd.PFragments = NULL;
+    snd.PPFx = NULL;
+    snd.PShkFx = NULL;
+    snd.Volume = src.Volume;
+    snd.Pitch = src.Pitch;
+    snd.PriorityBias = src.PriorityBias;
+    snd.SetLoop(false);
+    snd.SetFragmented(false);
+    snd.SetPFx(false);
+    snd.SetPFxEnable(false);
+    snd.SetShk(false);
+    snd.SetShkEnable(false);
+
+    bact->_mgun_soundcarrier.Position = bact->_soundcarrier.Position;
+    bact->_mgun_soundcarrier.Vector = bact->_soundcarrier.Vector;
+    SFXEngine::SFXe.startSound(&bact->_mgun_soundcarrier, soundIndex);
+    SFXEngine::SFXe.UpdateSoundCarrier(&bact->_mgun_soundcarrier);
+    bact->_mgun_sound_index = (int)((soundIndex + 1) % soundCount);
+}
+
+static vec3d ypabact_GetMinigunFireDir(NC_STACK_ypabact *bact, const vec3d &requestedDir)
+{
+    if ( !bact || !bact->_mgun_angle_set )
+        return requestedDir;
+
+    vec3d dir = bact->_rotation.AxisZ() - bact->_rotation.AxisY() * bact->GetMinigunAngle();
+
+    if ( dir.normalise() > 0.001 )
+        return dir;
+
+    return requestedDir;
+}
+
+static bool ypabact_SpawnVehicleMinigunImpact(NC_STACK_ypabact *bact, const vec3d &pos, const vec3d &dir, bool worldHit)
+{
+    if ( !bact || !bact->getBACT_pWorld() )
+        return false;
+
+    int vp = 0;
+
+    if ( worldHit )
+        vp = bact->_mgun_vp_megadeth > 0 ? bact->_mgun_vp_megadeth : bact->_mgun_vp_dead;
+    else
+        vp = bact->_mgun_vp_dead > 0 ? bact->_mgun_vp_dead : bact->_mgun_vp_megadeth;
+
+    if ( vp <= 0 )
+        return false;
+
+    bact->getBACT_pWorld()->SpawnTransientVP(vp, pos, ypabact_LaserRotationFromDir(dir, bact->_rotation), 90);
+    return true;
 }
 
 size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
@@ -11705,11 +11828,13 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
     if ( _world->_isNetGame )
         a5 = 1;
 
-    if ( _mgun == -1 )
+    if ( !HasMinigun() )
         return 0;
 
-    World::TWeapProto &mgunProto = _world->GetWeaponsProtos().at(_mgun);
+    World::TWeapProto *mgunProto = _mgun != -1 ? &_world->GetWeaponsProtos().at(_mgun) : NULL;
+    bool vehicleTimedMgun = UsesVehicleMinigunTiming();
     int mgunShots = _num_mguns > 0 ? _num_mguns : 1;
+    float mgunPower = GetMinigunPower();
     RevealInvisibleOnAttack();
 
     int v107 = 0;
@@ -11723,7 +11848,7 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
     }
     else if ( !_invulnerable )
     {
-        _energy -= _gun_power * arg->field_C / 300.0;
+        _energy -= mgunPower * arg->field_C / 300.0;
     }
 
     int v88 = getBACT_inputting();
@@ -11733,10 +11858,16 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
     {
         int v45;
 
-        if ( v88 )
+        int frameDeltaMs = (int)(arg->field_C * 1000.0);
+
+        if ( vehicleTimedMgun )
         {
-            int v43 = mgunProto.shot_time_user;
-            float v42 = arg->field_C * 1000.0;
+            v45 = GetMinigunShotTime(v88 != 0, frameDeltaMs);
+        }
+        else if ( v88 )
+        {
+            int v43 = mgunProto->shot_time_user;
+            int v42 = frameDeltaMs;
 
             if ( v43 <= v42 )
                 v45 = v42;
@@ -11745,8 +11876,8 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
         }
         else
         {
-            int v47 = mgunProto.shot_time;
-            float v46 = arg->field_C * 1000.0;
+            int v47 = mgunProto->shot_time;
+            int v46 = frameDeltaMs;
 
             if ( v47 <= v46 )
                 v45 = v46;
@@ -11766,28 +11897,21 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
         {
             _mgun_time = arg->field_10;
             spawnVisual = true;
+
+            if ( vehicleTimedMgun )
+                ypabact_PlayVehicleMinigunPulse(this);
         }
     }
 
     for (int shotId = 0; shotId < mgunShots; shotId++)
     {
-        float mgunOffset = ypabact_GetMgunOffset(this, shotId, mgunShots);
-        vec3d sideOffset = _rotation.Transpose().Transform(vec3d(mgunOffset, 0.0, 0.0));
-        vec3d shotPos = _position + sideOffset;
-        vec3d shotOldPos = _old_pos + sideOffset;
-        bool userInput = (_oflags & BACT_OFLAG_USERINPT);
+        vec3d shotPos = _position;
+        vec3d shotOldPos = _old_pos;
         float spreadX = _mgun_spread_x;
         float spreadY = _mgun_spread_y;
 
-        if ( userInput )
-        {
-            if ( _mgun_spread_x_user_set )
-                spreadX = _mgun_spread_x_user;
-
-            if ( _mgun_spread_y_user_set )
-                spreadY = _mgun_spread_y_user;
-        }
-        vec3d shotDir = ypabact_ApplyDirectionalSpread(_rotation, arg->field_0, spreadX, spreadY);
+        vec3d fireDir = ypabact_GetMinigunFireDir(this, arg->field_0);
+        vec3d shotDir = ypabact_ApplyDirectionalSpread(_rotation, fireDir, spreadX, spreadY);
 
         NC_STACK_ypabact *v108 = NULL;
         float v123 = 0.0;
@@ -11903,13 +12027,13 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
 
                                                         if ( cellUnit->getBACT_inputting() || cellUnit->getBACT_viewer() )
                                                         {
-                                                            float v39 = (_gun_power * arg->field_C) * (100.0 - cellUnit->GetEffectiveShield());
+                                                            float v39 = (mgunPower * arg->field_C) * (100.0 - cellUnit->GetEffectiveShield());
                                                             energ = (v39 * 0.004);
                                                         }
                                                         else
                                                         {
 
-                                                            float v41 = (_gun_power * arg->field_C) * (100.0 - cellUnit->GetEffectiveShield());
+                                                            float v41 = (mgunPower * arg->field_C) * (100.0 - cellUnit->GetEffectiveShield());
                                                             energ = v41 / 100;
                                                         }
 
@@ -11986,7 +12110,11 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
                 }
             }
 
-            if ( v55 )
+            bool spawnedVehicleImpact = false;
+            if ( v55 && vehicleTimedMgun )
+                spawnedVehicleImpact = ypabact_SpawnVehicleMinigunImpact(this, v80, shotDir, v96 != 0);
+
+            if ( v55 && !spawnedVehicleImpact && _mgun != -1 )
             {
                 ypaworld_arg146 arg147;
                 arg147.pos = v80;
@@ -12066,7 +12194,7 @@ void NC_STACK_ypabact::sub_4843BC(NC_STACK_ypabact *bact2, int a3)
         hudi.field_18 = NULL;
     }
 
-    if ( _mgun == -1 )
+    if ( !HasMinigun() )
     {
         hudi.field_0 = 0;
     }
@@ -13467,6 +13595,8 @@ size_t NC_STACK_ypabact::SetStateInternal(setState_msg *arg)
         }
 
         SFXEngine::SFXe.startSound(&_soundcarrier, 7);
+        if ( ypabact_IsAirVehicle(this) && !(_status_flg & BACT_STFLAG_LAND) )
+            SFXEngine::SFXe.startSound(&_soundcarrier, World::TVhclProto::SND_AIREXPLODE);
 
         _soundFlags |= 0x80;
 

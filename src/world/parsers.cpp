@@ -499,6 +499,7 @@ TVhclSound *VhclProtoParser::GetSndFxByName(const std::string &sndname)
         {"beamin",      9},
         {"beamout",    10},
         {"build",      11},
+        {"airexplode", 12},
     };
 
     for (const SoundType &t : CmpVals)
@@ -1752,6 +1753,32 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
         int numMguns = parser.stol(p2, NULL, 0);
         _vhcl->num_mguns = numMguns > 0 ? numMguns : 1;
     }
+    else if ( !StriCmp(p1, "mgun_shot_time") )
+    {
+        _vhcl->mgun_shot_time = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "mgun_shot_time_user") )
+    {
+        _vhcl->mgun_shot_time_user = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "mgun_vp_dead") )
+    {
+        _vhcl->mgun_vp_dead = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "mgun_vp_megadeth") )
+    {
+        _vhcl->mgun_vp_megadeth = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "mgun_power") )
+    {
+        _vhcl->mgun_power = parser.stof(p2, 0);
+        _vhcl->mgun_power_set = true;
+    }
+    else if ( !StriCmp(p1, "mgun_angle") )
+    {
+        _vhcl->mgun_angle = parser.stof(p2, 0);
+        _vhcl->mgun_angle_set = true;
+    }
     else if ( !StriCmp(p1, "weapon_spread_x") )
     {
         _vhcl->weapon_spread_x = parser.stof(p2, 0);
@@ -1778,16 +1805,6 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
         _vhcl->weapon_spread_y_user = parser.stof(p2, 0);
         _vhcl->weapon_spread_y_user_set = true;
     }
-    else if ( !StriCmp(p1, "mgun_spread_x_user") )
-    {
-        _vhcl->mgun_spread_x_user = parser.stof(p2, 0);
-        _vhcl->mgun_spread_x_user_set = true;
-    }
-    else if ( !StriCmp(p1, "mgun_spread_y_user") )
-    {
-        _vhcl->mgun_spread_y_user = parser.stof(p2, 0);
-        _vhcl->mgun_spread_y_user_set = true;
-    }
     else if ( !StriCmp(p1, "fire_x") )
     {
         _vhcl->fire_x = parser.stof(p2, 0);
@@ -1799,10 +1816,6 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     else if ( !StriCmp(p1, "fire_z") )
     {
         _vhcl->fire_z = parser.stof(p2, 0);
-    }
-    else if ( !StriCmp(p1, "mgun_fire_x") )
-    {
-        _vhcl->mgun_fire_x = parser.stof(p2, 0);
     }
     else if ( !StriCmp(p1, "gun_radius") )
     {
@@ -2340,18 +2353,22 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->lowhp_weapon = 0;
         _vhcl->mgun = -1;
         _vhcl->num_mguns = 1;
+        _vhcl->mgun_shot_time = 0;
+        _vhcl->mgun_shot_time_user = 0;
+        _vhcl->mgun_vp_dead = 0;
+        _vhcl->mgun_vp_megadeth = 0;
+        _vhcl->mgun_power = 0.0;
+        _vhcl->mgun_angle = 0.0;
+        _vhcl->mgun_power_set = false;
+        _vhcl->mgun_angle_set = false;
         _vhcl->weapon_spread_x = 0.0;
         _vhcl->weapon_spread_y = 0.0;
         _vhcl->mgun_spread_x = 0.0;
         _vhcl->mgun_spread_y = 0.0;
         _vhcl->weapon_spread_x_user = 0.0;
         _vhcl->weapon_spread_y_user = 0.0;
-        _vhcl->mgun_spread_x_user = 0.0;
-        _vhcl->mgun_spread_y_user = 0.0;
         _vhcl->weapon_spread_x_user_set = false;
         _vhcl->weapon_spread_y_user_set = false;
-        _vhcl->mgun_spread_x_user_set = false;
-        _vhcl->mgun_spread_y_user_set = false;
         _vhcl->type_icon = 65;
         _vhcl->vp_normal = 0;
         _vhcl->vp_fire = 1;

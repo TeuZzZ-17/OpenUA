@@ -940,9 +940,9 @@ void NC_STACK_ypatank::User_layer(update_msg *arg)
             LaunchMissile(&arg79);
         }
 
-        if ( _mgun != -1 )
+        if ( HasMinigun() )
         {
-            if ( _status_flg & BACT_STFLAG_FIRE )
+            if ( !UsesVehicleMinigunTiming() && (_status_flg & BACT_STFLAG_FIRE) )
             {
                 if ( !(arg->inpt->Buttons.Is(2)) )
                 {
@@ -957,7 +957,7 @@ void NC_STACK_ypatank::User_layer(update_msg *arg)
 
             if ( arg->inpt->Buttons.Is(2) )
             {
-                if ( !(_status_flg & BACT_STFLAG_FIRE) )
+                if ( !UsesVehicleMinigunTiming() && !(_status_flg & BACT_STFLAG_FIRE) )
                 {
                     setState_msg arg78;
                     arg78.setFlags = BACT_STFLAG_FIRE;
@@ -1707,7 +1707,7 @@ size_t NC_STACK_ypatank::CheckFireAI(bact_arg101 *arg)
 
     if ( !v22 )
     {
-        if ( _mgun == -1 )
+        if ( !HasMinigun() )
             return 0;
         v43 = 2;
     }

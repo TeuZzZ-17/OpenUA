@@ -1548,22 +1548,25 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
 
         bacto->_mgun = vhcl.mgun;
         bacto->_num_mguns = vhcl.num_mguns > 0 ? vhcl.num_mguns : 1;
+        bacto->_mgun_shot_time = vhcl.mgun_shot_time;
+        bacto->_mgun_shot_time_user = vhcl.mgun_shot_time_user;
+        bacto->_mgun_vp_dead = vhcl.mgun_vp_dead;
+        bacto->_mgun_vp_megadeth = vhcl.mgun_vp_megadeth;
+        bacto->_mgun_power = vhcl.mgun_power;
+        bacto->_mgun_angle = vhcl.mgun_angle;
+        bacto->_mgun_power_set = vhcl.mgun_power_set;
+        bacto->_mgun_angle_set = vhcl.mgun_angle_set;
         bacto->_weapon_spread_x = vhcl.weapon_spread_x;
         bacto->_weapon_spread_y = vhcl.weapon_spread_y;
         bacto->_mgun_spread_x = vhcl.mgun_spread_x;
         bacto->_mgun_spread_y = vhcl.mgun_spread_y;
         bacto->_weapon_spread_x_user = vhcl.weapon_spread_x_user;
         bacto->_weapon_spread_y_user = vhcl.weapon_spread_y_user;
-        bacto->_mgun_spread_x_user = vhcl.mgun_spread_x_user;
-        bacto->_mgun_spread_y_user = vhcl.mgun_spread_y_user;
         bacto->_weapon_spread_x_user_set = vhcl.weapon_spread_x_user_set;
         bacto->_weapon_spread_y_user_set = vhcl.weapon_spread_y_user_set;
-        bacto->_mgun_spread_x_user_set = vhcl.mgun_spread_x_user_set;
-        bacto->_mgun_spread_y_user_set = vhcl.mgun_spread_y_user_set;
         bacto->_fire_pos.x = vhcl.fire_x;
         bacto->_fire_pos.y = vhcl.fire_y;
         bacto->_fire_pos.z = vhcl.fire_z;
-        bacto->_mgun_fire_x = vhcl.mgun_fire_x;
         bacto->_gun_angle = vhcl.gun_angle;
         bacto->_gun_angle_user = vhcl.gun_angle;
         bacto->_num_weapons = vhcl.num_weapons;
@@ -7919,28 +7922,28 @@ int NC_STACK_ypaworld::TestVehicle(int protoID, int job)
     switch ( job )
     {
     case 1:
-        if ( (proto.mgun == -1 && !wpn) || proto.model_id == BACT_TYPES_UFO )
+        if ( ((proto.mgun == -1 && proto.mgun_shot_time <= 0) && !wpn) || proto.model_id == BACT_TYPES_UFO )
             return -1;
 
         return proto.job_fightrobo;
         break;
 
     case 2:
-        if ( (proto.mgun == -1 && !wpn) || proto.model_id == BACT_TYPES_UFO )
+        if ( ((proto.mgun == -1 && proto.mgun_shot_time <= 0) && !wpn) || proto.model_id == BACT_TYPES_UFO )
             return -1;
 
         return proto.job_fighttank;
         break;
 
     case 4:
-        if ( (proto.mgun == -1 && !wpn) || proto.model_id == BACT_TYPES_UFO )
+        if ( ((proto.mgun == -1 && proto.mgun_shot_time <= 0) && !wpn) || proto.model_id == BACT_TYPES_UFO )
             return -1;
 
         return proto.job_fighthelicopter;
         break;
 
     case 3:
-        if ( (proto.mgun == -1 && !wpn) || proto.model_id == BACT_TYPES_UFO )
+        if ( ((proto.mgun == -1 && proto.mgun_shot_time <= 0) && !wpn) || proto.model_id == BACT_TYPES_UFO )
             return -1;
 
         return proto.job_fightflyer;

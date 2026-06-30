@@ -884,9 +884,9 @@ void NC_STACK_ypaflyer::User_layer(update_msg *arg)
             LaunchMissile(&arg79);
         }
 
-        if ( _mgun != -1 )
+        if ( HasMinigun() )
         {
-            if ( _status_flg & BACT_STFLAG_FIRE )
+            if ( !UsesVehicleMinigunTiming() && (_status_flg & BACT_STFLAG_FIRE) )
             {
                 if ( !arg->inpt->Buttons.Is(2) )
                 {
@@ -901,7 +901,7 @@ void NC_STACK_ypaflyer::User_layer(update_msg *arg)
 
             if ( arg->inpt->Buttons.Is(2))
             {
-                if ( !(_status_flg & BACT_STFLAG_FIRE) )
+                if ( !UsesVehicleMinigunTiming() && !(_status_flg & BACT_STFLAG_FIRE) )
                 {
                     setState_msg arg78;
                     arg78.unsetFlags = 0;
@@ -1136,5 +1136,4 @@ int NC_STACK_ypaflyer::getFLY_type()
 {
     return _flyerType;
 }
-
 

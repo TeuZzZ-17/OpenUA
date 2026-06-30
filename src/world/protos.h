@@ -335,8 +335,9 @@ struct TVhclProto
         SND_BEAMIN  = 9,
         SND_BEAMOUT = 10,
         SND_BUILD   = 11,
+        SND_AIREXPLODE = 12,
         
-        SND_MAX     = 12
+        SND_MAX     = 13
     };
     
     inline static bool IsLoopingSnd(int i)
@@ -369,18 +370,22 @@ struct TVhclProto
     int field_4 = 0;
     int8_t mgun = 0;
     int16_t num_mguns = 1;
+    int mgun_shot_time = 0;
+    int mgun_shot_time_user = 0;
+    int16_t mgun_vp_dead = 0;
+    int16_t mgun_vp_megadeth = 0;
+    float mgun_power = 0.0;
+    float mgun_angle = 0.0;
+    bool mgun_power_set = false;
+    bool mgun_angle_set = false;
     float weapon_spread_x = 0.0;
     float weapon_spread_y = 0.0;
     float mgun_spread_x = 0.0;
     float mgun_spread_y = 0.0;
     float weapon_spread_x_user = 0.0;
     float weapon_spread_y_user = 0.0;
-    float mgun_spread_x_user = 0.0;
-    float mgun_spread_y_user = 0.0;
     bool weapon_spread_x_user_set = false;
     bool weapon_spread_y_user_set = false;
-    bool mgun_spread_x_user_set = false;
-    bool mgun_spread_y_user_set = false;
     uint8_t type_icon = 0;
     std::string name;
     int16_t vp_normal = 0;
@@ -476,7 +481,6 @@ struct TVhclProto
     float fire_x = 0.0;
     float fire_y = 0.0;
     float fire_z = 0.0;
-    float mgun_fire_x = 0.0;
     int16_t num_weapons = 0;
     float gun_power = 0.0;
     float gun_radius = 0.0;

@@ -526,6 +526,11 @@ public:
     bool IsInvisibleUnrevealed() const { return _invisibleUnrevealed; }
     bool CanBeSeenByAIOrRadar() const { return !_invisibleUnrevealed; }
     void RevealInvisibleOnAttack();
+    bool HasMinigun() const;
+    bool UsesVehicleMinigunTiming() const { return _mgun_shot_time > 0; }
+    int GetMinigunShotTime(bool userControlled, int frameDeltaMs) const;
+    float GetMinigunPower() const { return _mgun_power_set ? _mgun_power : _gun_power; }
+    float GetMinigunAngle() const { return _mgun_angle_set ? _mgun_angle : _gun_angle; }
 
     NC_STACK_ypabact();
     virtual ~NC_STACK_ypabact();
@@ -794,6 +799,8 @@ public:
     TSndCarrier _damaged_shake_carrier;
     TSndCarrier _laser_soundcarrier; // OpenUA custom: managed loop sound for model = laser
     TSndCarrier _vertical_laser_soundcarrier; // OpenUA custom: managed loop sound for model = vertical_laser
+    TSndCarrier _mgun_soundcarrier; // OpenUA custom: one-shot pulse sound for vehicle-controlled MG
+    int _mgun_sound_index;
     int _vp_active;
     extra_vproto _vp_extra[3];
     int _vp_extra_mode;
@@ -840,18 +847,22 @@ public:
     uint8_t _weapon_flags;
     int _mgun;
     int _num_mguns;
+    int _mgun_shot_time;
+    int _mgun_shot_time_user;
+    int _mgun_vp_dead;
+    int _mgun_vp_megadeth;
+    float _mgun_power;
+    float _mgun_angle;
+    bool _mgun_power_set;
+    bool _mgun_angle_set;
     float _weapon_spread_x;
     float _weapon_spread_y;
     float _mgun_spread_x;
     float _mgun_spread_y;
     float _weapon_spread_x_user;
     float _weapon_spread_y_user;
-    float _mgun_spread_x_user;
-    float _mgun_spread_y_user;
     bool _weapon_spread_x_user_set;
     bool _weapon_spread_y_user_set;
-    bool _mgun_spread_x_user_set;
-    bool _mgun_spread_y_user_set;
     uint8_t _num_weapons;
 
     World::MissileList _missiles_list;
@@ -862,7 +873,6 @@ public:
     float _gun_leftright;
     float _gun_radius;
     float _gun_power;
-    float _mgun_fire_x;
     int _mgun_time;
     int _salve_counter;
     int _kill_after_shot;
