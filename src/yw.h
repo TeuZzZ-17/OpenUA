@@ -2561,6 +2561,7 @@ public:
         vec3d axisScale = vec3d(1.0, 1.0, 1.0);
         bool chainFX = false;
         std::vector<NC_STACK_base *> chainBases;
+        std::vector<World::TVisualTint> chainTints;
         int32_t chainIndex = -1;
         float startScale = 1.0;
         float endScale = 1.0;

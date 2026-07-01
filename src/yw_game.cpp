@@ -2792,15 +2792,21 @@ void NC_STACK_ypaworld::SpawnChainFX(const World::TChainFXConfig &config, const 
 
     std::vector<NC_STACK_base *> bases;
     bases.reserve(config.vp_models.size());
+    std::vector<World::TVisualTint> tints;
+    tints.reserve(config.vp_models.size());
 
-    for (int16_t modelId : config.vp_models)
+    for (const World::TChainFXVPModel &vpModel : config.vp_models)
     {
+        int16_t modelId = vpModel.model;
         if ( modelId <= 0 || modelId >= (int32_t)_vhclModels.size() )
             continue;
 
         NC_STACK_base *base = _vhclModels.at(modelId);
         if ( base )
+        {
             bases.push_back(base);
+            tints.push_back(vpModel.has_tint ? vpModel.tint : World::TVisualTint());
+        }
     }
 
     if ( bases.empty() )
@@ -2812,7 +2818,10 @@ void NC_STACK_ypaworld::SpawnChainFX(const World::TChainFXConfig &config, const 
     TTransientVP &fx = _transientVPs.back();
     fx.chainFX = true;
     fx.chainBases = std::move(bases);
+    fx.chainTints = std::move(tints);
     fx.chainIndex = 0;
+    if ( !fx.chainTints.empty() )
+        fx.tint = fx.chainTints.front();
     fx.startScale = config.start_size >= 0.0 ? config.start_size : 0.0;
     fx.endScale = config.end_size >= 0.0 ? config.end_size : 0.0;
 }
@@ -3512,6 +3521,10 @@ static void yw_RenderTransientVPs(NC_STACK_ypaworld *world, std::list<NC_STACK_y
                 {
                     it->vp.reset(it->chainBases[index]->GenRenderInstance());
                     it->chainIndex = index;
+                    if ( index < (int32_t)it->chainTints.size() )
+                        it->tint = it->chainTints[index];
+                    else
+                        it->tint = World::TVisualTint();
                 }
             }
         }

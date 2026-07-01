@@ -58,6 +58,13 @@ struct TDecorationFXConfig
     TVisualTint tint;
 };
 
+struct TChainFXVPModel
+{
+    int16_t model = 0;
+    bool has_tint = false;
+    TVisualTint tint;
+};
+
 enum VisualScaleMode
 {
     VISUAL_SCALE_FIXED = 0,
@@ -106,7 +113,7 @@ struct TChainFXConfig
     float start_size = 1.0;
     float end_size = 0.0;
     int duration = 0;
-    std::vector<int16_t> vp_models;
+    std::vector<TChainFXVPModel> vp_models;
     int physical_vehicle = 0;
     bool inherit_velocity = false;
 };

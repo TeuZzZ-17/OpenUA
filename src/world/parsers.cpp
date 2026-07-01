@@ -937,7 +937,7 @@ static int ParseChainFXBlock(ScriptParser::Parser &parser,
     bool hasEndSize = false;
     vec3d offset;
     int duration = 0;
-    std::vector<int16_t> vpModels;
+    std::vector<World::TChainFXVPModel> vpModels;
     int physicalVehicle = 0;
     bool inheritVelocity = false;
     World::TChainFXConfig::Trigger trigger = World::TChainFXConfig::TRIGGER_NONE;
@@ -1055,7 +1055,22 @@ static int ParseChainFXBlock(ScriptParser::Parser &parser,
         else if ( !StriCmp(p1, "offset_z") )
             offset.z = parser.stof(p2, 0);
         else if ( !StriCmp(p1, "vp_model") )
-            vpModels.push_back(parser.stol(p2, NULL, 0));
+        {
+            World::TChainFXVPModel vpModel;
+            vpModel.model = parser.stol(p2, NULL, 0);
+            vpModels.push_back(vpModel);
+        }
+        else if ( !StriCmp(p1, "vp_tint") )
+        {
+            if ( vpModels.empty() )
+            {
+                ypa_log_out("WARNING: begin_chain_fx vp_tint without preceding vp_model ignored\n");
+                continue;
+            }
+
+            ParseTintParam(parser, "vp_tint", p1, p2, vpModels.back().tint);
+            vpModels.back().has_tint = true;
+        }
         else if ( !StriCmp(p1, "physical_vehicle") )
             physicalVehicle = parser.stol(p2, NULL, 0);
         else if ( !StriCmp(p1, "inherit_velocity") )

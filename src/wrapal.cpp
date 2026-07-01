@@ -11,7 +11,7 @@
 
 
 #define WRAP_AL_BUFFS   3
-#define WRAP_AL_BUFFSZ  1024
+#define WRAP_AL_BUFFSZ  4096 // Keep modern 44/48 kHz stereo WAV SFX safely ahead of the audio thread.
 #define WRAP_AL_MUSSBUFF (4096 * 2 * 2) // 2 channel 16 bit 4096 samples ~0.09sec on 44100
 #ifdef WRAP_DEBUG
 
