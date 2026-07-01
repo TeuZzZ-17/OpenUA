@@ -32,6 +32,25 @@ public:
     static Common::Ini::Key GfxBlending;
     static Common::Ini::Key GfxSolidFont;
     static Common::Ini::Key GfxVsync;
+    static Common::Ini::Key GfxNewSky;
+    static Common::Ini::Key GfxSkyDistance;
+    static Common::Ini::Key GfxSkyLength;
+    static Common::Ini::Key GfxHorizonFogEnable;
+    static Common::Ini::Key GfxHorizonFogStart;
+    static Common::Ini::Key GfxHorizonFogLength;
+    static Common::Ini::Key GfxHorizonFogStrength;
+    static Common::Ini::Key GfxHorizonDarkEnable;
+    static Common::Ini::Key GfxHorizonDarkStart;
+    static Common::Ini::Key GfxHorizonDarkLength;
+    static Common::Ini::Key GfxHorizonDarkStrength;
+    static Common::Ini::Key GfxHorizonDarkColor;
+    static Common::Ini::Key GfxRenderSectors;
+    static Common::Ini::Key GfxNormalVisualLimit;
+    static Common::Ini::Key GfxNormalFadeLength;
+    static Common::Ini::Key GfxSkyVisualLimit;
+    static Common::Ini::Key GfxSkyFadeLength;
+    static Common::Ini::Key GfxSkyHeight;
+    static Common::Ini::Key GfxSkyRender;
     static Common::Ini::Key GfxAdditionalModes;
     
     static Common::Ini::Key GfxMode;

@@ -42,7 +42,7 @@
 
 
 
-#define YW_RENDER_SECTORS_DEF   5
+#define YW_RENDER_SECTORS_DEF   8
 
 class NC_STACK_ypaworld;
 class NC_STACK_button;
@@ -2216,6 +2216,7 @@ public:
 
 
     void SetFarView(bool farvw);
+    void ApplyNucleusViewDistanceOverrides();
     
     int TestVehicle(int protoID, int job);
 
@@ -2486,7 +2487,8 @@ public:
     void ypaworld_func137__sub0(ypaworld_arg137 *arg, const TSectorCollision &a2);    
     
     void VoiceMessageUpdate();
-    void VoiceMessagePlayFile(const std::string &flname, NC_STACK_ypabact *unit, int a5);
+    bool VoiceMessagePlayFile(const std::string &flname, NC_STACK_ypabact *unit, int a5);
+    bool VoiceMessagePlayResourceFile(const std::string &filename, NC_STACK_ypabact *unit, int priority);
     void VoiceMessagePlayMsg(NC_STACK_ypabact *unit, int priority, int msgID);
     void VoiceMessageCalcPositionToUnit();
     

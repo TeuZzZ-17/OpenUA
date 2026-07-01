@@ -50,6 +50,87 @@ uint32_t bact_id = 0x10000;
 // method 169
 uint32_t dword_5A7A80;
 
+static std::string yw_TrimConfigValue(std::string s)
+{
+    size_t first = s.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos)
+        return std::string();
+
+    size_t last = s.find_last_not_of(" \t\r\n");
+    return s.substr(first, last - first + 1);
+}
+
+static bool yw_ParseOptionalInt(std::string s, int32_t *out)
+{
+    s = yw_TrimConfigValue(s);
+    if (s.empty())
+        return false;
+
+    try
+    {
+        size_t pos = 0;
+        int32_t v = (int32_t)std::stol(s, &pos, 0);
+        size_t rest = s.find_first_not_of(" \t\r\n", pos);
+        if (rest != std::string::npos)
+            return false;
+
+        *out = v;
+        return true;
+    }
+    catch (...)
+    {
+        return false;
+    }
+}
+
+static bool yw_ParseOptionalBool(std::string s, bool *out)
+{
+    s = yw_TrimConfigValue(s);
+    if (s.empty())
+        return false;
+
+    *out = StrGetBool(s);
+    return true;
+}
+
+static int32_t yw_ClampRenderSectors(int32_t sectors)
+{
+    if (sectors < 3)
+        sectors = 3;
+    if (sectors > YW_RENDER_SECTORS_DEF * 2 - 1)
+        sectors = YW_RENDER_SECTORS_DEF * 2 - 1;
+    if ((sectors & 1) == 0)
+        sectors -= 1;
+
+    return sectors;
+}
+
+static void yw_ApplyNucleusViewDistanceOverrides(NC_STACK_ypaworld *yw)
+{
+    int32_t v = 0;
+    bool b = false;
+
+    if (yw_ParseOptionalInt(System::IniConf::GfxRenderSectors.Get<std::string>(), &v))
+        yw->_renderSectors = yw_ClampRenderSectors(v);
+    if (yw_ParseOptionalInt(System::IniConf::GfxNormalVisualLimit.Get<std::string>(), &v) && v > 0)
+        yw->_normalVizLimit = v;
+    if (yw_ParseOptionalInt(System::IniConf::GfxNormalFadeLength.Get<std::string>(), &v) && v > 0)
+        yw->_normalFadeLength = v;
+    if (yw_ParseOptionalInt(System::IniConf::GfxSkyVisualLimit.Get<std::string>(), &v) && v > 0)
+        yw->_skyVizLimit = v;
+    if (yw_ParseOptionalInt(System::IniConf::GfxSkyFadeLength.Get<std::string>(), &v) && v > 0)
+        yw->_skyFadeLength = v;
+    if (yw_ParseOptionalInt(System::IniConf::GfxSkyHeight.Get<std::string>(), &v))
+        yw->_skyHeight = v;
+    if (yw_ParseOptionalBool(System::IniConf::GfxSkyRender.Get<std::string>(), &b))
+        yw->_skyRender = b;
+}
+
+void NC_STACK_ypaworld::ApplyNucleusViewDistanceOverrides()
+{
+    yw_ApplyNucleusViewDistanceOverrides(this);
+}
+
 NC_STACK_ypaworld::NC_STACK_ypaworld()
 : _unitsList(this, NC_STACK_ypabact::GetKidRefNode, World::BLIST_UNITS)
 , _deadCacheList(this, NC_STACK_ypabact::GetKidRefNode, World::BLIST_CACHE)
@@ -375,6 +456,7 @@ size_t NC_STACK_ypaworld::Init(IDVList &stak)
     _mapSize.y = stak.Get<int32_t>(YW_ATT_MAPMAX_Y, 64);
     _skyHeight = stak.Get<int32_t>(YW_ATT_SKYHEIGHT, -550);
     _skyRender = stak.Get<bool>(YW_ATT_SKYRENDER, true);
+    ApplyNucleusViewDistanceOverrides();
     _doEnergyRecalc = stak.Get<bool>(YW_ATT_DOENERGYRECALC, true);
 
     _buildDate = stak.Get<std::string>(YW_ATT_BUILD_DATE, "");
@@ -1547,6 +1629,7 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
             bacto->_weapon_flags = _weaponProtos.at( vhcl.weapon )._weaponFlags;
 
         bacto->_mgun = vhcl.mgun;
+        bacto->_mgun_set = vhcl.mgun_set;
         bacto->_num_mguns = vhcl.num_mguns > 0 ? vhcl.num_mguns : 1;
         bacto->_mgun_shot_time = vhcl.mgun_shot_time;
         bacto->_mgun_shot_time_user = vhcl.mgun_shot_time_user;
@@ -7922,28 +8005,28 @@ int NC_STACK_ypaworld::TestVehicle(int protoID, int job)
     switch ( job )
     {
     case 1:
-        if ( ((proto.mgun == -1 && proto.mgun_shot_time <= 0) && !wpn) || proto.model_id == BACT_TYPES_UFO )
+        if ( (((proto.mgun_set && proto.mgun == -1) || (!proto.mgun_set && proto.mgun_shot_time <= 0)) && !wpn) || proto.model_id == BACT_TYPES_UFO )
             return -1;
 
         return proto.job_fightrobo;
         break;
 
     case 2:
-        if ( ((proto.mgun == -1 && proto.mgun_shot_time <= 0) && !wpn) || proto.model_id == BACT_TYPES_UFO )
+        if ( (((proto.mgun_set && proto.mgun == -1) || (!proto.mgun_set && proto.mgun_shot_time <= 0)) && !wpn) || proto.model_id == BACT_TYPES_UFO )
             return -1;
 
         return proto.job_fighttank;
         break;
 
     case 4:
-        if ( ((proto.mgun == -1 && proto.mgun_shot_time <= 0) && !wpn) || proto.model_id == BACT_TYPES_UFO )
+        if ( (((proto.mgun_set && proto.mgun == -1) || (!proto.mgun_set && proto.mgun_shot_time <= 0)) && !wpn) || proto.model_id == BACT_TYPES_UFO )
             return -1;
 
         return proto.job_fighthelicopter;
         break;
 
     case 3:
-        if ( ((proto.mgun == -1 && proto.mgun_shot_time <= 0) && !wpn) || proto.model_id == BACT_TYPES_UFO )
+        if ( (((proto.mgun_set && proto.mgun == -1) || (!proto.mgun_set && proto.mgun_shot_time <= 0)) && !wpn) || proto.model_id == BACT_TYPES_UFO )
             return -1;
 
         return proto.job_fightflyer;

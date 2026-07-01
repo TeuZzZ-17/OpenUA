@@ -1747,6 +1747,7 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     else if ( !StriCmp(p1, "mgun") )
     {
         _vhcl->mgun = parser.stol(p2, NULL, 0);
+        _vhcl->mgun_set = true;
     }
     else if ( !StriCmp(p1, "num_mguns") )
     {
@@ -1936,6 +1937,10 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     else if ( !StriCmp(p1, "vo_type") )
     {
         _vhcl->vo_type = parser.stol(p2, NULL, 16);
+    }
+    else if ( !StriCmp(p1, "voicepack") )
+    {
+        _vhcl->voicepack = p2;
     }
     else if ( !StriCmp(p1, "max_pitch") )
     {
@@ -2352,6 +2357,7 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->lowhp_threshold = 0.30;
         _vhcl->lowhp_weapon = 0;
         _vhcl->mgun = -1;
+        _vhcl->mgun_set = false;
         _vhcl->num_mguns = 1;
         _vhcl->mgun_shot_time = 0;
         _vhcl->mgun_shot_time_user = 0;
@@ -2433,6 +2439,7 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->seek_and_explode_weapon = 0;
         _vhcl->seek_and_explode_trigger_radius = 0.0;
         _vhcl->ai_max_active_at_once = 0;
+        _vhcl->voicepack.clear();
         _vhcl->shield = 50;
         _vhcl->energy = 10000;
         _vhcl->adist_sector = 800.0;

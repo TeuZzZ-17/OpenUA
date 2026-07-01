@@ -527,7 +527,7 @@ public:
     bool CanBeSeenByAIOrRadar() const { return !_invisibleUnrevealed; }
     void RevealInvisibleOnAttack();
     bool HasMinigun() const;
-    bool UsesVehicleMinigunTiming() const { return _mgun_shot_time > 0; }
+    bool UsesVehicleMinigunTiming() const { return !_mgun_set && _mgun_shot_time > 0; }
     int GetMinigunShotTime(bool userControlled, int frameDeltaMs) const;
     float GetMinigunPower() const { return _mgun_power_set ? _mgun_power : _gun_power; }
     float GetMinigunAngle() const { return _mgun_angle_set ? _mgun_angle : _gun_angle; }
@@ -847,6 +847,7 @@ public:
     int _lowhp_weapon;
     uint8_t _weapon_flags;
     int _mgun;
+    bool _mgun_set;
     int _num_mguns;
     int _mgun_shot_time;
     int _mgun_shot_time_user;

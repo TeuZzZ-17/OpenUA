@@ -1290,6 +1290,7 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _lowhp_weapon = 0;
     _weapon_flags = 0;
     _mgun = 0;
+    _mgun_set = false;
     _num_mguns = 1;
     _mgun_shot_time = 0;
     _mgun_shot_time_user = 0;
@@ -2356,7 +2357,10 @@ void NC_STACK_ypabact::BeforeSoundCarrierUpdate()
 
 bool NC_STACK_ypabact::HasMinigun() const
 {
-    return _mgun != -1 || _mgun_shot_time > 0;
+    if ( _mgun_set )
+        return _mgun != -1;
+
+    return _mgun_shot_time > 0;
 }
 
 int NC_STACK_ypabact::GetMinigunShotTime(bool userControlled, int frameDeltaMs) const
@@ -5462,7 +5466,7 @@ void NC_STACK_ypabact::Die()
         {
             if ( _bact_type == BACT_TYPES_GUN )
             {
-                if ( _weapon != -1 || -1 != _mgun )
+                if ( _weapon != -1 || HasMinigun() )
                 {
                     v53.field_14 = 80;
                     v53.field_4 = 31;
@@ -11182,6 +11186,7 @@ void NC_STACK_ypabact::Renew()
     _lowhp_weapon_enable = 0;
     _lowhp_threshold = 0.30;
     _lowhp_weapon = 0;
+    _mgun_set = false;
     _num_mguns = 1;
     _mgun_shot_time = 0;
     _mgun_shot_time_user = 0;

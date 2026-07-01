@@ -47,6 +47,104 @@ struct StatusIconCacheEntry
 using StatusIconList = std::array<std::string, STATUS_ICON_MAX_COUNT>;
 
 std::map<std::string, StatusIconCacheEntry> g_statusIconCache;
+std::map<std::string, bool> g_voicepackLoggedUsed;
+std::map<std::string, bool> g_voicepackLoggedFallback;
+
+const char *VoicepackEventKeyFromMsgID(int msgID)
+{
+    switch ( msgID )
+    {
+    case 14:
+        return "unit_ready";
+    case 1:
+        return "unit_idle";
+    case 15:
+        return "order_ack_friendly";
+    case 16:
+        return "order_ack_enemy";
+    case 17:
+        return "unit_control_entered";
+    case 22:
+        return "enemy_sector_entered";
+    case 10:
+        return "unit_recovered";
+    case 7:
+        return "enemy_unit_spotted";
+    case 6:
+        return "enemy_host_found";
+    case 18:
+        return "request_support";
+    case 9:
+        return "unit_retreating";
+    case 8:
+        return "unit_lost";
+    case 19:
+        return "enemy_unit_engaged";
+    case 5:
+        return "enemy_unit_destroyed";
+    case 11:
+        return "enemy_host_destroyed";
+    case 45:
+        return "powerstation_captured";
+    default:
+        return NULL;
+    }
+}
+
+std::string VoicepackJoinPath(std::string dir, const std::string &file)
+{
+    if ( dir.compare(0, 5, "rsrc:") == 0 )
+        dir.erase(0, 5);
+
+    while ( !dir.empty() && (dir.back() == '/' || dir.back() == '\\') )
+        dir.pop_back();
+
+    if ( dir.empty() )
+        return file;
+
+    return dir + "/" + file;
+}
+
+void VoicepackLogOnce(std::map<std::string, bool> &cache, const std::string &key, const char *fmt, const std::string &path)
+{
+    if ( cache[key] )
+        return;
+
+    cache[key] = true;
+    ypa_log_out(fmt, path.c_str());
+}
+
+std::string VoicepackFindEventFile(const std::string &dir, const char *eventKey)
+{
+    std::vector<std::string> variants;
+    std::string oldRsrc = Common::Env.SetPrefix("rsrc", "data:");
+
+    for (int i = 1; i <= 99; i++)
+    {
+        std::string filename = VoicepackJoinPath(dir, fmt::sprintf("%s_%02d.wav", eventKey, i));
+
+        if ( uaFileExist("rsrc:" + filename) )
+            variants.push_back(filename);
+    }
+
+    if ( !variants.empty() )
+    {
+        std::string filename = variants.at(rand() % variants.size());
+        Common::Env.SetPrefix("rsrc", oldRsrc);
+        return filename;
+    }
+
+    std::string filename = VoicepackJoinPath(dir, std::string(eventKey) + ".wav");
+
+    if ( uaFileExist("rsrc:" + filename) )
+    {
+        Common::Env.SetPrefix("rsrc", oldRsrc);
+        return filename;
+    }
+
+    Common::Env.SetPrefix("rsrc", oldRsrc);
+    return "";
+}
 
 enum StatusIconPowerState
 {
@@ -8639,10 +8737,49 @@ void ypaworld_func64__sub15(NC_STACK_ypaworld *yw)
     }
 }
 
-void NC_STACK_ypaworld::VoiceMessagePlayFile(const std::string &flname, NC_STACK_ypabact *unit, int priority)
+bool NC_STACK_ypaworld::VoiceMessagePlayResourceFile(const std::string &filename, NC_STACK_ypabact *unit, int priority)
 {
     if ( IsSpectatorControlled() )
-        return;
+        return false;
+
+    std::string oldRsrc = Common::Env.SetPrefix("rsrc", "data:");
+
+    if ( !uaFileExist("rsrc:" + filename) )
+    {
+        Common::Env.SetPrefix("rsrc", oldRsrc);
+        return false;
+    }
+
+    NC_STACK_wav *v23 = Nucleus::CInit<NC_STACK_wav>( {{NC_STACK_rsrc::RSRC_ATT_NAME, filename}} );
+
+    Common::Env.SetPrefix("rsrc", oldRsrc);
+
+    if ( !v23 )
+        return false;
+
+    _voiceMessage.Reset();
+
+    _voiceMessage.Carrier.Sounds[0].Pitch = 0;
+    _voiceMessage.Carrier.Sounds[0].Volume = priority + 500;
+    _voiceMessage.Carrier.Sounds[0].PriorityBias = 512;
+    _voiceMessage.Carrier.Sounds[0].PSample = v23->GetSampleData();
+
+    _voiceMessage.Priority = priority;
+    _voiceMessage.Sample = v23;
+    _voiceMessage.Unit = unit;
+
+    VoiceMessageCalcPositionToUnit();
+
+    _voiceMessage.Carrier.Vector = _userUnit->_fly_dir * _userUnit->_fly_dir_length;
+    SFXEngine::SFXe.startSound(&_voiceMessage.Carrier, 0);
+
+    return true;
+}
+
+bool NC_STACK_ypaworld::VoiceMessagePlayFile(const std::string &flname, NC_STACK_ypabact *unit, int priority)
+{
+    if ( IsSpectatorControlled() )
+        return false;
 
     _voiceMessage.Reset();
 
@@ -8664,30 +8801,8 @@ void NC_STACK_ypaworld::VoiceMessagePlayFile(const std::string &flname, NC_STACK
         filename += flname;
     }
 
-    NC_STACK_wav *v23 = Nucleus::CInit<NC_STACK_wav>( {{NC_STACK_rsrc::RSRC_ATT_NAME, filename}} );
-
     Common::Env.SetPrefix("rsrc", oldRsrc);
-
-    if ( v23 )
-    {        
-        _voiceMessage.Carrier.Sounds[0].Pitch = 0;
-        _voiceMessage.Carrier.Sounds[0].Volume = priority + 500;
-        _voiceMessage.Carrier.Sounds[0].PriorityBias = 512;
-
-        if ( v23 )
-            _voiceMessage.Carrier.Sounds[0].PSample = v23->GetSampleData();
-        else
-            _voiceMessage.Carrier.Sounds[0].PSample = NULL;
-
-        _voiceMessage.Priority = priority;
-        _voiceMessage.Sample = v23;
-        _voiceMessage.Unit = unit;
-
-        VoiceMessageCalcPositionToUnit();
-
-        _voiceMessage.Carrier.Vector = _userUnit->_fly_dir * _userUnit->_fly_dir_length;
-        SFXEngine::SFXe.startSound(&_voiceMessage.Carrier, 0);
-    }
+    return VoiceMessagePlayResourceFile(filename, unit, priority);
 }
 void NC_STACK_ypaworld::VoiceMessagePlayMsg(NC_STACK_ypabact *unit, int priority, int msgID)
 {
@@ -9046,7 +9161,40 @@ void NC_STACK_ypaworld::VoiceMessagePlayMsg(NC_STACK_ypabact *unit, int priority
 
             if ( msgvals.v1 == 1 )
             {
-                vo_type = _vhclProtos[unit->_vehicleID].vo_type;
+                World::TVhclProto &vhclProto = _vhclProtos[unit->_vehicleID];
+                const char *voicepackEventKey = VoicepackEventKeyFromMsgID(msgID);
+
+                if ( voicepackEventKey && !vhclProto.voicepack.empty() )
+                {
+                    std::string voicepackFile = VoicepackFindEventFile(vhclProto.voicepack, voicepackEventKey);
+
+                    if ( !voicepackFile.empty() )
+                    {
+                        if ( VoiceMessagePlayResourceFile(voicepackFile, unit, priority) )
+                        {
+                            VoicepackLogOnce(g_voicepackLoggedUsed,
+                                             voicepackFile,
+                                             "Voicepack: using %s\n",
+                                             voicepackFile);
+                            return;
+                        }
+
+                        VoicepackLogOnce(g_voicepackLoggedFallback,
+                                         voicepackFile,
+                                         "Voicepack: failed to load %s, falling back to vanilla voice\n",
+                                         voicepackFile);
+                    }
+                    else
+                    {
+                        std::string missingKey = VoicepackJoinPath(vhclProto.voicepack, voicepackEventKey);
+                        VoicepackLogOnce(g_voicepackLoggedFallback,
+                                         missingKey,
+                                         "Voicepack: missing %s*.wav, falling back to vanilla voice\n",
+                                         missingKey);
+                    }
+                }
+
+                vo_type = vhclProto.vo_type;
 
                 if ( !vo_type )
                     vo_type = 11;

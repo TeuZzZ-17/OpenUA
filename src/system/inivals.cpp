@@ -23,6 +23,25 @@ Common::Ini::Key IniConf::GfxExportWindowMode("gfx.export_window_mode", Common::
 Common::Ini::Key IniConf::GfxBlending("gfx.blending", Common::Ini::KT_DIGIT, (int32_t) 0);
 Common::Ini::Key IniConf::GfxSolidFont("gfx.solidfont", Common::Ini::KT_BOOL, false);
 Common::Ini::Key IniConf::GfxVsync("gfx.vsync", Common::Ini::KT_DIGIT, (int32_t)1);
+Common::Ini::Key IniConf::GfxNewSky("gfx.newsky", Common::Ini::KT_BOOL, false);
+Common::Ini::Key IniConf::GfxSkyDistance("gfx.skydistance", Common::Ini::KT_DIGIT, (int32_t)3000);
+Common::Ini::Key IniConf::GfxSkyLength("gfx.skylength", Common::Ini::KT_DIGIT, (int32_t)500);
+Common::Ini::Key IniConf::GfxHorizonFogEnable("gfx.horizon_fog_enable", Common::Ini::KT_BOOL, true);
+Common::Ini::Key IniConf::GfxHorizonFogStart("gfx.horizon_fog_start", Common::Ini::KT_WORD, std::string());
+Common::Ini::Key IniConf::GfxHorizonFogLength("gfx.horizon_fog_length", Common::Ini::KT_WORD, std::string());
+Common::Ini::Key IniConf::GfxHorizonFogStrength("gfx.horizon_fog_strength", Common::Ini::KT_WORD, std::string("1.0"));
+Common::Ini::Key IniConf::GfxHorizonDarkEnable("gfx.horizon_dark_enable", Common::Ini::KT_BOOL, true);
+Common::Ini::Key IniConf::GfxHorizonDarkStart("gfx.horizon_dark_start", Common::Ini::KT_WORD, std::string());
+Common::Ini::Key IniConf::GfxHorizonDarkLength("gfx.horizon_dark_length", Common::Ini::KT_WORD, std::string());
+Common::Ini::Key IniConf::GfxHorizonDarkStrength("gfx.horizon_dark_strength", Common::Ini::KT_WORD, std::string("1.0"));
+Common::Ini::Key IniConf::GfxHorizonDarkColor("gfx.horizon_dark_color", Common::Ini::KT_WORD, std::string("0_0_0"));
+Common::Ini::Key IniConf::GfxRenderSectors("gfx.render_sectors", Common::Ini::KT_WORD, std::string());
+Common::Ini::Key IniConf::GfxNormalVisualLimit("gfx.normal_visual_limit", Common::Ini::KT_WORD, std::string());
+Common::Ini::Key IniConf::GfxNormalFadeLength("gfx.normal_fade_length", Common::Ini::KT_WORD, std::string());
+Common::Ini::Key IniConf::GfxSkyVisualLimit("gfx.sky_visual_limit", Common::Ini::KT_WORD, std::string());
+Common::Ini::Key IniConf::GfxSkyFadeLength("gfx.sky_fade_length", Common::Ini::KT_WORD, std::string());
+Common::Ini::Key IniConf::GfxSkyHeight("gfx.sky_height", Common::Ini::KT_WORD, std::string());
+Common::Ini::Key IniConf::GfxSkyRender("gfx.sky_render", Common::Ini::KT_WORD, std::string());
 Common::Ini::Key IniConf::GfxAdditionalModes("gfx.custommodes", Common::Ini::KT_STRING);
 
 // Gfx Engine
@@ -256,6 +275,25 @@ void IniConf::Init()
         , &GfxBlending
         , &GfxSolidFont
         , &GfxVsync
+        , &GfxNewSky
+        , &GfxSkyDistance
+        , &GfxSkyLength
+        , &GfxHorizonFogEnable
+        , &GfxHorizonFogStart
+        , &GfxHorizonFogLength
+        , &GfxHorizonFogStrength
+        , &GfxHorizonDarkEnable
+        , &GfxHorizonDarkStart
+        , &GfxHorizonDarkLength
+        , &GfxHorizonDarkStrength
+        , &GfxHorizonDarkColor
+        , &GfxRenderSectors
+        , &GfxNormalVisualLimit
+        , &GfxNormalFadeLength
+        , &GfxSkyVisualLimit
+        , &GfxSkyFadeLength
+        , &GfxSkyHeight
+        , &GfxSkyRender
         , &GfxMode
         , &GfxXRes
         , &GfxYRes

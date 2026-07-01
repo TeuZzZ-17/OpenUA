@@ -365,9 +365,12 @@ struct GfxStates
     bool Fog = false;
     float FogStart = 3496.0;
     float FogLength = 600.0;
+    float FogStrength = 1.0;
+    TGLColor FogColor = TGLColor(0.0, 0.0, 0.0, 1.0);
     bool AFog = false;
     float AFogStart = 3496.0;
     float AFogLength = 600.0;
+    float AFogStrength = 1.0;
     
     bool DepthTest = true;
     
@@ -865,14 +868,15 @@ protected:
     
     static constexpr int32_t _vboMProjOff = 0;   // 4 * 4 * 4 = 64
     static constexpr int32_t _vboMViewOff = 64;  // 4 * 4 * 4 = 64
-    static constexpr int32_t _vboFogOff   = 128; // 3 * 4 = 12  ... + 4(because next vec3)
-    static constexpr int32_t _vboAFogOff  = 144; // 3 * 4 = 12
-    static constexpr int32_t _vboTextured = 156; // 4
-    static constexpr int32_t _vboFlat     = 160; // 4
-    static constexpr int32_t _vboATest    = 164; // 4
+    static constexpr int32_t _vboFogOff   = 128; // vec4: enable, start, length, strength
+    static constexpr int32_t _vboAFogOff  = 144; // vec4: enable, start, length, strength
+    static constexpr int32_t _vboTextured = 160; // 4
+    static constexpr int32_t _vboFlat     = 164; // 4
+    static constexpr int32_t _vboATest    = 168; // 4
     // OpenUA custom: visual_tint multiplier (std140 vec4 -> 16-byte aligned at 176)
     static constexpr int32_t _vboColorMul = 176; // 4 * 4 = 16
-    static constexpr int32_t _vboParamsSize = 192;
+    static constexpr int32_t _vboFogColor = 192; // 4 * 4 = 16
+    static constexpr int32_t _vboParamsSize = 208;
     static constexpr int32_t _vboParamsBlockBinding = 0;
 
     struct
@@ -882,16 +886,17 @@ protected:
         float   Fog = 0.0;
         float   FogStart = 0.0;
         float   FogLength = 0.0;
-        float   _pad1 = 0.0;
+        float   FogStrength = 1.0;
         float   AFog = 0.0;
         float   AFogStart = 0.0;
         float   AFogLength = 0.0;
+        float   AFogStrength = 1.0;
         int32_t Textured = 0;
         int32_t Flat = 0;
         int32_t ATest = 0;
         int32_t _pad2 = 0;
-        int32_t _pad3 = 0;
         float   ColorMul[4] = {1.0, 1.0, 1.0, 1.0}; // std140 vec4 at offset 176
+        float   FogColor[4] = {0.0, 0.0, 0.0, 1.0}; // std140 vec4 at offset 192
     } _vboStatesBlock;
     
     bool _vboStatesChanged = true;

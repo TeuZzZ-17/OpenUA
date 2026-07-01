@@ -1052,6 +1052,8 @@ void NC_STACK_ypaworld::SetFarView(bool farvw)
         setYW_normVisLimit(1400);
         setYW_fadeLength(600);
     }
+
+    ApplyNucleusViewDistanceOverrides();
 }
 
 

@@ -58,6 +58,134 @@ std::vector<TGFXDeviceInfo> GFXEngine::_devices
     TGFXDeviceInfo("Opengl", "<primary>")         
 };
 
+struct HorizonFogConfig
+{
+    bool FogEnable = true;
+    bool FogStartOverride = false;
+    bool FogLengthOverride = false;
+    float FogStart = 0.0f;
+    float FogLength = 0.0f;
+    float FogStrength = 1.0f;
+
+    bool DarkEnable = true;
+    bool DarkStartOverride = false;
+    bool DarkLengthOverride = false;
+    float DarkStart = 0.0f;
+    float DarkLength = 0.0f;
+    float DarkStrength = 1.0f;
+    TGLColor DarkColor = TGLColor(0.0, 0.0, 0.0, 1.0);
+};
+
+static HorizonFogConfig gHorizonFogConfig;
+
+static std::string HorizonTrim(std::string s)
+{
+    size_t first = s.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos)
+        return std::string();
+
+    size_t last = s.find_last_not_of(" \t\r\n");
+    return s.substr(first, last - first + 1);
+}
+
+static float HorizonClamp01(float v)
+{
+    if (v < 0.0f)
+        return 0.0f;
+    if (v > 1.0f)
+        return 1.0f;
+    return v;
+}
+
+static bool HorizonParseFloat(std::string s, float *out)
+{
+    s = HorizonTrim(s);
+    if (s.empty())
+        return false;
+
+    for (char &c : s)
+    {
+        if (c == ',')
+            c = '.';
+    }
+
+    try
+    {
+        size_t pos = 0;
+        float v = std::stof(s, &pos);
+        size_t rest = s.find_first_not_of(" \t\r\n", pos);
+        if (rest != std::string::npos)
+            return false;
+
+        *out = v;
+        return true;
+    }
+    catch (...)
+    {
+        return false;
+    }
+}
+
+static float HorizonReadStrength(const std::string &s, float fallback)
+{
+    float v = fallback;
+    if (!HorizonParseFloat(s, &v))
+        v = fallback;
+
+    return HorizonClamp01(v);
+}
+
+static int HorizonClampColor(int v)
+{
+    if (v < 0)
+        return 0;
+    if (v > 255)
+        return 255;
+    return v;
+}
+
+static TGLColor HorizonParseColor(std::string s, const TGLColor &fallback)
+{
+    s = HorizonTrim(s);
+    if (s.empty())
+        return fallback;
+
+    std::vector<std::string> parts = Stok::Split(s, "_, \t");
+    if (parts.size() < 3)
+        return fallback;
+
+    try
+    {
+        int r = HorizonClampColor(std::stoi(parts[0]));
+        int g = HorizonClampColor(std::stoi(parts[1]));
+        int b = HorizonClampColor(std::stoi(parts[2]));
+
+        return TGLColor((float)r / 255.0f, (float)g / 255.0f, (float)b / 255.0f, 1.0f);
+    }
+    catch (...)
+    {
+        return fallback;
+    }
+}
+
+static void HorizonLoadConfigFromIni()
+{
+    HorizonFogConfig cfg;
+
+    cfg.FogEnable = System::IniConf::GfxHorizonFogEnable.Get<bool>();
+    cfg.FogStartOverride = HorizonParseFloat(System::IniConf::GfxHorizonFogStart.Get<std::string>(), &cfg.FogStart);
+    cfg.FogLengthOverride = HorizonParseFloat(System::IniConf::GfxHorizonFogLength.Get<std::string>(), &cfg.FogLength);
+    cfg.FogStrength = HorizonReadStrength(System::IniConf::GfxHorizonFogStrength.Get<std::string>(), 1.0f);
+
+    cfg.DarkEnable = System::IniConf::GfxHorizonDarkEnable.Get<bool>();
+    cfg.DarkStartOverride = HorizonParseFloat(System::IniConf::GfxHorizonDarkStart.Get<std::string>(), &cfg.DarkStart);
+    cfg.DarkLengthOverride = HorizonParseFloat(System::IniConf::GfxHorizonDarkLength.Get<std::string>(), &cfg.DarkLength);
+    cfg.DarkStrength = HorizonReadStrength(System::IniConf::GfxHorizonDarkStrength.Get<std::string>(), 1.0f);
+    cfg.DarkColor = HorizonParseColor(System::IniConf::GfxHorizonDarkColor.Get<std::string>(), cfg.DarkColor);
+
+    gHorizonFogConfig = cfg;
+}
+
 
 bool TRenderNode::CompareSolid(TRenderNode *a, TRenderNode *b)
 {
@@ -80,30 +208,70 @@ bool TRenderNode::CompareDistance(TRenderNode* a, TRenderNode* b)
     return a->Distance < b->Distance;
 }
 
-static float HorizonAlphaFogStart(float fogStart, float fogLength)
+static float HorizonDefaultAlphaFogStart(float fogStart, float fogLength)
 {
     // OpenUA: push the transparent horizon mist farther away from the player.
     // This keeps the atmosphere visible only in the far band instead of in mid-range.
     return fogStart + fogLength * 0.46f;
 }
 
-static float HorizonAlphaFogLength(float fogLength)
+static float HorizonDefaultAlphaFogLength(float fogLength)
 {
     // Keep the distant dissolve gradual after moving it farther back.
     return fogLength * 0.90f;
 }
 
+static float HorizonAlphaFogStart(float fogStart, float fogLength)
+{
+    return gHorizonFogConfig.FogStartOverride
+         ? gHorizonFogConfig.FogStart
+         : HorizonDefaultAlphaFogStart(fogStart, fogLength);
+}
+
+static float HorizonAlphaFogLength(float fogLength)
+{
+    return gHorizonFogConfig.FogLengthOverride
+         ? gHorizonFogConfig.FogLength
+         : HorizonDefaultAlphaFogLength(fogLength);
+}
+
 static float HorizonDarkFogStart(float fogStart, float fogLength)
 {
     // Keep the black matte aligned with the far alpha band: less near fog, darker horizon.
-    return HorizonAlphaFogStart(fogStart, fogLength);
+    return gHorizonFogConfig.DarkStartOverride
+         ? gHorizonFogConfig.DarkStart
+         : HorizonDefaultAlphaFogStart(fogStart, fogLength);
 }
 
 static float HorizonDarkFogLength(float fogLength)
 {
     // Reach black faster inside the far band, so the edge reads as dark horizon
     // instead of bright sky-colored mist.
-    return HorizonAlphaFogLength(fogLength) * 0.22f;
+    return gHorizonFogConfig.DarkLengthOverride
+         ? gHorizonFogConfig.DarkLength
+         : HorizonDefaultAlphaFogLength(fogLength) * 0.22f;
+}
+
+static bool HorizonAlphaFogEnabled(float fogLength)
+{
+    return gHorizonFogConfig.FogEnable
+        && gHorizonFogConfig.FogStrength > 0.0f
+        && HorizonAlphaFogLength(fogLength) > 0.0f;
+}
+
+static bool HorizonDarkFogEnabled(float fogLength)
+{
+    return gHorizonFogConfig.DarkEnable
+        && gHorizonFogConfig.DarkStrength > 0.0f
+        && HorizonDarkFogLength(fogLength) > 0.0f;
+}
+
+static float HorizonFogFactor(float z, float start, float length)
+{
+    if (length <= 0.0f)
+        return 0.0f;
+
+    return HorizonClamp01((z - start) / length);
 }
 
 bool TRenderParams::operator==(const TRenderParams &b)
@@ -824,13 +992,22 @@ void GFXEngine::SetRenderStates(int setAll)
         
         if ((forceSetShader || (newStates->Fog != _lastStates.Fog) ||
             (newStates->FogLength != _lastStates.FogLength) ||
-            (newStates->FogStart != _lastStates.FogStart)) )
+            (newStates->FogStart != _lastStates.FogStart) ||
+            (newStates->FogStrength != _lastStates.FogStrength) ||
+            (newStates->FogColor.r != _lastStates.FogColor.r) ||
+            (newStates->FogColor.g != _lastStates.FogColor.g) ||
+            (newStates->FogColor.b != _lastStates.FogColor.b)) )
         {
             if (newStates->Fog)
             {
                 _vboStatesBlock.Fog = 1.0;
                 _vboStatesBlock.FogStart = newStates->FogStart;
                 _vboStatesBlock.FogLength = newStates->FogLength;
+                _vboStatesBlock.FogStrength = newStates->FogStrength;
+                _vboStatesBlock.FogColor[0] = newStates->FogColor.r;
+                _vboStatesBlock.FogColor[1] = newStates->FogColor.g;
+                _vboStatesBlock.FogColor[2] = newStates->FogColor.b;
+                _vboStatesBlock.FogColor[3] = 1.0;
             }
             else
             {
@@ -841,13 +1018,15 @@ void GFXEngine::SetRenderStates(int setAll)
         
         if ((forceSetShader || (newStates->AFog != _lastStates.AFog) ||
             (newStates->AFogLength != _lastStates.AFogLength) ||
-            (newStates->AFogStart != _lastStates.AFogStart)) )
+            (newStates->AFogStart != _lastStates.AFogStart) ||
+            (newStates->AFogStrength != _lastStates.AFogStrength)) )
         {
             if (newStates->AFog)
             {
                 _vboStatesBlock.AFog = 1.0;
                 _vboStatesBlock.AFogStart = newStates->AFogStart;
                 _vboStatesBlock.AFogLength = newStates->AFogLength;
+                _vboStatesBlock.AFogStrength = newStates->AFogStrength;
             }
             else
             {
@@ -890,7 +1069,10 @@ void GFXEngine::SetRenderStates(int setAll)
 
         if (setAll || (newStates->Fog != _lastStates.Fog) ||
             (newStates->FogLength != _lastStates.FogLength) ||
-            (newStates->FogStart != _lastStates.FogStart) )
+            (newStates->FogStart != _lastStates.FogStart) ||
+            (newStates->FogColor.r != _lastStates.FogColor.r) ||
+            (newStates->FogColor.g != _lastStates.FogColor.g) ||
+            (newStates->FogColor.b != _lastStates.FogColor.b) )
         {
             if (newStates->Fog)
             {
@@ -899,7 +1081,12 @@ void GFXEngine::SetRenderStates(int setAll)
                 glFogi(GL_FOG_MODE, GL_LINEAR);
                 glHint(GL_FOG_HINT, GL_DONT_CARE);
 
-                float fcolors[4] = {0.0, 0.0, 0.0, 1.0};
+                float fcolors[4] = {
+                    newStates->FogColor.r,
+                    newStates->FogColor.g,
+                    newStates->FogColor.b,
+                    1.0
+                };
 
                 glFogfv(GL_FOG_COLOR, fcolors);
                 
@@ -1069,6 +1256,8 @@ void GFXEngine::RenderingMeshOld(TRenderNode *nod)
         _states.Fog = true;
         _states.FogStart = nod->FogStart;
         _states.FogLength = nod->FogLength;
+        _states.FogStrength = 1.0f;
+        _states.FogColor = TGLColor(0.0, 0.0, 0.0, 1.0);
     }
     
     if ( flags & RFLAGS_LUMTRACY )
@@ -1129,27 +1318,60 @@ void GFXEngine::RenderingMeshOld(TRenderNode *nod)
 
     if ((flags & RFLAGS_ALPHA_FOG) && (flags & RFLAGS_FOG) && !(flags & RFLAGS_SKY) && nod->FogLength > 0.0f)
     {
-        _states.Fog = true;
-        _states.FogStart = HorizonDarkFogStart(nod->FogStart, nod->FogLength);
-        _states.FogLength = HorizonDarkFogLength(nod->FogLength);
-        _states.AlphaBlend = true;
-        _states.SrcBlend = GL_SRC_ALPHA;
-        _states.DstBlend = GL_ONE_MINUS_SRC_ALPHA;
+        bool alphaFog = HorizonAlphaFogEnabled(nod->FogLength);
+        bool darkFog = HorizonDarkFogEnabled(nod->FogLength);
 
-        float alphaStart = HorizonAlphaFogStart(nod->FogStart, nod->FogLength);
-        float alphaLength = HorizonAlphaFogLength(nod->FogLength);
+        _states.Fog = false;
 
-        for (TVertex &v : mesh->Vertexes)
+        float darkStart = HorizonDarkFogStart(nod->FogStart, nod->FogLength);
+        float darkLength = HorizonDarkFogLength(nod->FogLength);
+        bool fixedDarkFog = darkFog && gHorizonFogConfig.DarkStrength >= 1.0f;
+
+        if (fixedDarkFog)
         {
-            TGLColor src = useComputedColor ? v.ComputedColor : v.Color;
-            float f = 1.0f - (nod->TForm.Transform(v.Pos).z - alphaStart) / alphaLength;
-            if (f > 1.0f) f = 1.0f;
-            if (f < 0.0f) f = 0.0f;
-
-            v.ComputedColor = src;
-            v.ComputedColor.a = src.a * f;
+            _states.Fog = true;
+            _states.FogStart = darkStart;
+            _states.FogLength = darkLength;
+            _states.FogStrength = 1.0f;
+            _states.FogColor = gHorizonFogConfig.DarkColor;
         }
-        useComputedColor = true;
+
+        if (alphaFog)
+        {
+            _states.AlphaBlend = true;
+            _states.SrcBlend = GL_SRC_ALPHA;
+            _states.DstBlend = GL_ONE_MINUS_SRC_ALPHA;
+        }
+
+        if (alphaFog || (darkFog && !fixedDarkFog))
+        {
+            float alphaStart = HorizonAlphaFogStart(nod->FogStart, nod->FogLength);
+            float alphaLength = HorizonAlphaFogLength(nod->FogLength);
+
+            for (TVertex &v : mesh->Vertexes)
+            {
+                TGLColor src = useComputedColor ? v.ComputedColor : v.Color;
+                TGLColor out = src;
+                float z = nod->TForm.Transform(v.Pos).z;
+
+                if (darkFog && !fixedDarkFog)
+                {
+                    float f = HorizonFogFactor(z, darkStart, darkLength) * gHorizonFogConfig.DarkStrength;
+                    out.r = src.r + (gHorizonFogConfig.DarkColor.r - src.r) * f;
+                    out.g = src.g + (gHorizonFogConfig.DarkColor.g - src.g) * f;
+                    out.b = src.b + (gHorizonFogConfig.DarkColor.b - src.b) * f;
+                }
+
+                if (alphaFog)
+                {
+                    float f = HorizonFogFactor(z, alphaStart, alphaLength) * gHorizonFogConfig.FogStrength;
+                    out.a = src.a * (1.0f - f);
+                }
+
+                v.ComputedColor = out;
+            }
+            useComputedColor = true;
+        }
     }
 
     // OpenUA custom visual_tint: per-node color multiplier (fixed-function path).
@@ -1248,6 +1470,8 @@ void GFXEngine::RenderingMesh(TRenderNode *nod)
         _states.Fog = true;
         _states.FogStart = nod->FogStart;
         _states.FogLength = nod->FogLength;
+        _states.FogStrength = 1.0f;
+        _states.FogColor = TGLColor(0.0, 0.0, 0.0, 1.0);
     }
     
     if ( flags & RFLAGS_LUMTRACY )
@@ -1308,15 +1532,31 @@ void GFXEngine::RenderingMesh(TRenderNode *nod)
 
     if ((flags & RFLAGS_ALPHA_FOG) && (flags & RFLAGS_FOG) && !(flags & RFLAGS_SKY) && nod->FogLength > 0.0f)
     {
-        _states.Fog = true;
-        _states.FogStart = HorizonDarkFogStart(nod->FogStart, nod->FogLength);
-        _states.FogLength = HorizonDarkFogLength(nod->FogLength);
-        _states.AFog = true;
-        _states.AFogStart = HorizonAlphaFogStart(nod->FogStart, nod->FogLength);
-        _states.AFogLength = HorizonAlphaFogLength(nod->FogLength);
-        _states.AlphaBlend = true;
-        _states.SrcBlend = GL_SRC_ALPHA;
-        _states.DstBlend = GL_ONE_MINUS_SRC_ALPHA;
+        bool alphaFog = HorizonAlphaFogEnabled(nod->FogLength);
+        bool darkFog = HorizonDarkFogEnabled(nod->FogLength);
+
+        _states.Fog = false;
+        _states.AFog = false;
+
+        if (darkFog)
+        {
+            _states.Fog = true;
+            _states.FogStart = HorizonDarkFogStart(nod->FogStart, nod->FogLength);
+            _states.FogLength = HorizonDarkFogLength(nod->FogLength);
+            _states.FogStrength = gHorizonFogConfig.DarkStrength;
+            _states.FogColor = gHorizonFogConfig.DarkColor;
+        }
+
+        if (alphaFog)
+        {
+            _states.AFog = true;
+            _states.AFogStart = HorizonAlphaFogStart(nod->FogStart, nod->FogLength);
+            _states.AFogLength = HorizonAlphaFogLength(nod->FogLength);
+            _states.AFogStrength = gHorizonFogConfig.FogStrength;
+            _states.AlphaBlend = true;
+            _states.SrcBlend = GL_SRC_ALPHA;
+            _states.DstBlend = GL_ONE_MINUS_SRC_ALPHA;
+        }
     }
 
     // OpenUA custom visual_tint: enable a local alpha blend when the tint lowers alpha.
@@ -2739,6 +2979,7 @@ void GFXEngine::Init()
     System::EventsAddHandler(EventsWatcher);
     
     System::IniConf::ReadFromNucleusIni();
+    HorizonLoadConfigFromIni();
     
     _vbo = System::IniConf::GfxVBO.Get<bool>();
     _colorEffects = System::IniConf::GfxColorEffects.Get<int32_t>();

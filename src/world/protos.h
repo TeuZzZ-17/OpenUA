@@ -369,6 +369,7 @@ struct TVhclProto
     int16_t lowhp_weapon = 0;
     int field_4 = 0;
     int8_t mgun = 0;
+    bool mgun_set = false;
     int16_t num_mguns = 1;
     int mgun_shot_time = 0;
     int mgun_shot_time_user = 0;
@@ -456,6 +457,7 @@ struct TVhclProto
     std::vector<DestFX>    ExtDestroyFX; // ext_dest_fx
     std::array<TVhclSound, SND_MAX> sndFX;
     int vo_type = 0;
+    std::string voicepack;
     float max_pitch = 0.0;
     int16_t field_1D6D = 0;
     int16_t field_1D6F = 0;

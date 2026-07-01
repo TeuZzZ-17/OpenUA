@@ -11,12 +11,13 @@ layout(std140) uniform Parameters\
 {\
     mat4 MProj;\
     mat4 MView;\
-    vec3 Fog;\
-    vec3 AlphaFog;\
+    vec4 Fog;\
+    vec4 AlphaFog;\
     bool Textured;\
     bool Flat;\
     bool ATest;\
     vec4 ColorMul;\
+    vec4 FogColor;\
 };\
 uniform sampler2D texture;\
 in vec4 smoothColor;\
@@ -43,12 +44,13 @@ layout(std140) uniform Parameters\
 {\
     mat4 MProj;\
     mat4 MView;\
-    vec3 Fog;\
-    vec3 AlphaFog;\
+    vec4 Fog;\
+    vec4 AlphaFog;\
     bool Textured;\
     bool Flat;\
     bool ATest;\
     vec4 ColorMul;\
+    vec4 FogColor;\
 };\
 attribute vec3 vPos;\
 attribute vec4 vColor;\
@@ -65,8 +67,8 @@ void main()\
     vec4 clr;\
     if (Fog.x != 0.0)\
     {\
-        float fg = clamp((tformed.z - Fog.y) / Fog.z, 0.0, 1.0);\
-        clr = vec4(mix(vColor.xyz, vec3(0.0), fg), vColor.w);\
+        float fg = clamp((tformed.z - Fog.y) / Fog.z, 0.0, 1.0) * Fog.w;\
+        clr = vec4(mix(vColor.xyz, FogColor.xyz, fg), vColor.w);\
     }\
     else\
     {\
@@ -75,7 +77,7 @@ void main()\
     \
     if (AlphaFog.x != 0.0)\
     {\
-        clr.w *= 1.0 - clamp((tformed.z - AlphaFog.y) / AlphaFog.z, 0.0, 1.0);\
+        clr.w *= 1.0 - clamp((tformed.z - AlphaFog.y) / AlphaFog.z, 0.0, 1.0) * AlphaFog.w;\
     }\
     flatColor = clr;\
     smoothColor = clr;\

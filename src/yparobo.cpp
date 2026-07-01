@@ -4320,7 +4320,7 @@ void NC_STACK_yparobo::checkDanger()
             {
                 for ( NC_STACK_ypabact* &v7 : _world->SectorAt(pt).unitsList )
                 {
-                    if (v7->_owner != _owner && v7->_status != BACT_STATUS_DEAD && v7->_weapon != -1 && v7->_mgun != -1)
+                    if (v7->_owner != _owner && v7->_status != BACT_STATUS_DEAD && v7->_weapon != -1 && v7->HasMinigun())
                     {
                         v11 = 1;
                         v12 = v7->_commandID;
