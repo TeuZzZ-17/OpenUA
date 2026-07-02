@@ -1026,6 +1026,19 @@ NC_STACK_ypabact * yw_netFindReorderUnit(NC_STACK_ypabact *bact_host, uint32_t I
     return NULL;
 }
 
+static bool yw_netHasPushResistance(NC_STACK_ypaworld *yw, NC_STACK_ypabact *unit)
+{
+    if ( !yw || !unit )
+        return false;
+
+    const std::vector<World::TVhclProto> &protos = yw->GetVhclProtos();
+
+    if ( unit->_vehicleID >= protos.size() )
+        return false;
+
+    return protos.at(unit->_vehicleID).has_push_resistance;
+}
+
 size_t yw_handleNormMsg(NC_STACK_ypaworld *yw, windp_recvMsg *msg, std::string *err)
 {
     uamessage_base *bMsg = (uamessage_base *)msg->data;
@@ -2464,7 +2477,8 @@ size_t yw_handleNormMsg(NC_STACK_ypaworld *yw, windp_recvMsg *msg, std::string *
                     curUnit->_bact_type != BACT_TYPES_GUN &&
                     curUnit->_bact_type != BACT_TYPES_HOVER &&
                     !(curUnit->_status_flg & BACT_STFLAG_DEATH2) &&
-                    curUnit->_owner == yw->_userRobo->_owner)
+                    curUnit->_owner == yw->_userRobo->_owner &&
+                    !(impMsg->p[0] && yw_netHasPushResistance(yw, curUnit)))
                 curUnit->ApplyImpulse(&impls);
         }
     }

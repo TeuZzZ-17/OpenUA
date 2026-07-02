@@ -46,33 +46,35 @@ static bool ypabact_IsDamagedFXSystemDisabled(const NC_STACK_ypabact *bact)
     return bact->_damaged_fx.threshold <= 0.0 || bact->_damaged_fx.threshold >= 1.0;
 }
 
-static bool ypabact_ShouldApplyProjectileSpin(NC_STACK_ypabact *bact, NC_STACK_base *base)
+static bool ypabact_IsMainVPBase(NC_STACK_ypabact *bact, NC_STACK_base *base)
 {
-    if ( bact->_bact_type != BACT_TYPES_MISSLE )
-        return false;
-
-    if ( base != bact->_vp_normal && base != bact->_vp_fire && base != bact->_vp_wait )
-        return false;
-
-    return bact->_projectile_spin_speed.x != 0.0 ||
-           bact->_projectile_spin_speed.y != 0.0 ||
-           bact->_projectile_spin_speed.z != 0.0;
-}
-
-static bool ypabact_ShouldApplyVisualRotation(NC_STACK_ypabact *bact, NC_STACK_base *base)
-{
-    if ( bact->_visual_rotation.x == 0.0 &&
-         bact->_visual_rotation.y == 0.0 &&
-         bact->_visual_rotation.z == 0.0 )
-        return false;
-
     if ( bact->_bact_type == BACT_TYPES_MISSLE )
         return base == bact->_vp_normal || base == bact->_vp_fire || base == bact->_vp_wait;
 
     return base == bact->_vp_normal || base == bact->_vp_fire || base == bact->_vp_wait || base == bact->_vp_genesis;
 }
 
-static mat3x3 ypabact_BuildVisualRotationMatrix(const vec3d &degrees)
+static bool ypabact_ShouldApplyVPOrientation(NC_STACK_ypabact *bact, NC_STACK_base *base)
+{
+    if ( bact->_vp_orientation.x == 0.0 &&
+         bact->_vp_orientation.y == 0.0 &&
+         bact->_vp_orientation.z == 0.0 )
+        return false;
+
+    return ypabact_IsMainVPBase(bact, base);
+}
+
+static bool ypabact_ShouldApplyVPSpin(NC_STACK_ypabact *bact, NC_STACK_base *base)
+{
+    if ( bact->_vp_spin_speed.x == 0.0 &&
+         bact->_vp_spin_speed.y == 0.0 &&
+         bact->_vp_spin_speed.z == 0.0 )
+        return false;
+
+    return ypabact_IsMainVPBase(bact, base);
+}
+
+static mat3x3 ypabact_BuildVPRotationMatrix(const vec3d &degrees)
 {
     vec3d angle = degrees * C_PI_180;
     mat3x3 rot = mat3x3::Ident();
@@ -87,9 +89,9 @@ static mat3x3 ypabact_BuildVisualRotationMatrix(const vec3d &degrees)
     return rot;
 }
 
-static mat3x3 ypabact_BuildProjectileSpinMatrix(const NC_STACK_ypabact *bact)
+static mat3x3 ypabact_BuildVPSpinMatrix(const NC_STACK_ypabact *bact)
 {
-    vec3d angle = bact->_projectile_spin_speed * ((float)bact->_clock * 0.001f * C_PI_180);
+    vec3d angle = bact->_vp_spin_speed * ((float)bact->_clock * 0.001f * C_PI_180);
     mat3x3 spin = mat3x3::Ident();
 
     if ( angle.x != 0.0 )
@@ -1240,11 +1242,16 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _viewer_max_side = 0.0;
     _thraction = 0.0;
     _fly_dir_length = 0.0;
+    _weaponRecoilMoveTime = 0;
     _height = 0.0;
     _height_max_user = 0.0;
-    _visual_scale = 1.0;
-    _visual_scale_vec = vec3d(1.0, 1.0, 1.0);
-    _visual_tint = World::TVisualTint();
+    _vp_scale = vec3d(1.0, 1.0, 1.0);
+    _vp_tint = World::TVisualTint();
+    _vp_orientation = vec3d(0.0, 0.0, 0.0);
+    _vp_spin_speed = vec3d(0.0, 0.0, 0.0);
+    _vp_trail_scale = vec3d(1.0, 1.0, 1.0);
+    _vp_trail_tint = World::TVisualTint();
+    _vp_trail_spin_speed = vec3d(0.0, 0.0, 0.0);
     ypabact_ResetDamagedFX(this);
     _decoration_fx = World::TDecorationFXConfig();
     _decoration_fx_next_time = 0;
@@ -1433,6 +1440,7 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _viewer_rotation = mat3x3::Ident();
     _fly_dir = vec3d(0.0, 0.0, 0.0);
     _fly_dir_length = 0;
+    _weaponRecoilMoveTime = 0;
     _target_vec = vec3d(0.0, 0.0, 0.0);
     
     //_kidRef.bact = this;
@@ -1465,11 +1473,13 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _energy_max = 10000;
     _invulnerable = false;
     ypabact_ResetDamagedFX(this);
-    _visual_scale = 1.0;
-    _visual_scale_vec = vec3d(1.0, 1.0, 1.0);
-    _visual_tint = World::TVisualTint();
-    _visual_rotation = vec3d(0.0, 0.0, 0.0);
-    _projectile_spin_speed = vec3d(0.0, 0.0, 0.0);
+    _vp_scale = vec3d(1.0, 1.0, 1.0);
+    _vp_tint = World::TVisualTint();
+    _vp_orientation = vec3d(0.0, 0.0, 0.0);
+    _vp_spin_speed = vec3d(0.0, 0.0, 0.0);
+    _vp_trail_scale = vec3d(1.0, 1.0, 1.0);
+    _vp_trail_tint = World::TVisualTint();
+    _vp_trail_spin_speed = vec3d(0.0, 0.0, 0.0);
     _decoration_fx = World::TDecorationFXConfig();
     _decoration_fx_next_time = 0;
     _decoration_fx_persistent_id = 0;
@@ -2785,9 +2795,11 @@ static void ypabact_SpawnDecorationFXEvent(NC_STACK_ypabact *bact)
                                         bact,
                                         localOffset,
                                         bact->_decoration_fx.duration > 0 ? bact->_decoration_fx.duration : 1000,
-                                        bact->_decoration_fx.scale,
+                                        1.0,
                                         true,
-                                        bact->_decoration_fx.has_tint ? bact->_decoration_fx.tint : World::TVisualTint());
+                                        bact->_decoration_fx.vp_tint,
+                                        bact->_decoration_fx.vp_scale,
+                                        bact->_decoration_fx.vp_spin);
     }
 }
 
@@ -2841,9 +2853,11 @@ void NC_STACK_ypabact::UpdateDecorationFX(update_msg *)
                                                  this,
                                                  _decoration_fx.offset,
                                                  0,
-                                                 _decoration_fx.scale,
+                                                 1.0,
                                                  true,
-                                                 _decoration_fx.has_tint ? _decoration_fx.tint : World::TVisualTint());
+                                                 _decoration_fx.vp_tint,
+                                                 _decoration_fx.vp_scale,
+                                                 _decoration_fx.vp_spin);
         }
 
         return;
@@ -2879,6 +2893,18 @@ static bool ypabact_IsAoePushGroundAlignedUnit(NC_STACK_ypabact *unit)
            unit->_bact_type == BACT_TYPES_HOVER;
 }
 
+static bool ypabact_NormalizeXZ(vec3d *dir)
+{
+    dir->y = 0.0;
+
+    float dirLen = dir->length();
+    if ( !isfinite(dirLen) || dirLen <= 0.001f )
+        return false;
+
+    *dir /= dirLen;
+    return true;
+}
+
 static bool ypabact_SnapAoePushGroundUnit(NC_STACK_ypabact *unit)
 {
     ypaworld_arg136 ground;
@@ -2912,6 +2938,72 @@ void NC_STACK_ypabact::AddAoePush(const vec3d &dir, float distance)
         return;
 
     _aoePushVel += (dir / dirLen) * (distance / AOE_PUSH_TAU);
+}
+
+void NC_STACK_ypabact::ApplyWeaponRecoil(const vec3d &dir, float recoil, float shotSpeed)
+{
+    if ( _bact_type == BACT_TYPES_GUN || recoil <= 0.0f )
+        return;
+
+    vec3d recoilDir = dir;
+    bool groundAligned = ypabact_IsAoePushGroundAlignedUnit(this);
+
+    if ( groundAligned )
+    {
+        if ( !ypabact_NormalizeXZ(&recoilDir) )
+        {
+            recoilDir = -_rotation.AxisZ();
+            if ( !ypabact_NormalizeXZ(&recoilDir) )
+                return;
+        }
+    }
+    else
+    {
+        float dirLen = recoilDir.length();
+        if ( !isfinite(dirLen) || dirLen <= 0.001f )
+            return;
+
+        recoilDir /= dirLen;
+    }
+
+    float recoilBaseSpeed = fabs(shotSpeed) * 0.12f;
+    if ( recoilBaseSpeed < 4.0f )
+        recoilBaseSpeed = 4.0f;
+    else if ( recoilBaseSpeed > 18.0f )
+        recoilBaseSpeed = 18.0f;
+
+    float recoilImpulse = recoil * recoilBaseSpeed;
+
+    if ( groundAligned && (_status_flg & BACT_STFLAG_LAND) && !getBACT_viewer() )
+    {
+        float hullDot = recoilDir.dot(_rotation.AxisZ());
+        if ( fabs(hullDot) >= 0.25f )
+            recoilDir = _rotation.AxisZ() * (hullDot > 0.0f ? 1.0f : -1.0f);
+        else
+            recoilDir = -_rotation.AxisZ();
+    }
+
+    vec3d velocity = _fly_dir * _fly_dir_length;
+    velocity += recoilDir * recoilImpulse;
+
+    float speed = velocity.length();
+    if ( !isfinite(speed) || speed <= 0.001f )
+    {
+        _fly_dir_length = 0.0f;
+        return;
+    }
+
+    _fly_dir = velocity / speed;
+    _fly_dir_length = speed;
+
+    if ( groundAligned && (_status_flg & BACT_STFLAG_LAND) )
+    {
+        _status_flg |= BACT_STFLAG_MOVE;
+        _weaponRecoilMoveTime = 350;
+
+        if ( !getBACT_inputting() )
+            _thraction = 0.0f;
+    }
 }
 
 void NC_STACK_ypabact::UpdateAoePush(update_msg *arg)
@@ -2984,60 +3076,63 @@ void NC_STACK_ypabact::Render(baseRender_msg *arg)
 
     // OpenUA Black Sect clone balance: imperfect grey clones (owner 5) always wear the
     // grey clone identity tint. In V1 this deliberately overrides any manual per-prototype
-    // visual_tint so the clone is always visually readable. This is render-only: it reads
-    // the cached config and never mutates _visual_tint or the shared prototype.
+    // vp_tint so the clone is always visually readable. This is render-only: it reads
+    // the cached config and never mutates _vp_tint or the shared prototype.
     const World::TVisualTint effectiveTint =
-        World::CloneBalance::IsCloneActor(this) ? World::CloneBalance::Tint() : _visual_tint;
+        World::CloneBalance::IsCloneActor(this) ? World::CloneBalance::Tint() : _vp_tint;
 
-    auto shouldApplyVisualScale = [this](NC_STACK_base *base)
+    auto shouldApplyVPScale = [this](NC_STACK_base *base)
     {
-        if ( _visual_scale_vec.x == 1.0 && _visual_scale_vec.y == 1.0 && _visual_scale_vec.z == 1.0 )
+        if ( _vp_scale.x == 1.0 && _vp_scale.y == 1.0 && _vp_scale.z == 1.0 )
             return false;
 
-        if ( _bact_type == BACT_TYPES_MISSLE )
-        {
-            // Weapon visual_scale is only the live projectile body scale.
-            return base == _vp_normal || base == _vp_fire || base == _vp_wait;
-        }
-
-        // Vehicle visual_scale is limited to normal live/create visuals, not death effects.
-        return base == _vp_normal || base == _vp_fire || base == _vp_wait || base == _vp_genesis;
+        return ypabact_IsMainVPBase(this, base);
     };
 
-    auto visualParticleScale = [this]() -> float
-    {
-        float scale = _visual_scale_vec.x;
-
-        if ( _visual_scale_vec.y > scale )
-            scale = _visual_scale_vec.y;
-        if ( _visual_scale_vec.z > scale )
-            scale = _visual_scale_vec.z;
-
-        return scale > 0.0 ? scale : 1.0;
-    };
-
-    // OpenUA custom visual_tint: same eligible visual prototypes as visual_scale.
+    // OpenUA custom vp_tint: same eligible visual prototypes as vp_scale.
     // Tint is a visual-only per-instance RGBA multiplier; never affects gameplay.
     // effectiveTint already folds in the Black Sect grey clone override (see above).
-    auto shouldApplyVisualTint = [this, &effectiveTint](NC_STACK_base *base)
+    auto shouldApplyVPTint = [this, &effectiveTint](NC_STACK_base *base)
     {
         if ( effectiveTint.IsNeutral() )
             return false;
 
-        if ( _bact_type == BACT_TYPES_MISSLE )
-            return base == _vp_normal || base == _vp_fire || base == _vp_wait;
-
-        return base == _vp_normal || base == _vp_fire || base == _vp_wait || base == _vp_genesis;
+        return ypabact_IsMainVPBase(this, base);
     };
 
-    // Apply the tint only around eligible visual prototypes, then restore the
-    // neutral default so nothing else rendered with this message gets tinted.
-    auto setTint = [&effectiveTint, arg](bool on)
+    auto tintToGL = [](const World::TVisualTint &tint) -> GFX::TGLColor
     {
-        if ( on )
-            arg->tint = GFX::TGLColor(effectiveTint.r, effectiveTint.g, effectiveTint.b, effectiveTint.a);
+        return GFX::TGLColor(tint.r, tint.g, tint.b, tint.a);
+    };
+
+    auto applyRenderControls = [&](NC_STACK_base *base)
+    {
+        bool mainBase = ypabact_IsMainVPBase(this, base);
+        bool missileMain = _bact_type == BACT_TYPES_MISSLE && mainBase;
+
+        if ( shouldApplyVPTint(base) )
+            arg->tint = tintToGL(effectiveTint);
         else
             arg->tint = GFX::TGLColor(1.0, 1.0, 1.0, 1.0);
+
+        if ( missileMain )
+        {
+            arg->particleTint = tintToGL(_vp_trail_tint);
+            arg->particleScale = _vp_trail_scale;
+            arg->particleSpin = _vp_trail_spin_speed;
+        }
+        else if ( mainBase )
+        {
+            arg->particleTint = arg->tint;
+            arg->particleScale = shouldApplyVPScale(base) ? _vp_scale : vec3d(1.0, 1.0, 1.0);
+            arg->particleSpin = ypabact_ShouldApplyVPSpin(this, base) ? _vp_spin_speed : vec3d(0.0, 0.0, 0.0);
+        }
+        else
+        {
+            arg->particleTint = GFX::TGLColor(1.0, 1.0, 1.0, 1.0);
+            arg->particleScale = vec3d(1.0, 1.0, 1.0);
+            arg->particleSpin = vec3d(0.0, 0.0, 0.0);
+        }
     };
 
     if ( _current_vp )
@@ -3049,25 +3144,26 @@ void NC_STACK_ypabact::Render(baseRender_msg *arg)
                 _current_vp->Bas->TForm().Pos = _tForm.Pos;
                 _current_vp->Bas->TForm().SclRot = _tForm.SclRot;
 
-                bool scaled = shouldApplyVisualScale(_current_vp->Bas);
-                if ( ypabact_ShouldApplyVisualRotation(this, _current_vp->Bas) )
-                    _current_vp->Bas->TForm().SclRot *= ypabact_BuildVisualRotationMatrix(_visual_rotation);
+                bool scaled = shouldApplyVPScale(_current_vp->Bas);
+                if ( ypabact_ShouldApplyVPOrientation(this, _current_vp->Bas) )
+                    _current_vp->Bas->TForm().SclRot *= ypabact_BuildVPRotationMatrix(_vp_orientation);
 
-                if ( ypabact_ShouldApplyProjectileSpin(this, _current_vp->Bas) )
-                    _current_vp->Bas->TForm().SclRot *= ypabact_BuildProjectileSpinMatrix(this);
+                if ( ypabact_ShouldApplyVPSpin(this, _current_vp->Bas) )
+                    _current_vp->Bas->TForm().SclRot *= ypabact_BuildVPSpinMatrix(this);
 
                 if ( scaled )
-                    _current_vp->Bas->TForm().SclRot *= mat3x3::Scale(_visual_scale_vec);
+                    _current_vp->Bas->TForm().SclRot *= mat3x3::Scale(_vp_scale);
 
-                bool tinted = shouldApplyVisualTint(_current_vp->Bas);
-                float oldParticleScale = arg->particleScale;
-                if ( scaled )
-                    arg->particleScale = visualParticleScale();
-                setTint(tinted);
+                GFX::TGLColor oldTint = arg->tint;
+                GFX::TGLColor oldParticleTint = arg->particleTint;
+                vec3d oldParticleScale = arg->particleScale;
+                vec3d oldParticleSpin = arg->particleSpin;
+                applyRenderControls(_current_vp->Bas);
                 _current_vp->Bas->Render(arg, _current_vp);
-                if ( tinted )
-                    setTint(false);
+                arg->tint = oldTint;
+                arg->particleTint = oldParticleTint;
                 arg->particleScale = oldParticleScale;
+                arg->particleSpin = oldParticleSpin;
             }
         }
     }
@@ -3087,19 +3183,26 @@ void NC_STACK_ypabact::Render(baseRender_msg *arg)
                 else
                     bd->vp->Bas->TForm().SclRot = bd->rotate.Transpose();
 
-                bool scaled = shouldApplyVisualScale(bd->vp->Bas);
-                if ( scaled )
-                    bd->vp->Bas->TForm().SclRot *= mat3x3::Scale(_visual_scale_vec);
+                bool scaled = shouldApplyVPScale(bd->vp->Bas);
+                if ( ypabact_ShouldApplyVPOrientation(this, bd->vp->Bas) )
+                    bd->vp->Bas->TForm().SclRot *= ypabact_BuildVPRotationMatrix(_vp_orientation);
 
-                bool tinted = shouldApplyVisualTint(bd->vp->Bas);
-                float oldParticleScale = arg->particleScale;
+                if ( ypabact_ShouldApplyVPSpin(this, bd->vp->Bas) )
+                    bd->vp->Bas->TForm().SclRot *= ypabact_BuildVPSpinMatrix(this);
+
                 if ( scaled )
-                    arg->particleScale = visualParticleScale();
-                setTint(tinted);
+                    bd->vp->Bas->TForm().SclRot *= mat3x3::Scale(_vp_scale);
+
+                GFX::TGLColor oldTint = arg->tint;
+                GFX::TGLColor oldParticleTint = arg->particleTint;
+                vec3d oldParticleScale = arg->particleScale;
+                vec3d oldParticleSpin = arg->particleSpin;
+                applyRenderControls(bd->vp->Bas);
                 bd->vp->Bas->Render(arg, bd->vp);
-                if ( tinted )
-                    setTint(false);
+                arg->tint = oldTint;
+                arg->particleTint = oldParticleTint;
                 arg->particleScale = oldParticleScale;
+                arg->particleSpin = oldParticleSpin;
             }
         }
     }
@@ -8305,22 +8408,11 @@ static float ypabact_LaserClampVPSpacing(float spacing)
     return spacing;
 }
 
-static float ypabact_LaserVisualScale(const World::TWeapProto &wproto)
+static vec3d ypabact_LaserVPScale(const World::TWeapProto &wproto)
 {
-    if ( wproto.visual_scale_mode == World::VISUAL_SCALE_AXIS )
-        return 1.0f;
-
-    return wproto.visual_scale > 0.0f ? wproto.visual_scale : 1.0f;
-}
-
-static vec3d ypabact_LaserVisualAxisScale(const World::TWeapProto &wproto)
-{
-    if ( wproto.visual_scale_mode != World::VISUAL_SCALE_AXIS )
-        return vec3d(1.0, 1.0, 1.0);
-
-    return vec3d(wproto.visual_scale_axis.x > 0.0f ? wproto.visual_scale_axis.x : 1.0f,
-                 wproto.visual_scale_axis.y > 0.0f ? wproto.visual_scale_axis.y : 1.0f,
-                 wproto.visual_scale_axis.z > 0.0f ? wproto.visual_scale_axis.z : 1.0f);
+    return vec3d(wproto.vp_scale.x > 0.0f ? wproto.vp_scale.x : 1.0f,
+                 wproto.vp_scale.y > 0.0f ? wproto.vp_scale.y : 1.0f,
+                 wproto.vp_scale.z > 0.0f ? wproto.vp_scale.z : 1.0f);
 }
 
 static void ypabact_SpawnLaserBeamVPs(NC_STACK_ypabact *bact, const World::TWeapProto &wproto,
@@ -8341,8 +8433,7 @@ static void ypabact_SpawnLaserBeamVPs(NC_STACK_ypabact *bact, const World::TWeap
     vec3d dir = span / len;
     mat3x3 rot = ypabact_LaserRotationFromDir(dir, bact->_rotation);
 
-    float scale = ypabact_LaserVisualScale(wproto);
-    vec3d axisScale = ypabact_LaserVisualAxisScale(wproto);
+    vec3d axisScale = ypabact_LaserVPScale(wproto);
 
     // Visual-only density control: damage timing stays controlled only by
     // laser_energy_tick_time, while radius remains the gameplay hit thickness.
@@ -8373,9 +8464,8 @@ static void ypabact_SpawnLaserBeamVPs(NC_STACK_ypabact *bact, const World::TWeap
         float t = ((float)i + 0.5f) / (float)count;
         vec3d pos = visualStart + span * t;
         // OpenUA custom: the laser beam body uses vp_normal, so honour the weapon's
-        // visual_tint here (same eligible prototype as projectiles). Impact/launch FX
-        // below deliberately stay untinted.
-        world->SpawnTransientVP(wproto.vp_normal, pos, rot, 45, scale, wproto.visual_tint, axisScale);
+        // main VP controls here. Impact/launch FX below deliberately stay neutral.
+        world->SpawnTransientVP(wproto.vp_normal, pos, rot, 45, 1.0, wproto.vp_tint, axisScale, wproto.vp_spin);
     }
 }
 
@@ -9464,6 +9554,9 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
 
     ypabact_StoreHUDMissileMultiLockTargets(this, missileMultiTarget ? weaponTargets : std::vector<NC_STACK_ypabact *>());
 
+    vec3d recoilDirSum(0.0, 0.0, 0.0);
+    int recoilShotCount = 0;
+
     for (int i = 0; i < v13; i++)
     {
         float v37;
@@ -9544,6 +9637,12 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
             wobj->_fly_dir_length *= 0.2;
 
         wobj->_rotation.SetZ( wobj->_fly_dir );
+
+        if ( wproto.recoil > 0.0f )
+        {
+            recoilDirSum -= wobj->_fly_dir;
+            recoilShotCount++;
+        }
 
         wobj->_rotation.SetX( _rotation.AxisX() );
 
@@ -9648,6 +9747,9 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
                 wobj->SetLifeTime(life_time_nt);
         }
     }
+
+    if ( wproto.recoil > 0.0f && recoilShotCount > 0 )
+        ApplyWeaponRecoil(recoilDirSum, wproto.recoil * (float)recoilShotCount, wproto.start_speed);
 
     if ( _kill_after_shot )
     {
@@ -13247,7 +13349,6 @@ bool NC_STACK_ypabact::StartChainFXByTrigger(uint8_t trigger)
             World::DestFX tempFx;
             tempFx.ModelID = fx.physical_vehicle;
             tempFx.Pos = fx.offset;
-            tempFx.Accel = fx.inherit_velocity;
             StartDestFX(tempFx);
         }
 

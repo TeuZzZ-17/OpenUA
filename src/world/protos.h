@@ -18,7 +18,7 @@ enum DecorationFXMode
     DECORATION_FX_PERSISTENT = 1
 };
 
-// OpenUA custom: RGBA tint multiplier (see visual_tint / wireframe_tint script params).
+// OpenUA custom: RGBA tint multiplier (see vp_tint / wireframe_tint script params).
 // Stored as normalized 0..1 float multipliers. Neutral default = no change.
 struct TVisualTint
 {
@@ -52,10 +52,10 @@ struct TDecorationFXConfig
     int count_max = 0;
     int duration = 1000;
     float random_pos = 0.0;
-    float scale = 1.0;
+    vec3d vp_scale = vec3d(1.0, 1.0, 1.0);
+    vec3d vp_spin = vec3d(0.0, 0.0, 0.0);
     vec3d offset;
-    bool has_tint = false;
-    TVisualTint tint;
+    TVisualTint vp_tint;
 };
 
 struct TChainFXVPModel
@@ -63,13 +63,6 @@ struct TChainFXVPModel
     int16_t model = 0;
     bool has_tint = false;
     TVisualTint tint;
-};
-
-enum VisualScaleMode
-{
-    VISUAL_SCALE_FIXED = 0,
-    VISUAL_SCALE_RANDOM = 1,
-    VISUAL_SCALE_AXIS = 2
 };
 
 struct DestFX
@@ -115,7 +108,6 @@ struct TChainFXConfig
     int duration = 0;
     std::vector<TChainFXVPModel> vp_models;
     int physical_vehicle = 0;
-    bool inherit_velocity = false;
 };
 
 struct TRoboColl
@@ -402,14 +394,11 @@ struct TVhclProto
     int16_t vp_wait = 0;
     int16_t vp_megadeth = 0;
     int16_t vp_genesis = 0;
-    float visual_scale = 1.0;
-    uint8_t visual_scale_mode = VISUAL_SCALE_FIXED;
-    float visual_scale_random_min = 1.0;
-    float visual_scale_random_max = 1.0;
-    vec3d visual_scale_axis = vec3d(1.0, 1.0, 1.0);
-    TVisualTint visual_tint; // OpenUA custom: visual-only RGBA tint multiplier
+    vec3d vp_scale = vec3d(1.0, 1.0, 1.0);
+    vec3d vp_orientation = vec3d(0.0, 0.0, 0.0);
+    vec3d vp_spin = vec3d(0.0, 0.0, 0.0);
+    TVisualTint vp_tint; // OpenUA custom: main VP visual-only RGBA tint multiplier
     TVisualTint wireframe_tint; // OpenUA custom: UI wireframe-only RGBA tint multiplier
-    vec3d visual_rotation = vec3d(0.0, 0.0, 0.0); // OpenUA custom: visual-only local rotation, degrees
     TDamagedFXConfig damaged_fx;
     TDecorationFXConfig decoration_fx;
     std::string damaged_icon;
@@ -477,6 +466,8 @@ struct TVhclProto
     float sdist_sector = 0.0;
     float sdist_bact = 0.0;
     int8_t radar = 0;
+    float push_resistance = 0.0; // OpenUA custom: target-side resistance to push / aoe_unit_push
+    bool has_push_resistance = false; // true only when push_resistance is explicitly authored
     float mass = 0.0;
     float force = 0.0;
     float airconst = 0.0;
@@ -617,15 +608,14 @@ struct TWeapProto
     int16_t vp_megadeth = 0;
     int16_t vp_genesis = 0;
     int16_t vp_launch = 0;
-    float visual_scale = 1.0;
-    uint8_t visual_scale_mode = VISUAL_SCALE_FIXED;
-    float visual_scale_random_min = 1.0;
-    float visual_scale_random_max = 1.0;
-    vec3d visual_scale_axis = vec3d(1.0, 1.0, 1.0);
-    TVisualTint visual_tint; // OpenUA custom: visual-only RGBA tint multiplier
+    vec3d vp_scale = vec3d(1.0, 1.0, 1.0);
+    vec3d vp_orientation = vec3d(0.0, 0.0, 0.0);
+    vec3d vp_spin = vec3d(0.0, 0.0, 0.0);
+    TVisualTint vp_tint; // OpenUA custom: main VP visual-only RGBA tint multiplier
+    vec3d vp_trail_scale = vec3d(1.0, 1.0, 1.0);
+    vec3d vp_trail_spin = vec3d(0.0, 0.0, 0.0);
+    TVisualTint vp_trail_tint; // OpenUA custom: weapon embedded particle/trail tint
     TVisualTint wireframe_tint; // OpenUA custom: UI wireframe-only RGBA tint multiplier
-    vec3d visual_rotation = vec3d(0.0, 0.0, 0.0); // OpenUA custom: visual-only local rotation, degrees
-    vec3d projectile_spin_speed = vec3d(0.0, 0.0, 0.0); // OpenUA custom: visual-only spin speed, degrees per second, local X/Y/Z
     std::vector<DestFX> dfx;
     std::vector<DestFX> ExtDestroyFX; // ext_dest_fx
     std::array<TVhclSound, SND_MAX> sndFXes;
@@ -645,6 +635,7 @@ struct TWeapProto
     // but only for the primary/direct-hit unit. If both push and aoe_unit_push are set,
     // the direct-hit unit receives only push; nearby units receive aoe_unit_push.
     int push = 0;
+    float recoil = 0.0; // OpenUA custom: shooter-side knockback multiplier, 0..1
 //    int field_87C = 0;
     int life_time = 0;
     int life_time_nt = 0;
@@ -688,7 +679,7 @@ struct TWeapProto
     float maxrot = 0.0;
     float heightStd = 0;
     // radius is direct projectile collision. AoE has separate unit/building/sector values.
-    // visual_scale never affects any gameplay radius.
+    // vp_scale never affects any gameplay radius.
     float radius = 0.0;
     float aoe_unit_radius = 0.0;
     float aoe_building_radius = 0.0;

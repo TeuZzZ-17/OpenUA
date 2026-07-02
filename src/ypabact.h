@@ -462,6 +462,7 @@ public:
     void UpdateDamageFX(update_msg *arg);
     void UpdateDecorationFX(update_msg *arg);
     void AddAoePush(const vec3d &dir, float distance); // queue aoe_unit_push knockback
+    void ApplyWeaponRecoil(const vec3d &dir, float recoil, float shotSpeed);
     void UpdateAoePush(update_msg *arg);               // integrate/decay it per frame
     void ApplyWeaponDebuff(World::TWeaponDebuffConfig &debuff, NC_STACK_ypabact *source);
     void UpdateActiveDebuff(update_msg *arg);
@@ -759,10 +760,10 @@ public:
     float _thraction;
     vec3d _fly_dir;
     float _fly_dir_length;
+    int _weaponRecoilMoveTime = 0;
 
     // OpenUA aoe_unit_push: residual knockback velocity, integrated and decayed
-    // every frame by UpdateAoePush() so the shockwave shoves every unit class
-    // smoothly and uniformly (not an instant teleport).
+    // every frame by UpdateAoePush() so shockwaves shove units smoothly.
     vec3d _aoePushVel = vec3d(0.0, 0.0, 0.0);
 
     vec3d _position; //Current pos
@@ -774,11 +775,13 @@ public:
     float _height;
     float _height_max_user;
     vec3d _scale;
-    float _visual_scale = 1.0;
-    vec3d _visual_scale_vec = vec3d(1.0, 1.0, 1.0);
-    World::TVisualTint _visual_tint; // OpenUA custom: visual-only RGBA tint multiplier
-    vec3d _visual_rotation = vec3d(0.0, 0.0, 0.0);
-    vec3d _projectile_spin_speed = vec3d(0.0, 0.0, 0.0);
+    vec3d _vp_scale = vec3d(1.0, 1.0, 1.0);
+    World::TVisualTint _vp_tint; // OpenUA custom: main VP visual-only RGBA tint multiplier
+    vec3d _vp_orientation = vec3d(0.0, 0.0, 0.0);
+    vec3d _vp_spin_speed = vec3d(0.0, 0.0, 0.0);
+    vec3d _vp_trail_scale = vec3d(1.0, 1.0, 1.0);
+    World::TVisualTint _vp_trail_tint; // OpenUA custom: weapon embedded particle/trail tint
+    vec3d _vp_trail_spin_speed = vec3d(0.0, 0.0, 0.0);
     NC_STACK_base *_vp_normal;
     NC_STACK_base *_vp_fire;
     NC_STACK_base *_vp_wait;

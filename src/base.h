@@ -37,8 +37,9 @@ struct area_arg_65
     uint32_t flags;
     // OpenUA custom: per-emitter tint copied to particles spawned during this render.
     GFX::TGLColor tint = GFX::TGLColor(1.0, 1.0, 1.0, 1.0);
-    // OpenUA custom: per-emitter visual scale copied to particles spawned during this render.
-    float particleScale = 1.0;
+    // OpenUA custom: per-emitter visual scale/spin copied to particles spawned during this render.
+    vec3d particleScale = vec3d(1.0, 1.0, 1.0);
+    vec3d particleSpin = vec3d(0.0, 0.0, 0.0);
 
     area_arg_65()
     {
@@ -54,7 +55,8 @@ struct area_arg_65
         ambientLight = 0;
         flags = 0;
         tint = GFX::TGLColor(1.0, 1.0, 1.0, 1.0);
-        particleScale = 1.0;
+        particleScale = vec3d(1.0, 1.0, 1.0);
+        particleSpin = vec3d(0.0, 0.0, 0.0);
     }
 };
 
@@ -66,10 +68,12 @@ struct baseRender_msg
     float minZ = 0.;
     float maxZ = 0.;
     uint32_t flags = 0;
-    // OpenUA custom: per-render visual_tint multiplier. Neutral (1,1,1,1) = no change.
+    // OpenUA custom: per-render main VP tint multiplier. Neutral (1,1,1,1) = no change.
     GFX::TGLColor tint = GFX::TGLColor(1.0, 1.0, 1.0, 1.0);
-    // OpenUA custom: per-render particle size multiplier inherited by emitted particles.
-    float particleScale = 1.0;
+    // OpenUA custom: per-render particle controls inherited by emitted particles.
+    GFX::TGLColor particleTint = GFX::TGLColor(1.0, 1.0, 1.0, 1.0);
+    vec3d particleScale = vec3d(1.0, 1.0, 1.0);
+    vec3d particleSpin = vec3d(0.0, 0.0, 0.0);
 };
 
 

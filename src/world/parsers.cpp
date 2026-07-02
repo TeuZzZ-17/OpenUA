@@ -83,6 +83,17 @@ static void EnsureDebuffFXSlot(std::vector<int16_t> &slots, int slot)
         slots.resize(slot + 1, 0);
 }
 
+static float Clamp01(float value)
+{
+    if ( value < 0.0f )
+        return 0.0f;
+
+    if ( value > 1.0f )
+        return 1.0f;
+
+    return value;
+}
+
 static void InitStatusSoundFXDefaults(World::TVhclSound &snd, int defaultVolume)
 {
     snd.volume = defaultVolume;
@@ -641,6 +652,92 @@ static bool ParseTintParam(ScriptParser::Parser &parser,
                            const std::string &p2,
                            TVisualTint &tint);
 
+static float ParseVPScaleValue(ScriptParser::Parser &parser, const std::string &value)
+{
+    float scale = parser.stof(value, 0);
+    return scale > 0.0 ? scale : 1.0;
+}
+
+static bool ParseVPScaleParam(ScriptParser::Parser &parser,
+                              const std::string &prefix,
+                              const std::string &p1,
+                              const std::string &p2,
+                              vec3d &scale)
+{
+    if ( !StriCmp(p1, prefix + "_scale_x") )
+    {
+        scale.x = ParseVPScaleValue(parser, p2);
+        return true;
+    }
+
+    if ( !StriCmp(p1, prefix + "_scale_y") )
+    {
+        scale.y = ParseVPScaleValue(parser, p2);
+        return true;
+    }
+
+    if ( !StriCmp(p1, prefix + "_scale_z") )
+    {
+        scale.z = ParseVPScaleValue(parser, p2);
+        return true;
+    }
+
+    return false;
+}
+
+static bool ParseVPSpinParam(ScriptParser::Parser &parser,
+                             const std::string &prefix,
+                             const std::string &p1,
+                             const std::string &p2,
+                             vec3d &spin)
+{
+    if ( !StriCmp(p1, prefix + "_spin_x") )
+    {
+        spin.x = parser.stof(p2, 0);
+        return true;
+    }
+
+    if ( !StriCmp(p1, prefix + "_spin_y") )
+    {
+        spin.y = parser.stof(p2, 0);
+        return true;
+    }
+
+    if ( !StriCmp(p1, prefix + "_spin_z") )
+    {
+        spin.z = parser.stof(p2, 0);
+        return true;
+    }
+
+    return false;
+}
+
+static bool ParseVPOrientationParam(const std::string &p1,
+                                    const std::string &p2,
+                                    vec3d &orientation)
+{
+    if ( StriCmp(p1, "vp_orientation") )
+        return false;
+
+    if ( !StriCmp(p2, "normal") )
+        orientation = vec3d(0.0, 0.0, 0.0);
+    else if ( !StriCmp(p2, "upside_down") )
+        orientation = vec3d(180.0, 0.0, 0.0);
+    else if ( !StriCmp(p2, "half_turn") )
+        orientation = vec3d(0.0, 180.0, 0.0);
+    else if ( !StriCmp(p2, "sideways_left") )
+        orientation = vec3d(0.0, 0.0, 90.0);
+    else if ( !StriCmp(p2, "sideways_right") )
+        orientation = vec3d(0.0, 0.0, 270.0);
+    else
+    {
+        ypa_log_out("Unknown vp_orientation '%s', using normal\n", p2.c_str());
+        orientation = vec3d(0.0, 0.0, 0.0);
+    }
+
+    return true;
+}
+
 static bool ParseDecorationFXParam(ScriptParser::Parser &parser,
                                    const std::string &p1,
                                    const std::string &p2,
@@ -703,13 +800,6 @@ static bool ParseDecorationFXParam(ScriptParser::Parser &parser,
         return true;
     }
 
-    if ( !StriCmp(p1, "decoration_fx_scale") )
-    {
-        float scale = parser.stof(p2, 0);
-        config.scale = scale > 0.0 ? scale : 1.0;
-        return true;
-    }
-
     if ( !StriCmp(p1, "decoration_fx_offset_x") )
     {
         config.offset.x = parser.stof(p2, 0);
@@ -728,116 +818,18 @@ static bool ParseDecorationFXParam(ScriptParser::Parser &parser,
         return true;
     }
 
-    if ( ParseTintParam(parser, "decoration_fx_tint", p1, p2, config.tint) )
+    if ( ParseVPScaleParam(parser, "decoration_fx_vp", p1, p2, config.vp_scale) )
     {
-        config.has_tint = true;
         return true;
     }
 
-    return false;
-}
-
-static bool ParseVisualScaleParam(ScriptParser::Parser &parser,
-                                  const std::string &p1,
-                                  const std::string &p2,
-                                  float &fixedScale,
-                                  uint8_t &mode,
-                                  float &randomMin,
-                                  float &randomMax,
-                                  vec3d &axisScale)
-{
-    if ( !StriCmp(p1, "visual_scale") )
+    if ( ParseVPSpinParam(parser, "decoration_fx_vp", p1, p2, config.vp_spin) )
     {
-        float scale = parser.stof(p2, 0);
-        fixedScale = scale > 0.0 ? scale : 1.0;
-        mode = VISUAL_SCALE_FIXED;
         return true;
     }
 
-    if ( !StriCmp(p1, "visual_scale_random_min") )
+    if ( ParseTintParam(parser, "decoration_fx_vp_tint", p1, p2, config.vp_tint) )
     {
-        float scale = parser.stof(p2, 0);
-        randomMin = scale > 0.0 ? scale : 1.0;
-        mode = VISUAL_SCALE_RANDOM;
-        return true;
-    }
-
-    if ( !StriCmp(p1, "visual_scale_random_max") )
-    {
-        float scale = parser.stof(p2, 0);
-        randomMax = scale > 0.0 ? scale : 1.0;
-        mode = VISUAL_SCALE_RANDOM;
-        return true;
-    }
-
-    if ( !StriCmp(p1, "visual_scale_x") )
-    {
-        float scale = parser.stof(p2, 0);
-        axisScale.x = scale > 0.0 ? scale : 1.0;
-        mode = VISUAL_SCALE_AXIS;
-        return true;
-    }
-
-    if ( !StriCmp(p1, "visual_scale_y") )
-    {
-        float scale = parser.stof(p2, 0);
-        axisScale.y = scale > 0.0 ? scale : 1.0;
-        mode = VISUAL_SCALE_AXIS;
-        return true;
-    }
-
-    if ( !StriCmp(p1, "visual_scale_z") )
-    {
-        float scale = parser.stof(p2, 0);
-        axisScale.z = scale > 0.0 ? scale : 1.0;
-        mode = VISUAL_SCALE_AXIS;
-        return true;
-    }
-
-    return false;
-}
-
-static bool ParseVisualOrientationParam(ScriptParser::Parser &parser,
-                                        const std::string &p1,
-                                        const std::string &p2,
-                                        vec3d &visualRotation)
-{
-    if ( !StriCmp(p1, "visual_orientation") )
-    {
-        if ( !StriCmp(p2, "normal") )
-            visualRotation = vec3d(0.0, 0.0, 0.0);
-        else if ( !StriCmp(p2, "upside_down") )
-            visualRotation = vec3d(180.0, 0.0, 0.0);
-        else if ( !StriCmp(p2, "half_turn") )
-            visualRotation = vec3d(0.0, 180.0, 0.0);
-        else if ( !StriCmp(p2, "sideways_left") )
-            visualRotation = vec3d(0.0, 0.0, 90.0);
-        else if ( !StriCmp(p2, "sideways_right") )
-            visualRotation = vec3d(0.0, 0.0, 270.0);
-        else
-        {
-            ypa_log_out("Unknown visual_orientation '%s', using normal\n", p2.c_str());
-            visualRotation = vec3d(0.0, 0.0, 0.0);
-        }
-
-        return true;
-    }
-
-    if ( !StriCmp(p1, "visual_rotation_x") )
-    {
-        visualRotation.x = parser.stof(p2, 0);
-        return true;
-    }
-
-    if ( !StriCmp(p1, "visual_rotation_y") )
-    {
-        visualRotation.y = parser.stof(p2, 0);
-        return true;
-    }
-
-    if ( !StriCmp(p1, "visual_rotation_z") )
-    {
-        visualRotation.z = parser.stof(p2, 0);
         return true;
     }
 
@@ -876,14 +868,6 @@ static bool ParseTintParam(ScriptParser::Parser &parser,
     tint.b = clamp255(comp[2]);
     tint.a = clamp255(comp[3]);
     return true;
-}
-
-static bool ParseVisualTintParam(ScriptParser::Parser &parser,
-                                 const std::string &p1,
-                                 const std::string &p2,
-                                 TVisualTint &tint)
-{
-    return ParseTintParam(parser, "visual_tint", p1, p2, tint);
 }
 
 static bool ParseWireframeTintParam(ScriptParser::Parser &parser,
@@ -939,7 +923,6 @@ static int ParseChainFXBlock(ScriptParser::Parser &parser,
     int duration = 0;
     std::vector<World::TChainFXVPModel> vpModels;
     int physicalVehicle = 0;
-    bool inheritVelocity = false;
     World::TChainFXConfig::Trigger trigger = World::TChainFXConfig::TRIGGER_NONE;
     bool hasTrigger = false;
     bool badTrigger = false;
@@ -1004,7 +987,6 @@ static int ParseChainFXBlock(ScriptParser::Parser &parser,
                     chain.trigger = trigger;
                     chain.offset = offset;
                     chain.physical_vehicle = physicalVehicle;
-                    chain.inherit_velocity = inheritVelocity;
                     out->push_back(chain);
                 }
                 else
@@ -1073,8 +1055,6 @@ static int ParseChainFXBlock(ScriptParser::Parser &parser,
         }
         else if ( !StriCmp(p1, "physical_vehicle") )
             physicalVehicle = parser.stol(p2, NULL, 0);
-        else if ( !StriCmp(p1, "inherit_velocity") )
-            inheritVelocity = parser.stol(p2, NULL, 0) != 0;
         else
             return ScriptParser::RESULT_UNKNOWN;
     }
@@ -1286,6 +1266,11 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     else if ( !StriCmp(p1, "radar") )
     {
         _vhcl->radar = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "push_resistance") )
+    {
+        _vhcl->push_resistance = Clamp01(parser.stof(p2, 0));
+        _vhcl->has_push_resistance = true;
     }
     else if ( !StriCmp(p1, "add_energy") )
     {
@@ -1628,21 +1613,19 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
         int maxActive = parser.stol(p2, NULL, 0);
         _vhcl->ai_max_active_at_once = maxActive > 0 ? maxActive : 0;
     }
-    else if ( ParseVisualScaleParam(parser, p1, p2,
-                                    _vhcl->visual_scale,
-                                    _vhcl->visual_scale_mode,
-                                    _vhcl->visual_scale_random_min,
-                                    _vhcl->visual_scale_random_max,
-                                    _vhcl->visual_scale_axis) )
+    else if ( ParseVPScaleParam(parser, "vp", p1, p2, _vhcl->vp_scale) )
     {
     }
-    else if ( ParseVisualTintParam(parser, p1, p2, _vhcl->visual_tint) )
+    else if ( ParseTintParam(parser, "vp_tint", p1, p2, _vhcl->vp_tint) )
     {
     }
     else if ( ParseWireframeTintParam(parser, p1, p2, _vhcl->wireframe_tint) )
     {
     }
-    else if ( ParseVisualOrientationParam(parser, p1, p2, _vhcl->visual_rotation) )
+    else if ( ParseVPOrientationParam(p1, p2, _vhcl->vp_orientation) )
+    {
+    }
+    else if ( ParseVPSpinParam(parser, "vp", p1, p2, _vhcl->vp_spin) )
     {
     }
     else if ( !StriCmp(p1, "invulnerable") )
@@ -2397,14 +2380,11 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->vp_wait = 3;
         _vhcl->vp_dead = 4;
         _vhcl->vp_genesis = 5;
-        _vhcl->visual_scale = 1.0;
-        _vhcl->visual_scale_mode = VISUAL_SCALE_FIXED;
-        _vhcl->visual_scale_random_min = 1.0;
-        _vhcl->visual_scale_random_max = 1.0;
-        _vhcl->visual_scale_axis = vec3d(1.0, 1.0, 1.0);
-        _vhcl->visual_tint = TVisualTint();
+        _vhcl->vp_scale = vec3d(1.0, 1.0, 1.0);
+        _vhcl->vp_orientation = vec3d(0.0, 0.0, 0.0);
+        _vhcl->vp_spin = vec3d(0.0, 0.0, 0.0);
+        _vhcl->vp_tint = TVisualTint();
         _vhcl->wireframe_tint = TVisualTint();
-        _vhcl->visual_rotation = vec3d(0.0, 0.0, 0.0);
         _vhcl->damaged_fx = TDamagedFXConfig();
         _vhcl->damaged_icon.clear();
         _vhcl->regen_icon.clear();
@@ -2463,6 +2443,8 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->sdist_bact = 100.0;
         _vhcl->radar = 1;
         _vhcl->kill_after_shot = 0;
+        _vhcl->push_resistance = 0.0;
+        _vhcl->has_push_resistance = false;
         _vhcl->mass = 400.0;
         _vhcl->force = 5000.0;
         _vhcl->airconst = 80.0;
@@ -2546,6 +2528,7 @@ bool WeaponProtoParser::IsScope(ScriptParser::Parser &parser, const std::string 
         _wpn->aoe_falloff = 0;
         _wpn->aoe_unit_push = 0;
         _wpn->push = 0;
+        _wpn->recoil = 0.0;
         _wpn->mass = 50.0;
         _wpn->force = 5000.0;
         _wpn->airconst = 50.0;
@@ -2594,15 +2577,14 @@ bool WeaponProtoParser::IsScope(ScriptParser::Parser &parser, const std::string 
         _wpn->vp_dead = 4;
         _wpn->vp_genesis = 5;
         _wpn->vp_launch = 0;
-        _wpn->visual_scale = 1.0;
-        _wpn->visual_scale_mode = VISUAL_SCALE_FIXED;
-        _wpn->visual_scale_random_min = 1.0;
-        _wpn->visual_scale_random_max = 1.0;
-        _wpn->visual_scale_axis = vec3d(1.0, 1.0, 1.0);
-        _wpn->visual_tint = TVisualTint();
+        _wpn->vp_scale = vec3d(1.0, 1.0, 1.0);
+        _wpn->vp_orientation = vec3d(0.0, 0.0, 0.0);
+        _wpn->vp_spin = vec3d(0.0, 0.0, 0.0);
+        _wpn->vp_tint = TVisualTint();
+        _wpn->vp_trail_scale = vec3d(1.0, 1.0, 1.0);
+        _wpn->vp_trail_spin = vec3d(0.0, 0.0, 0.0);
+        _wpn->vp_trail_tint = TVisualTint();
         _wpn->wireframe_tint = TVisualTint();
-        _wpn->visual_rotation = vec3d(0.0, 0.0, 0.0);
-        _wpn->projectile_spin_speed = vec3d(0.0, 0.0, 0.0);
         _wpn->type_icon = 65;
         _wpn->debuff = TWeaponDebuffConfig();
         _wpn->debuff.tick_snd.volume = 120;
@@ -2714,6 +2696,10 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     else if ( !StriCmp(p1, "push") )
     {
         _wpn->push = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "recoil") )
+    {
+        _wpn->recoil = Clamp01(parser.stof(p2, 0));
     }
     else if ( !StriCmp(p1, "debuff_allow") )
     {
@@ -3160,34 +3146,29 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     {
         _wpn->vp_launch = parser.stol(p2, NULL, 0);
     }
-    else if ( ParseVisualScaleParam(parser, p1, p2,
-                                    _wpn->visual_scale,
-                                    _wpn->visual_scale_mode,
-                                    _wpn->visual_scale_random_min,
-                                    _wpn->visual_scale_random_max,
-                                    _wpn->visual_scale_axis) )
+    else if ( ParseVPScaleParam(parser, "vp", p1, p2, _wpn->vp_scale) )
     {
     }
-    else if ( ParseVisualTintParam(parser, p1, p2, _wpn->visual_tint) )
+    else if ( ParseTintParam(parser, "vp_tint", p1, p2, _wpn->vp_tint) )
     {
     }
     else if ( ParseWireframeTintParam(parser, p1, p2, _wpn->wireframe_tint) )
     {
     }
-    else if ( ParseVisualOrientationParam(parser, p1, p2, _wpn->visual_rotation) )
+    else if ( ParseVPOrientationParam(p1, p2, _wpn->vp_orientation) )
     {
     }
-    else if ( !StriCmp(p1, "spin_x") )
+    else if ( ParseVPSpinParam(parser, "vp", p1, p2, _wpn->vp_spin) )
     {
-        _wpn->projectile_spin_speed.x = parser.stof(p2, 0);
     }
-    else if ( !StriCmp(p1, "spin_y") )
+    else if ( ParseVPScaleParam(parser, "vp_trail", p1, p2, _wpn->vp_trail_scale) )
     {
-        _wpn->projectile_spin_speed.y = parser.stof(p2, 0);
     }
-    else if ( !StriCmp(p1, "spin_z") )
+    else if ( ParseVPSpinParam(parser, "vp_trail", p1, p2, _wpn->vp_trail_spin) )
     {
-        _wpn->projectile_spin_speed.z = parser.stof(p2, 0);
+    }
+    else if ( ParseTintParam(parser, "vp_trail_tint", p1, p2, _wpn->vp_trail_tint) )
+    {
     }
     else if ( ParseDecorationFXParam(parser, p1, p2, _wpn->decoration_fx) )
     {

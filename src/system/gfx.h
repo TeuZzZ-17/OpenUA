@@ -269,7 +269,7 @@ struct TRenderNode
     
     uint32_t Flags = 0;
     TGLColor Color;
-    // OpenUA custom: per-node visual_tint multiplier. Neutral (1,1,1,1) = no change.
+    // OpenUA custom: per-node VP tint multiplier. Neutral (1,1,1,1) = no change.
     TGLColor ColorMul = TGLColor(1.0, 1.0, 1.0, 1.0);
 
     mat4x4 TForm;
@@ -873,7 +873,7 @@ protected:
     static constexpr int32_t _vboTextured = 160; // 4
     static constexpr int32_t _vboFlat     = 164; // 4
     static constexpr int32_t _vboATest    = 168; // 4
-    // OpenUA custom: visual_tint multiplier (std140 vec4 -> 16-byte aligned at 176)
+    // OpenUA custom: VP tint multiplier (std140 vec4 -> 16-byte aligned at 176)
     static constexpr int32_t _vboColorMul = 176; // 4 * 4 = 16
     static constexpr int32_t _vboFogColor = 192; // 4 * 4 = 16
     static constexpr int32_t _vboParamsSize = 208;

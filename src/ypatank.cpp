@@ -291,25 +291,41 @@ void NC_STACK_ypatank::AI_layer3(update_msg *arg)
 
             if ( _status_flg & BACT_STFLAG_MOVE )
             {
-                _thraction += _force * v244 * 0.8;
+                bool recoilMove = _weaponRecoilMoveTime > 0 && fabs(_fly_dir_length) > 0.1;
 
-                if ( _thraction > _force )
-                    _thraction = _force;
+                if ( !recoilMove )
+                {
+                    _thraction += _force * v244 * 0.8;
 
-                if ( !(_tankCollisionFlag & (COLL_WALL_L | COLL_WALL_R | COLL_HILL_L | COLL_HILL_R)) && 
-                      _tankCollisionWay > 0.0 )
-                    _thraction -= _force * v244 * 0.6;
+                    if ( _thraction > _force )
+                        _thraction = _force;
 
-                if ( _thraction < 0.0 )
+                    if ( !(_tankCollisionFlag & (COLL_WALL_L | COLL_WALL_R | COLL_HILL_L | COLL_HILL_R)) &&
+                          _tankCollisionWay > 0.0 )
+                        _thraction -= _force * v244 * 0.6;
+
+                    if ( _thraction < 0.0 )
+                        _thraction = 0;
+                }
+                else if ( !getBACT_inputting() )
+                {
                     _thraction = 0;
+                }
 
-                if ( seekAndExplodeRamming || !(_status_flg & BACT_STFLAG_ATTACK) || !_tankExpectTgt || _tankCollisionFlag )
+                if ( seekAndExplodeRamming || !(_status_flg & BACT_STFLAG_ATTACK) || !_tankExpectTgt || _tankCollisionFlag || recoilMove )
                 {
                     move_msg arg74;
                     arg74.flag = 0;
                     arg74.field_0 = v244;
 
                     Move(&arg74);
+                }
+
+                if ( _weaponRecoilMoveTime > 0 )
+                {
+                    _weaponRecoilMoveTime -= arg->frameTime;
+                    if ( _weaponRecoilMoveTime < 0 )
+                        _weaponRecoilMoveTime = 0;
                 }
 
                 if ( _tankCollisionWay > 0.0 )

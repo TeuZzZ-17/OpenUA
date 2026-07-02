@@ -152,38 +152,6 @@ static bool yw_IsUsableGameplayName(const std::string &name)
     return false;
 }
 
-static vec3d yw_ResolveVisualScale(uint8_t mode, float fixedScale, float randomMin, float randomMax, const vec3d &axisScale)
-{
-    switch ( mode )
-    {
-    case World::VISUAL_SCALE_RANDOM:
-    {
-        float minScale = randomMin > 0.0 ? randomMin : 1.0;
-        float maxScale = randomMax > 0.0 ? randomMax : 1.0;
-        if ( maxScale < minScale )
-            std::swap(minScale, maxScale);
-
-        float scale = minScale;
-        if ( maxScale > minScale )
-            scale += ((float)rand() / (float)RAND_MAX) * (maxScale - minScale);
-
-        return vec3d(scale, scale, scale);
-    }
-
-    case World::VISUAL_SCALE_AXIS:
-        return vec3d(axisScale.x > 0.0 ? axisScale.x : 1.0,
-                     axisScale.y > 0.0 ? axisScale.y : 1.0,
-                     axisScale.z > 0.0 ? axisScale.z : 1.0);
-
-    case World::VISUAL_SCALE_FIXED:
-    default:
-    {
-        float scale = fixedScale > 0.0 ? fixedScale : 1.0;
-        return vec3d(scale, scale, scale);
-    }
-    }
-}
-
 std::string NC_STACK_ypaworld::GetVehicleName(uint32_t id) const
 {
     return GetVehicleName(_vhclProtos[id]);
@@ -1660,14 +1628,13 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_vp_wait = _vhclModels.at( vhcl.vp_wait );
         bacto->_vp_megadeth = _vhclModels.at( vhcl.vp_megadeth );
         bacto->_vp_genesis = _vhclModels.at( vhcl.vp_genesis );
-        bacto->_visual_scale = vhcl.visual_scale;
-        bacto->_visual_scale_vec = yw_ResolveVisualScale(vhcl.visual_scale_mode,
-                                                          vhcl.visual_scale,
-                                                          vhcl.visual_scale_random_min,
-                                                          vhcl.visual_scale_random_max,
-                                                          vhcl.visual_scale_axis);
-        bacto->_visual_tint = vhcl.visual_tint;
-        bacto->_visual_rotation = vhcl.visual_rotation;
+        bacto->_vp_scale = vhcl.vp_scale;
+        bacto->_vp_tint = vhcl.vp_tint;
+        bacto->_vp_orientation = vhcl.vp_orientation;
+        bacto->_vp_spin_speed = vhcl.vp_spin;
+        bacto->_vp_trail_scale = vec3d(1.0, 1.0, 1.0);
+        bacto->_vp_trail_tint = World::TVisualTint();
+        bacto->_vp_trail_spin_speed = vec3d(0.0, 0.0, 0.0);
         bacto->_damaged_fx = vhcl.damaged_fx;
         bacto->_damaged_fx_next_time = 0;
         bacto->_decoration_fx = vhcl.decoration_fx;
@@ -1898,15 +1865,13 @@ NC_STACK_ypamissile * NC_STACK_ypaworld::ypaworld_func147(ypaworld_arg146 *arg)
     wobj->_vp_wait =     _vhclModels.at(wproto.vp_wait);
     wobj->_vp_megadeth = _vhclModels.at(wproto.vp_megadeth);
     wobj->_vp_genesis =  _vhclModels.at(wproto.vp_genesis);
-    wobj->_visual_scale = wproto.visual_scale;
-    wobj->_visual_scale_vec = yw_ResolveVisualScale(wproto.visual_scale_mode,
-                                                    wproto.visual_scale,
-                                                    wproto.visual_scale_random_min,
-                                                    wproto.visual_scale_random_max,
-                                                    wproto.visual_scale_axis);
-    wobj->_visual_tint = wproto.visual_tint;
-    wobj->_visual_rotation = wproto.visual_rotation;
-    wobj->_projectile_spin_speed = wproto.projectile_spin_speed;
+    wobj->_vp_scale = wproto.vp_scale;
+    wobj->_vp_tint = wproto.vp_tint;
+    wobj->_vp_orientation = wproto.vp_orientation;
+    wobj->_vp_spin_speed = wproto.vp_spin;
+    wobj->_vp_trail_scale = wproto.vp_trail_scale;
+    wobj->_vp_trail_tint = wproto.vp_trail_tint;
+    wobj->_vp_trail_spin_speed = wproto.vp_trail_spin;
 
     wobj->_destroyFX = wproto.dfx;
     wobj->_extDestroyFX = wproto.ExtDestroyFX;

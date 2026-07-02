@@ -2762,7 +2762,7 @@ void NC_STACK_ypaworld::RenderFillers(baseRender_msg *arg)
     }
 }
 
-int32_t NC_STACK_ypaworld::SpawnTransientVP(int32_t modelId, const vec3d &pos, const mat3x3 &rot, int32_t lifeTime, float scale, const World::TVisualTint &tint, const vec3d &axisScale)
+int32_t NC_STACK_ypaworld::SpawnTransientVP(int32_t modelId, const vec3d &pos, const mat3x3 &rot, int32_t lifeTime, float scale, const World::TVisualTint &tint, const vec3d &axisScale, const vec3d &spin)
 {
     if ( modelId <= 0 || modelId >= (int32_t)_vhclModels.size() || lifeTime < 0 )
         return 0;
@@ -2778,6 +2778,7 @@ int32_t NC_STACK_ypaworld::SpawnTransientVP(int32_t modelId, const vec3d &pos, c
         fx.axisScale = vec3d(axisScale.x > 0.0f ? axisScale.x : 1.0f,
                              axisScale.y > 0.0f ? axisScale.y : 1.0f,
                              axisScale.z > 0.0f ? axisScale.z : 1.0f);
+        fx.spin = spin;
         fx.tint = tint;
         return fx.id;
     }
@@ -2863,7 +2864,7 @@ bool NC_STACK_ypaworld::UpdateRandomFXTimer(int intervalMin, int intervalMax, in
     return true;
 }
 
-int32_t NC_STACK_ypaworld::SpawnRandomizedTransientVP(int32_t modelId, const vec3d &ownerPos, float randomPos, const World::TVisualTint &tint, int32_t lifeTime, float scale, const vec3d &offset)
+int32_t NC_STACK_ypaworld::SpawnRandomizedTransientVP(int32_t modelId, const vec3d &ownerPos, float randomPos, const World::TVisualTint &tint, int32_t lifeTime, float scale, const vec3d &offset, const vec3d &axisScale, const vec3d &spin)
 {
     if ( modelId <= 0 )
         return 0;
@@ -2876,13 +2877,12 @@ int32_t NC_STACK_ypaworld::SpawnRandomizedTransientVP(int32_t modelId, const vec
         pos.z += (((float)rand() / (float)RAND_MAX) * 2.0 - 1.0) * randomPos;
     }
 
-    return SpawnTransientVP(modelId, pos, mat3x3::Ident(), lifeTime, scale, tint);
+    return SpawnTransientVP(modelId, pos, mat3x3::Ident(), lifeTime, scale, tint, axisScale, spin);
 }
 
 void NC_STACK_ypaworld::UpdateDecorationFX(const World::TDecorationFXConfig &config, int32_t &nextTime, const vec3d &ownerPos, int32_t *persistentId)
 {
-    const World::TVisualTint tint = config.has_tint ? config.tint : World::TVisualTint();
-    const float scale = config.scale > 0.0 ? config.scale : 1.0;
+    const World::TVisualTint tint = config.vp_tint;
 
     if ( config.mode == World::DECORATION_FX_PERSISTENT )
     {
@@ -2892,7 +2892,7 @@ void NC_STACK_ypaworld::UpdateDecorationFX(const World::TDecorationFXConfig &con
             return;
 
         if ( !HasTransientVP(*persistentId) )
-            *persistentId = SpawnTransientVP(config.vp, ownerPos + config.offset, mat3x3::Ident(), 0, scale, tint);
+            *persistentId = SpawnTransientVP(config.vp, ownerPos + config.offset, mat3x3::Ident(), 0, 1.0, tint, config.vp_scale, config.vp_spin);
 
         return;
     }
@@ -2923,11 +2923,13 @@ void NC_STACK_ypaworld::UpdateDecorationFX(const World::TDecorationFXConfig &con
         SpawnRandomizedTransientVP(config.vp, ownerPos, config.random_pos,
                                    tint,
                                    config.duration > 0 ? config.duration : 1000,
-                                   scale,
-                                   config.offset);
+                                   1.0,
+                                   config.offset,
+                                   config.vp_scale,
+                                   config.vp_spin);
 }
 
-int32_t NC_STACK_ypaworld::SpawnAttachedTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime, float scale, bool useOwnerTransform, const World::TVisualTint &tint)
+int32_t NC_STACK_ypaworld::SpawnAttachedTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime, float scale, bool useOwnerTransform, const World::TVisualTint &tint, const vec3d &axisScale, const vec3d &spin)
 {
     if ( !owner || modelId <= 0 || modelId >= (int32_t)_vhclModels.size() )
         return 0;
@@ -2949,6 +2951,10 @@ int32_t NC_STACK_ypaworld::SpawnAttachedTransientVP(int32_t modelId, NC_STACK_yp
     fx.followLocalOffset = localOffset;
     fx.followUseOwnerTransform = useOwnerTransform;
     fx.scale = scale > 0.0 ? scale : 1.0;
+    fx.axisScale = vec3d(axisScale.x > 0.0f ? axisScale.x : 1.0f,
+                         axisScale.y > 0.0f ? axisScale.y : 1.0f,
+                         axisScale.z > 0.0f ? axisScale.z : 1.0f);
+    fx.spin = spin;
     fx.tint = tint;
     return fx.id;
 }
@@ -3457,6 +3463,27 @@ static void yw_UpdateBuildingSpawner(NC_STACK_ypaworld *world, cellArea &cell, c
     }
 }
 
+static mat3x3 yw_BuildTransientVPSpinMatrix(const vec3d &degreesPerSecond, int32_t age)
+{
+    const float degToRad = 0.01745329251994329577f;
+    vec3d angle = degreesPerSecond * ((float)age * 0.001f * degToRad);
+    mat3x3 spin = mat3x3::Ident();
+
+    if ( angle.x != 0.0 )
+        spin *= mat3x3::RotateX(angle.x);
+    if ( angle.y != 0.0 )
+        spin *= mat3x3::RotateY(angle.y);
+    if ( angle.z != 0.0 )
+        spin *= mat3x3::RotateZ(angle.z);
+
+    return spin;
+}
+
+static bool yw_HasTransientVPSpin(const vec3d &spin)
+{
+    return spin.x != 0.0 || spin.y != 0.0 || spin.z != 0.0;
+}
+
 static void yw_RenderTransientVPs(NC_STACK_ypaworld *world, std::list<NC_STACK_ypaworld::TTransientVP> *effects, baseRender_msg *arg)
 {
     for (auto it = effects->begin(); it != effects->end();)
@@ -3529,23 +3556,36 @@ static void yw_RenderTransientVPs(NC_STACK_ypaworld *world, std::list<NC_STACK_y
             }
         }
 
-        it->vp->Bas->TForm().Pos = it->pos;
-        it->vp->Bas->TForm().SclRot = it->rot.Transpose() * mat3x3::Scale(it->axisScale * scale);
+        vec3d renderScale = it->axisScale * scale;
+        mat3x3 renderRot = it->rot.Transpose();
+        if ( yw_HasTransientVPSpin(it->spin) )
+            renderRot *= yw_BuildTransientVPSpinMatrix(it->spin, it->age);
 
-        // OpenUA custom visual_tint/scale: affect only this transient model and
-        // particles emitted by it, then restore neutral defaults for other effects.
-        float oldParticleScale = arg->particleScale;
-        arg->particleScale = scale > 0.0 ? scale : 1.0;
+        it->vp->Bas->TForm().Pos = it->pos;
+        it->vp->Bas->TForm().SclRot = renderRot * mat3x3::Scale(renderScale);
+
+        // OpenUA custom VP controls: affect only this transient model and
+        // particles emitted by it, then restore defaults for other effects.
+        GFX::TGLColor oldTint = arg->tint;
+        GFX::TGLColor oldParticleTint = arg->particleTint;
+        vec3d oldParticleScale = arg->particleScale;
+        vec3d oldParticleSpin = arg->particleSpin;
+        arg->particleTint = GFX::TGLColor(it->tint.r, it->tint.g, it->tint.b, it->tint.a);
+        arg->particleScale = renderScale;
+        arg->particleSpin = it->spin;
 
         bool tinted = !it->tint.IsNeutral();
         if ( tinted )
             arg->tint = GFX::TGLColor(it->tint.r, it->tint.g, it->tint.b, it->tint.a);
+        else
+            arg->tint = GFX::TGLColor(1.0, 1.0, 1.0, 1.0);
 
         it->vp->Bas->Render(arg, it->vp.get());
 
-        if ( tinted )
-            arg->tint = GFX::TGLColor(1.0, 1.0, 1.0, 1.0);
+        arg->tint = oldTint;
+        arg->particleTint = oldParticleTint;
         arg->particleScale = oldParticleScale;
+        arg->particleSpin = oldParticleSpin;
 
         it->age += arg->frameTime;
         ++it;

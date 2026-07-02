@@ -505,8 +505,9 @@ size_t NC_STACK_base::Render(baseRender_msg *arg, Instance * inst, bool doCopy /
         _renderMsg.ViewTForm = view;
         _renderMsg.OwnerTForm = &_transform;
         _renderMsg.flags = arg->flags;
-        _renderMsg.tint = arg->tint;
+        _renderMsg.tint = arg->particleTint;
         _renderMsg.particleScale = arg->particleScale;
+        _renderMsg.particleSpin = arg->particleSpin;
         
         if (!inst)
             isVisible = _skeleton->skeleton_func132(&skel132);
@@ -523,7 +524,7 @@ size_t NC_STACK_base::Render(baseRender_msg *arg, Instance * inst, bool doCopy /
 
             rend.Distance = distance;
             rend.Color = msh.Mat.Color;
-            rend.ColorMul = arg->tint; // OpenUA custom: per-object visual_tint multiplier
+            rend.ColorMul = arg->tint; // OpenUA custom: per-object VP tint multiplier
             rend.Flags = msh.Mat.Flags;
 
             if ((msh.Mat.Flags & GFX::RFLAGS_DYNAMIC_TEXTURE) && msh.Mat.TexSource)
@@ -616,8 +617,9 @@ size_t NC_STACK_base::RenderImmediately(baseRender_msg *arg, Instance * inst)
         _renderMsg.ViewTForm = view;
         _renderMsg.OwnerTForm = &_transform;
         _renderMsg.flags = arg->flags;
-        _renderMsg.tint = arg->tint;
+        _renderMsg.tint = arg->particleTint;
         _renderMsg.particleScale = arg->particleScale;
+        _renderMsg.particleSpin = arg->particleSpin;
         
         float distance = skel132.tform.Transform( _transform.Pos ).length();
         
@@ -626,7 +628,7 @@ size_t NC_STACK_base::RenderImmediately(baseRender_msg *arg, Instance * inst)
             GFX::TRenderNode rend( GFX::TRenderNode::TYPE_MESH );
             rend.Distance = distance;
             rend.Color = msh.Mat.Color;
-            rend.ColorMul = arg->tint; // OpenUA custom: per-object visual_tint multiplier
+            rend.ColorMul = arg->tint; // OpenUA custom: per-object VP tint multiplier
             rend.Flags = msh.Mat.Flags | arg->flags;
             
             rend.Mesh = &msh;            

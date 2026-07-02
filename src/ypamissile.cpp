@@ -43,6 +43,32 @@ static int ypamissile_ScaleAoeEnergy(int energy, float factor)
     return (int)((float)energy * factor);
 }
 
+static float ypamissile_GetTargetPushMultiplier(NC_STACK_ypaworld *world, NC_STACK_ypabact *target)
+{
+    if ( !world || !target )
+        return 1.0f;
+
+    const std::vector<World::TVhclProto> &protos = world->GetVhclProtos();
+
+    if ( target->_vehicleID >= protos.size() )
+        return 1.0f;
+
+    return 1.0f - ypamissile_Clamp01(protos.at(target->_vehicleID).push_resistance);
+}
+
+static bool ypamissile_TargetHasPushResistance(NC_STACK_ypaworld *world, NC_STACK_ypabact *target)
+{
+    if ( !world || !target )
+        return false;
+
+    const std::vector<World::TVhclProto> &protos = world->GetVhclProtos();
+
+    if ( target->_vehicleID >= protos.size() )
+        return false;
+
+    return protos.at(target->_vehicleID).has_push_resistance;
+}
+
 static NC_STACK_ypabact *ypamissile_FindLiveBactByGid(World::RefBactList &list, int32_t gid)
 {
     for (NC_STACK_ypabact *unit : list)
@@ -1090,7 +1116,9 @@ void NC_STACK_ypamissile::ApplyDirectPushToBact(NC_STACK_ypabact *bct)
         }
     }
 
-    bct->AddAoePush(pushDir, (float)_mislDirectPush);
+    float pushStrength = (float)_mislDirectPush * ypamissile_GetTargetPushMultiplier(_world, bct);
+    if ( pushStrength > 0.0f )
+        bct->AddAoePush(pushDir, pushStrength);
 }
 
 const char *NC_STACK_ypamissile::GetAreaDamageSkipReason(NC_STACK_ypabact *bct, bool allowFriendly) const
@@ -1466,6 +1494,8 @@ void NC_STACK_ypamissile::ApplyAreaDamage()
                         if ( t < 0.0f ) t = 0.0f;
                         pushStrength *= t;
                     }
+
+                    pushStrength *= ypamissile_GetTargetPushMultiplier(_world, bct);
 
                     if ( pushStrength > 0.0f )
                         bct->AddAoePush(pushDir, pushStrength);
@@ -2331,6 +2361,9 @@ void NC_STACK_ypamissile::Impact()
     /* FIXME:
        Needs to check all near sectors too if effective radius affect it*/
 
+    bool modernPushWeapon = _mislDirectPush > 0 || _mislAoeUnitPush > 0;
+    bool hasLegacyImpulseTarget = false;
+
     for( NC_STACK_ypabact* &bct : _pSector->unitsList )
     {
         if ( bct->_bact_type != BACT_TYPES_MISSLE && bct->_bact_type != BACT_TYPES_ROBO && bct->_bact_type != BACT_TYPES_TANK && bct->_bact_type != BACT_TYPES_CAR && bct->_bact_type != BACT_TYPES_GUN && bct->_bact_type != BACT_TYPES_HOVER && !(bct->_status_flg & BACT_STFLAG_DEATH2) )
@@ -2351,15 +2384,25 @@ void NC_STACK_ypamissile::Impact()
                     continue;
                 }
 
+                if ( modernPushWeapon && ypamissile_TargetHasPushResistance(_world, bct) )
+                    continue;
+
+                hasLegacyImpulseTarget = true;
+
                 bct->ApplyImpulse(&arg83);
+            }
+            else if ( !(modernPushWeapon && ypamissile_TargetHasPushResistance(_world, bct)) )
+            {
+                hasLegacyImpulseTarget = true;
             }
         }
     }
 
-    if ( _world->_isNetGame )
+    if ( _world->_isNetGame && hasLegacyImpulseTarget )
     {
         uamessage_impulse impMsg;
         impMsg.msgID = UAMSG_IMPULSE;
+        impMsg.p[0] = modernPushWeapon ? 1 : 0;
         impMsg.owner = _owner;
         impMsg.id = _gid;
         impMsg.pos = _position;

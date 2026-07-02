@@ -4,6 +4,7 @@
 #include "../ade.h"
 #include "../particle.h"
 #include "../base.h"
+#include "../utils.h"
 
 namespace World
 {
@@ -11,11 +12,38 @@ namespace World
 ParticleSystem::ParticleSystem()
 {
 }
-    
-void ParticleSystem::AddParticle(NC_STACK_particle *base, const vec3d& pos, const vec3d& vec, int32_t age, const GFX::TGLColor &tint, float scale)
+
+static mat3x3 ParticleSystem_BuildSpinMatrix(const vec3d &degreesPerSecond, int32_t age)
+{
+    vec3d angle = degreesPerSecond * ((float)age * 0.001f * C_PI_180);
+    mat3x3 spin = mat3x3::Ident();
+
+    if ( angle.x != 0.0 )
+        spin *= mat3x3::RotateX(angle.x);
+    if ( angle.y != 0.0 )
+        spin *= mat3x3::RotateY(angle.y);
+    if ( angle.z != 0.0 )
+        spin *= mat3x3::RotateZ(angle.z);
+
+    return spin;
+}
+
+static float ParticleSystem_MaxScaleAxis(const vec3d &scale)
+{
+    float maxScale = scale.x;
+
+    if ( scale.y > maxScale )
+        maxScale = scale.y;
+    if ( scale.z > maxScale )
+        maxScale = scale.z;
+
+    return maxScale > 0.0f ? maxScale : 1.0f;
+}
+
+void ParticleSystem::AddParticle(NC_STACK_particle *base, const vec3d& pos, const vec3d& vec, int32_t age, const GFX::TGLColor &tint, const vec3d &scale, const vec3d &spin)
 {
     if (!_disableAdd && (int32_t)_particles.size() < System::IniConf::ParticlesLimit.Get<int32_t>())
-        _particles.emplace_back( base, pos, vec, age, tint, scale );
+        _particles.emplace_back( base, pos, vec, age, tint, scale, spin );
 }
 
 void ParticleSystem::UpdateRender(area_arg_65 *rndrParams, int32_t delta)
@@ -44,7 +72,8 @@ void ParticleSystem::UpdateRender(area_arg_65 *rndrParams, int32_t delta)
         
         f.Vec += f.pParticleGen->_accelStart + f.pParticleGen->_accelDelta * f.Age;
         f.Pos += f.Vec * fsec + NC_STACK_particle::RandVec() * f.pParticleGen->_noisePower;
-        float scl = (f.pParticleGen->_scaleStart + f.pParticleGen->_scaleDelta * f.Age) * f.Scale;
+        float baseScale = f.pParticleGen->_scaleStart + f.pParticleGen->_scaleDelta * f.Age;
+        vec3d scl(baseScale * f.Scale.x, baseScale * f.Scale.y, baseScale * f.Scale.z);
         
         Render(&f, scl, rndrParams);
         
@@ -55,7 +84,7 @@ void ParticleSystem::UpdateRender(area_arg_65 *rndrParams, int32_t delta)
 }
 
 
-void ParticleSystem::Render(Frak *p, float scale, area_arg_65 *rndrParams)
+void ParticleSystem::Render(Frak *p, const vec3d &scale, area_arg_65 *rndrParams)
 {
     TF::TForm3D *view = rndrParams->ViewTForm;
 
@@ -74,7 +103,8 @@ void ParticleSystem::Render(Frak *p, float scale, area_arg_65 *rndrParams)
     /* Radius of 2.0 side square = sqrt(1.0^2 + 1.0^2) = 1.414
      * And applied W
      */
-    float radius = scale * 1.42 / w;
+    float maxScale = ParticleSystem_MaxScaleAxis(scale);
+    float radius = maxScale * 1.42 / w;
 
     vec2f scrPos(projPos.x / w, projPos.y / w);
     
@@ -117,15 +147,16 @@ void ParticleSystem::Render(Frak *p, float scale, area_arg_65 *rndrParams)
 
             rend.Mesh = &mesh;        
             
-            rend.TForm = mat4x4(scale, 0.0, 0.0, pos.x,
-                                0.0, scale, 0.0, pos.y,
-                                0.0,   0.0, 1.0, pos.z,
-                                0.0,   0.0, 0.0, 1.0);
+            mat4x4 particleForm(ParticleSystem_BuildSpinMatrix(p->Spin, p->Age) * mat3x3::Scale(scale));
+            particleForm.m03 = pos.x;
+            particleForm.m13 = pos.y;
+            particleForm.m23 = pos.z;
+            rend.TForm = particleForm;
             rend.TimeStamp = rndrParams->timeStamp;
             rend.FrameTime = rndrParams->frameTime;
             rend.FogStart = rndrParams->fadeStart;
             rend.FogLength = rndrParams->fadeLength;
-            rend.ParticleSize = scale;
+            rend.ParticleSize = maxScale;
 
             GFX::GFXEngine::Instance.QueueRenderMesh(&rend);
         }

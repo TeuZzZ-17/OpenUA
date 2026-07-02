@@ -1374,7 +1374,7 @@ void GFXEngine::RenderingMeshOld(TRenderNode *nod)
         }
     }
 
-    // OpenUA custom visual_tint: per-node color multiplier (fixed-function path).
+    // OpenUA custom VP tint: per-node color multiplier (fixed-function path).
     // Computed into the scratch ComputedColor right before the draw, so the shared
     // mesh's base vertex colors are never permanently modified.
     if ( nod->ColorMul.r != 1.0 || nod->ColorMul.g != 1.0 ||
@@ -1559,7 +1559,7 @@ void GFXEngine::RenderingMesh(TRenderNode *nod)
         }
     }
 
-    // OpenUA custom visual_tint: enable a local alpha blend when the tint lowers alpha.
+    // OpenUA custom VP tint: enable a local alpha blend when the tint lowers alpha.
     if ( nod->ColorMul.a < 1.0 && !_states.AlphaBlend )
     {
         _states.AlphaBlend = true;
@@ -1589,7 +1589,7 @@ void GFXEngine::RenderingMesh(TRenderNode *nod)
             Glext::GLVertexAttribPointer(_lastStates.Prog.UVLoc, 2, GL_FLOAT, GL_FALSE,  sizeof(TVertex), (void *)offsetof(TVertex, TexCoord));
     }
 
-    // OpenUA custom visual_tint: push the per-node color multiplier to the shader UBO.
+    // OpenUA custom VP tint: push the per-node color multiplier to the shader UBO.
     if ( _vboStatesBlock.ColorMul[0] != nod->ColorMul.r ||
          _vboStatesBlock.ColorMul[1] != nod->ColorMul.g ||
          _vboStatesBlock.ColorMul[2] != nod->ColorMul.b ||
@@ -4708,7 +4708,7 @@ void GFXEngine::DrawVtxQuad(const std::array<GFX::TVertex, 4> &vtx)
         if (_lastStates.Prog.UVLoc != -1)
             Glext::GLVertexAttribPointer(_lastStates.Prog.UVLoc, 2, GL_FLOAT, GL_FALSE,  sizeof(TVertex), (void *)offsetof(TVertex, TexCoord));
 
-        // OpenUA custom visual_tint: screen/HUD/UI quads must never inherit a mesh tint.
+        // OpenUA custom VP tint: screen/HUD/UI quads must never inherit a mesh tint.
         if ( _vboStatesBlock.ColorMul[0] != 1.0 || _vboStatesBlock.ColorMul[1] != 1.0 ||
              _vboStatesBlock.ColorMul[2] != 1.0 || _vboStatesBlock.ColorMul[3] != 1.0 )
         {
