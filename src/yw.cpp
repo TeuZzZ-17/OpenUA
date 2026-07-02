@@ -1581,6 +1581,7 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_gun_power = vhcl.gun_power;
         bacto->_pitch_max = vhcl.max_pitch;
         bacto->_vehicleID = vhcl_id->vehicle_id;
+        bacto->_static = vhcl.static_unit;
         bacto->_isDummy = vhcl.is_dummy != 0; // OpenUA: model = dummy -> inert module
         bacto->_weapon = vhcl.weapon;
         bacto->_extra_weapons = vhcl.extra_weapons;

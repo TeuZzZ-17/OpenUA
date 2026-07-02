@@ -1243,6 +1243,7 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _thraction = 0.0;
     _fly_dir_length = 0.0;
     _weaponRecoilMoveTime = 0;
+    _static = false;
     _height = 0.0;
     _height_max_user = 0.0;
     _vp_scale = vec3d(1.0, 1.0, 1.0);
@@ -1441,6 +1442,7 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _fly_dir = vec3d(0.0, 0.0, 0.0);
     _fly_dir_length = 0;
     _weaponRecoilMoveTime = 0;
+    _static = false;
     _target_vec = vec3d(0.0, 0.0, 0.0);
     
     //_kidRef.bact = this;
@@ -2462,11 +2464,18 @@ void NC_STACK_ypabact::Update(update_msg *arg)
     UpdateCarrierSpawn(arg);
     UpdateProximityDefense(arg);
     UpdateMortar(arg);
-    AI_layer1(arg);
-    UpdateLaser(arg); // OpenUA custom: process this frame's laser fire request (must run after AI_layer1 firing)
-    UpdateVerticalLaser(arg);
-    UpdateAoePush(arg);
-    UpdateSeekAndExplode(arg);
+    if ( _static )
+    {
+        FreezeStaticUnit();
+    }
+    else
+    {
+        AI_layer1(arg);
+        UpdateLaser(arg); // OpenUA custom: process this frame's laser fire request (must run after AI_layer1 firing)
+        UpdateVerticalLaser(arg);
+        UpdateAoePush(arg);
+        UpdateSeekAndExplode(arg);
+    }
     UpdateUnitGuns(arg);
     UpdateUnitDummies(arg);
 
@@ -3065,6 +3074,17 @@ void NC_STACK_ypabact::UpdateAoePush(update_msg *arg)
 
     // Exponential decay toward zero.
     _aoePushVel *= expf(-dtime / AOE_PUSH_TAU);
+}
+
+void NC_STACK_ypabact::FreezeStaticUnit()
+{
+    _old_pos = _position;
+    _target_vec = vec3d(0.0, 0.0, 0.0);
+    _thraction = 0.0;
+    _fly_dir_length = 0.0;
+    _weaponRecoilMoveTime = 0;
+    _aoePushVel = vec3d(0.0, 0.0, 0.0);
+    _status_flg &= ~(BACT_STFLAG_MOVE | BACT_STFLAG_DODGE_LEFT | BACT_STFLAG_DODGE_RIGHT);
 }
 
 void NC_STACK_ypabact::Render(baseRender_msg *arg)

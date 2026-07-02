@@ -6580,14 +6580,8 @@ void NC_STACK_ypaworld::debug_count_units()
 
 void NC_STACK_ypaworld::debug_info_draw(TInputState *inpt)
 {
-    if ( _showDebugMode == 0)
+    if ( _showDebugMode != 0 )
     {
-        if ( sub_449678(inpt, Input::KC_F9) )
-            _showDebugMode++;
-    }
-    else
-    {
-
         CmdStream dbg_txt;
         dbg_txt.reserve(4096);
         char buf_sprintf[2048];
@@ -7031,19 +7025,16 @@ void NC_STACK_ypaworld::debug_info_draw(TInputState *inpt)
 
 
         if ( v104 )
-        {
             _showDebugMode = 0;
-        }
-        else
-        {
-            if ( sub_449678(inpt, Input::KC_F9) )
-                _showDebugMode++;
-        }
     }
 
     // F10 collision debug overlay: direct key check, no RMB/easy-cheat helper.
     if ( inpt && inpt->KbdLastHit == Input::KC_F10 )
         _showCollDebug = !_showCollDebug;
+
+    // F11 screenshot mode: hide the gameplay HUD without enabling debug overlays.
+    if ( inpt && inpt->KbdLastHit == Input::KC_F11 )
+        _hideHudForScreenshots = !_hideHudForScreenshots;
 
     if ( _showCollDebug )
         debug_draw_coll_spheres();

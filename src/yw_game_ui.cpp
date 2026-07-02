@@ -4038,6 +4038,9 @@ void sb_0x4d7c08__sub0__sub1()
 
 void sb_0x4d7c08__sub0(NC_STACK_ypaworld *yw)
 {
+    if ( yw->_hideHudForScreenshots )
+        return;
+
     if ( yw->_userUnit->_bact_type != BACT_TYPES_MISSLE )
     {
         sb_0x4d7c08__sub0__sub4(yw);

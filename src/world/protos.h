@@ -468,6 +468,7 @@ struct TVhclProto
     int8_t radar = 0;
     float push_resistance = 0.0; // OpenUA custom: target-side resistance to push / aoe_unit_push
     bool has_push_resistance = false; // true only when push_resistance is explicitly authored
+    bool static_unit = false; // OpenUA custom: freeze this vehicle's spawned unit instances
     float mass = 0.0;
     float force = 0.0;
     float airconst = 0.0;

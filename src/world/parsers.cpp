@@ -1272,6 +1272,11 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
         _vhcl->push_resistance = Clamp01(parser.stof(p2, 0));
         _vhcl->has_push_resistance = true;
     }
+    else if ( !StriCmp(p1, "static") )
+    {
+        if (IsModsAllow(true))
+            _vhcl->static_unit = StrGetBool(p2);
+    }
     else if ( !StriCmp(p1, "add_energy") )
     {
         _vhcl->energy += parser.stol(p2, NULL, 0);
@@ -2445,6 +2450,7 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->kill_after_shot = 0;
         _vhcl->push_resistance = 0.0;
         _vhcl->has_push_resistance = false;
+        _vhcl->static_unit = false;
         _vhcl->mass = 400.0;
         _vhcl->force = 5000.0;
         _vhcl->airconst = 80.0;

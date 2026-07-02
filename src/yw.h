@@ -2741,6 +2741,7 @@ public:
     
     int8_t _showDebugMode = 0; // debug info draw modes
     bool _showCollDebug = false; // F10: draw collision sphere overlay
+    bool _hideHudForScreenshots = false; // F11: hide gameplay HUD/screenshots UI
 
     // F10 debug: transient AoE impact rings. Recorded on weapon detonation,
     // fade out after a short time. Only populated while _showCollDebug is on.
