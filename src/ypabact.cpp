@@ -148,6 +148,14 @@ static void ypabact_StartTankWeaponRecoilVisual(NC_STACK_ypabact *bact, float re
     bact->_weaponRecoilVisualPitch = degrees * C_PI_180;
 }
 
+static bool ypabact_IsAiTankWeaponRecoilUnit(const NC_STACK_ypabact *unit)
+{
+    return unit &&
+           unit->_bact_type == BACT_TYPES_TANK &&
+           !(unit->_oflags & BACT_OFLAG_VIEWER) &&
+           !(unit->_oflags & BACT_OFLAG_USERINPT);
+}
+
 static float ypabact_GetDamagedThreshold(const NC_STACK_ypabact *bact)
 {
     float threshold = bact->_damaged_fx.threshold;
@@ -1289,6 +1297,7 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _weaponRecoilVisualEndTime = 0;
     _weaponRecoilVisualDuration = 0;
     _weaponRecoilVisualPitch = 0.0f;
+    _weaponRecoilVisualOffset = vec3d(0.0, 0.0, 0.0);
     _weaponRecoilAiRecoveryEndTime = 0;
     _weaponRecoilPlayerRecoveryEndTime = 0;
     _weaponRecoilPushVel = vec3d(0.0, 0.0, 0.0);
@@ -1493,6 +1502,7 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _weaponRecoilVisualEndTime = 0;
     _weaponRecoilVisualDuration = 0;
     _weaponRecoilVisualPitch = 0.0f;
+    _weaponRecoilVisualOffset = vec3d(0.0, 0.0, 0.0);
     _weaponRecoilAiRecoveryEndTime = 0;
     _weaponRecoilPlayerRecoveryEndTime = 0;
     _weaponRecoilPushVel = vec3d(0.0, 0.0, 0.0);
@@ -3070,9 +3080,32 @@ static void ypabact_UpdateFakePushVel(NC_STACK_ypabact *unit, vec3d *pushVel, up
             *pushVel = vec3d(0.0, 0.0, 0.0);
             break;
         }
+
     }
 
     *pushVel *= expf(-dtime / tau);
+}
+
+static void ypabact_UpdateTankWeaponRecoilVisualOffset(NC_STACK_ypabact *unit, update_msg *arg)
+{
+    if ( !ypabact_IsAiTankWeaponRecoilUnit(unit) )
+        return;
+
+    float offsetLen = unit->_weaponRecoilVisualOffset.length();
+    if ( !isfinite(offsetLen) || offsetLen < 0.01f )
+    {
+        unit->_weaponRecoilVisualOffset = vec3d(0.0, 0.0, 0.0);
+        return;
+    }
+
+    float dtime = arg->frameTime / 1000.0f;
+    if ( !isfinite(dtime) || dtime <= 0.0f )
+        return;
+
+    if ( dtime > AOE_PUSH_MAX_DT )
+        dtime = AOE_PUSH_MAX_DT;
+
+    unit->_weaponRecoilVisualOffset *= expf(-dtime / WEAPON_RECOIL_TAU);
 }
 
 void NC_STACK_ypabact::AddAoePush(const vec3d &dir, float distance)
@@ -3113,6 +3146,9 @@ void NC_STACK_ypabact::ApplyWeaponRecoil(const vec3d &dir, float recoil, float s
     if ( _bact_type == BACT_TYPES_GUN || recoil <= 0.0f )
         return;
 
+    if ( _bact_type == BACT_TYPES_TANK && !(_status_flg & BACT_STFLAG_LAND) )
+        return;
+
     if ( _bact_type == BACT_TYPES_TANK )
     {
         ypabact_StartTankWeaponRecoilVisual(this, recoil);
@@ -3136,6 +3172,18 @@ void NC_STACK_ypabact::ApplyWeaponRecoil(const vec3d &dir, float recoil, float s
             return;
     }
 
+    if ( ypabact_IsAiTankWeaponRecoilUnit(this) )
+    {
+        _weaponRecoilVisualOffset += recoilDir * (recoil * WEAPON_RECOIL_DISTANCE_PER_UNIT);
+
+        float maxOffset = WEAPON_RECOIL_DISTANCE_PER_UNIT * 10.0f;
+        float offsetLen = _weaponRecoilVisualOffset.length();
+        if ( isfinite(offsetLen) && offsetLen > maxOffset )
+            _weaponRecoilVisualOffset *= maxOffset / offsetLen;
+
+        return;
+    }
+
     _weaponRecoilPushVel += recoilDir * ((recoil * WEAPON_RECOIL_DISTANCE_PER_UNIT) / WEAPON_RECOIL_TAU);
 }
 
@@ -3146,6 +3194,13 @@ void NC_STACK_ypabact::UpdateAoePush(update_msg *arg)
 
 void NC_STACK_ypabact::UpdateWeaponRecoilPush(update_msg *arg)
 {
+    if ( ypabact_IsAiTankWeaponRecoilUnit(this) )
+    {
+        _weaponRecoilPushVel = vec3d(0.0, 0.0, 0.0);
+        ypabact_UpdateTankWeaponRecoilVisualOffset(this, arg);
+        return;
+    }
+
     ypabact_UpdateFakePushVel(this, &_weaponRecoilPushVel, arg, WEAPON_RECOIL_TAU);
 }
 
@@ -3158,6 +3213,7 @@ void NC_STACK_ypabact::FreezeStaticUnit()
     _weaponRecoilVisualEndTime = 0;
     _weaponRecoilVisualDuration = 0;
     _weaponRecoilVisualPitch = 0.0f;
+    _weaponRecoilVisualOffset = vec3d(0.0, 0.0, 0.0);
     _weaponRecoilAiRecoveryEndTime = 0;
     _weaponRecoilPlayerRecoveryEndTime = 0;
     _weaponRecoilPushVel = vec3d(0.0, 0.0, 0.0);
@@ -3240,6 +3296,8 @@ void NC_STACK_ypabact::Render(baseRender_msg *arg)
             if ( !(_oflags & BACT_OFLAG_VIEWER) || _oflags & BACT_OFLAG_ALWAYSREND )
             {
                 _current_vp->Bas->TForm().Pos = _tForm.Pos;
+                if ( ypabact_IsAiTankWeaponRecoilUnit(this) && ypabact_IsMainVPBase(this, _current_vp->Bas) )
+                    _current_vp->Bas->TForm().Pos += _weaponRecoilVisualOffset;
                 _current_vp->Bas->TForm().SclRot = _tForm.SclRot;
 
                 bool scaled = shouldApplyVPScale(_current_vp->Bas);
