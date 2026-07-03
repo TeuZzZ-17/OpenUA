@@ -104,6 +104,50 @@ static mat3x3 ypabact_BuildVPSpinMatrix(const NC_STACK_ypabact *bact)
     return spin;
 }
 
+static float ypabact_GetTankWeaponRecoilVisualPitch(const NC_STACK_ypabact *bact)
+{
+    // OpenUA tank recoil: keep the physical recoil stable/horizontal, but add
+    // a small render-only pitch kick for third-person tanks.  This restores the
+    // visible firing tilt without feeding vertical velocity back into tank AI,
+    // collision or pathing.
+    if ( bact->_bact_type != BACT_TYPES_TANK ||
+         bact->_weaponRecoilVisualDuration <= 0 ||
+         bact->_weaponRecoilVisualPitch == 0.0f ||
+         bact->_clock >= bact->_weaponRecoilVisualEndTime )
+        return 0.0f;
+
+    float remain = (float)(bact->_weaponRecoilVisualEndTime - bact->_clock) /
+                   (float)bact->_weaponRecoilVisualDuration;
+    if ( remain <= 0.0f )
+        return 0.0f;
+    if ( remain > 1.0f )
+        remain = 1.0f;
+
+    // Ease out quickly: full kick immediately after the shot, then fade fast.
+    return bact->_weaponRecoilVisualPitch * remain * remain;
+}
+
+static void ypabact_StartTankWeaponRecoilVisual(NC_STACK_ypabact *bact, float recoil)
+{
+    if ( bact->_bact_type != BACT_TYPES_TANK || recoil <= 0.0f )
+        return;
+
+    const int durationMs = 220;
+
+    float degrees = recoil * 0.75f;
+    if ( degrees < 0.0f )
+        degrees = 0.0f;
+    else if ( degrees > 5.0f )
+        degrees = 5.0f;
+
+    if ( degrees <= 0.0f )
+        return;
+
+    bact->_weaponRecoilVisualDuration = durationMs;
+    bact->_weaponRecoilVisualEndTime = bact->_clock + durationMs;
+    bact->_weaponRecoilVisualPitch = degrees * C_PI_180;
+}
+
 static float ypabact_GetDamagedThreshold(const NC_STACK_ypabact *bact)
 {
     float threshold = bact->_damaged_fx.threshold;
@@ -1242,7 +1286,12 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _viewer_max_side = 0.0;
     _thraction = 0.0;
     _fly_dir_length = 0.0;
-    _weaponRecoilMoveTime = 0;
+    _weaponRecoilVisualEndTime = 0;
+    _weaponRecoilVisualDuration = 0;
+    _weaponRecoilVisualPitch = 0.0f;
+    _weaponRecoilAiRecoveryEndTime = 0;
+    _weaponRecoilPlayerRecoveryEndTime = 0;
+    _weaponRecoilPushVel = vec3d(0.0, 0.0, 0.0);
     _static = false;
     _height = 0.0;
     _height_max_user = 0.0;
@@ -1441,7 +1490,12 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _viewer_rotation = mat3x3::Ident();
     _fly_dir = vec3d(0.0, 0.0, 0.0);
     _fly_dir_length = 0;
-    _weaponRecoilMoveTime = 0;
+    _weaponRecoilVisualEndTime = 0;
+    _weaponRecoilVisualDuration = 0;
+    _weaponRecoilVisualPitch = 0.0f;
+    _weaponRecoilAiRecoveryEndTime = 0;
+    _weaponRecoilPlayerRecoveryEndTime = 0;
+    _weaponRecoilPushVel = vec3d(0.0, 0.0, 0.0);
     _static = false;
     _target_vec = vec3d(0.0, 0.0, 0.0);
     
@@ -2474,6 +2528,7 @@ void NC_STACK_ypabact::Update(update_msg *arg)
         UpdateLaser(arg); // OpenUA custom: process this frame's laser fire request (must run after AI_layer1 firing)
         UpdateVerticalLaser(arg);
         UpdateAoePush(arg);
+        UpdateWeaponRecoilPush(arg);
         UpdateSeekAndExplode(arg);
     }
     UpdateUnitGuns(arg);
@@ -2891,6 +2946,10 @@ void NC_STACK_ypabact::UpdateDecorationFX(update_msg *)
 static const float AOE_PUSH_TAU = 0.30f; // knockback time constant, seconds
 static const float AOE_PUSH_MAX_DT = 0.05f;
 static const float AOE_PUSH_MAX_STEP = 80.0f;
+static const float WEAPON_RECOIL_TAU = 0.14f;
+static const float WEAPON_RECOIL_DISTANCE_PER_UNIT = 35.0f;
+static const int WEAPON_RECOIL_AI_TANK_RECOVERY_MS = 220;
+static const int WEAPON_RECOIL_PLAYER_TANK_RECOVERY_MS = 220;
 
 static bool ypabact_IsAoePushGroundAlignedUnit(NC_STACK_ypabact *unit)
 {
@@ -2900,6 +2959,15 @@ static bool ypabact_IsAoePushGroundAlignedUnit(NC_STACK_ypabact *unit)
     return unit->_bact_type == BACT_TYPES_TANK ||
            unit->_bact_type == BACT_TYPES_CAR ||
            unit->_bact_type == BACT_TYPES_HOVER;
+}
+
+static bool ypabact_ShouldFlattenAirKnockback(const NC_STACK_ypabact *unit)
+{
+    // OpenUA recoil/push stability: airborne vehicle controllers fight hard to
+    // maintain altitude.  Feeding them vertical recoil / aoe push creates the
+    // observed up/down bouncing after attacks.  Keep knockback horizontal while
+    // the unit is flying; landed air vehicles still use their normal ground state.
+    return ypabact_IsAirVehicle(unit) && !(unit->_status_flg & BACT_STFLAG_LAND);
 }
 
 static bool ypabact_NormalizeXZ(vec3d *dir)
@@ -2931,6 +2999,82 @@ static bool ypabact_SnapAoePushGroundUnit(NC_STACK_ypabact *unit)
     return true;
 }
 
+static float ypabact_ClampWeaponRecoil(float recoil)
+{
+    if ( !(recoil > 0.0f) )
+        return 0.0f;
+
+    if ( recoil > 10.0f )
+        return 10.0f;
+
+    return recoil;
+}
+
+static void ypabact_UpdateFakePushVel(NC_STACK_ypabact *unit, vec3d *pushVel, update_msg *arg, float tau)
+{
+    NC_STACK_ypaworld *world = unit->getBACT_pWorld();
+    if ( !world )
+        return;
+
+    if ( ypabact_ShouldFlattenAirKnockback(unit) )
+        pushVel->y = 0.0f;
+
+    float pushSpeed = pushVel->length();
+    if ( !isfinite(pushSpeed) || pushSpeed < 1.0f )
+    {
+        *pushVel = vec3d(0.0, 0.0, 0.0);
+        return;
+    }
+
+    float dtime = arg->frameTime / 1000.0;
+    if ( !isfinite(dtime) || dtime <= 0.0f )
+        return;
+
+    if ( dtime > AOE_PUSH_MAX_DT )
+        dtime = AOE_PUSH_MAX_DT;
+
+    vec3d totalStep = *pushVel * dtime;
+    float stepLen = totalStep.length();
+    if ( !isfinite(stepLen) || stepLen <= 0.0f )
+    {
+        *pushVel = vec3d(0.0, 0.0, 0.0);
+        return;
+    }
+
+    int slices = (int)ceil(stepLen / AOE_PUSH_MAX_STEP);
+    if ( slices < 1 )
+        slices = 1;
+
+    vec3d step = totalStep / (float)slices;
+    bool groundAligned = ypabact_IsAoePushGroundAlignedUnit(unit);
+
+    for (int i = 0; i < slices; i++)
+    {
+        ypaworld_arg136 moveTest;
+        moveTest.stPos = unit->_position;
+        moveTest.vect  = step;
+        moveTest.flags = 0;
+
+        world->ypaworld_func136(&moveTest);
+
+        if ( moveTest.isect )
+        {
+            *pushVel = vec3d(0.0, 0.0, 0.0);
+            break;
+        }
+
+        unit->_position += step;
+
+        if ( groundAligned && !ypabact_SnapAoePushGroundUnit(unit) )
+        {
+            *pushVel = vec3d(0.0, 0.0, 0.0);
+            break;
+        }
+    }
+
+    *pushVel *= expf(-dtime / tau);
+}
+
 void NC_STACK_ypabact::AddAoePush(const vec3d &dir, float distance)
 {
     // OpenUA custom: flak/turret actors are static defenses. Keep every
@@ -2942,138 +3086,67 @@ void NC_STACK_ypabact::AddAoePush(const vec3d &dir, float distance)
     if ( distance <= 0.0f )
         return;
 
-    float dirLen = dir.length();
+    vec3d pushDir = dir;
+
+    // Air vehicles are extremely sensitive to vertical impulses: after firing or
+    // being hit by aoe_unit_push they can oscillate up/down and fail to land.
+    // Keep the modern push horizontal for airborne vehicles so push remains a
+    // shove, not an altitude-controller problem.
+    if ( ypabact_ShouldFlattenAirKnockback(this) )
+    {
+        if ( !ypabact_NormalizeXZ(&pushDir) )
+            return;
+    }
+
+    float dirLen = pushDir.length();
     if ( !isfinite(dirLen) || dirLen <= 0.001f )
         return;
 
-    _aoePushVel += (dir / dirLen) * (distance / AOE_PUSH_TAU);
+    _aoePushVel += (pushDir / dirLen) * (distance / AOE_PUSH_TAU);
 }
 
 void NC_STACK_ypabact::ApplyWeaponRecoil(const vec3d &dir, float recoil, float shotSpeed)
 {
+    (void)shotSpeed;
+
+    recoil = ypabact_ClampWeaponRecoil(recoil);
     if ( _bact_type == BACT_TYPES_GUN || recoil <= 0.0f )
         return;
 
-    vec3d recoilDir = dir;
-    bool groundAligned = ypabact_IsAoePushGroundAlignedUnit(this);
-
-    if ( groundAligned )
+    if ( _bact_type == BACT_TYPES_TANK )
     {
-        if ( !ypabact_NormalizeXZ(&recoilDir) )
-        {
-            recoilDir = -_rotation.AxisZ();
-            if ( !ypabact_NormalizeXZ(&recoilDir) )
-                return;
-        }
-    }
-    else
-    {
-        float dirLen = recoilDir.length();
-        if ( !isfinite(dirLen) || dirLen <= 0.001f )
-            return;
+        ypabact_StartTankWeaponRecoilVisual(this, recoil);
 
-        recoilDir /= dirLen;
-    }
-
-    float recoilBaseSpeed = fabs(shotSpeed) * 0.12f;
-    if ( recoilBaseSpeed < 4.0f )
-        recoilBaseSpeed = 4.0f;
-    else if ( recoilBaseSpeed > 18.0f )
-        recoilBaseSpeed = 18.0f;
-
-    float recoilImpulse = recoil * recoilBaseSpeed;
-
-    if ( groundAligned && (_status_flg & BACT_STFLAG_LAND) && !getBACT_viewer() )
-    {
-        float hullDot = recoilDir.dot(_rotation.AxisZ());
-        if ( fabs(hullDot) >= 0.25f )
-            recoilDir = _rotation.AxisZ() * (hullDot > 0.0f ? 1.0f : -1.0f);
+        // The fake recoil push moves the tank directly backwards. Without a
+        // short recovery window, AI tanks immediately drive back to their attack
+        // spot and player tanks that are holding forward snap ahead, producing
+        // a visible spring/flipper effect. Keep the recoil itself unchanged and
+        // only damp forward recovery briefly.
+        if ( !(_oflags & BACT_OFLAG_VIEWER) && !(_oflags & BACT_OFLAG_USERINPT) )
+            _weaponRecoilAiRecoveryEndTime = _clock + WEAPON_RECOIL_AI_TANK_RECOVERY_MS;
         else
-            recoilDir = -_rotation.AxisZ();
+            _weaponRecoilPlayerRecoveryEndTime = _clock + WEAPON_RECOIL_PLAYER_TANK_RECOVERY_MS;
     }
 
-    vec3d velocity = _fly_dir * _fly_dir_length;
-    velocity += recoilDir * recoilImpulse;
-
-    float speed = velocity.length();
-    if ( !isfinite(speed) || speed <= 0.001f )
+    vec3d recoilDir = dir;
+    if ( !ypabact_NormalizeXZ(&recoilDir) )
     {
-        _fly_dir_length = 0.0f;
-        return;
+        recoilDir = -_rotation.AxisZ();
+        if ( !ypabact_NormalizeXZ(&recoilDir) )
+            return;
     }
 
-    _fly_dir = velocity / speed;
-    _fly_dir_length = speed;
-
-    if ( groundAligned && (_status_flg & BACT_STFLAG_LAND) )
-    {
-        _status_flg |= BACT_STFLAG_MOVE;
-        _weaponRecoilMoveTime = 350;
-
-        if ( !getBACT_inputting() )
-            _thraction = 0.0f;
-    }
+    _weaponRecoilPushVel += recoilDir * ((recoil * WEAPON_RECOIL_DISTANCE_PER_UNIT) / WEAPON_RECOIL_TAU);
 }
 
 void NC_STACK_ypabact::UpdateAoePush(update_msg *arg)
 {
-    float pushSpeed = _aoePushVel.length();
-    if ( !isfinite(pushSpeed) || pushSpeed < 1.0f )
-    {
-        _aoePushVel = vec3d(0.0, 0.0, 0.0);
-        return;
-    }
+    ypabact_UpdateFakePushVel(this, &_aoePushVel, arg, AOE_PUSH_TAU);
+}
 
-    float dtime = arg->frameTime / 1000.0;
-    if ( !isfinite(dtime) || dtime <= 0.0f )
-        return;
-
-    if ( dtime > AOE_PUSH_MAX_DT )
-        dtime = AOE_PUSH_MAX_DT;
-
-    // Move this frame's slice, terrain-checked so we never shove a unit through
-    // the ground or a wall (same safety as the engine's ApplyImpulse).
-    vec3d totalStep = _aoePushVel * dtime;
-    float stepLen = totalStep.length();
-    if ( !isfinite(stepLen) || stepLen <= 0.0f )
-    {
-        _aoePushVel = vec3d(0.0, 0.0, 0.0);
-        return;
-    }
-
-    int slices = (int)ceil(stepLen / AOE_PUSH_MAX_STEP);
-    if ( slices < 1 )
-        slices = 1;
-
-    vec3d step = totalStep / (float)slices;
-    bool groundAligned = ypabact_IsAoePushGroundAlignedUnit(this);
-
-    for (int i = 0; i < slices; i++)
-    {
-        ypaworld_arg136 moveTest;
-        moveTest.stPos = _position;
-        moveTest.vect  = step;
-        moveTest.flags = 0;
-
-        _world->ypaworld_func136(&moveTest);
-
-        if ( moveTest.isect )
-        {
-            _aoePushVel = vec3d(0.0, 0.0, 0.0); // hit terrain: stop the knockback
-            break;
-        }
-
-        _position += step;
-
-        if ( groundAligned && !ypabact_SnapAoePushGroundUnit(this) )
-        {
-            _aoePushVel = vec3d(0.0, 0.0, 0.0);
-            break;
-        }
-    }
-
-    // Exponential decay toward zero.
-    _aoePushVel *= expf(-dtime / AOE_PUSH_TAU);
+void NC_STACK_ypabact::UpdateWeaponRecoilPush(update_msg *arg)
+{
+    ypabact_UpdateFakePushVel(this, &_weaponRecoilPushVel, arg, WEAPON_RECOIL_TAU);
 }
 
 void NC_STACK_ypabact::FreezeStaticUnit()
@@ -3082,7 +3155,12 @@ void NC_STACK_ypabact::FreezeStaticUnit()
     _target_vec = vec3d(0.0, 0.0, 0.0);
     _thraction = 0.0;
     _fly_dir_length = 0.0;
-    _weaponRecoilMoveTime = 0;
+    _weaponRecoilVisualEndTime = 0;
+    _weaponRecoilVisualDuration = 0;
+    _weaponRecoilVisualPitch = 0.0f;
+    _weaponRecoilAiRecoveryEndTime = 0;
+    _weaponRecoilPlayerRecoveryEndTime = 0;
+    _weaponRecoilPushVel = vec3d(0.0, 0.0, 0.0);
     _aoePushVel = vec3d(0.0, 0.0, 0.0);
     _status_flg &= ~(BACT_STFLAG_MOVE | BACT_STFLAG_DODGE_LEFT | BACT_STFLAG_DODGE_RIGHT);
 }
@@ -3167,6 +3245,10 @@ void NC_STACK_ypabact::Render(baseRender_msg *arg)
                 bool scaled = shouldApplyVPScale(_current_vp->Bas);
                 if ( ypabact_ShouldApplyVPOrientation(this, _current_vp->Bas) )
                     _current_vp->Bas->TForm().SclRot *= ypabact_BuildVPRotationMatrix(_vp_orientation);
+
+                float tankRecoilPitch = ypabact_GetTankWeaponRecoilVisualPitch(this);
+                if ( tankRecoilPitch != 0.0f && ypabact_IsMainVPBase(this, _current_vp->Bas) )
+                    _current_vp->Bas->TForm().SclRot *= mat3x3::RotateX(tankRecoilPitch);
 
                 if ( ypabact_ShouldApplyVPSpin(this, _current_vp->Bas) )
                     _current_vp->Bas->TForm().SclRot *= ypabact_BuildVPSpinMatrix(this);
@@ -4537,6 +4619,8 @@ void NC_STACK_ypabact::User_layer(update_msg *arg)
             v61.start_point.y = _fire_pos.y;
             v61.start_point.z = _fire_pos.z;
             v61.flags = (arg->inpt->Buttons.Is(1) ? 1 : 0) | 2;
+            if ( (_oflags & BACT_OFLAG_VIEWER) && arg->inpt->Buttons.Is(3) )
+                v61.flags |= BACT_ARG79_FLAG_RECOIL_BRAKE_HELD;
 
             LaunchMissile(&v61);
         }
@@ -9769,7 +9853,18 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
     }
 
     if ( wproto.recoil > 0.0f && recoilShotCount > 0 )
-        ApplyWeaponRecoil(recoilDirSum, wproto.recoil * (float)recoilShotCount, wproto.start_speed);
+    {
+        float recoilAmount = wproto.recoil * (float)recoilShotCount;
+
+        // OpenUA custom: handbrake stabilizes first-person firing.  This is
+        // intentionally applied only when the input path explicitly marks the
+        // shot, so AI/third-person behavior stays unchanged and recoil remains
+        // completely independent from push_resistance.
+        if ( arg->flags & BACT_ARG79_FLAG_RECOIL_BRAKE_HELD )
+            recoilAmount *= 0.2f;
+
+        ApplyWeaponRecoil(recoilDirSum, recoilAmount, wproto.start_speed);
+    }
 
     if ( _kill_after_shot )
     {

@@ -94,6 +94,17 @@ static float Clamp01(float value)
     return value;
 }
 
+static float ClampRecoilMultiplier(float value)
+{
+    if ( !(value >= 0.0f) )
+        return 0.0f;
+
+    if ( value > 10.0f )
+        return 10.0f;
+
+    return value;
+}
+
 static void InitStatusSoundFXDefaults(World::TVhclSound &snd, int defaultVolume)
 {
     snd.volume = defaultVolume;
@@ -1352,11 +1363,11 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     }
     else if ( !StriCmp(p1, "regen_icon") )
     {
-        _vhcl->regen_icon = p2;
+        // Legacy no-op: regen status icon is hardcoded.
     }
     else if ( !StriCmp(p1, "drain_icon") )
     {
-        _vhcl->drain_icon = p2;
+        // Legacy no-op: drain status icon is hardcoded.
     }
     else if ( !StriCmp(p1, "spawn_icon") )
     {
@@ -2392,8 +2403,6 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->wireframe_tint = TVisualTint();
         _vhcl->damaged_fx = TDamagedFXConfig();
         _vhcl->damaged_icon.clear();
-        _vhcl->regen_icon.clear();
-        _vhcl->drain_icon.clear();
         _vhcl->spawn_icon.clear();
         _vhcl->radar_icon.clear();
         _vhcl->unit_gun_icon.clear();
@@ -2533,7 +2542,9 @@ bool WeaponProtoParser::IsScope(ScriptParser::Parser &parser, const std::string 
         _wpn->aoe_sector_energy = 0;
         _wpn->aoe_falloff = 0;
         _wpn->aoe_unit_push = 0;
+        _wpn->aoe_unit_push_at_death = 0;
         _wpn->push = 0;
+        _wpn->push_at_death = 0;
         _wpn->recoil = 0.0;
         _wpn->mass = 50.0;
         _wpn->force = 5000.0;
@@ -2699,13 +2710,21 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     {
         _wpn->aoe_unit_push = parser.stol(p2, NULL, 0);
     }
+    else if ( !StriCmp(p1, "aoe_unit_push_at_death") )
+    {
+        _wpn->aoe_unit_push_at_death = std::max(parser.stol(p2, NULL, 0), 0L);
+    }
     else if ( !StriCmp(p1, "push") )
     {
         _wpn->push = parser.stol(p2, NULL, 0);
     }
+    else if ( !StriCmp(p1, "push_at_death") )
+    {
+        _wpn->push_at_death = std::max(parser.stol(p2, NULL, 0), 0L);
+    }
     else if ( !StriCmp(p1, "recoil") )
     {
-        _wpn->recoil = Clamp01(parser.stof(p2, 0));
+        _wpn->recoil = ClampRecoilMultiplier(parser.stof(p2, 0));
     }
     else if ( !StriCmp(p1, "debuff_allow") )
     {

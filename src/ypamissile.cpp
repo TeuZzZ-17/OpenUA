@@ -6,6 +6,7 @@
 #include "ypamissile.h"
 #include "yparobo.h"
 #include "yw_net.h"
+#include "system/inivals.h"
 
 #include "log.h"
 
@@ -21,6 +22,71 @@ static float ypamissile_Clamp01(float value)
         return 1.0;
 
     return value;
+}
+
+static bool ypamissile_IsAliveForPushAtDeath(NC_STACK_ypabact *target)
+{
+    return target &&
+           target->_bact_type != BACT_TYPES_MISSLE &&
+           target->_bact_type != BACT_TYPES_GUN &&
+           target->_status != BACT_STATUS_DEAD &&
+           target->_energy > 0 &&
+           !(target->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2));
+}
+
+static float ypamissile_SegmentSegmentDistanceSq(const vec3d &p1, const vec3d &q1, const vec3d &p2, const vec3d &q2)
+{
+    const float EPSILON = 0.0001f;
+    vec3d d1 = q1 - p1;
+    vec3d d2 = q2 - p2;
+    vec3d r = p1 - p2;
+    float a = d1.dot(d1);
+    float e = d2.dot(d2);
+    float f = d2.dot(r);
+    float s = 0.0f;
+    float t = 0.0f;
+
+    if ( a <= EPSILON && e <= EPSILON )
+        return r.dot(r);
+
+    if ( a <= EPSILON )
+    {
+        t = ypamissile_Clamp01(f / e);
+    }
+    else
+    {
+        float c = d1.dot(r);
+        if ( e <= EPSILON )
+        {
+            s = ypamissile_Clamp01(-c / a);
+        }
+        else
+        {
+            float b = d1.dot(d2);
+            float denom = a * e - b * b;
+
+            if ( denom != 0.0f )
+                s = ypamissile_Clamp01((b * f - c * e) / denom);
+
+            t = (b * s + f) / e;
+
+            if ( t < 0.0f )
+            {
+                t = 0.0f;
+                s = ypamissile_Clamp01(-c / a);
+            }
+            else if ( t > 1.0f )
+            {
+                t = 1.0f;
+                s = ypamissile_Clamp01((b - c) / a);
+            }
+        }
+    }
+
+    vec3d c1 = p1 + d1 * s;
+    vec3d c2 = p2 + d2 * t;
+    vec3d delta = c1 - c2;
+    return delta.dot(delta);
 }
 
 static float ypamissile_AoeFalloffFactor(float distance, float radius, bool falloff)
@@ -144,6 +210,8 @@ size_t NC_STACK_ypamissile::Init(IDVList &stak)
     _mislLifeTime = 5000;
     _mislDelayTime = 0;
     _mislType = MISL_BOMB;
+    _mislAoeUnitPushAtDeath = 0;
+    _mislPushAtDeath = 0;
     _mislClusterAge = 0;
     _mislClusterGeneration = 0;
     _mislClusterDone = false;
@@ -854,8 +922,23 @@ bool NC_STACK_ypamissile::TubeCollisionTest(bool applyDirectDamage, NC_STACK_ypa
 
             for ( NC_STACK_ypabact* &bct : pCells[i]->unitsList )
             {
-                if ( bct == this || bct == _mislEmitter || bct->_bact_type == BACT_TYPES_MISSLE || bct->_status == BACT_STATUS_DEAD )
+                if ( bct == this || bct == _mislEmitter || bct->_status == BACT_STATUS_DEAD )
                     continue;
+
+                if ( bct->_bact_type == BACT_TYPES_MISSLE )
+                {
+                    NC_STACK_ypamissile *otherMissile = dynamic_cast<NC_STACK_ypamissile *>( bct );
+
+                    if ( CanCollideWithWeapon(otherMissile) )
+                    {
+                        if ( hitTarget )
+                            *hitTarget = otherMissile;
+
+                        return true;
+                    }
+
+                    continue;
+                }
 
                 if (bct->_bact_type == BACT_TYPES_GUN && bct->GetEffectiveShield() >= 100.0f)
                 {
@@ -1074,15 +1157,27 @@ void NC_STACK_ypamissile::ApplyDirectHitToBact(NC_STACK_ypabact *bct)
 
     bct->_status_flg &= ~BACT_STFLAG_LAND;
     RememberDirectHitUnit(bct);
-    ApplyDirectPushToBact(bct);
+
+    bool wasAlive = ypamissile_IsAliveForPushAtDeath(bct);
+    vec3d pushDir;
+    float pushStrength = 0.0f;
+    bool hasDirectPush = ApplyDirectPushToBact(bct, &pushDir, &pushStrength, false);
+
     int appliedDamage = ApplyDamageToBact(bct, _energy);
+    bool diedNow = IsNewDeath1ForPushAtDeath(bct, wasAlive);
+
+    if ( diedNow )
+        ApplyPushAtDeath(bct, pushDir);
+    else if ( hasDirectPush )
+        bct->AddAoePush(pushDir, pushStrength);
+
     TrySpawnChainProjectile(bct, appliedDamage);
 }
 
-void NC_STACK_ypamissile::ApplyDirectPushToBact(NC_STACK_ypabact *bct)
+bool NC_STACK_ypamissile::ApplyDirectPushToBact(NC_STACK_ypabact *bct, vec3d *appliedDir, float *appliedStrength, bool enqueue)
 {
     if ( !bct || _mislDirectPush <= 0 )
-        return;
+        return false;
 
     bool allowFriendly = getBACT_viewer();
 
@@ -1093,7 +1188,7 @@ void NC_STACK_ypamissile::ApplyDirectPushToBact(NC_STACK_ypabact *bct)
     // Station push, no final death wrecks, no shielded robo guns/friendly fire
     // unless the normal player/viewer path allows it.
     if ( GetAreaPushSkipReason(bct, allowFriendly) )
-        return;
+        return false;
 
     // Single-target version of aoe_unit_push. Prefer a true radial direction away
     // from the impact point; fall back to projectile travel direction for exact
@@ -1117,8 +1212,92 @@ void NC_STACK_ypamissile::ApplyDirectPushToBact(NC_STACK_ypabact *bct)
     }
 
     float pushStrength = (float)_mislDirectPush * ypamissile_GetTargetPushMultiplier(_world, bct);
-    if ( pushStrength > 0.0f )
+    if ( pushStrength <= 0.0f )
+        return false;
+
+    if ( enqueue )
         bct->AddAoePush(pushDir, pushStrength);
+
+    if ( appliedDir )
+        *appliedDir = pushDir;
+
+    if ( appliedStrength )
+        *appliedStrength = pushStrength;
+
+    return true;
+}
+
+bool NC_STACK_ypamissile::IsNewDeath1ForPushAtDeath(NC_STACK_ypabact *bct, bool wasAlive) const
+{
+    return wasAlive &&
+           bct &&
+           bct->_bact_type != BACT_TYPES_MISSLE &&
+           bct->_bact_type != BACT_TYPES_GUN &&
+           !(bct->_status_flg & BACT_STFLAG_DEATH2) &&
+           (bct->_status_flg & BACT_STFLAG_DEATH1);
+}
+
+void NC_STACK_ypamissile::ApplyPushAtDeath(NC_STACK_ypabact *bct, const vec3d &fallbackDir)
+{
+    if ( _mislPushAtDeath <= 0 || !bct )
+        return;
+
+    if ( bct->_bact_type == BACT_TYPES_MISSLE || bct->_bact_type == BACT_TYPES_GUN )
+        return;
+
+    if ( bct->_status_flg & BACT_STFLAG_DEATH2 )
+        return;
+
+    if ( !(bct->_status_flg & BACT_STFLAG_DEATH1) )
+        return;
+
+    vec3d deathPushDir = _fly_dir;
+    if ( deathPushDir.normalise() <= 0.001f )
+    {
+        deathPushDir = _position - _old_pos;
+        if ( deathPushDir.normalise() <= 0.001f )
+        {
+            deathPushDir = fallbackDir;
+            if ( deathPushDir.normalise() <= 0.001f )
+                return;
+        }
+    }
+
+    float pushStrength = (float)_mislPushAtDeath * ypamissile_GetTargetPushMultiplier(_world, bct);
+    if ( pushStrength > 0.0f )
+        bct->AddAoePush(deathPushDir, pushStrength);
+}
+
+void NC_STACK_ypamissile::ApplyAoePushAtDeath(NC_STACK_ypabact *bct, const vec3d &pushDir, float distance)
+{
+    if ( _mislAoeUnitPushAtDeath <= 0 || !bct )
+        return;
+
+    if ( bct->_bact_type == BACT_TYPES_MISSLE || bct->_bact_type == BACT_TYPES_GUN )
+        return;
+
+    if ( bct->_status_flg & BACT_STFLAG_DEATH2 )
+        return;
+
+    if ( !(bct->_status_flg & BACT_STFLAG_DEATH1) )
+        return;
+
+    vec3d deathPushDir = pushDir;
+    if ( deathPushDir.normalise() <= 0.001f )
+        return;
+
+    float pushStrength = (float)_mislAoeUnitPushAtDeath;
+    if ( _mislAoeFalloff )
+    {
+        float t = 1.0f - distance / _mislAoeUnitRadius;
+        if ( t < 0.0f ) t = 0.0f;
+        pushStrength *= t;
+    }
+
+    pushStrength *= ypamissile_GetTargetPushMultiplier(_world, bct);
+
+    if ( pushStrength > 0.0f )
+        bct->AddAoePush(deathPushDir, pushStrength);
 }
 
 const char *NC_STACK_ypamissile::GetAreaDamageSkipReason(NC_STACK_ypabact *bct, bool allowFriendly) const
@@ -1190,8 +1369,9 @@ const char *NC_STACK_ypamissile::GetAreaPushSkipReason(NC_STACK_ypabact *bct, bo
     if ( bct->_bact_type == BACT_TYPES_MISSLE )
         return "missile";
 
-    // Robo / Host Station are always immune to push.
-    if ( bct->_bact_type == BACT_TYPES_ROBO )
+    // Robo / Host Station stay vanilla-immune unless their prototype explicitly
+    // opts into modern push with push_resistance.
+    if ( bct->_bact_type == BACT_TYPES_ROBO && !ypamissile_TargetHasPushResistance(_world, bct) )
         return "robo";
 
     // OpenUA custom: all flak/turret actors use model = gun / BACT_TYPES_GUN.
@@ -1202,14 +1382,6 @@ const char *NC_STACK_ypamissile::GetAreaPushSkipReason(NC_STACK_ypabact *bct, bo
     // Final death-FX wreck: do not disturb (same guard as legacy Impact()).
     if ( bct->_status_flg & BACT_STFLAG_DEATH2 )
         return "death2";
-
-    if ( bct->_bact_type == BACT_TYPES_GUN && bct->GetEffectiveShield() >= 100.0f )
-    {
-        NC_STACK_ypagun *gun = dynamic_cast<NC_STACK_ypagun *>( bct );
-
-        if ( gun && gun->IsRoboGun() )
-            return "shielded_robo_gun";
-    }
 
     if ( _mislEmitter && !allowFriendly && bct->_owner == _mislEmitter->_owner )
         return "friendly";
@@ -1231,6 +1403,65 @@ const char *NC_STACK_ypamissile::GetAreaPushSkipReason(NC_STACK_ypabact *bct, bo
     }
 
     return NULL;
+}
+
+bool NC_STACK_ypamissile::CanCollideWithWeapon(NC_STACK_ypamissile *other) const
+{
+    if ( !System::IniConf::GameWeaponWeaponCollision.Get<bool>() )
+        return false;
+
+    if ( !other || other == this || other == _mislEmitter )
+        return false;
+
+    if ( other->_mislEmitter == this )
+        return false;
+
+    if ( _mislClusterAge < 150 || other->_mislClusterAge < 150 )
+        return false;
+
+    if ( other->_mislEmitter == _mislEmitter && (_mislClusterAge < 300 || other->_mislClusterAge < 300) )
+        return false;
+
+    if ( _status == BACT_STATUS_DEAD || other->_status == BACT_STATUS_DEAD )
+        return false;
+
+    if ( (_status_flg | other->_status_flg) & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2) )
+        return false;
+
+    if ( !_world || other->getBACT_pWorld() != _world )
+        return false;
+
+    float radiusSum = _radius + other->_radius;
+    if ( radiusSum <= 0.0f )
+        return false;
+
+    float distSq = ypamissile_SegmentSegmentDistanceSq(_old_pos, _position, other->_old_pos, other->_position);
+    return distSq <= radiusSum * radiusSum;
+}
+
+void NC_STACK_ypamissile::DetonateWeaponCollision(NC_STACK_ypamissile *other)
+{
+    if ( !other || other == this || _status == BACT_STATUS_DEAD )
+        return;
+
+    if ( other->_status != BACT_STATUS_DEAD )
+    {
+        other->Impact();
+
+        setState_msg otherState;
+        otherState.unsetFlags = 0;
+        otherState.setFlags = 0;
+        otherState.newStatus = BACT_STATUS_DEAD;
+        other->SetState(&otherState);
+    }
+
+    Impact();
+
+    setState_msg selfState;
+    selfState.unsetFlags = 0;
+    selfState.setFlags = 0;
+    selfState.newStatus = BACT_STATUS_DEAD;
+    SetState(&selfState);
 }
 
 bool NC_STACK_ypamissile::IsDirectHitUnit(NC_STACK_ypabact *bct) const
@@ -1417,8 +1648,9 @@ void NC_STACK_ypamissile::ApplyAreaDamage()
 {
     bool doAoeDamage = (_mislAoeUnitEnergy > 0);
     bool doAoePush   = (_mislAoeUnitPush > 0);
+    bool doAoePushAtDeath = (_mislAoeUnitPushAtDeath > 0);
 
-    if ( _mislAoeUnitRadius <= 0.0 || (!doAoeDamage && !doAoePush) || !_world )
+    if ( _mislAoeUnitRadius <= 0.0 || (!doAoeDamage && !doAoePush && !doAoePushAtDeath) || !_world )
         return;
 
     bool allowFriendly = getBACT_viewer();
@@ -1452,7 +1684,7 @@ void NC_STACK_ypamissile::ApplyAreaDamage()
                 // Push uses a permissive filter so units killed by THIS explosion
                 // (direct hit or strong AoE) are still thrown (Bug #2/#3/#4 fix).
                 const char *dmgSkip  = GetAreaDamageSkipReason(bct, allowFriendly);
-                const char *pushSkip = doAoePush ? GetAreaPushSkipReason(bct, allowFriendly) : "push_disabled";
+                const char *pushSkip = (doAoePush || doAoePushAtDeath) ? GetAreaPushSkipReason(bct, allowFriendly) : "push_disabled";
 
                 if ( dmgSkip && pushSkip )
                     continue;
@@ -1475,8 +1707,16 @@ void NC_STACK_ypamissile::ApplyAreaDamage()
                 // class-dependent chaos of touching _fly_dir (some classes never
                 // integrate velocity while idle). Result: tanks, flyers and UFOs all
                 // get the SAME smooth push, independent of mass and ground/air state.
-                if ( doAoePush && !pushSkip && !(_mislDirectPush > 0 && IsDirectHitUnit(bct)) )
+                bool wasAlive = false;
+                bool hasAoePush = false;
+                vec3d appliedPushDir(0.0, 0.0, 0.0);
+                float appliedPushStrength = 0.0f;
+                float appliedPushDistance = distance;
+
+                if ( (doAoePush || doAoePushAtDeath) && !pushSkip && !(_mislDirectPush > 0 && IsDirectHitUnit(bct)) )
                 {
+                    wasAlive = ypamissile_IsAliveForPushAtDeath(bct);
+
                     // Radial 3D direction away from the blast, with a safe fallback
                     // when the unit sits exactly at the blast center.
                     vec3d pushDir;
@@ -1485,21 +1725,32 @@ void NC_STACK_ypamissile::ApplyAreaDamage()
                     else
                         pushDir = vec3d(1.0f, 0.0f, 0.0f);
 
-                    // Knockback distance (in world units) = aoe_unit_push, optionally
-                    // reduced by linear falloff when aoe_falloff = 1.
-                    float pushStrength = (float)_mislAoeUnitPush;
-                    if ( _mislAoeFalloff )
+                    appliedPushDir = pushDir;
+                    appliedPushDistance = distance;
+
+                    if ( doAoePush )
                     {
-                        float t = 1.0f - distance / _mislAoeUnitRadius;
-                        if ( t < 0.0f ) t = 0.0f;
-                        pushStrength *= t;
+                        // Knockback distance (in world units) = aoe_unit_push, optionally
+                        // reduced by linear falloff when aoe_falloff = 1.
+                        float pushStrength = (float)_mislAoeUnitPush;
+                        if ( _mislAoeFalloff )
+                        {
+                            float t = 1.0f - distance / _mislAoeUnitRadius;
+                            if ( t < 0.0f ) t = 0.0f;
+                            pushStrength *= t;
+                        }
+
+                        pushStrength *= ypamissile_GetTargetPushMultiplier(_world, bct);
+
+                        if ( pushStrength > 0.0f )
+                        {
+                            hasAoePush = true;
+                            appliedPushStrength = pushStrength;
+                        }
                     }
-
-                    pushStrength *= ypamissile_GetTargetPushMultiplier(_world, bct);
-
-                    if ( pushStrength > 0.0f )
-                        bct->AddAoePush(pushDir, pushStrength);
                 }
+
+                bool diedNow = false;
 
                 // AoE damage skips direct-hit units (they already received direct damage)
                 // and anything the strict filter rejected (dead/dying/friendly/...).
@@ -1507,8 +1758,16 @@ void NC_STACK_ypamissile::ApplyAreaDamage()
                 {
                     int areaEnergy = ypamissile_ScaleAoeEnergy(_mislAoeUnitEnergy, ypamissile_AoeFalloffFactor(distance, _mislAoeUnitRadius, _mislAoeFalloff != 0));
                     if ( areaEnergy > 0 )
+                    {
                         ApplyDamageToBact(bct, areaEnergy);
+                        diedNow = IsNewDeath1ForPushAtDeath(bct, wasAlive);
+                    }
                 }
+
+                if ( diedNow )
+                    ApplyAoePushAtDeath(bct, appliedPushDir, appliedPushDistance);
+                else if ( hasAoePush )
+                    bct->AddAoePush(appliedPushDir, appliedPushStrength);
             }
         }
     }
@@ -1905,6 +2164,12 @@ void NC_STACK_ypamissile::AI_layer3(update_msg *arg)
             {
                 ResetViewing();
 
+                if ( hitTarget && hitTarget->_bact_type == BACT_TYPES_MISSLE )
+                {
+                    DetonateWeaponCollision(dynamic_cast<NC_STACK_ypamissile *>(hitTarget));
+                    return;
+                }
+
                 if ( _mislDelayTime > 0 )
                 {
                     AttachDelayedDetonationToTarget(hitTarget);
@@ -2224,7 +2489,9 @@ void NC_STACK_ypamissile::Renew()
     _mislFlags  = 0;
     _mislDelayTime = 0;
     _mislAoeFalloff = 0;
+    _mislAoeUnitPushAtDeath = 0;
     _mislDirectPush = 0;
+    _mislPushAtDeath = 0;
     _mislClusterAge = 0;
     _mislClusterGeneration = 0;
     _mislClusterDone = false;
@@ -2361,7 +2628,8 @@ void NC_STACK_ypamissile::Impact()
     /* FIXME:
        Needs to check all near sectors too if effective radius affect it*/
 
-    bool modernPushWeapon = _mislDirectPush > 0 || _mislAoeUnitPush > 0;
+    bool modernPushWeapon = _mislDirectPush > 0 || _mislAoeUnitPush > 0 ||
+                            _mislPushAtDeath > 0 || _mislAoeUnitPushAtDeath > 0;
     bool hasLegacyImpulseTarget = false;
 
     for( NC_STACK_ypabact* &bct : _pSector->unitsList )
@@ -2629,9 +2897,19 @@ void NC_STACK_ypamissile::SetAoeUnitPush(int push)
     _mislAoeUnitPush = push;
 }
 
+void NC_STACK_ypamissile::SetAoeUnitPushAtDeath(int push)
+{
+    _mislAoeUnitPushAtDeath = std::max(push, 0);
+}
+
 void NC_STACK_ypamissile::SetDirectPush(int push)
 {
     _mislDirectPush = push;
+}
+
+void NC_STACK_ypamissile::SetPushAtDeath(int push)
+{
+    _mislPushAtDeath = std::max(push, 0);
 }
 
 void NC_STACK_ypamissile::SetRadiusHeli(float rad)

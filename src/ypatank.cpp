@@ -20,6 +20,23 @@ NC_STACK_ypatank::NC_STACK_ypatank()
     _tankExpectTgt = false;
 }
 
+static bool ypatank_IsAiRecoilRecoveryActive(const NC_STACK_ypatank *tank)
+{
+    return tank &&
+           tank->_weaponRecoilAiRecoveryEndTime > tank->_clock &&
+           !(tank->_oflags & BACT_OFLAG_VIEWER) &&
+           !(tank->_oflags & BACT_OFLAG_USERINPT);
+}
+
+static bool ypatank_IsPlayerRecoilRecoveryActive(const NC_STACK_ypatank *tank)
+{
+    return tank &&
+           tank->_weaponRecoilPlayerRecoveryEndTime > tank->_clock &&
+           (tank->_oflags & (BACT_OFLAG_VIEWER | BACT_OFLAG_USERINPT));
+}
+
+static const float YPATANK_PLAYER_RECOIL_FORWARD_SCALE = 0.20f;
+
 size_t NC_STACK_ypatank::Init(IDVList &stak)
 {
     if ( !NC_STACK_ypabact::Init(stak) )
@@ -291,41 +308,52 @@ void NC_STACK_ypatank::AI_layer3(update_msg *arg)
 
             if ( _status_flg & BACT_STFLAG_MOVE )
             {
-                bool recoilMove = _weaponRecoilMoveTime > 0 && fabs(_fly_dir_length) > 0.1;
+                bool recoilRecovery = ypatank_IsAiRecoilRecoveryActive(this);
 
-                if ( !recoilMove )
+                if ( recoilRecovery )
+                {
+                    _old_pos = _position;
+
+                    // OpenUA mechanical recoil: AI tanks get pushed backwards by
+                    // a simulated recoil offset. Without a short recovery pause
+                    // the AI instantly accelerates forward to reacquire its old
+                    // attack position, producing an ugly spring/flipper motion.
+                    // Suppress only forward thrust; rotation, targeting and the
+                    // recoil push itself remain active.
+                    if ( _thraction > 0.0f )
+                        _thraction = 0.0f;
+
+                    vec2d flyXZ = _fly_dir.XZ();
+                    vec2d forwardXZ = _rotation.AxisZ().XZ();
+                    if ( _fly_dir_length > 0.0f && flyXZ.length() > 0.001f && forwardXZ.length() > 0.001f &&
+                         flyXZ.dot(forwardXZ) > 0.0f )
+                        _fly_dir_length = 0.0f;
+                }
+                else
                 {
                     _thraction += _force * v244 * 0.8;
 
                     if ( _thraction > _force )
                         _thraction = _force;
-
-                    if ( !(_tankCollisionFlag & (COLL_WALL_L | COLL_WALL_R | COLL_HILL_L | COLL_HILL_R)) &&
-                          _tankCollisionWay > 0.0 )
-                        _thraction -= _force * v244 * 0.6;
-
-                    if ( _thraction < 0.0 )
-                        _thraction = 0;
                 }
-                else if ( !getBACT_inputting() )
-                {
+
+                if ( !(_tankCollisionFlag & (COLL_WALL_L | COLL_WALL_R | COLL_HILL_L | COLL_HILL_R)) &&
+                      _tankCollisionWay > 0.0 )
+                    _thraction -= _force * v244 * 0.6;
+
+                if ( _thraction < 0.0 )
                     _thraction = 0;
-                }
 
-                if ( seekAndExplodeRamming || !(_status_flg & BACT_STFLAG_ATTACK) || !_tankExpectTgt || _tankCollisionFlag || recoilMove )
+                bool allowRecoilRecoveryMove = !recoilRecovery || seekAndExplodeRamming || _tankCollisionFlag;
+
+                if ( allowRecoilRecoveryMove &&
+                     (seekAndExplodeRamming || !(_status_flg & BACT_STFLAG_ATTACK) || !_tankExpectTgt || _tankCollisionFlag) )
                 {
                     move_msg arg74;
                     arg74.flag = 0;
                     arg74.field_0 = v244;
 
                     Move(&arg74);
-                }
-
-                if ( _weaponRecoilMoveTime > 0 )
-                {
-                    _weaponRecoilMoveTime -= arg->frameTime;
-                    if ( _weaponRecoilMoveTime < 0 )
-                        _weaponRecoilMoveTime = 0;
                 }
 
                 if ( _tankCollisionWay > 0.0 )
@@ -867,12 +895,33 @@ void NC_STACK_ypatank::User_layer(update_msg *arg)
         }
 
         float v88 = arg->inpt->Sliders[4];
-        float v75 = fabs(v88);
 
         if ( v88 > 1.0 )
             v88 = 1.0;
         else if ( v88 < -1.0 )
             v88 = -1.0;
+
+        bool playerRecoilRecovery = ypatank_IsPlayerRecoilRecoveryActive(this);
+        if ( playerRecoilRecovery && v88 > 0.0f )
+        {
+            // OpenUA mechanical recoil: when the player fires a tank while
+            // holding forward, the simulated backward recoil is immediately
+            // contradicted by full forward traction, creating a slingshot.
+            // Briefly damp only forward recovery; steering, braking, reverse,
+            // aiming and firing stay responsive.
+            v88 *= YPATANK_PLAYER_RECOIL_FORWARD_SCALE;
+
+            if ( _thraction > 0.0f )
+                _thraction *= YPATANK_PLAYER_RECOIL_FORWARD_SCALE;
+
+            vec2d flyXZ = _fly_dir.XZ();
+            vec2d forwardXZ = _rotation.AxisZ().XZ();
+            if ( _fly_dir_length > 0.0f && flyXZ.length() > 0.001f && forwardXZ.length() > 0.001f &&
+                 flyXZ.dot(forwardXZ) > 0.0f )
+                _fly_dir_length *= YPATANK_PLAYER_RECOIL_FORWARD_SCALE;
+        }
+
+        float v75 = fabs(v88);
 
         _thraction += _force * (v90 * 0.75) * v88;
 
@@ -952,6 +1001,8 @@ void NC_STACK_ypatank::User_layer(update_msg *arg)
             arg79.start_point.z = _fire_pos.z;
             arg79.flags = (arg->inpt->Buttons.Is(1) ? 1 : 0);
             arg79.flags |= 2;
+            if ( (_oflags & BACT_OFLAG_VIEWER) && arg->inpt->Buttons.Is(3) )
+                arg79.flags |= BACT_ARG79_FLAG_RECOIL_BRAKE_HELD;
 
             LaunchMissile(&arg79);
         }

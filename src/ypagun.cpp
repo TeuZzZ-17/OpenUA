@@ -477,6 +477,8 @@ void NC_STACK_ypagun::User_layer(update_msg *arg)
                     arg79.g_time = _clock;
                     arg79.start_point = _fire_pos;
                     arg79.flags = (arg->inpt->Buttons.Is(1) ? 1 : 0) | 2;
+                    if ( (_oflags & BACT_OFLAG_VIEWER) && arg->inpt->Buttons.Is(3) )
+                        arg79.flags |= BACT_ARG79_FLAG_RECOIL_BRAKE_HELD;
 
                     if ( LaunchMissile(&arg79) )
                     {

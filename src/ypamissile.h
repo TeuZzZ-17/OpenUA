@@ -98,7 +98,9 @@ public:
     virtual void SetAreaDamage(float unitRadius, int unitEnergy, float buildingRadius, int buildingEnergy,
                                float sectorRadius, int sectorEnergy, int falloff);
     virtual void SetAoeUnitPush(int push);
+    virtual void SetAoeUnitPushAtDeath(int push);
     virtual void SetDirectPush(int push);
+    virtual void SetPushAtDeath(int push);
     // Per-class weapon radius API: inactive (always set to 0.0) but kept for ABI/object-system
     // compatibility. Collision uses weapon.radius only. Do not remove. See GetRadius* below.
     virtual void SetRadiusHeli(float);
@@ -133,9 +135,14 @@ protected:
     int CalcDamageForBact(NC_STACK_ypabact *bct, int baseEnergy);
     int ApplyDamageToBact(NC_STACK_ypabact *bct, int baseEnergy);
     void ApplyDirectHitToBact(NC_STACK_ypabact *bct);
-    void ApplyDirectPushToBact(NC_STACK_ypabact *bct);
+    bool ApplyDirectPushToBact(NC_STACK_ypabact *bct, vec3d *appliedDir = NULL, float *appliedStrength = NULL, bool enqueue = true);
+    bool IsNewDeath1ForPushAtDeath(NC_STACK_ypabact *bct, bool wasAlive) const;
+    void ApplyPushAtDeath(NC_STACK_ypabact *bct, const vec3d &fallbackDir);
+    void ApplyAoePushAtDeath(NC_STACK_ypabact *bct, const vec3d &pushDir, float distance);
     const char *GetAreaDamageSkipReason(NC_STACK_ypabact *bct, bool allowFriendly) const;
     const char *GetAreaPushSkipReason(NC_STACK_ypabact *bct, bool allowFriendly) const;
+    bool CanCollideWithWeapon(NC_STACK_ypamissile *other) const;
+    void DetonateWeaponCollision(NC_STACK_ypamissile *other);
     bool IsDirectHitUnit(NC_STACK_ypabact *bct) const;
     void RememberDirectHitUnit(NC_STACK_ypabact *bct);
     vec3d GetBuildingSlotCenter(const cellArea &cell, int bldX, int bldY) const;
@@ -196,7 +203,9 @@ protected:
     int _mislAoeSectorEnergy     = 0;
     int _mislAoeFalloff          = 0;
     int _mislAoeUnitPush         = 0;
+    int _mislAoeUnitPushAtDeath  = 0;
     int _mislDirectPush          = 0;
+    int _mislPushAtDeath = 0;
     int _mislClusterAge          = 0;
     int _mislClusterGeneration   = 0;
     bool _mislClusterDone        = false;

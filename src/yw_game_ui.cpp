@@ -38,6 +38,8 @@ namespace
 constexpr int STATUS_ICON_MAX_COUNT = 8;
 constexpr int STATUS_ICON_SIZE = 16;
 constexpr int STATUS_ICON_SPACING = 2;
+constexpr const char *STATUS_ICON_REGEN = "StatusIcons/regen.png";
+constexpr const char *STATUS_ICON_DRAIN = "StatusIcons/drain.png";
 
 struct StatusIconCacheEntry
 {
@@ -300,17 +302,16 @@ bool StatusIconCanUseMobilePowerUnit(NC_STACK_ypabact *bact)
 
 void StatusIconCollectMobilePower(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact, StatusIconList &icons, int &iconCount)
 {
-    if ( !yw || !StatusIconCanUseMobilePowerUnit(bact) || (size_t)bact->_vehicleID >= yw->_vhclProtos.size() )
+    if ( !yw || !StatusIconCanUseMobilePowerUnit(bact) )
         return;
 
-    World::TVhclProto &targetProto = yw->_vhclProtos[bact->_vehicleID];
     TMobilePowerInfluence mobilePower = yw->FindMobilePowerInfluenceForUnit(bact);
 
     if ( mobilePower.AlliedPower > 0 && bact->_energy < bact->_energy_max )
-        StatusIconAdd(icons, iconCount, targetProto.regen_icon);
+        StatusIconAdd(icons, iconCount, STATUS_ICON_REGEN);
 
     if ( mobilePower.EnemyPower > 0 )
-        StatusIconAdd(icons, iconCount, targetProto.drain_icon);
+        StatusIconAdd(icons, iconCount, STATUS_ICON_DRAIN);
 }
 
 void StatusIconCollectMountedUnitGunIcons(const std::vector<World::TRoboGun> &guns, const std::string &fallbackIcon, StatusIconList &icons, int &iconCount)
@@ -359,15 +360,9 @@ int StatusIconCollect(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact, World::TVhc
 
     StatusIconPowerState powerState = StatusIconGetPowerStationState(yw, bact);
     if ( powerState == STATUS_ICON_POWER_DRAIN )
-    {
-        if ( !vhcl->drain_icon.empty() )
-            StatusIconAdd(icons, iconCount, vhcl->drain_icon);
-    }
+        StatusIconAdd(icons, iconCount, STATUS_ICON_DRAIN);
     else if ( powerState == STATUS_ICON_POWER_REGEN )
-    {
-        if ( !vhcl->regen_icon.empty() )
-            StatusIconAdd(icons, iconCount, vhcl->regen_icon);
-    }
+        StatusIconAdd(icons, iconCount, STATUS_ICON_REGEN);
 
     StatusIconCollectMobilePower(yw, bact, icons, iconCount);
 

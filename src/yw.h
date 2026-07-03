@@ -2167,7 +2167,6 @@ public:
     void ClearSpectatorFollowTarget();
     void ReturnToSpectatorVehicle();
     bool UpdateSpectatorFollowCamera(TInputState *inpt);
-    void ApplySpectatorOwnerProfile();
     void TryActivateSpectatorMode();
     virtual std::vector<World::TWeapProto> &GetWeaponsProtos() { return _weaponProtos; };
     virtual std::vector<World::TBuildingProto> &GetBuildProtos() { return _buildProtos; };
@@ -2622,6 +2621,7 @@ public:
     NC_STACK_ypabact *_spectatorFollowTarget = NULL;
     TF::TForm3D _spectatorFollowView;
     float _spectatorFollowDistance = 900.0;
+    float _spectatorFollowTargetDistance = 900.0;
     float _spectatorFollowYaw = 0.0;
     float _spectatorFollowPitch = 0.25;
     

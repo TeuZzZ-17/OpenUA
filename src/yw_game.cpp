@@ -2,7 +2,6 @@
 #include <string.h>
 #include <math.h>
 #include <stdio.h>
-#include <fstream>
 #include <vector>
 #include <functional>
 #include <set>
@@ -762,6 +761,7 @@ void NC_STACK_ypaworld::SetSpectatorFollowTarget(NC_STACK_ypabact *bact)
     _spectatorFollowTarget = bact;
     _viewerBact = bact;
     _spectatorFollowDistance = 900.0;
+    _spectatorFollowTargetDistance = _spectatorFollowDistance;
     _spectatorFollowPitch = 0.25;
     _spectatorFollowYaw = atan2(-bact->_rotation.m20, bact->_rotation.m22);
 
@@ -801,6 +801,71 @@ bool NC_STACK_ypaworld::UpdateSpectatorFollowCamera(TInputState *inpt)
         return false;
     }
 
+    // OpenUA custom: Spectator Follow camera uses one tank-style framing rule
+    // for every vehicle class.  The old code treated non-ground units with a
+    // higher/stranger focus, which made planes, helicopters and Host Stations
+    // look inconsistent or clip the camera into large models.  Use the same
+    // low, readable tank-style orbit for all targets, then scale distance by
+    // the actor's scripted collision/view extents so very large ROBO/Host
+    // Stations keep the camera outside their model.
+    float targetRadius = _spectatorFollowTarget->_radius;
+    if ( _spectatorFollowTarget->_viewer_radius > targetRadius )
+        targetRadius = _spectatorFollowTarget->_viewer_radius;
+    if ( targetRadius < 80.0f )
+        targetRadius = 80.0f;
+
+    float targetExtent = targetRadius;
+    if ( fabs(_spectatorFollowTarget->_overeof) > targetExtent )
+        targetExtent = fabs(_spectatorFollowTarget->_overeof);
+    if ( fabs(_spectatorFollowTarget->_viewer_overeof) > targetExtent )
+        targetExtent = fabs(_spectatorFollowTarget->_viewer_overeof);
+    if ( fabs(_spectatorFollowTarget->_height) * 0.35f > targetExtent )
+        targetExtent = fabs(_spectatorFollowTarget->_height) * 0.35f;
+    if ( targetExtent < 80.0f )
+        targetExtent = 80.0f;
+
+    bool followTargetIsRobo = _spectatorFollowTarget->_bact_type == BACT_TYPES_ROBO;
+
+    float followMinDistance = targetExtent * 1.65f;
+    if ( followMinDistance < 220.0f )
+        followMinDistance = 220.0f;
+
+    float followMaxDistance = followMinDistance * 3.0f;
+    if ( followMaxDistance < 1300.0f )
+        followMaxDistance = 1300.0f;
+
+    if ( followTargetIsRobo )
+    {
+        // Host Stations/ROBO use very large vertical/viewer extents, so using
+        // targetExtent for zoom-in keeps the camera stuck too far away.  Use
+        // the horizontal radius for the close limit and keep the larger extent
+        // only for focus/terrain safety.  This allows a real zoom-in while
+        // still avoiding the obvious inside-model view.
+        followMinDistance = targetRadius * 0.55f;
+        if ( followMinDistance < 520.0f )
+            followMinDistance = 520.0f;
+        if ( followMinDistance > 700.0f )
+            followMinDistance = 700.0f;
+
+        // Use the same zoom-out logic as normal vehicles after the
+        // ROBO close-zoom override.  The previous ROBO minimum max-distance
+        // was intentionally safe but too far away, making zoom-out excessive.
+        followMaxDistance = followMinDistance * 3.0f;
+        if ( followMaxDistance < 1300.0f )
+            followMaxDistance = 1300.0f;
+    }
+
+    if ( followMaxDistance > 3600.0f )
+        followMaxDistance = 3600.0f;
+    if ( followMinDistance > followMaxDistance )
+        followMinDistance = followMaxDistance;
+
+    float wheelStep = 180.0f;
+    if ( targetExtent > 160.0f )
+        wheelStep += (targetExtent - 160.0f) * 0.35f;
+    if ( wheelStep > 520.0f )
+        wheelStep = 520.0f;
+
     if ( inpt )
     {
         const float fperiod = inpt->Period / 1000.0;
@@ -827,28 +892,39 @@ bool NC_STACK_ypaworld::UpdateSpectatorFollowCamera(TInputState *inpt)
 
         if ( inpt->ClickInf.wheel )
         {
-            _spectatorFollowDistance -= inpt->ClickInf.wheel * 180.0;
+            _spectatorFollowTargetDistance -= inpt->ClickInf.wheel * wheelStep;
 
             // Spectator Follow should never zoom out far enough to expose the
-            // finite UA sky dome/skybox. Keep the camera cinematic and local.
-            if ( _spectatorFollowDistance < 220.0 )
-                _spectatorFollowDistance = 220.0;
-            else if ( _spectatorFollowDistance > 1300.0 )
-                _spectatorFollowDistance = 1300.0;
+            // finite UA sky dome/skybox. Keep the camera cinematic and local,
+            // but scale the useful range with large vehicles so ROBO/Host
+            // Stations cannot swallow the camera.
+            if ( _spectatorFollowTargetDistance < followMinDistance )
+                _spectatorFollowTargetDistance = followMinDistance;
+            else if ( _spectatorFollowTargetDistance > followMaxDistance )
+                _spectatorFollowTargetDistance = followMaxDistance;
+        }
+
+        if ( fperiod > 0.0 )
+        {
+            float zoomBlend = 1.0 - exp(-fperiod * 12.0);
+            _spectatorFollowDistance += (_spectatorFollowTargetDistance - _spectatorFollowDistance) * zoomBlend;
         }
     }
 
-    if ( _spectatorFollowDistance > 1300.0 )
-        _spectatorFollowDistance = 1300.0;
+    if ( _spectatorFollowTargetDistance < followMinDistance )
+        _spectatorFollowTargetDistance = followMinDistance;
+    else if ( _spectatorFollowTargetDistance > followMaxDistance )
+        _spectatorFollowTargetDistance = followMaxDistance;
 
-    bool followTargetIsGround = _spectatorFollowTarget->_bact_type == BACT_TYPES_TANK ||
-                                _spectatorFollowTarget->_bact_type == BACT_TYPES_CAR  ||
-                                _spectatorFollowTarget->_bact_type == BACT_TYPES_GUN;
+    if ( _spectatorFollowDistance < followMinDistance )
+        _spectatorFollowDistance = followMinDistance;
+    if ( _spectatorFollowDistance > followMaxDistance )
+        _spectatorFollowDistance = followMaxDistance;
 
-    // Ground units should not be forced into an excessively high, top-down
-    // camera when the player zooms in. Keep their close camera lower and less
-    // vertical, while still preserving the terrain safety clamp below.
-    if ( followTargetIsGround && _spectatorFollowDistance < 1200.0 && _spectatorFollowPitch > 0.55 )
+    // Tank-style camera for every class: never force non-ground units into an
+    // excessively high/top-down view. This keeps spectator follow homogeneous.
+    bool followTargetIsGround = true;
+    if ( _spectatorFollowDistance < 1200.0 && _spectatorFollowPitch > 0.55 )
         _spectatorFollowPitch = 0.55;
 
     float cp = cos(_spectatorFollowPitch);
@@ -862,16 +938,20 @@ bool NC_STACK_ypaworld::UpdateSpectatorFollowCamera(TInputState *inpt)
     else
         orbitForward = vec3d::Normalise(orbitForward);
 
-    float targetHeight = _spectatorFollowTarget->_height * 0.45;
-    if ( followTargetIsGround )
+    float targetHeight = targetExtent * 0.22f;
+    if ( targetHeight < 45.0f )
+        targetHeight = 45.0f;
+    if ( targetHeight > 110.0f )
+        targetHeight = 110.0f;
+
+    if ( followTargetIsRobo )
     {
-        if ( targetHeight < 45.0 )
-            targetHeight = 45.0;
-        if ( targetHeight > 95.0 )
-            targetHeight = 95.0;
+        targetHeight = targetExtent * 0.30f;
+        if ( targetHeight < 140.0f )
+            targetHeight = 140.0f;
+        if ( targetHeight > 360.0f )
+            targetHeight = 360.0f;
     }
-    else if ( targetHeight < 80.0 )
-        targetHeight = 80.0;
 
     vec3d focus = _spectatorFollowTarget->_position + vec3d::OY(targetHeight);
     vec3d camPos = focus - orbitForward * _spectatorFollowDistance;
@@ -964,425 +1044,6 @@ bool NC_STACK_ypaworld::UpdateSpectatorFollowCamera(TInputState *inpt)
     return true;
 }
 
-struct TSpectatorRoboAI
-{
-    uint8_t conBudget;
-    int conDelay;
-    uint8_t defBudget;
-    int defDelay;
-    uint8_t recBudget;
-    int recDelay;
-    uint8_t robBudget;
-    int robDelay;
-    uint8_t powBudget;
-    int powDelay;
-    uint8_t radBudget;
-    int radDelay;
-    uint8_t safBudget;
-    int safDelay;
-    uint8_t cplBudget;
-    int cplDelay;
-};
-
-struct TSpectatorOwnerProfile
-{
-    TSpectatorRoboAI ai = {};
-    bool hasAI = false;
-    bool hasRoboEnergy = false;
-    bool hasRoboReloadConst = false;
-    int roboEnergy = 0;
-    int roboReloadConst = 0;
-    bool loadedExternal = false;
-    std::string loadedPath;
-    std::vector<int> enabledVehicles;
-    std::vector<int> enabledBuildings;
-};
-
-static void yw_ApplySpectatorRoboAI(NC_STACK_yparobo *robo, const TSpectatorRoboAI &ai)
-{
-    robo->_roboEpConquer = ai.conBudget;
-    robo->_roboConqDelay = ai.conDelay;
-    robo->_roboEpDefense = ai.defBudget;
-    robo->_roboEnemyDelay = ai.defDelay;
-    robo->_roboEpRecon = ai.recBudget;
-    robo->_roboExploreDelay = ai.recDelay;
-    robo->_roboEpRobo = ai.robBudget;
-    robo->_roboDangerDelay = ai.robDelay;
-    robo->_roboEpPower = ai.powBudget;
-    robo->_roboPowerDelay = ai.powDelay;
-    robo->_roboEpRadar = ai.radBudget;
-    robo->_roboRadarDelay = ai.radDelay;
-    robo->_roboEpSafety = ai.safBudget;
-    robo->_roboSafetyDelay = ai.safDelay;
-    robo->_roboEpChangePlace = ai.cplBudget;
-    robo->_roboPositionDelay = ai.cplDelay;
-}
-
-static TSpectatorRoboAI yw_MakeSpectatorRoboAI(int conBudget, int conDelay,
-                                                int defBudget, int defDelay,
-                                                int recBudget, int recDelay,
-                                                int robBudget, int robDelay,
-                                                int powBudget, int powDelay,
-                                                int radBudget, int radDelay,
-                                                int safBudget, int safDelay,
-                                                int cplBudget, int cplDelay)
-{
-    TSpectatorRoboAI ai = {};
-
-    ai.conBudget = conBudget;
-    ai.conDelay = conDelay;
-    ai.defBudget = defBudget;
-    ai.defDelay = defDelay;
-    ai.recBudget = recBudget;
-    ai.recDelay = recDelay;
-    ai.robBudget = robBudget;
-    ai.robDelay = robDelay;
-    ai.powBudget = powBudget;
-    ai.powDelay = powDelay;
-    ai.radBudget = radBudget;
-    ai.radDelay = radDelay;
-    ai.safBudget = safBudget;
-    ai.safDelay = safDelay;
-    ai.cplBudget = cplBudget;
-    ai.cplDelay = cplDelay;
-
-    return ai;
-}
-
-static TSpectatorRoboAI yw_GetSpectatorPresetRoboAI(const std::string &presetName)
-{
-    if ( !StriCmp(presetName, "aggressive") )
-        return yw_MakeSpectatorRoboAI(85, 0, 70, 0, 70, 0, 90, 30000, 35, 0, 30, 0, 25, 0, 70, 180000);
-
-    if ( !StriCmp(presetName, "defensive") )
-        return yw_MakeSpectatorRoboAI(60, 0, 90, 0, 50, 0, 55, 90000, 70, 0, 45, 0, 75, 0, 30, 600000);
-
-    if ( !StriCmp(presetName, "recon") )
-        return yw_MakeSpectatorRoboAI(75, 0, 60, 0, 90, 0, 50, 90000, 45, 0, 80, 0, 35, 0, 45, 300000);
-
-    return yw_MakeSpectatorRoboAI(80, 0, 80, 0, 70, 0, 70, 60000, 50, 0, 40, 0, 40, 0, 50, 300000);
-}
-
-static TSpectatorOwnerProfile yw_GetInternalSpectatorOwnerProfile()
-{
-    TSpectatorOwnerProfile profile;
-    profile.ai = yw_GetSpectatorPresetRoboAI("balanced");
-    profile.hasAI = true;
-    profile.roboEnergy = 900000;
-    profile.roboReloadConst = 143125;
-    profile.hasRoboEnergy = true;
-    profile.hasRoboReloadConst = true;
-    profile.loadedExternal = false;
-    profile.loadedPath = "internal balanced fallback";
-    profile.enabledVehicles = {1, 2, 3, 56};
-    profile.enabledBuildings = {1, 2, 3};
-    return profile;
-}
-
-static std::string yw_TrimSpectatorProfileText(const std::string &text)
-{
-    size_t first = text.find_first_not_of(" \t\r\n");
-    if ( first == std::string::npos )
-        return std::string();
-
-    size_t last = text.find_last_not_of(" \t\r\n");
-    return text.substr(first, last - first + 1);
-}
-
-static std::string yw_StripSpectatorProfileComment(const std::string &line)
-{
-    size_t comment = line.find_first_of(";#");
-    if ( comment == std::string::npos )
-        return line;
-
-    return line.substr(0, comment);
-}
-
-static bool yw_ParseSpectatorProfileInt(const std::string &text, int *out)
-{
-    if ( !out )
-        return false;
-
-    try
-    {
-        size_t parsed = 0;
-        int value = std::stoi(text, &parsed, 0);
-        if ( parsed != text.size() )
-            return false;
-
-        *out = value;
-        return true;
-    }
-    catch (...)
-    {
-        return false;
-    }
-}
-
-static void yw_SetSpectatorAIValue(TSpectatorRoboAI *ai, const std::string &key, int value)
-{
-    if ( !StriCmp(key, "con_budget") )
-        ai->conBudget = value;
-    else if ( !StriCmp(key, "con_delay") )
-        ai->conDelay = value;
-    else if ( !StriCmp(key, "def_budget") )
-        ai->defBudget = value;
-    else if ( !StriCmp(key, "def_delay") )
-        ai->defDelay = value;
-    else if ( !StriCmp(key, "rec_budget") )
-        ai->recBudget = value;
-    else if ( !StriCmp(key, "rec_delay") )
-        ai->recDelay = value;
-    else if ( !StriCmp(key, "rob_budget") )
-        ai->robBudget = value;
-    else if ( !StriCmp(key, "rob_delay") )
-        ai->robDelay = value;
-    else if ( !StriCmp(key, "pow_budget") )
-        ai->powBudget = value;
-    else if ( !StriCmp(key, "pow_delay") )
-        ai->powDelay = value;
-    else if ( !StriCmp(key, "rad_budget") )
-        ai->radBudget = value;
-    else if ( !StriCmp(key, "rad_delay") )
-        ai->radDelay = value;
-    else if ( !StriCmp(key, "saf_budget") )
-        ai->safBudget = value;
-    else if ( !StriCmp(key, "saf_delay") )
-        ai->safDelay = value;
-    else if ( !StriCmp(key, "cpl_budget") )
-        ai->cplBudget = value;
-    else if ( !StriCmp(key, "cpl_delay") )
-        ai->cplDelay = value;
-}
-
-static bool yw_LoadSpectatorOwnerProfileFile(const std::string &path, TSpectatorOwnerProfile *profile)
-{
-    std::ifstream file(path.c_str());
-    if ( !file )
-        return false;
-
-    std::string section;
-    std::string line;
-    int lineNo = 0;
-
-    while ( std::getline(file, line) )
-    {
-        lineNo++;
-        line = yw_TrimSpectatorProfileText(yw_StripSpectatorProfileComment(line));
-        if ( line.empty() )
-            continue;
-
-        if ( line.front() == '[' && line.back() == ']' )
-        {
-            section = yw_TrimSpectatorProfileText(line.substr(1, line.size() - 2));
-            continue;
-        }
-
-        bool enableSection = !StriCmp(section, "enable_vehicles") ||
-                             !StriCmp(section, "enable_buildings");
-
-        size_t eq = line.find('=');
-        if ( eq == std::string::npos && !enableSection )
-        {
-            ypa_log_out("WARNING: malformed spectator owner profile line %d in %s.\n", lineNo, path.c_str());
-            return false;
-        }
-
-        std::string key;
-        int value = 1;
-
-        if ( eq == std::string::npos )
-        {
-            key = yw_TrimSpectatorProfileText(line);
-        }
-        else
-        {
-            key = yw_TrimSpectatorProfileText(line.substr(0, eq));
-            std::string valueText = yw_TrimSpectatorProfileText(line.substr(eq + 1));
-            if ( !yw_ParseSpectatorProfileInt(valueText, &value) )
-            {
-                ypa_log_out("WARNING: bad spectator owner profile value at line %d in %s.\n", lineNo, path.c_str());
-                return false;
-            }
-        }
-
-        if ( key.empty() )
-        {
-            ypa_log_out("WARNING: bad spectator owner profile value at line %d in %s.\n", lineNo, path.c_str());
-            return false;
-        }
-
-        if ( !StriCmp(section, "ai") )
-        {
-            yw_SetSpectatorAIValue(&profile->ai, key, value);
-            profile->hasAI = true;
-        }
-        else if ( !StriCmp(section, "enable_vehicles") )
-        {
-            int id = 0;
-            if ( yw_ParseSpectatorProfileInt(key, &id) && id > 0 && value )
-                profile->enabledVehicles.push_back(id);
-        }
-        else if ( !StriCmp(section, "enable_buildings") )
-        {
-            int id = 0;
-            if ( yw_ParseSpectatorProfileInt(key, &id) && id > 0 && value )
-                profile->enabledBuildings.push_back(id);
-        }
-        else if ( !StriCmp(section, "robo") )
-        {
-            if ( !StriCmp(key, "energy") )
-            {
-                profile->roboEnergy = value;
-                profile->hasRoboEnergy = true;
-            }
-            else if ( !StriCmp(key, "reload_const") )
-            {
-                profile->roboReloadConst = value;
-                profile->hasRoboReloadConst = true;
-            }
-        }
-    }
-
-    return true;
-}
-
-static TSpectatorOwnerProfile yw_LoadSpectatorOwnerProfile()
-{
-    std::string profileName = System::IniConf::GameSpectatorOwner1AI.Get<std::string>();
-    if ( profileName.empty() )
-        profileName = "balanced";
-
-    std::string virtualPath = "data:AIPresets/" + profileName + ".ini";
-    std::string path = Common::Env.ApplyPrefix(virtualPath);
-    TSpectatorOwnerProfile profile;
-
-    ypa_log_out("[SPECTATOR_PROFILE] selected profile '%s'.\n", profileName.c_str());
-    ypa_log_out("[SPECTATOR_PROFILE] trying '%s' resolved '%s'.\n", virtualPath.c_str(), path.c_str());
-
-    if ( yw_LoadSpectatorOwnerProfileFile(path, &profile) )
-    {
-        profile.loadedExternal = true;
-        profile.loadedPath = path;
-        return profile;
-    }
-
-    std::string fallbackPath = "Data/AIPresets/" + profileName + ".ini";
-    if ( fallbackPath != path && yw_LoadSpectatorOwnerProfileFile(fallbackPath, &profile) )
-    {
-        profile.loadedExternal = true;
-        profile.loadedPath = fallbackPath;
-        return profile;
-    }
-
-    ypa_log_out("[SPECTATOR_PROFILE] failed to load profile '%s' from '%s', using internal balanced fallback.\n", profileName.c_str(), path.c_str());
-    return yw_GetInternalSpectatorOwnerProfile();
-}
-
-static NC_STACK_yparobo *yw_FindSpectatorOwnerRobo(NC_STACK_ypaworld *yw)
-{
-    if ( yw->_userRobo && yw->_userRobo->_owner == World::OWNER_RESIST )
-        return dynamic_cast<NC_STACK_yparobo *>(yw->_userRobo);
-
-    for (NC_STACK_ypabact *unit : yw->_unitsList)
-    {
-        NC_STACK_yparobo *robo = dynamic_cast<NC_STACK_yparobo *>(unit);
-        if ( robo && robo->_owner == World::OWNER_RESIST )
-            return robo;
-    }
-
-    return NULL;
-}
-
-static void yw_ApplySpectatorOwnerBuildAvailability(NC_STACK_ypaworld *yw, const TSpectatorOwnerProfile &profile, int *enabledVehicles, int *enabledBuildings)
-{
-    const int ownerMask = 1 << World::OWNER_RESIST;
-
-    if ( enabledVehicles )
-        *enabledVehicles = 0;
-
-    if ( enabledBuildings )
-        *enabledBuildings = 0;
-
-    for ( World::TVhclProto &proto : yw->_vhclProtos )
-        proto.disable_enable_bitmask &= ~ownerMask;
-
-    for ( World::TBuildingProto &proto : yw->_buildProtos )
-        proto.EnableMask &= ~ownerMask;
-
-    for ( int id : profile.enabledVehicles )
-    {
-        if ( id > 0 && id < (int)yw->_vhclProtos.size() )
-        {
-            yw->_vhclProtos[id].disable_enable_bitmask |= ownerMask;
-            if ( enabledVehicles )
-                (*enabledVehicles)++;
-        }
-        else
-            ypa_log_out("WARNING: spectator owner profile ignored invalid vehicle id %d.\n", id);
-    }
-
-    for ( int id : profile.enabledBuildings )
-    {
-        if ( id > 0 && id < (int)yw->_buildProtos.size() )
-        {
-            yw->_buildProtos[id].EnableMask |= ownerMask;
-            if ( enabledBuildings )
-                (*enabledBuildings)++;
-        }
-        else
-            ypa_log_out("WARNING: spectator owner profile ignored invalid building id %d.\n", id);
-    }
-}
-
-static void yw_ApplySpectatorOwnerRoboStats(NC_STACK_yparobo *robo, const TSpectatorOwnerProfile &profile)
-{
-    if ( profile.hasRoboEnergy )
-    {
-        robo->_energy = profile.roboEnergy;
-        robo->_energy_max = profile.roboEnergy;
-        robo->setROBO_battVehicle(profile.roboEnergy);
-        robo->setROBO_battBeam(profile.roboEnergy);
-    }
-
-    if ( profile.hasRoboReloadConst )
-        robo->_reload_const = profile.roboReloadConst;
-}
-
-void NC_STACK_ypaworld::ApplySpectatorOwnerProfile()
-{
-    if ( !IsSpectatorModeEnabled() || !_userRobo )
-        return;
-
-    NC_STACK_yparobo *ownerRobo = yw_FindSpectatorOwnerRobo(this);
-    if ( !ownerRobo )
-    {
-        ypa_log_out("WARNING: spectator owner profile could not find owner 1 Host Station.\n");
-        return;
-    }
-
-    TSpectatorOwnerProfile profile = yw_LoadSpectatorOwnerProfile();
-
-    if ( profile.hasAI )
-        yw_ApplySpectatorRoboAI(ownerRobo, profile.ai);
-
-    int enabledVehicles = 0;
-    int enabledBuildings = 0;
-    yw_ApplySpectatorOwnerBuildAvailability(this, profile, &enabledVehicles, &enabledBuildings);
-    yw_ApplySpectatorOwnerRoboStats(ownerRobo, profile);
-
-    ypa_log_out("[SPECTATOR_PROFILE] source: %s (%s).\n",
-                profile.loadedExternal ? "external" : "fallback",
-                profile.loadedPath.c_str());
-    ypa_log_out("[SPECTATOR_PROFILE] enabled vehicles: %d, enabled buildings: %d.\n",
-                enabledVehicles,
-                enabledBuildings);
-    ypa_log_out("[SPECTATOR_PROFILE] owner 1 Host Station energy=%d reload_const=%d.\n",
-                ownerRobo->_energy_max,
-                ownerRobo->_reload_const);
-    ypa_log_out("[SPECTATOR_PROFILE] owner 1 AI activated: yes.\n");
-}
-
 static bool yw_IsUsableSpectatorBact(NC_STACK_ypaworld *yw, NC_STACK_ypabact *unit)
 {
     return unit &&
@@ -1415,8 +1076,8 @@ static void yw_ApplySpectatorObserverSafety(NC_STACK_ypabact *spectator)
         return;
 
     // Runtime-only neutralization: the spectator is an observer, not an
-    // owner-1 combat unit. Owner 1 remains simulated through the Host
-    // Station AI fallback, while the observer itself is neutral/intangible.
+    // owner-1 combat unit. Owner 1 keeps the LDF-loaded setup, while the
+    // observer itself is neutral/intangible.
     spectator->_owner = World::OWNER_0;
     spectator->_m_owner = World::OWNER_0;
     spectator->_killer = NULL;
@@ -1486,10 +1147,8 @@ static vec3d yw_GetSpectatorSpawnPosition(NC_STACK_ypaworld *yw)
 
 void NC_STACK_ypaworld::TryActivateSpectatorMode()
 {
-    if ( !IsSpectatorModeEnabled() || _levelInfo.Mode == 1 )
+    if ( !System::IniConf::GameSpectatorMode.Get<bool>() || _levelInfo.Mode == 1 )
         return;
-
-    ApplySpectatorOwnerProfile();
 
     int spectatorVehicleID = System::IniConf::GameSpectatorVehicleID.Get<int32_t>();
     if ( spectatorVehicleID <= 0 || spectatorVehicleID >= (int)_vhclProtos.size() )

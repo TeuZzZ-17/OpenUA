@@ -402,8 +402,6 @@ struct TVhclProto
     TDamagedFXConfig damaged_fx;
     TDecorationFXConfig decoration_fx;
     std::string damaged_icon;
-    std::string regen_icon;
-    std::string drain_icon;
     std::string spawn_icon;
     std::string radar_icon;
     std::string unit_gun_icon;
@@ -632,11 +630,13 @@ struct TWeapProto
     int aoe_sector_energy = 0;
     int aoe_falloff = 0;
     int aoe_unit_push = 0;
+    int aoe_unit_push_at_death = 0; // OpenUA custom: AoE corpse push when this weapon explosion causes DEATH1
     // OpenUA custom: direct-hit single-target knockback. Same movement model as aoe_unit_push,
     // but only for the primary/direct-hit unit. If both push and aoe_unit_push are set,
     // the direct-hit unit receives only push; nearby units receive aoe_unit_push.
     int push = 0;
-    float recoil = 0.0; // OpenUA custom: shooter-side knockback multiplier, 0..1
+    int push_at_death = 0; // OpenUA custom: corpse push when this weapon causes DEATH1
+    float recoil = 0.0; // OpenUA custom: shooter-side knockback multiplier, 0..10
 //    int field_87C = 0;
     int life_time = 0;
     int life_time_nt = 0;

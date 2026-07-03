@@ -223,7 +223,7 @@ public:
     static Common::Ini::Key GameRoboPlayerAIBehavior;
     static Common::Ini::Key GameSpectatorMode;
     static Common::Ini::Key GameSpectatorVehicleID;
-    static Common::Ini::Key GameSpectatorOwner1AI;
+    static Common::Ini::Key GameWeaponWeaponCollision;
     static Common::Ini::Key GameRoboBuildingCollisionDamagePercent;
 
     // OpenUA: Black Sect "imperfect grey clone" runtime balance (owner/faction 5 only).

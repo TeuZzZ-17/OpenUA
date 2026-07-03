@@ -348,6 +348,11 @@ struct bact_arg79
     int flags;
 };
 
+// OpenUA custom: internal LaunchMissile() flag.  When the player is in
+// first-person/viewer control and holds the handbrake while firing, weapon
+// recoil is reduced without touching push_resistance, push or ApplyImpulse().
+static const int BACT_ARG79_FLAG_RECOIL_BRAKE_HELD = 0x100;
+
 struct bact_arg75
 {
     vec3d pos;
@@ -463,6 +468,7 @@ public:
     void UpdateDecorationFX(update_msg *arg);
     void AddAoePush(const vec3d &dir, float distance); // queue aoe_unit_push knockback
     void ApplyWeaponRecoil(const vec3d &dir, float recoil, float shotSpeed);
+    void UpdateWeaponRecoilPush(update_msg *arg);      // integrate fake weapon recoil push
     void UpdateAoePush(update_msg *arg);               // integrate/decay it per frame
     void FreezeStaticUnit();
     void ApplyWeaponDebuff(World::TWeaponDebuffConfig &debuff, NC_STACK_ypabact *source);
@@ -761,7 +767,12 @@ public:
     float _thraction;
     vec3d _fly_dir;
     float _fly_dir_length;
-    int _weaponRecoilMoveTime = 0;
+    int _weaponRecoilVisualEndTime = 0; // OpenUA: render-only tank firing tilt, does not affect physics
+    int _weaponRecoilVisualDuration = 0;
+    float _weaponRecoilVisualPitch = 0.0f;
+    int _weaponRecoilAiRecoveryEndTime = 0; // OpenUA: short AI tank forward-thrust pause after fake recoil
+    int _weaponRecoilPlayerRecoveryEndTime = 0; // OpenUA: short player tank forward-input damping after fake recoil
+    vec3d _weaponRecoilPushVel = vec3d(0.0, 0.0, 0.0);
 
     // OpenUA aoe_unit_push: residual knockback velocity, integrated and decayed
     // every frame by UpdateAoePush() so shockwaves shove units smoothly.
