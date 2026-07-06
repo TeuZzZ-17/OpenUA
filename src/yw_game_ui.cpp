@@ -206,6 +206,19 @@ static SDL_Color ApplyWireframeTint(SDL_Color color, const World::TVisualTint *t
     return color;
 }
 
+static int ResolveUnitDisplayVehicleProtoId(NC_STACK_ypaworld *yw, const NC_STACK_ypabact *bact)
+{
+    if ( !yw || !bact )
+        return -1;
+
+    int protoId = bact->_mimic_disguise_vehicleID ? bact->_mimic_disguise_vehicleID : bact->_vehicleID;
+
+    if ( protoId < 0 || (size_t)protoId >= yw->_vhclProtos.size() )
+        return -1;
+
+    return protoId;
+}
+
 NC_STACK_bitmap *StatusIconLoad(const std::string &path)
 {
     auto it = g_statusIconCache.find(path);
@@ -1975,7 +1988,10 @@ void sub_4F6DFC(NC_STACK_ypaworld *yw, CmdStream *cur, int height, int width, NC
             if ( bact->_bact_type == BACT_TYPES_MISSLE )
                 v8 = bact->_owner + 1;
             else
-                v8 = yw->_vhclProtos[bact->_vehicleID].type_icon;
+            {
+                int protoId = ResolveUnitDisplayVehicleProtoId(yw, bact);
+                v8 = protoId >= 0 ? yw->_vhclProtos[protoId].type_icon : 0;
+            }
         }
         else
         {
@@ -4200,7 +4216,7 @@ void gui_update_create_btn__sub0(NC_STACK_ypaworld *yw)
 
             const World::TVhclProto &proto = yw->_vhclProtos[v5];
 
-            int v17 = dround(yw->sub_4498F4() * 2 * proto.energy / 100.0);
+            int v17 = dround(yw->sub_4498F4() * 2 * proto.GetProductionCost() / 100.0);
 
             const std::string v8 = yw->ResolveGameplayVehicleName(proto);
 
@@ -6162,7 +6178,8 @@ void ypaworld_func64__sub7__sub7(NC_STACK_ypaworld *yw, TInputState *inpt)
 
 char sub_4C7134(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact)
 {
-    uint8_t icon = yw->_vhclProtos[ bact->_vehicleID ].type_icon;
+    int protoId = ResolveUnitDisplayVehicleProtoId(yw, bact);
+    uint8_t icon = protoId >= 0 ? yw->_vhclProtos[protoId].type_icon : 0;
 
     if ( !icon )
         icon = 65;
@@ -9841,8 +9858,11 @@ void yw_RenderHUDInfo(NC_STACK_ypaworld *yw, sklt_wis *wis, CmdStream *cur, floa
         a6a = 1.0;
     }
 
-    if ( vhclid == -1 )
-        vhclid = bact->_vehicleID;
+    if ( vhclid == -1 && bact )
+        vhclid = ResolveUnitDisplayVehicleProtoId(yw, bact);
+
+    if ( vhclid < 0 || (size_t)vhclid >= yw->_vhclProtos.size() )
+        return;
 
     World::TVhclProto *vhcl = &yw->_vhclProtos[vhclid];
 
@@ -12011,7 +12031,7 @@ void NC_STACK_ypaworld::ypaworld_func64__sub21__sub7()
     {
         if ( bzda.field_8EC != -1 )
         {
-            _updateMessage.energy = dround(sub_4498F4() * (2 * _vhclProtos[bzda.field_2DC[bzda.field_8EC]].energy));
+            _updateMessage.energy = dround(sub_4498F4() * (2 * _vhclProtos[bzda.field_2DC[bzda.field_8EC]].GetProductionCost()));
         }
     }
     else if ( bzda.field_1D0 == 16 && bzda.field_8F4 != -1 )

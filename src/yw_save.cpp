@@ -343,6 +343,8 @@ int yw_write_item_modifers(NC_STACK_ypaworld *yw, FSMgr::FileHandle *fil)
 
             fil->printf("    shield         = %d\n", proto.shield);
             fil->printf("    energy         = %d\n", proto.energy);
+            if (proto.mimic_energy_cost > 0)
+                fil->printf("    mimic_energy_cost = %d\n", proto.mimic_energy_cost);
             fil->printf("    num_weapons    = %d\n", proto.num_weapons);
             fil->printf("    weapon         = %d\n", proto.weapon);
             fil->printf("    radar          = %d\n", proto.radar);

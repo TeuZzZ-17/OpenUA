@@ -1092,7 +1092,12 @@ static bool IsMimicVehicleShellParam(const std::string &p1)
     return !StriCmp(p1, "model") ||
            !StriCmp(p1, "name") ||
            !StriCmp(p1, "type_icon") ||
+           !StriCmp(p1, "mimic_energy_cost") ||
            !StriCmp(p1, "mimic_vehicle_list") ||
+           !StriCmp(p1, "mimic_vp_tint") ||
+           !StriCmp(p1, "snd_mimic_sample") ||
+           !StriCmp(p1, "snd_mimic_pitch") ||
+           !StriCmp(p1, "snd_mimic_volume") ||
            !StriCmp(p1, "spawn_at_death_units") ||
            !StriCmp(p1, "spawn_at_death_vehicle") ||
            !StriCmp(p1, "spawn_at_death_count") ||
@@ -1246,6 +1251,11 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     else if ( !StriCmp(p1, "energy") )
     {
         _vhcl->energy = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "mimic_energy_cost") )
+    {
+        int cost = parser.stol(p2, NULL, 0);
+        _vhcl->mimic_energy_cost = cost > 0 ? cost : 0;
     }
     else if ( !StriCmp(p1, "shield") )
     {
@@ -1565,6 +1575,18 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
                 _vhcl->mimic_vehicle_list.push_back((int16_t)vehicleId);
         }
     }
+    else if ( !StriCmp(p1, "snd_mimic_sample") )
+    {
+        _vhcl->snd_mimic.MainSample.Name = p2;
+    }
+    else if ( !StriCmp(p1, "snd_mimic_pitch") )
+    {
+        _vhcl->snd_mimic.pitch = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "snd_mimic_volume") )
+    {
+        _vhcl->snd_mimic.volume = parser.stol(p2, NULL, 0);
+    }
     else if ( !StriCmp(p1, "death_damage") )
     {
         int damage = parser.stol(p2, NULL, 0);
@@ -1670,6 +1692,9 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     {
     }
     else if ( ParseTintParam(parser, "vp_tint", p1, p2, _vhcl->vp_tint) )
+    {
+    }
+    else if ( ParseTintParam(parser, "mimic_vp_tint", p1, p2, _vhcl->mimic_vp_tint) )
     {
     }
     else if ( ParseWireframeTintParam(parser, p1, p2, _vhcl->wireframe_tint) )
@@ -2493,6 +2518,7 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->voicepack.clear();
         _vhcl->shield = 50;
         _vhcl->energy = 10000;
+        _vhcl->mimic_energy_cost = 0;
         _vhcl->adist_sector = 800.0;
         _vhcl->adist_bact = 650.0;
         _vhcl->sdist_sector = 200.0;
@@ -2536,6 +2562,8 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->initParams.clear();
         _vhcl->is_mimic = 0;
         _vhcl->mimic_vehicle_list.clear();
+        _vhcl->mimic_vp_tint = TVisualTint();
+        _vhcl->snd_mimic = TVhclSound();
         return true;
     }
     else if ( !StriCmp(word, "modify_vehicle") )

@@ -457,6 +457,8 @@ struct TVhclProto
     int16_t field_1D6F = 0;
     int shield = 0;
     int energy = 0;
+    int mimic_energy_cost = 0; // OpenUA custom: mimic shell production cost override; 0 keeps vanilla energy-as-cost
+    int GetProductionCost() const { return mimic_energy_cost > 0 ? mimic_energy_cost : energy; }
     bool invulnerable = false;
     int field_1D79 = 0;
     float adist_sector = 0.0;
@@ -520,6 +522,8 @@ struct TVhclProto
 
     int is_mimic = 0;                       // OpenUA: model = mimic shell/disguise proto
     std::vector<int16_t> mimic_vehicle_list;
+    TVisualTint mimic_vp_tint;              // OpenUA: model = mimic shell tint applied to copied VP
+    TVhclSound snd_mimic;                   // OpenUA: model = mimic persistent shell loop
 
     rbcolls coll;                           // OpenUA: universal compound collision spheres (coll_*)
 

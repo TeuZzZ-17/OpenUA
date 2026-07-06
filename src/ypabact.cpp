@@ -619,6 +619,29 @@ static void ypabact_StartStatusSoundIfIdle(NC_STACK_ypabact *bact, TSndCarrier *
     }
 }
 
+static void ypabact_UpdateMimicSoundCarrier(NC_STACK_ypabact *bact)
+{
+    if ( !bact || bact->_mimic_soundcarrier.Sounds.empty() )
+        return;
+
+    if ( bact->_status == BACT_STATUS_DEAD ||
+         bact->_status == BACT_STATUS_NOPE ||
+         (bact->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2)) )
+    {
+        SFXEngine::SFXe.StopCarrier(&bact->_mimic_soundcarrier);
+        return;
+    }
+
+    bact->_mimic_soundcarrier.Position = bact->_soundcarrier.Position;
+    bact->_mimic_soundcarrier.Vector = bact->_soundcarrier.Vector;
+
+    TSoundSource &snd = bact->_mimic_soundcarrier.Sounds[0];
+    if ( !snd.IsEnabled() && !snd.IsPFxEnabled() && !snd.IsShkEnabled() )
+        SFXEngine::SFXe.startSound(&bact->_mimic_soundcarrier, 0);
+
+    SFXEngine::SFXe.UpdateSoundCarrier(&bact->_mimic_soundcarrier);
+}
+
 static NC_STACK_ypabact *ypabact_FindLiveBactByGid(World::RefBactList &list, int32_t gid)
 {
     for (NC_STACK_ypabact *unit : list)
@@ -1337,6 +1360,7 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _active_debuff.Clear();
     _debuff_soundcarrier.Clear();
     _damaged_shake_carrier.Clear();
+    _mimic_soundcarrier.Clear();
 
     _vp_active = 0;
 
@@ -1571,6 +1595,7 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _debuff_soundcarrier.Clear();
     _damaged_shake_carrier.Clear();
     _mgun_soundcarrier.Clear();
+    _mimic_soundcarrier.Clear();
     _mgun_sound_index = 0;
     _mgun_vp_fire_end_time = 0;
 //    ypabact.field_3CE = 0;
@@ -1785,6 +1810,7 @@ size_t NC_STACK_ypabact::Deinit()
     SFXEngine::SFXe.StopCarrier(&_laser_soundcarrier);
     SFXEngine::SFXe.StopCarrier(&_vertical_laser_soundcarrier);
     SFXEngine::SFXe.StopCarrier(&_mgun_soundcarrier);
+    SFXEngine::SFXe.StopCarrier(&_mimic_soundcarrier);
     _active_debuff.Clear();
 
     _status_flg |= BACT_STFLAG_CLEAN;
@@ -2634,6 +2660,8 @@ void NC_STACK_ypabact::Update(update_msg *arg)
         ypabact_UpdateStatusSoundCarrier(this, &_debuff_soundcarrier);
         ypabact_UpdateStatusSoundCarrier(this, &_damaged_shake_carrier);
     }
+
+    ypabact_UpdateMimicSoundCarrier(this);
 }
 
 void NC_STACK_ypabact::ClearActiveDebuff()
@@ -11460,6 +11488,7 @@ void NC_STACK_ypabact::Renew()
     _mgun_power_set = false;
     _mgun_angle_set = false;
     _mgun_soundcarrier.Clear();
+    _mimic_soundcarrier.Clear();
     _mgun_sound_index = 0;
     _mgun_vp_fire_end_time = 0;
     _spawn_units = 0;
@@ -13856,6 +13885,7 @@ size_t NC_STACK_ypabact::SetStateInternal(setState_msg *arg)
     if ( arg->newStatus == BACT_STATUS_DEAD && (_vp_active != 2 && _vp_active != 3) )
     {
         _energy = -10000;
+        SFXEngine::SFXe.StopCarrier(&_mimic_soundcarrier);
 
         SetVP(_vp_dead);
 

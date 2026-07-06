@@ -18,6 +18,8 @@
 int dword_5B1128 = 1;
 
 static bool yparobo_IsAiActiveVehicleCapReached(NC_STACK_yparobo *robo, int vehicleId);
+static int yparobo_GetVehicleProductionCost(NC_STACK_ypaworld *world, int vehicleId);
+static int yparobo_GetUnitProductionCost(NC_STACK_ypabact *unit);
 
 robo_t2 stru_5B0628[100];
 int dword_515138[8];
@@ -483,7 +485,8 @@ void NC_STACK_yparobo::InitForce(NC_STACK_ypabact *unit)
 
     NC_STACK_ypabact *newUnit = NULL;
 
-    int v23 = (arg81.enrg_sum * 0.05 + 1.0) * (float)unit->_energy_max;
+    int unitCost = yparobo_GetUnitProductionCost(unit);
+    int v23 = (arg81.enrg_sum * 0.05 + 1.0) * (float)unitCost;
     
     if ( v6 > (signed int)v23 )
     {
@@ -560,7 +563,7 @@ void NC_STACK_yparobo::InitForce(NC_STACK_ypabact *unit)
         _energy -= v23;
     }
 
-    _roboDockEnerg -= newUnit->_energy;
+    _roboDockEnerg -= yparobo_GetUnitProductionCost(newUnit);
 
     setState_msg arg78;
     arg78.setFlags = 0;
@@ -2998,6 +3001,24 @@ static bool yparobo_IsAiActiveVehicleCapReached(NC_STACK_yparobo *robo, int vehi
     return yparobo_CountAiActiveVehicle(world, robo->_owner, vehicleId) >= proto.ai_max_active_at_once;
 }
 
+
+static int yparobo_GetVehicleProductionCost(NC_STACK_ypaworld *world, int vehicleId)
+{
+    if ( !world || vehicleId <= 0 || (size_t)vehicleId >= world->GetVhclProtos().size() )
+        return 0;
+
+    return world->GetVhclProtos().at(vehicleId).GetProductionCost();
+}
+
+static int yparobo_GetUnitProductionCost(NC_STACK_ypabact *unit)
+{
+    if ( !unit )
+        return 0;
+
+    int cost = yparobo_GetVehicleProductionCost(unit->getBACT_pWorld(), unit->_vehicleID);
+    return cost > 0 ? cost : unit->_energy_max;
+}
+
 static bool yparobo_IsAiActiveVehicleCapReached(NC_STACK_yparobo *robo, int vehicleId)
 {
     if ( !robo || vehicleId <= 0 )
@@ -3113,7 +3134,8 @@ NC_STACK_ypabact *NC_STACK_yparobo::AllocForce(robo_loct1 *arg)
                 {
                     if ( proto.model_id != BACT_TYPES_ROBO && proto.model_id != BACT_TYPES_GUN && proto.model_id != BACT_TYPES_MISSLE )
                     {
-                        if ( v67 > ((float)proto.energy * v73) &&
+                        int protoCost = proto.GetProductionCost();
+                        if ( v67 > ((float)protoCost * v73) &&
                              !yparobo_IsAiActiveVehicleCapReached(this, i, proto) )
                         {
                             int v80 = _world->TestVehicle(i, arg->job);
@@ -3248,7 +3270,7 @@ NC_STACK_ypabact *NC_STACK_yparobo::AllocForce(robo_loct1 *arg)
         newUnit->setBACT_aggression(60);
 
         _roboDockUser = newUnit->_commandID;
-        _roboDockEnerg = arg->energ - newUnit->_energy;
+        _roboDockEnerg = arg->energ - yparobo_GetUnitProductionCost(newUnit);
 
         newUnit->_scale_time = (float)newUnit->_energy_max * 0.2;
 
@@ -3272,7 +3294,7 @@ NC_STACK_ypabact *NC_STACK_yparobo::AllocForce(robo_loct1 *arg)
 
         newUnit->SetTarget(&arg67);
 
-        int v70 = (float)newUnit->_energy_max * v73;
+        int v70 = (float)yparobo_GetUnitProductionCost(newUnit) * v73;
 
         if ( _roboState & ROBOSTATE_BUILDROBO )
         {

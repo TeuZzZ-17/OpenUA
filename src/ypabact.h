@@ -816,6 +816,7 @@ public:
     TSndCarrier _laser_soundcarrier; // OpenUA custom: managed loop sound for model = laser
     TSndCarrier _vertical_laser_soundcarrier; // OpenUA custom: managed loop sound for model = vertical_laser
     TSndCarrier _mgun_soundcarrier; // OpenUA custom: one-shot pulse sound for vehicle-controlled MG
+    TSndCarrier _mimic_soundcarrier; // OpenUA custom: persistent loop for model = mimic shell
     int _mgun_sound_index;
     int _mgun_vp_fire_end_time;
     int _vp_active;

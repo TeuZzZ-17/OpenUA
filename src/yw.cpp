@@ -1718,6 +1718,14 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_vp_genesis = _vhclModels.at( vhcl.vp_genesis );
         bacto->_vp_scale = vhcl.vp_scale;
         bacto->_vp_tint = vhcl.vp_tint;
+        if ( requestedVhcl.is_mimic && !requestedVhcl.mimic_vp_tint.IsNeutral() )
+        {
+            bacto->_vp_tint.r *= requestedVhcl.mimic_vp_tint.r;
+            bacto->_vp_tint.g *= requestedVhcl.mimic_vp_tint.g;
+            bacto->_vp_tint.b *= requestedVhcl.mimic_vp_tint.b;
+            bacto->_vp_tint.a *= requestedVhcl.mimic_vp_tint.a;
+            bacto->_vp_tint.Clamp();
+        }
         bacto->_vp_orientation = vhcl.vp_orientation;
         bacto->_vp_spin_speed = vhcl.vp_spin;
         bacto->_vp_trail_scale = vec3d(1.0, 1.0, 1.0);
@@ -1893,6 +1901,29 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_base_snd_normal_pitch = bacto->_soundcarrier.Sounds[World::TVhclProto::SND_NORMAL].Pitch;
         bacto->_base_snd_fire_pitch = bacto->_soundcarrier.Sounds[World::TVhclProto::SND_FIRE].Pitch;
         bacto->_base_snd_wait_pitch = bacto->_soundcarrier.Sounds[World::TVhclProto::SND_WAIT].Pitch;
+
+        bacto->_mimic_soundcarrier.Clear();
+        if ( requestedVhcl.is_mimic )
+        {
+            requestedVhcl.snd_mimic.LoadSamples();
+            if ( requestedVhcl.snd_mimic.MainSample.Sample )
+            {
+                bacto->_mimic_soundcarrier.Resize(1);
+
+                TSoundSource &snd = bacto->_mimic_soundcarrier.Sounds[0];
+                snd.PSample = requestedVhcl.snd_mimic.MainSample.Sample->GetSampleData();
+                snd.SampleVariants.clear();
+                if ( snd.PSample )
+                    snd.SampleVariants.push_back(snd.PSample);
+                snd.Volume = requestedVhcl.snd_mimic.volume;
+                snd.Pitch = requestedVhcl.snd_mimic.pitch;
+                snd.PriorityBias = 0;
+                snd.SetLoop(true);
+                snd.SetPFx(false);
+                snd.SetShk(false);
+                snd.SetFragmented(false);
+            }
+        }
 
         bacto->SetParameters(vhcl.initParams);
 
