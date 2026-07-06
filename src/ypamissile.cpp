@@ -1041,7 +1041,7 @@ bool NC_STACK_ypamissile::TubeCollisionTest(bool applyDirectDamage, NC_STACK_ypa
                                         ApplyDirectHitToBact(bct);
                                         RememberArmorPenetratedTarget(bct);
                                         _mislArmorPenetrationRemaining--;
-                                        ApplyArmorPenetrationImpactFX();
+                                        ApplyArmorPenetrationUnitImpactFX();
                                         break;
                                     }
 
@@ -1215,11 +1215,11 @@ void NC_STACK_ypamissile::RememberArmorPenetratedTarget(NC_STACK_ypabact *bct)
     _mislArmorPenetratedGids.push_back(bct->_gid);
 }
 
-void NC_STACK_ypamissile::ApplyArmorPenetrationImpactFX()
+void NC_STACK_ypamissile::ApplyArmorPenetrationUnitImpactFX()
 {
     SFXEngine::SFXe.startSound(&_soundcarrier, World::TWeapProto::SND_HIT);
-    StartChainFXByTrigger(World::TChainFXConfig::TRIGGER_IMPACT_WORLD);
-    StartDestFXByType(World::DestFX::FX_MEGADETH);
+    StartChainFXByTrigger(World::TChainFXConfig::TRIGGER_DETONATE);
+    StartDestFXByType(World::DestFX::FX_DEATH);
 }
 
 bool NC_STACK_ypamissile::ApplyDirectPushToBact(NC_STACK_ypabact *bct, vec3d *appliedDir, float *appliedStrength, bool enqueue)

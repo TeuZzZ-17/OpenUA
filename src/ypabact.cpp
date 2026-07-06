@@ -858,7 +858,7 @@ static bool ypabact_IsDeathDamageTarget(NC_STACK_ypabact *source, NC_STACK_ypaba
            !(target->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2 | BACT_STFLAG_NORENDER));
 }
 
-static int ypabact_CalcShieldedDeathDamage(NC_STACK_ypabact *target, int rawDamage)
+static int ypabact_CalcShieldedCustomDamage(NC_STACK_ypabact *target, int rawDamage)
 {
     if ( !target || rawDamage <= 0 )
         return 0;
@@ -918,7 +918,7 @@ static void ypabact_ApplyDeathDamage(NC_STACK_ypabact *unit, bool megadethPhase)
         if ( !ypabact_IsDeathDamageTarget(unit, target) )
             continue;
 
-        int shieldedDamage = ypabact_CalcShieldedDeathDamage(target, unit->_death_damage);
+        int shieldedDamage = ypabact_CalcShieldedCustomDamage(target, unit->_death_damage);
         if ( shieldedDamage <= 0 )
             continue;
 
@@ -2787,6 +2787,11 @@ void NC_STACK_ypabact::UpdateActiveDebuff(update_msg *)
             else
                 tickDamage += (int)(percentDamage + 0.5);
         }
+    }
+
+    if ( tickDamage > 0 )
+    {
+        tickDamage = ypabact_CalcShieldedCustomDamage(this, tickDamage);
     }
 
     if ( tickDamage > 0 )

@@ -149,7 +149,7 @@ protected:
     bool IsArmorPenetratedTarget(NC_STACK_ypabact *bct) const;
     bool ShouldArmorPenetrateTarget(NC_STACK_ypabact *bct) const;
     void RememberArmorPenetratedTarget(NC_STACK_ypabact *bct);
-    void ApplyArmorPenetrationImpactFX();
+    void ApplyArmorPenetrationUnitImpactFX();
     vec3d GetBuildingSlotCenter(const cellArea &cell, int bldX, int bldY) const;
     bool GetBuildingSlotAtPosition(const vec3d &pos, Common::Point *cellId, int *bldX, int *bldY) const;
     const char *GetAreaBuildingSkipReason(const cellArea &cell, int bldX, int bldY) const;
