@@ -8082,6 +8082,33 @@ int NC_STACK_ypaworld::TestVehicle(int protoID, int job)
 {
     const World::TVhclProto &proto = _vhclProtos[ protoID ];
 
+    if ( proto.is_mimic )
+    {
+        switch ( job )
+        {
+        case 1:
+            return proto.job_fightrobo;
+
+        case 2:
+            return proto.job_fighttank;
+
+        case 4:
+            return proto.job_fighthelicopter;
+
+        case 3:
+            return proto.job_fightflyer;
+
+        case 5:
+            return proto.job_reconnoitre;
+
+        case 6:
+            return proto.job_conquer;
+
+        default:
+            return -1;
+        }
+    }
+
     World::TWeapProto *wpn;
 
     if ( proto.weapon == -1 )

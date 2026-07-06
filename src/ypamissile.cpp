@@ -115,11 +115,12 @@ static float ypamissile_GetTargetPushMultiplier(NC_STACK_ypaworld *world, NC_STA
         return 1.0f;
 
     const std::vector<World::TVhclProto> &protos = world->GetVhclProtos();
+    uint8_t protoId = target->_mimic_disguise_vehicleID ? target->_mimic_disguise_vehicleID : target->_vehicleID;
 
-    if ( target->_vehicleID >= protos.size() )
+    if ( protoId >= protos.size() )
         return 1.0f;
 
-    return 1.0f - ypamissile_Clamp01(protos.at(target->_vehicleID).push_resistance);
+    return 1.0f - ypamissile_Clamp01(protos.at(protoId).push_resistance);
 }
 
 static bool ypamissile_TargetHasPushResistance(NC_STACK_ypaworld *world, NC_STACK_ypabact *target)
@@ -128,11 +129,12 @@ static bool ypamissile_TargetHasPushResistance(NC_STACK_ypaworld *world, NC_STAC
         return false;
 
     const std::vector<World::TVhclProto> &protos = world->GetVhclProtos();
+    uint8_t protoId = target->_mimic_disguise_vehicleID ? target->_mimic_disguise_vehicleID : target->_vehicleID;
 
-    if ( target->_vehicleID >= protos.size() )
+    if ( protoId >= protos.size() )
         return false;
 
-    return protos.at(target->_vehicleID).has_push_resistance;
+    return protos.at(protoId).has_push_resistance;
 }
 
 static NC_STACK_ypabact *ypamissile_FindLiveBactByGid(World::RefBactList &list, int32_t gid)

@@ -1098,6 +1098,12 @@ static bool IsMimicVehicleShellParam(const std::string &p1)
            !StriCmp(p1, "snd_mimic_sample") ||
            !StriCmp(p1, "snd_mimic_pitch") ||
            !StriCmp(p1, "snd_mimic_volume") ||
+           !StriCmp(p1, "job_fightrobo") ||
+           !StriCmp(p1, "job_fightflyer") ||
+           !StriCmp(p1, "job_fighthelicopter") ||
+           !StriCmp(p1, "job_fighttank") ||
+           !StriCmp(p1, "job_conquer") ||
+           !StriCmp(p1, "job_reconnoitre") ||
            !StriCmp(p1, "spawn_at_death_units") ||
            !StriCmp(p1, "spawn_at_death_vehicle") ||
            !StriCmp(p1, "spawn_at_death_count") ||
@@ -1225,6 +1231,12 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
             _vhcl->model_id = BACT_TYPES_TANK;
             _vhcl->is_mimic = 1;
             _vhcl->mimic_vehicle_list.clear();
+            _vhcl->job_fightrobo = 6;
+            _vhcl->job_fightflyer = 6;
+            _vhcl->job_fighthelicopter = 6;
+            _vhcl->job_fighttank = 6;
+            _vhcl->job_conquer = 6;
+            _vhcl->job_reconnoitre = 6;
         }
         else
         {

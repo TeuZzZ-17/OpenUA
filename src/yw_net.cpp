@@ -1032,11 +1032,12 @@ static bool yw_netHasPushResistance(NC_STACK_ypaworld *yw, NC_STACK_ypabact *uni
         return false;
 
     const std::vector<World::TVhclProto> &protos = yw->GetVhclProtos();
+    uint8_t protoId = unit->_mimic_disguise_vehicleID ? unit->_mimic_disguise_vehicleID : unit->_vehicleID;
 
-    if ( unit->_vehicleID >= protos.size() )
+    if ( protoId >= protos.size() )
         return false;
 
-    return protos.at(unit->_vehicleID).has_push_resistance;
+    return protos.at(protoId).has_push_resistance;
 }
 
 size_t yw_handleNormMsg(NC_STACK_ypaworld *yw, windp_recvMsg *msg, std::string *err)

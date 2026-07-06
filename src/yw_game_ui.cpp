@@ -9890,7 +9890,11 @@ void yw_RenderHUDInfo(NC_STACK_ypaworld *yw, sklt_wis *wis, CmdStream *cur, floa
     if ( v25 )
     {
         float v15 = wis->field_92 * 12.0 + ypos;
-        yw_RenderInfoVehicleName(yw, wis, cur, yw->ResolveGameplayVehicleName(bact, *vhcl), xpos, v15);
+        World::TVhclProto *nameVhcl = vhcl;
+        if ( bact && bact->_vehicleID >= 0 && (size_t)bact->_vehicleID < yw->_vhclProtos.size() )
+            nameVhcl = &yw->_vhclProtos[bact->_vehicleID];
+
+        yw_RenderInfoVehicleName(yw, wis, cur, yw->ResolveGameplayVehicleName(bact, *nameVhcl), xpos, v15);
     }
 
     if ( weap )
