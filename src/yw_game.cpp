@@ -208,6 +208,7 @@ int NC_STACK_ypaworld::LevelCommonLoader(TLevelDescription *mapp, int levelID, i
     _makingWaypointsMode = false;
     _gamePaused = false;
     _gamePausedTimeStamp = 0;
+    _debugGameplayFrozen = false;
     _joyIgnoreX = 1;
     _joyIgnoreY = 1;
     _joyIgnoreZ = 0;
@@ -3995,10 +3996,11 @@ static bool yw_IsValidMobilePowerGenerator(NC_STACK_ypaworld *yw, NC_STACK_ypaba
          unit->_bact_type == BACT_TYPES_MISSLE ||
          unit->_bact_type == BACT_TYPES_ROBO ||
          unit->_bact_type == BACT_TYPES_GUN ||
-         (size_t)unit->_vehicleID >= yw->_vhclProtos.size() )
+         (size_t)(unit->_mimic_disguise_vehicleID ? unit->_mimic_disguise_vehicleID : unit->_vehicleID) >= yw->_vhclProtos.size() )
         return false;
 
-    const World::TVhclProto &proto = yw->_vhclProtos[unit->_vehicleID];
+    uint8_t protoId = unit->_mimic_disguise_vehicleID ? unit->_mimic_disguise_vehicleID : unit->_vehicleID;
+    const World::TVhclProto &proto = yw->_vhclProtos[protoId];
     return proto.power > 0 && proto.power_radius > 0.0;
 }
 
@@ -4012,7 +4014,8 @@ static void yw_AddMobilePowerInfluenceFromGenerator(NC_STACK_ypaworld *yw,
 
     if ( yw_IsValidMobilePowerGenerator(yw, generator) )
     {
-        const World::TVhclProto &proto = yw->_vhclProtos[generator->_vehicleID];
+        uint8_t protoId = generator->_mimic_disguise_vehicleID ? generator->_mimic_disguise_vehicleID : generator->_vehicleID;
+        const World::TVhclProto &proto = yw->_vhclProtos[protoId];
 
         float dx = target->_position.x - generator->_position.x;
         float dz = target->_position.z - generator->_position.z;
@@ -6687,13 +6690,23 @@ void NC_STACK_ypaworld::debug_info_draw(TInputState *inpt)
             _showDebugMode = 0;
     }
 
-    // F10 collision debug overlay: direct key check, no RMB/easy-cheat helper.
-    if ( inpt && inpt->KbdLastHit == Input::KC_F10 )
-        _showCollDebug = !_showCollDebug;
+    bool openUADebug = System::IniConf::IsGameNewDebugEnabled();
+    if ( !openUADebug )
+    {
+        _showCollDebug = false;
+        _hideHudForScreenshots = false;
+        _debugGameplayFrozen = false;
+    }
+    else
+    {
+        // F10 collision debug overlay: direct key check, no RMB/easy-cheat helper.
+        if ( inpt && inpt->KbdLastHit == Input::KC_F10 )
+            _showCollDebug = !_showCollDebug;
 
-    // F11 screenshot mode: hide the gameplay HUD without enabling debug overlays.
-    if ( inpt && inpt->KbdLastHit == Input::KC_F11 )
-        _hideHudForScreenshots = !_hideHudForScreenshots;
+        // F11 screenshot mode: hide the gameplay HUD without enabling debug overlays.
+        if ( inpt && inpt->KbdLastHit == Input::KC_F11 )
+            _hideHudForScreenshots = !_hideHudForScreenshots;
+    }
 
     if ( _showCollDebug )
         debug_draw_coll_spheres();
@@ -7049,9 +7062,10 @@ void NC_STACK_ypaworld::debug_draw_coll_spheres()
         if ( unit->_bact_type != BACT_TYPES_MISSLE &&
              unit->_bact_type != BACT_TYPES_ROBO &&
              unit->_bact_type != BACT_TYPES_GUN &&
-             (size_t)unit->_vehicleID < _vhclProtos.size() )
+             (size_t)(unit->_mimic_disguise_vehicleID ? unit->_mimic_disguise_vehicleID : unit->_vehicleID) < _vhclProtos.size() )
         {
-            const World::TVhclProto &proto = _vhclProtos[unit->_vehicleID];
+            uint8_t protoId = unit->_mimic_disguise_vehicleID ? unit->_mimic_disguise_vehicleID : unit->_vehicleID;
+            const World::TVhclProto &proto = _vhclProtos[protoId];
             if ( proto.power > 0 && proto.power_radius > 0.01f )
                 drawFlatRing(pos, proto.power_radius, 60, 120, 230);
         }

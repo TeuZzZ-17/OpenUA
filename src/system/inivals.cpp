@@ -1,5 +1,6 @@
 #include <inttypes.h>
 #include "inivals.h"
+#include "utils.h"
 
 namespace System 
 {
@@ -220,6 +221,7 @@ Common::Ini::Key IniConf::NetGmode("net.gmode",  Common::Ini::KT_DIGIT);
 Common::Ini::Key IniConf::NetVersionCheck("net.versioncheck", Common::Ini::KT_BOOL, true);
 
 Common::Ini::Key IniConf::GameDebug("game.debug", Common::Ini::KT_BOOL);
+Common::Ini::Key IniConf::GameNewDebug("game.new.debug", Common::Ini::KT_WORD, std::string("no"));
 
 // Yparobo keys
 Common::Ini::Key IniConf::GameNewAI("game.newai",    Common::Ini::KT_BOOL, true);
@@ -435,6 +437,7 @@ void IniConf::Init()
         , &NetVersionCheck
 
         , &GameDebug
+        , &GameNewDebug
 
         , &GameNewAI
         , &GameTimeLine
@@ -495,6 +498,11 @@ bool IniConf::ReadFromNucleusIni()
 bool IniConf::ReadFromIni(const std::string &fname)
 {
     return Common::Ini::ParseIniFile(fname, &_varList);
+}
+
+bool IniConf::IsGameNewDebugEnabled()
+{
+    return !StriCmp(GameNewDebug.Get<std::string>(), "yes");
 }
 
 

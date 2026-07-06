@@ -101,6 +101,7 @@ public:
     virtual void SetAoeUnitPushAtDeath(int push);
     virtual void SetDirectPush(int push);
     virtual void SetPushAtDeath(int push);
+    virtual void SetArmorPenetrationTargets(int targets);
     // Per-class weapon radius API: inactive (always set to 0.0) but kept for ABI/object-system
     // compatibility. Collision uses weapon.radius only. Do not remove. See GetRadius* below.
     virtual void SetRadiusHeli(float);
@@ -145,6 +146,10 @@ protected:
     void DetonateWeaponCollision(NC_STACK_ypamissile *other);
     bool IsDirectHitUnit(NC_STACK_ypabact *bct) const;
     void RememberDirectHitUnit(NC_STACK_ypabact *bct);
+    bool IsArmorPenetratedTarget(NC_STACK_ypabact *bct) const;
+    bool ShouldArmorPenetrateTarget(NC_STACK_ypabact *bct) const;
+    void RememberArmorPenetratedTarget(NC_STACK_ypabact *bct);
+    void ApplyArmorPenetrationImpactFX();
     vec3d GetBuildingSlotCenter(const cellArea &cell, int bldX, int bldY) const;
     bool GetBuildingSlotAtPosition(const vec3d &pos, Common::Point *cellId, int *bldX, int *bldY) const;
     const char *GetAreaBuildingSkipReason(const cellArea &cell, int bldX, int bldY) const;
@@ -206,6 +211,7 @@ protected:
     int _mislAoeUnitPushAtDeath  = 0;
     int _mislDirectPush          = 0;
     int _mislPushAtDeath = 0;
+    int _mislArmorPenetrationRemaining = 0;
     int _mislClusterAge          = 0;
     int _mislClusterGeneration   = 0;
     bool _mislClusterDone        = false;
@@ -227,6 +233,7 @@ protected:
     vec3d _mislLastAttachedPosition;
     TSndCarrier _mislClusterSoundCarrier;
     std::vector<int32_t> _mislChainHitGids;
+    std::vector<int32_t> _mislArmorPenetratedGids;
     std::vector<NC_STACK_ypabact *> _mislDirectHitUnits;
     std::vector<TBuildingHitRef> _mislDirectHitBuildings;
     std::vector<TBuildingHitRef> _mislDirectHitSectors;

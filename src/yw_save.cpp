@@ -494,7 +494,11 @@ int yw_write_bact(NC_STACK_ypabact *bct, FSMgr::FileHandle *fil)
     bool saveInvisibleState = bct->IsInvisibleUnrevealed();
     NC_STACK_ypaworld *world = bct->getBACT_pWorld();
     if ( world && bct->_vehicleID >= 0 && (size_t)bct->_vehicleID < world->GetVhclProtos().size() )
-        saveInvisibleState = saveInvisibleState || world->GetVhclProtos().at(bct->_vehicleID).invisible;
+    {
+        uint8_t protoId = bct->_mimic_disguise_vehicleID ? bct->_mimic_disguise_vehicleID : bct->_vehicleID;
+        if ( (size_t)protoId < world->GetVhclProtos().size() )
+            saveInvisibleState = saveInvisibleState || world->GetVhclProtos().at(protoId).invisible;
+    }
 
     if ( bct->getBACT_viewer() )
         fil->printf("    viewer         = yes\n");

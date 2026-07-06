@@ -50,6 +50,37 @@ uint32_t bact_id = 0x10000;
 // method 169
 uint32_t dword_5A7A80;
 
+static int yw_SelectMimicVehicleID(std::vector<World::TVhclProto> &protos, int shellVehicleId)
+{
+    if ( shellVehicleId <= 0 || (size_t)shellVehicleId >= protos.size() )
+        return 0;
+
+    World::TVhclProto &shell = protos[shellVehicleId];
+    if ( !shell.is_mimic || shell.mimic_vehicle_list.empty() )
+        return 0;
+
+    std::vector<int16_t> validIds;
+    validIds.reserve(shell.mimic_vehicle_list.size());
+
+    for (int16_t vehicleId : shell.mimic_vehicle_list)
+    {
+        if ( vehicleId <= 0 || vehicleId == shellVehicleId || (size_t)vehicleId >= protos.size() )
+            continue;
+
+        World::TVhclProto &candidate = protos[vehicleId];
+        if ( candidate.is_mimic || candidate.model_id == BACT_TYPES_NOPE )
+            continue;
+
+        validIds.push_back(vehicleId);
+    }
+
+    if ( validIds.empty() )
+        return 0;
+
+    size_t randomIndex = (size_t)(rand() % (int)validIds.size());
+    return validIds[randomIndex];
+}
+
 static std::string yw_TrimConfigValue(std::string s)
 {
     size_t first = s.find_first_not_of(" \t\r\n");
@@ -604,7 +635,17 @@ size_t NC_STACK_ypaworld::Process(base_64arg *arg)
             }
         }
 
-        _timeStamp += arg->DTime;
+        bool openUADebug = System::IniConf::IsGameNewDebugEnabled();
+        if ( !openUADebug )
+            _debugGameplayFrozen = false;
+        else if ( arg->field_8 && arg->field_8->KbdLastHit == Input::KC_F12 )
+            _debugGameplayFrozen = !_debugGameplayFrozen;
+
+        bool gameplayFrozen = openUADebug && _debugGameplayFrozen;
+
+        if ( !gameplayFrozen )
+            _timeStamp += arg->DTime;
+
         _frameTime = arg->DTime;
         _framesElapsed++;
 
@@ -616,11 +657,12 @@ size_t NC_STACK_ypaworld::Process(base_64arg *arg)
         _FPS = 1024 / arg->DTime;
         _profileVals[PFID_FPS] = _FPS;
 
-        HistoryEventAdd(World::History::Frame(_timeStamp));
+        if ( !gameplayFrozen )
+            HistoryEventAdd(World::History::Frame(_timeStamp));
 
         uint32_t v22 = profiler_begin();
         
-        if ( _isNetGame )
+        if ( _isNetGame && !gameplayFrozen )
             yw_NetMsgHndlLoop(this);
 
         if ( !_isNetGame || _levelInfo.State != TLevelInfo::STATE_ABORTED )
@@ -649,14 +691,22 @@ size_t NC_STACK_ypaworld::Process(base_64arg *arg)
 
             UpdateSpectatorFollowCamera(arg->field_8);
 
-            ypaworld_func64__sub15(this);
-            ypaworld_func64__sub16(this);
-            ypaworld_func64__sub17(this);
+            if ( !gameplayFrozen )
+            {
+                ypaworld_func64__sub15(this);
+                ypaworld_func64__sub16(this);
+                ypaworld_func64__sub17(this);
+            }
+
             sub_4C40AC();
-            ypaworld_func64__sub9(this);
-            ypaworld_func64__sub19();
-            BuildingConstructUpdate(arg->DTime);
-            BuildingDecorationFXUpdate();
+
+            if ( !gameplayFrozen )
+            {
+                ypaworld_func64__sub9(this);
+                ypaworld_func64__sub19();
+                BuildingConstructUpdate(arg->DTime);
+                BuildingDecorationFXUpdate();
+            }
 
             if ( !_doNotRender )
             {
@@ -673,10 +723,10 @@ size_t NC_STACK_ypaworld::Process(base_64arg *arg)
                 _profileVals[PFID_GUITIME] = profiler_end(v33);
             }
 
-            if ( _doEnergyRecalc )
+            if ( _doEnergyRecalc && !gameplayFrozen )
                 DoSectorsEnergyRecalc();
 
-            if ( _replayRecorder->do_record )
+            if ( _replayRecorder->do_record && !gameplayFrozen )
                 recorder_update_time(this, arg->DTime);
 
             _guiVisor.field_0 = 0;
@@ -693,14 +743,38 @@ size_t NC_STACK_ypaworld::Process(base_64arg *arg)
                     ((NC_STACK_yparobo *)_userRobo)->HandleUserCommands(&_updateMessage);
             }
 
-            for ( NC_STACK_ypabact *unit : _unitsList.safe_iter() )
+            if ( gameplayFrozen )
             {
-                if (_isNetGame && unit != _userRobo && unit->_bact_type == BACT_TYPES_ROBO)
-                    unit->NetUpdate(&_updateMessage);
-                else
-                    unit->Update(&_updateMessage);
+                auto updateFrozenUserUnit = [&](NC_STACK_ypabact *unit)
+                {
+                    if ( !unit ||
+                         unit == _userRobo ||
+                         unit->_status == BACT_STATUS_DEAD ||
+                         unit->_bact_type == BACT_TYPES_NOPE )
+                    {
+                        return;
+                    }
 
-                _updateMessage.units_count++;
+                    unit->Update(&_updateMessage);
+                    _updateMessage.units_count++;
+                };
+
+                updateFrozenUserUnit(_userUnit);
+
+                if ( _viewerBact != _userUnit && _viewerBact && _viewerBact->getBACT_inputting() )
+                    updateFrozenUserUnit(_viewerBact);
+            }
+            else
+            {
+                for ( NC_STACK_ypabact *unit : _unitsList.safe_iter() )
+                {
+                    if (_isNetGame && unit != _userRobo && unit->_bact_type == BACT_TYPES_ROBO)
+                        unit->NetUpdate(&_updateMessage);
+                    else
+                        unit->Update(&_updateMessage);
+
+                    _updateMessage.units_count++;
+                }
             }
 
             _profileVals[PFID_UPDATETIME] = profiler_end(v37);
@@ -709,7 +783,7 @@ size_t NC_STACK_ypaworld::Process(base_64arg *arg)
 
             uint32_t v41 = profiler_begin();
 
-            if ( _isNetGame )
+            if ( _isNetGame && !gameplayFrozen )
             {
                 if ( arg->DTime == 1 )
                     _netFlushTimer -= 20;
@@ -752,17 +826,18 @@ size_t NC_STACK_ypaworld::Process(base_64arg *arg)
 
             //ypaworld_func64__sub22(this); // scene events
             
-            if (_script)
+            if (_script && !gameplayFrozen)
                 _script->CallUpdate(_timeStamp, arg->DTime);
                         
-            VoiceMessageUpdate(); // update sound messages
+            if ( !gameplayFrozen )
+                VoiceMessageUpdate(); // update sound messages
 
             const mat3x3 &v57 = SFXEngine::SFXe.sb_0x424c74();
             TF::TForm3D *v58 = TF::Engine.GetViewPoint();
 
             v58->SclRot = v57 * v58->SclRot;
 
-            if ( _replayRecorder->do_record )
+            if ( _replayRecorder->do_record && !gameplayFrozen )
                 recorder_write_frame();
 
             ypaworld_func64__sub3(this);
@@ -1529,10 +1604,22 @@ size_t NC_STACK_ypaworld::ypaworld_func145(NC_STACK_ypabact *bact)
 
 NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
 {
-    if ( vhcl_id->vehicle_id > NUM_VHCL_PROTO )
+    if ( vhcl_id->vehicle_id <= 0 || (size_t)vhcl_id->vehicle_id >= _vhclProtos.size() )
         return NULL;
 
-    World::TVhclProto &vhcl = _vhclProtos[vhcl_id->vehicle_id];
+    World::TVhclProto &requestedVhcl = _vhclProtos[vhcl_id->vehicle_id];
+    int mimicDisguiseVehicleId = requestedVhcl.is_mimic ?
+        yw_SelectMimicVehicleID(_vhclProtos, vhcl_id->vehicle_id) :
+        0;
+    World::TVhclProto *spawnProto = mimicDisguiseVehicleId > 0 ?
+        &_vhclProtos[mimicDisguiseVehicleId] :
+        (requestedVhcl.is_mimic ? NULL : &requestedVhcl);
+
+    if ( !spawnProto )
+        return NULL;
+
+    World::TVhclProto &vhcl = *spawnProto;
+    World::TVhclProto &deathProto = requestedVhcl.is_mimic ? requestedVhcl : vhcl;
 
     NC_STACK_ypabact *bacto = yw_createUnit(vhcl.model_id);
 
@@ -1581,7 +1668,7 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_gun_power = vhcl.gun_power;
         bacto->_pitch_max = vhcl.max_pitch;
         bacto->_vehicleID = vhcl_id->vehicle_id;
-        bacto->_static = vhcl.static_unit;
+        bacto->_mimic_disguise_vehicleID = mimicDisguiseVehicleId > 0 ? mimicDisguiseVehicleId : 0;
         bacto->_isDummy = vhcl.is_dummy != 0; // OpenUA: model = dummy -> inert module
         bacto->_weapon = vhcl.weapon;
         bacto->_extra_weapons = vhcl.extra_weapons;
@@ -1654,14 +1741,14 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_spawn_count = vhcl.spawn_count > 0 ? vhcl.spawn_count : 1;
         bacto->_spawn_instant = vhcl.spawn_instant ? 1 : 0;
         bacto->_spawn_last_time = 0;
-        bacto->_spawn_at_death_units = vhcl.spawn_at_death_units;
-        bacto->_spawn_at_death_vehicle = vhcl.spawn_at_death_vehicle;
-        bacto->_spawn_at_death_count = vhcl.spawn_at_death_count > 0 ? vhcl.spawn_at_death_count : 1;
+        bacto->_spawn_at_death_units = deathProto.spawn_at_death_units;
+        bacto->_spawn_at_death_vehicle = deathProto.spawn_at_death_vehicle;
+        bacto->_spawn_at_death_count = deathProto.spawn_at_death_count > 0 ? deathProto.spawn_at_death_count : 1;
         if ( bacto->_spawn_at_death_count > 8 )
             bacto->_spawn_at_death_count = 8;
-        bacto->_spawn_at_death_random_pos = vhcl.spawn_at_death_random_pos > 0.0 ? vhcl.spawn_at_death_random_pos : 0.0;
-        bacto->_spawn_at_death_instant = vhcl.spawn_at_death_instant ? 1 : 0;
-        bacto->_spawn_at_death_immunity_time = vhcl.spawn_at_death_immunity_time > 0 ? vhcl.spawn_at_death_immunity_time : 0;
+        bacto->_spawn_at_death_random_pos = deathProto.spawn_at_death_random_pos > 0.0 ? deathProto.spawn_at_death_random_pos : 0.0;
+        bacto->_spawn_at_death_instant = deathProto.spawn_at_death_instant ? 1 : 0;
+        bacto->_spawn_at_death_immunity_time = deathProto.spawn_at_death_immunity_time > 0 ? deathProto.spawn_at_death_immunity_time : 0;
         bacto->_spawn_at_death_done = false;
         bacto->_spawn_at_death_protection_end_time = 0;
         bacto->_spawn_at_death_restore_vulnerable = false;
@@ -1922,6 +2009,7 @@ NC_STACK_ypamissile * NC_STACK_ypaworld::ypaworld_func147(ypaworld_arg146 *arg)
     wobj->SetAoeUnitPushAtDeath(wproto.aoe_unit_push_at_death);
     wobj->SetDirectPush(wproto.push);
     wobj->SetPushAtDeath(wproto.push_at_death);
+    wobj->SetArmorPenetrationTargets(wproto.armor_penetration_targets);
 
     /* Original bug caused by mixing vararg and float values
        that does not passed as 32-bit float value and

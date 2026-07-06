@@ -85,6 +85,10 @@ size_t NC_STACK_ypagun::Init(IDVList &stak)
                 setGUN_roboGun ( val.Get<int32_t>() );
                 break;
 
+            case GUN_ATT_NO_FALL:
+                setGUN_doesNotFall( val.Get<int32_t>() );
+                break;
+
             default:
                 break;
             }
@@ -137,6 +141,10 @@ size_t NC_STACK_ypagun::SetParameters(IDVList &stak)
 
             case GUN_ATT_ROBOGUN:
                 setGUN_roboGun ( val.Get<int32_t>() );
+                break;
+
+            case GUN_ATT_NO_FALL:
+                setGUN_doesNotFall( val.Get<int32_t>() );
                 break;
 
             default:
@@ -208,7 +216,7 @@ void NC_STACK_ypagun::AI_layer3(update_msg *arg)
     case BACT_STATUS_NORMAL:
     case BACT_STATUS_IDLE:
     {
-        if ( !(_gunFlags & GUN_FLAGS_ROBO) )
+        if ( !(_gunFlags & (GUN_FLAGS_ROBO | GUN_FLAGS_NO_FALL)) )
         {
             if ( _clock - _gunDownTime > 800 )
             {
@@ -428,7 +436,7 @@ void NC_STACK_ypagun::User_layer(update_msg *arg)
 
     if ( _status == BACT_STATUS_NORMAL )
     {
-        if ( _gunFlags & GUN_FLAGS_ROBO || CheckPedestal() )
+        if ( _gunFlags & (GUN_FLAGS_ROBO | GUN_FLAGS_NO_FALL) || CheckPedestal() )
         {
             if ( _viewer_position.length() >= 3.0 )
             {
@@ -886,6 +894,14 @@ void NC_STACK_ypagun::setGUN_roboGun(int rbo)
         _gunFlags |= GUN_FLAGS_ROBO;
     else
         _gunFlags &= ~GUN_FLAGS_ROBO;
+}
+
+void NC_STACK_ypagun::setGUN_doesNotFall(int noFall)
+{
+    if ( noFall )
+        _gunFlags |= GUN_FLAGS_NO_FALL;
+    else
+        _gunFlags &= ~GUN_FLAGS_NO_FALL;
 }
 
 

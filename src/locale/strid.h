@@ -58,6 +58,7 @@ enum CMN
     CMN_WAVENAME    = 19,
     CMN_HELP        = 20,
     CMN_GAMENAME    = 21,
+    CMN_QUITGAME    = 22,
     
     CMN_MAX
 };
@@ -737,6 +738,7 @@ enum ADV
     ADV_RLYLOAD = 82,
     ADV_RLYRESTART = 83,
     ADV_RLYHELP = 86,
+    ADV_RLYQUITGAME = 87,
     ADV_MAX
 };
 

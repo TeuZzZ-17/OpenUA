@@ -74,6 +74,9 @@ int ProcessGameplayFrame()
 
     switch( levelInfo.State )
     {
+    case TLevelInfo::STATE_QUIT_GAME:
+        return 0;
+
     case TLevelInfo::STATE_COMPLETED:
     case TLevelInfo::STATE_ABORTED:
     {

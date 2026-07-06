@@ -33,6 +33,7 @@ std::array<std::string, CMN_MAX> DefaultStrings::Commons = Common::ArrayInit<std
     {CMN_WAVENAME, "19 == STOUDSON WAVE"},
     {CMN_HELP, "HELP"},
     {CMN_GAMENAME, "21 == YOUR PERSONAL AMOK"},
+    {CMN_QUITGAME, "Quit Game"},
 });
 
 std::array<std::string, HUDSTR_MAX> DefaultStrings::HudStrings = Common::ArrayInit<std::string, HUDSTR_MAX>(
@@ -659,7 +660,8 @@ std::array<std::string, ADV_MAX> DefaultStrings::Advanced = Common::ArrayInit<st
     {ADV_RLYSAVE, "REALLY SAVE GAME ?"},
     {ADV_RLYLOAD, "REALLY LOAD GAME ?"},
     {ADV_RLYRESTART, "REALLY RESTART MISSION ?"},
-    {ADV_RLYHELP, "REALLY LAUNCH ONLINE HELP ?"}
+    {ADV_RLYHELP, "REALLY LAUNCH ONLINE HELP ?"},
+    {ADV_RLYQUITGAME, "Do you really want to quit the game?"}
 });
 
 }

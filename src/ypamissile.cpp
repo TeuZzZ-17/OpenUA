@@ -210,8 +210,11 @@ size_t NC_STACK_ypamissile::Init(IDVList &stak)
     _mislLifeTime = 5000;
     _mislDelayTime = 0;
     _mislType = MISL_BOMB;
+    _mislAoeUnitPush = 0;
     _mislAoeUnitPushAtDeath = 0;
     _mislPushAtDeath = 0;
+    _mislArmorPenetrationRemaining = 0;
+    _mislArmorPenetratedGids.clear();
     _mislClusterAge = 0;
     _mislClusterGeneration = 0;
     _mislClusterDone = false;
@@ -925,6 +928,9 @@ bool NC_STACK_ypamissile::TubeCollisionTest(bool applyDirectDamage, NC_STACK_ypa
                 if ( bct == this || bct == _mislEmitter || bct->_status == BACT_STATUS_DEAD )
                     continue;
 
+                if ( IsArmorPenetratedTarget(bct) )
+                    continue;
+
                 if ( bct->_bact_type == BACT_TYPES_MISSLE )
                 {
                     NC_STACK_ypamissile *otherMissile = dynamic_cast<NC_STACK_ypamissile *>( bct );
@@ -1028,6 +1034,15 @@ bool NC_STACK_ypamissile::TubeCollisionTest(bool applyDirectDamage, NC_STACK_ypa
                                     Will hit only when distance ~ wpn_radius */
                                 if ( sqrt( POW2(dist_vect_len) + POW2(vp_len) ) > fabs(to_enemy_len - wpn_radius) )
                                 {
+                                    if ( applyDirectDamage && ShouldArmorPenetrateTarget(bct) )
+                                    {
+                                        ApplyDirectHitToBact(bct);
+                                        RememberArmorPenetratedTarget(bct);
+                                        _mislArmorPenetrationRemaining--;
+                                        ApplyArmorPenetrationImpactFX();
+                                        break;
+                                    }
+
                                     collisionSumRadius += radius;
                                     collisionCount++;
                                     collisionSumPosition += bct->_position;
@@ -1172,6 +1187,37 @@ void NC_STACK_ypamissile::ApplyDirectHitToBact(NC_STACK_ypabact *bct)
         bct->AddAoePush(pushDir, pushStrength);
 
     TrySpawnChainProjectile(bct, appliedDamage);
+}
+
+bool NC_STACK_ypamissile::IsArmorPenetratedTarget(NC_STACK_ypabact *bct) const
+{
+    if ( !bct )
+        return false;
+
+    return std::find(_mislArmorPenetratedGids.begin(), _mislArmorPenetratedGids.end(), bct->_gid) != _mislArmorPenetratedGids.end();
+}
+
+bool NC_STACK_ypamissile::ShouldArmorPenetrateTarget(NC_STACK_ypabact *bct) const
+{
+    return _mislArmorPenetrationRemaining > 0 &&
+           bct &&
+           bct->_bact_type != BACT_TYPES_MISSLE &&
+           !IsArmorPenetratedTarget(bct);
+}
+
+void NC_STACK_ypamissile::RememberArmorPenetratedTarget(NC_STACK_ypabact *bct)
+{
+    if ( !bct || IsArmorPenetratedTarget(bct) )
+        return;
+
+    _mislArmorPenetratedGids.push_back(bct->_gid);
+}
+
+void NC_STACK_ypamissile::ApplyArmorPenetrationImpactFX()
+{
+    SFXEngine::SFXe.startSound(&_soundcarrier, World::TWeapProto::SND_HIT);
+    StartChainFXByTrigger(World::TChainFXConfig::TRIGGER_IMPACT_WORLD);
+    StartDestFXByType(World::DestFX::FX_MEGADETH);
 }
 
 bool NC_STACK_ypamissile::ApplyDirectPushToBact(NC_STACK_ypabact *bct, vec3d *appliedDir, float *appliedStrength, bool enqueue)
@@ -1466,6 +1512,12 @@ void NC_STACK_ypamissile::DetonateWeaponCollision(NC_STACK_ypamissile *other)
 
 bool NC_STACK_ypamissile::IsDirectHitUnit(NC_STACK_ypabact *bct) const
 {
+    if ( !bct )
+        return false;
+
+    if ( IsArmorPenetratedTarget(bct) )
+        return true;
+
     return std::find(_mislDirectHitUnits.begin(), _mislDirectHitUnits.end(), bct) != _mislDirectHitUnits.end();
 }
 
@@ -1687,6 +1739,9 @@ void NC_STACK_ypamissile::ApplyAreaDamage()
                 const char *pushSkip = (doAoePush || doAoePushAtDeath) ? GetAreaPushSkipReason(bct, allowFriendly) : "push_disabled";
 
                 if ( dmgSkip && pushSkip )
+                    continue;
+
+                if ( IsArmorPenetratedTarget(bct) )
                     continue;
 
                 vec3d delta = bct->_position - _position;
@@ -2489,9 +2544,12 @@ void NC_STACK_ypamissile::Renew()
     _mislFlags  = 0;
     _mislDelayTime = 0;
     _mislAoeFalloff = 0;
+    _mislAoeUnitPush = 0;
     _mislAoeUnitPushAtDeath = 0;
     _mislDirectPush = 0;
     _mislPushAtDeath = 0;
+    _mislArmorPenetrationRemaining = 0;
+    _mislArmorPenetratedGids.clear();
     _mislClusterAge = 0;
     _mislClusterGeneration = 0;
     _mislClusterDone = false;
@@ -2910,6 +2968,12 @@ void NC_STACK_ypamissile::SetDirectPush(int push)
 void NC_STACK_ypamissile::SetPushAtDeath(int push)
 {
     _mislPushAtDeath = std::max(push, 0);
+}
+
+void NC_STACK_ypamissile::SetArmorPenetrationTargets(int targets)
+{
+    _mislArmorPenetrationRemaining = std::max(targets, 0);
+    _mislArmorPenetratedGids.clear();
 }
 
 void NC_STACK_ypamissile::SetRadiusHeli(float rad)

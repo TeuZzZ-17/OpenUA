@@ -217,6 +217,8 @@ public:
     static Common::Ini::Key NetVersionCheck;
     
     static Common::Ini::Key GameDebug;
+    static Common::Ini::Key GameNewDebug;
+    static bool IsGameNewDebugEnabled();
     
     static Common::Ini::Key GameNewAI;
     static Common::Ini::Key GameTimeLine;

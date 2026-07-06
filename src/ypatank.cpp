@@ -3,7 +3,6 @@
 #include <stddef.h>
 #include <string.h>
 #include <math.h>
-#include <set>
 #include "yw.h"
 #include "ypatank.h"
 #include "yparobo.h"
@@ -37,28 +36,6 @@ static bool ypatank_IsPlayerRecoilRecoveryActive(const NC_STACK_ypatank *tank)
 }
 
 static const float YPATANK_PLAYER_RECOIL_FORWARD_SCALE = 0.20f;
-static const bool YPATANK_DEBUG_AI_JUMP_LOG = true;
-static const int YPATANK_DEBUG_AI_JUMP_LOG_MAX = 1200;
-static int ypatank_debug_ai_jump_log_count = 0;
-static int ypatank_debug_ai_marker_log_count = 0;
-static std::set<uint32_t> ypatank_debug_ai_marker_gids;
-
-static float ypatank_DebugXZDelta(const vec3d &a, const vec3d &b)
-{
-    return (a.XZ() - b.XZ()).length();
-}
-
-static bool ypatank_DebugIsFocusUnit(const NC_STACK_ypatank *tank)
-{
-    return tank && (tank->_vehicleID == 22 || tank->_weapon == 22);
-}
-
-static bool ypatank_DebugCanLog(const NC_STACK_ypatank *tank)
-{
-    return YPATANK_DEBUG_AI_JUMP_LOG &&
-           ypatank_debug_ai_jump_log_count < YPATANK_DEBUG_AI_JUMP_LOG_MAX &&
-           ypatank_DebugIsFocusUnit(tank);
-}
 
 size_t NC_STACK_ypatank::Init(IDVList &stak)
 {
@@ -124,19 +101,6 @@ size_t NC_STACK_ypatank::SetParameters(IDVList &stak)
 void NC_STACK_ypatank::AI_layer3(update_msg *arg)
 {
     float v244 = arg->frameTime / 1000.0;
-    vec3d dbgFrameStartPos = _position;
-    int dbgFrameStartStatus = _status;
-    int dbgFrameStartFlags = _status_flg;
-
-    if ( YPATANK_DEBUG_AI_JUMP_LOG && ypatank_debug_ai_marker_gids.insert(_gid).second &&
-         (ypatank_DebugIsFocusUnit(this) || ypatank_debug_ai_marker_log_count < 80) )
-    {
-        ypatank_debug_ai_marker_log_count++;
-        ypa_log_out("[tank-ai-debug] diagnostics enabled gid=%u vehicle=%u weapon=%d focus=%d status=%d flags=%d oflags=%u pos=%.2f,%.2f,%.2f\n",
-                    (unsigned)_gid, (unsigned)_vehicleID, _weapon, ypatank_DebugIsFocusUnit(this) ? 1 : 0,
-                    _status, _status_flg, (unsigned)_oflags,
-                    _position.x, _position.y, _position.z);
-    }
 
     int v194 = getBACT_bactCollisions();
 
@@ -350,12 +314,9 @@ void NC_STACK_ypatank::AI_layer3(update_msg *arg)
                 {
                     _old_pos = _position;
 
-                    // OpenUA mechanical recoil: AI tanks get pushed backwards by
-                    // a simulated recoil offset. Without a short recovery pause
-                    // the AI instantly accelerates forward to reacquire its old
-                    // attack position, producing an ugly spring/flipper motion.
-                    // Suppress only forward thrust; rotation, targeting and the
-                    // recoil push itself remain active.
+                    // OpenUA recoil: AI tanks use a render-only recoil offset.
+                    // Briefly suppress forward recovery so the controller does
+                    // not visually cancel the kick on the next frame.
                     if ( _thraction > 0.0f )
                         _thraction = 0.0f;
 
@@ -385,25 +346,11 @@ void NC_STACK_ypatank::AI_layer3(update_msg *arg)
                 if ( allowRecoilRecoveryMove &&
                      (seekAndExplodeRamming || !(_status_flg & BACT_STFLAG_ATTACK) || !_tankExpectTgt || _tankCollisionFlag) )
                 {
-                    vec3d dbgBeforeMove = _position;
                     move_msg arg74;
                     arg74.flag = 0;
                     arg74.field_0 = v244;
 
                     Move(&arg74);
-
-                    float dbgMoveDelta = ypatank_DebugXZDelta(_position, dbgBeforeMove);
-                    if ( ypatank_DebugCanLog(this) )
-                    {
-                        ypatank_debug_ai_jump_log_count++;
-                        ypa_log_out("[tank-ai-debug] clk=%d gid=%u event=ai_move_attack delta=%.2f seek=%d expect=%d coll=%u recoil=%d pos=%.2f,%.2f,%.2f old=%.2f,%.2f,%.2f new=%.2f,%.2f,%.2f th=%.2f fly=%.2f prim=%d sec=%d weapon=%d\n",
-                                    _clock, (unsigned)_gid, dbgMoveDelta, seekAndExplodeRamming ? 1 : 0, _tankExpectTgt ? 1 : 0,
-                                    (unsigned)_tankCollisionFlag, recoilRecovery ? 1 : 0,
-                                    dbgBeforeMove.x, dbgBeforeMove.y, dbgBeforeMove.z,
-                                    _old_pos.x, _old_pos.y, _old_pos.z,
-                                    _position.x, _position.y, _position.z,
-                                    _thraction, _fly_dir_length, _primTtype, _secndTtype, _weapon);
-                    }
                 }
 
                 if ( _tankCollisionWay > 0.0 )
@@ -458,15 +405,6 @@ void NC_STACK_ypatank::AI_layer3(update_msg *arg)
 
                     if ( arg136.tVal * v224 <= (_radius + 50.0) )
                     {
-                        if ( ypatank_DebugCanLog(this) )
-                        {
-                            ypatank_debug_ai_jump_log_count++;
-                            ypa_log_out("[tank-ai-debug] clk=%d gid=%u event=rollback_wall delta=%.2f tval=%.3f v224=%.2f radius=%.2f pos=%.2f,%.2f,%.2f old=%.2f,%.2f,%.2f coll=%u th=%.2f fly=%.2f prim=%d sec=%d weapon=%d\n",
-                                        _clock, (unsigned)_gid, ypatank_DebugXZDelta(_position, _old_pos), arg136.tVal, v224, _radius,
-                                        _position.x, _position.y, _position.z,
-                                        _old_pos.x, _old_pos.y, _old_pos.z,
-                                        (unsigned)_tankCollisionFlag, _thraction, _fly_dir_length, _primTtype, _secndTtype, _weapon);
-                        }
                         _status_flg &= ~BACT_STFLAG_MOVE;
                         _position = _old_pos;
 
@@ -620,15 +558,6 @@ void NC_STACK_ypatank::AI_layer3(update_msg *arg)
                     }
                 }
 
-                if ( ypatank_DebugCanLog(this) )
-                {
-                    ypatank_debug_ai_jump_log_count++;
-                    ypa_log_out("[tank-ai-debug] clk=%d gid=%u event=rollback_align delta=%.2f align=%d ray=%d pos=%.2f,%.2f,%.2f old=%.2f,%.2f,%.2f coll=%u th=%.2f fly=%.2f prim=%d sec=%d weapon=%d\n",
-                                _clock, (unsigned)_gid, ypatank_DebugXZDelta(_position, _old_pos), alignRes, arg136.isect ? 1 : 0,
-                                _position.x, _position.y, _position.z,
-                                _old_pos.x, _old_pos.y, _old_pos.z,
-                                (unsigned)_tankCollisionFlag, _thraction, _fly_dir_length, _primTtype, _secndTtype, _weapon);
-                }
                 _position = _old_pos;
 
                 if ( (arg136.isect && arg136.skel->polygons[ arg136.polyID ].B < 0.6) || alignRes == ALIGN_NORMAL )
@@ -885,20 +814,6 @@ void NC_STACK_ypatank::AI_layer3(update_msg *arg)
     case BACT_STATUS_BEAM:
         BeamingTimeUpdate(arg);
         break;
-    }
-
-    float dbgFrameDelta = ypatank_DebugXZDelta(_position, dbgFrameStartPos);
-    if ( ypatank_DebugCanLog(this) && dbgFrameDelta >= 2.0f )
-    {
-        ypatank_debug_ai_jump_log_count++;
-        ypa_log_out("[tank-ai-debug] clk=%d gid=%u event=frame_jump delta=%.2f vehicle=%u weapon=%d status=%d->%d flags=%d->%d oflags=%u pos0=%.2f,%.2f,%.2f pos1=%.2f,%.2f,%.2f old=%.2f,%.2f,%.2f target=%.2f,%.2f,%.2f prim=%d sec=%d coll=%u th=%.2f fly=%.2f\n",
-                    _clock, (unsigned)_gid, dbgFrameDelta, (unsigned)_vehicleID, _weapon,
-                    dbgFrameStartStatus, _status, dbgFrameStartFlags, _status_flg, (unsigned)_oflags,
-                    dbgFrameStartPos.x, dbgFrameStartPos.y, dbgFrameStartPos.z,
-                    _position.x, _position.y, _position.z,
-                    _old_pos.x, _old_pos.y, _old_pos.z,
-                    _target_vec.x, _target_vec.y, _target_vec.z,
-                    _primTtype, _secndTtype, (unsigned)_tankCollisionFlag, _thraction, _fly_dir_length);
     }
 }
 
@@ -1686,17 +1601,6 @@ size_t NC_STACK_ypatank::CollisionWithBact(int arg)
         {
             if ( v106 )
             {
-                if ( ypatank_DebugCanLog(this) )
-                {
-                    ypatank_debug_ai_jump_log_count++;
-                    ypa_log_out("[tank-ai-debug] clk=%d gid=%u event=collision_bact delta=%.2f other=%u otherType=%d dist=%.2f v108=%d v105=%d coll=%u pos=%.2f,%.2f,%.2f old=%.2f,%.2f,%.2f th=%.2f fly=%.2f prim=%d sec=%d weapon=%d\n",
-                                _clock, (unsigned)_gid, ypatank_DebugXZDelta(_position, _old_pos),
-                                v117 ? (unsigned)v117->_gid : 0, v117 ? v117->_bact_type : -1, v109, v108, v105,
-                                (unsigned)_tankCollisionFlag,
-                                _position.x, _position.y, _position.z,
-                                _old_pos.x, _old_pos.y, _old_pos.z,
-                                _thraction, _fly_dir_length, _primTtype, _secndTtype, _weapon);
-                }
                 _fly_dir_length = 0;
                 _thraction = 0;
 
@@ -1846,17 +1750,6 @@ size_t NC_STACK_ypatank::CheckFireAI(bact_arg101 *arg)
                 }
             }
         }
-    }
-
-    if ( !_tankExpectTgt && ypatank_DebugCanLog(this) )
-    {
-        ypatank_debug_ai_jump_log_count++;
-        ypa_log_out("[tank-ai-debug] clk=%d gid=%u event=expect_false targetMode=%d ray=%d rayPos=%.2f,%.2f,%.2f pos=%.2f,%.2f,%.2f target=%.2f,%.2f,%.2f prim=%d sec=%d weapon=%d\n",
-                    _clock, (unsigned)_gid, arg->unkn, arg149.isect ? 1 : 0,
-                    arg149.isectPos.x, arg149.isectPos.y, arg149.isectPos.z,
-                    _position.x, _position.y, _position.z,
-                    arg->pos.x, arg->pos.y, arg->pos.z,
-                    _primTtype, _secndTtype, _weapon);
     }
 
     World::TWeapProto *v22 = NULL;

@@ -467,10 +467,9 @@ public:
     void UpdateDamageFX(update_msg *arg);
     void UpdateDecorationFX(update_msg *arg);
     void AddAoePush(const vec3d &dir, float distance); // queue aoe_unit_push knockback
-    void ApplyWeaponRecoil(const vec3d &dir, float recoil, float shotSpeed);
-    void UpdateWeaponRecoilPush(update_msg *arg);      // integrate fake weapon recoil push
+    void ApplyWeaponRecoil(const vec3d &dir, float recoil);
+    void UpdateWeaponRecoilPush(update_msg *arg);      // integrate/decay weapon recoil push or visual offset
     void UpdateAoePush(update_msg *arg);               // integrate/decay it per frame
-    void FreezeStaticUnit();
     void ApplyWeaponDebuff(World::TWeaponDebuffConfig &debuff, NC_STACK_ypabact *source);
     void UpdateActiveDebuff(update_msg *arg);
     void ClearActiveDebuff();
@@ -700,6 +699,7 @@ public:
     int _bact_type;
     uint32_t _gid = 0; // global bact id
     uint8_t _vehicleID; // vehicle id, from scr files
+    uint8_t _mimic_disguise_vehicleID; // OpenUA: copied proto for model = mimic runtime behavior
     uint8_t _bflags;
     uint32_t _commandID = 0;
     NC_STACK_yparobo *_host_station; // parent robo?
@@ -778,7 +778,6 @@ public:
     // OpenUA aoe_unit_push: residual knockback velocity, integrated and decayed
     // every frame by UpdateAoePush() so shockwaves shove units smoothly.
     vec3d _aoePushVel = vec3d(0.0, 0.0, 0.0);
-    bool _static = false;
 
     vec3d _position; //Current pos
     vec3d _old_pos; //Prev pos

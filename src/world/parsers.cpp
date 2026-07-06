@@ -1087,6 +1087,20 @@ static int ParseWeaponChainFXBlock(ScriptParser::Parser &parser, TWeapProto *wpn
                              true);
 }
 
+static bool IsMimicVehicleShellParam(const std::string &p1)
+{
+    return !StriCmp(p1, "model") ||
+           !StriCmp(p1, "name") ||
+           !StriCmp(p1, "type_icon") ||
+           !StriCmp(p1, "mimic_vehicle_list") ||
+           !StriCmp(p1, "spawn_at_death_units") ||
+           !StriCmp(p1, "spawn_at_death_vehicle") ||
+           !StriCmp(p1, "spawn_at_death_count") ||
+           !StriCmp(p1, "spawn_at_death_random_pos") ||
+           !StriCmp(p1, "spawn_at_death_instant") ||
+           !StriCmp(p1, "spawn_at_death_immunity_time");
+}
+
 int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1, const std::string &p2)
 {
     TRoboProto *robo = _vhcl->RoboProto;
@@ -1141,6 +1155,9 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
 
     if ( !StriCmp(p1, "model") )
     {
+        _vhcl->is_dummy = 0;
+        _vhcl->is_mimic = 0;
+
         if ( !StriCmp(p2, "heli") )
         {
             _vhcl->model_id = BACT_TYPES_BACT;
@@ -1196,10 +1213,22 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
             _vhcl->model_id = BACT_TYPES_GUN;
             _vhcl->is_dummy = 1;
         }
+        else if ( !StriCmp(p2, "mimic") )
+        {
+            // OpenUA custom: runtime shell that copies one listed vehicle proto
+            // when spawned, then keeps this proto's spawn_at_death_* reveal data.
+            _vhcl->model_id = BACT_TYPES_TANK;
+            _vhcl->is_mimic = 1;
+            _vhcl->mimic_vehicle_list.clear();
+        }
         else
         {
             return ScriptParser::RESULT_BAD_DATA;
         }
+    }
+    else if ( _vhcl->is_mimic && !IsMimicVehicleShellParam(p1) )
+    {
+        return ScriptParser::RESULT_OK;
     }
     else if ( !StriCmp(p1, "enable") )
     {
@@ -1282,11 +1311,6 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     {
         _vhcl->push_resistance = Clamp01(parser.stof(p2, 0));
         _vhcl->has_push_resistance = true;
-    }
-    else if ( !StriCmp(p1, "static") )
-    {
-        if (IsModsAllow(true))
-            _vhcl->static_unit = StrGetBool(p2);
     }
     else if ( !StriCmp(p1, "add_energy") )
     {
@@ -1527,6 +1551,19 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     {
         int time = parser.stol(p2, NULL, 0);
         _vhcl->spawn_at_death_immunity_time = time > 0 ? time : 0;
+    }
+    else if ( !StriCmp(p1, "mimic_vehicle_list") )
+    {
+        _vhcl->mimic_vehicle_list.clear();
+
+        Stok stok(p2, "_ ");
+        std::string val;
+        while ( stok.GetNext(&val) )
+        {
+            int vehicleId = parser.stol(val, NULL, 0);
+            if ( vehicleId > 0 && (size_t)vehicleId < _o._vhclProtos.size() )
+                _vhcl->mimic_vehicle_list.push_back((int16_t)vehicleId);
+        }
     }
     else if ( !StriCmp(p1, "death_damage") )
     {
@@ -1906,6 +1943,11 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
 
         if ( gun_type )
             _vhcl->initParams.Add(NC_STACK_ypagun::GUN_ATT_FIRETYPE, (int32_t)gun_type);
+    }
+    else if ( !StriCmp(p1, "gun_does_not_fall") )
+    {
+        if ( _vhcl->model_id == BACT_TYPES_GUN )
+            _vhcl->initParams.Add(NC_STACK_ypagun::GUN_ATT_NO_FALL, (int32_t)1);
     }
     else if ( !StriCmp(p1, "kamikaze") )
     {
@@ -2459,7 +2501,6 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->kill_after_shot = 0;
         _vhcl->push_resistance = 0.0;
         _vhcl->has_push_resistance = false;
-        _vhcl->static_unit = false;
         _vhcl->mass = 400.0;
         _vhcl->force = 5000.0;
         _vhcl->airconst = 80.0;
@@ -2493,6 +2534,8 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         }
 
         _vhcl->initParams.clear();
+        _vhcl->is_mimic = 0;
+        _vhcl->mimic_vehicle_list.clear();
         return true;
     }
     else if ( !StriCmp(word, "modify_vehicle") )
@@ -2545,6 +2588,7 @@ bool WeaponProtoParser::IsScope(ScriptParser::Parser &parser, const std::string 
         _wpn->aoe_unit_push_at_death = 0;
         _wpn->push = 0;
         _wpn->push_at_death = 0;
+        _wpn->armor_penetration_targets = 0;
         _wpn->recoil = 0.0;
         _wpn->mass = 50.0;
         _wpn->force = 5000.0;
@@ -2721,6 +2765,10 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     else if ( !StriCmp(p1, "push_at_death") )
     {
         _wpn->push_at_death = std::max(parser.stol(p2, NULL, 0), 0L);
+    }
+    else if ( !StriCmp(p1, "armor_penetration_targets") )
+    {
+        _wpn->armor_penetration_targets = std::max(parser.stol(p2, NULL, 0), 0L);
     }
     else if ( !StriCmp(p1, "recoil") )
     {

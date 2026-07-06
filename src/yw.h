@@ -1355,6 +1355,7 @@ struct TLevelInfo
         STATE_LOAD       = 7,
         STATE_MENU       = 8,
         STATE_DEBRIEFING = 9,
+        STATE_QUIT_GAME  = 10,
     };
     
     std::string MapName;
@@ -2658,6 +2659,7 @@ public:
     
     bool _gamePaused = false;
     uint32_t _gamePausedTimeStamp = 0;
+    bool _debugGameplayFrozen = false;
     
     int32_t _timeStamp = 0;
     int32_t _frameTime = 0;

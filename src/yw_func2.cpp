@@ -2732,6 +2732,9 @@ static int db_vehicle_flyer_type(const World::TVhclProto &p)
 
 static std::string db_vehicle_model_display_name(const World::TVhclProto &p)
 {
+    if ( p.is_mimic )
+        return "mimic";
+
     if ( p.is_dummy )
         return "dummy";
 

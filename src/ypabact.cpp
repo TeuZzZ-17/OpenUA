@@ -561,12 +561,7 @@ static bool ypabact_EnsureDamagedShakeCarrier(NC_STACK_ypabact *bact)
     if ( !bact || !bact->getBACT_pWorld() )
         return false;
 
-    std::vector<World::TVhclProto> &protos = bact->getBACT_pWorld()->GetVhclProtos();
-
-    if ( bact->_vehicleID >= protos.size() )
-        return false;
-
-    World::TDamagedFXConfig &damagedFX = protos[bact->_vehicleID].damaged_fx;
+    World::TDamagedFXConfig &damagedFX = bact->_damaged_fx;
     if ( damagedFX.shake.slot == 0 )
         return false;
 
@@ -840,6 +835,22 @@ static bool ypabact_IsDeathDamageTarget(NC_STACK_ypabact *source, NC_STACK_ypaba
            !(target->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2 | BACT_STFLAG_NORENDER));
 }
 
+static int ypabact_CalcShieldedDeathDamage(NC_STACK_ypabact *target, int rawDamage)
+{
+    if ( !target || rawDamage <= 0 )
+        return 0;
+
+    float shield = target->GetEffectiveShield();
+    if ( shield < 0.0f )
+        shield = 0.0f;
+
+    if ( shield >= 100.0f )
+        return 0;
+
+    int damage = (int)ceil((float)rawDamage * (100.0f - shield) / 100.0f);
+    return damage > 0 ? damage : 0;
+}
+
 static void ypabact_ApplyDeathDamage(NC_STACK_ypabact *unit, bool megadethPhase)
 {
     if ( !unit || !unit->getBACT_pWorld() || unit->_death_damage <= 0 || unit->_radius <= 0.0 )
@@ -884,8 +895,12 @@ static void ypabact_ApplyDeathDamage(NC_STACK_ypabact *unit, bool megadethPhase)
         if ( !ypabact_IsDeathDamageTarget(unit, target) )
             continue;
 
+        int shieldedDamage = ypabact_CalcShieldedDeathDamage(target, unit->_death_damage);
+        if ( shieldedDamage <= 0 )
+            continue;
+
         bact_arg84 damage;
-        damage.energy = -unit->_death_damage;
+        damage.energy = -shieldedDamage;
         damage.unit = unit;
         target->ModifyEnergy(&damage);
     }
@@ -1242,6 +1257,7 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _bact_type = 0;
     _gid = 0;
     _vehicleID = 0;
+    _mimic_disguise_vehicleID = 0;
     _bflags = 0;
     _commandID = 0;
     _host_station = NULL;
@@ -1301,7 +1317,6 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _weaponRecoilAiRecoveryEndTime = 0;
     _weaponRecoilPlayerRecoveryEndTime = 0;
     _weaponRecoilPushVel = vec3d(0.0, 0.0, 0.0);
-    _static = false;
     _height = 0.0;
     _height_max_user = 0.0;
     _vp_scale = vec3d(1.0, 1.0, 1.0);
@@ -1506,7 +1521,6 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _weaponRecoilAiRecoveryEndTime = 0;
     _weaponRecoilPlayerRecoveryEndTime = 0;
     _weaponRecoilPushVel = vec3d(0.0, 0.0, 0.0);
-    _static = false;
     _target_vec = vec3d(0.0, 0.0, 0.0);
     
     //_kidRef.bact = this;
@@ -2528,19 +2542,12 @@ void NC_STACK_ypabact::Update(update_msg *arg)
     UpdateCarrierSpawn(arg);
     UpdateProximityDefense(arg);
     UpdateMortar(arg);
-    if ( _static )
-    {
-        FreezeStaticUnit();
-    }
-    else
-    {
-        AI_layer1(arg);
-        UpdateLaser(arg); // OpenUA custom: process this frame's laser fire request (must run after AI_layer1 firing)
-        UpdateVerticalLaser(arg);
-        UpdateAoePush(arg);
-        UpdateWeaponRecoilPush(arg);
-        UpdateSeekAndExplode(arg);
-    }
+    AI_layer1(arg);
+    UpdateLaser(arg); // OpenUA custom: process this frame's laser fire request (must run after AI_layer1 firing)
+    UpdateVerticalLaser(arg);
+    UpdateAoePush(arg);
+    UpdateWeaponRecoilPush(arg);
+    UpdateSeekAndExplode(arg);
     UpdateUnitGuns(arg);
     UpdateUnitDummies(arg);
 
@@ -3138,10 +3145,8 @@ void NC_STACK_ypabact::AddAoePush(const vec3d &dir, float distance)
     _aoePushVel += (pushDir / dirLen) * (distance / AOE_PUSH_TAU);
 }
 
-void NC_STACK_ypabact::ApplyWeaponRecoil(const vec3d &dir, float recoil, float shotSpeed)
+void NC_STACK_ypabact::ApplyWeaponRecoil(const vec3d &dir, float recoil)
 {
-    (void)shotSpeed;
-
     recoil = ypabact_ClampWeaponRecoil(recoil);
     if ( _bact_type == BACT_TYPES_GUN || recoil <= 0.0f )
         return;
@@ -3153,11 +3158,9 @@ void NC_STACK_ypabact::ApplyWeaponRecoil(const vec3d &dir, float recoil, float s
     {
         ypabact_StartTankWeaponRecoilVisual(this, recoil);
 
-        // The fake recoil push moves the tank directly backwards. Without a
-        // short recovery window, AI tanks immediately drive back to their attack
-        // spot and player tanks that are holding forward snap ahead, producing
-        // a visible spring/flipper effect. Keep the recoil itself unchanged and
-        // only damp forward recovery briefly.
+        // AI tanks use render-only recoil translation below, while player tanks
+        // still receive physical recoil. Keep a short forward recovery damp so
+        // controllers do not immediately cancel the visible kick.
         if ( !(_oflags & BACT_OFLAG_VIEWER) && !(_oflags & BACT_OFLAG_USERINPT) )
             _weaponRecoilAiRecoveryEndTime = _clock + WEAPON_RECOIL_AI_TANK_RECOVERY_MS;
         else
@@ -3202,23 +3205,6 @@ void NC_STACK_ypabact::UpdateWeaponRecoilPush(update_msg *arg)
     }
 
     ypabact_UpdateFakePushVel(this, &_weaponRecoilPushVel, arg, WEAPON_RECOIL_TAU);
-}
-
-void NC_STACK_ypabact::FreezeStaticUnit()
-{
-    _old_pos = _position;
-    _target_vec = vec3d(0.0, 0.0, 0.0);
-    _thraction = 0.0;
-    _fly_dir_length = 0.0;
-    _weaponRecoilVisualEndTime = 0;
-    _weaponRecoilVisualDuration = 0;
-    _weaponRecoilVisualPitch = 0.0f;
-    _weaponRecoilVisualOffset = vec3d(0.0, 0.0, 0.0);
-    _weaponRecoilAiRecoveryEndTime = 0;
-    _weaponRecoilPlayerRecoveryEndTime = 0;
-    _weaponRecoilPushVel = vec3d(0.0, 0.0, 0.0);
-    _aoePushVel = vec3d(0.0, 0.0, 0.0);
-    _status_flg &= ~(BACT_STFLAG_MOVE | BACT_STFLAG_DODGE_LEFT | BACT_STFLAG_DODGE_RIGHT);
 }
 
 void NC_STACK_ypabact::Render(baseRender_msg *arg)
@@ -9921,7 +9907,7 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
         if ( arg->flags & BACT_ARG79_FLAG_RECOIL_BRAKE_HELD )
             recoilAmount *= 0.2f;
 
-        ApplyWeaponRecoil(recoilDirSum, recoilAmount, wproto.start_speed);
+        ApplyWeaponRecoil(recoilDirSum, recoilAmount);
     }
 
     if ( _kill_after_shot )
@@ -10911,7 +10897,8 @@ NC_STACK_ypabact * NC_STACK_ypabact::GetEnemyCandidateInSector(const cellArea &c
 {
     NC_STACK_ypabact *lastSelectedUnit = NULL;
 
-    const World::TVhclProto &proto = _world->GetVhclProtos().at( _vehicleID );
+    uint8_t protoId = _mimic_disguise_vehicleID ? _mimic_disguise_vehicleID : _vehicleID;
+    const World::TVhclProto &proto = _world->GetVhclProtos().at( protoId );
 
     for( NC_STACK_ypabact* cel_unit : cell.unitsList )
     {
@@ -11434,6 +11421,7 @@ void NC_STACK_ypabact::Renew()
     _wrldSize = World::SectorIDToPos2( _wrldSectors );
 
     _commandID = 0;
+    _mimic_disguise_vehicleID = 0;
 //    bact->field_3D1 = 1;
     _killer = NULL;
     _brkfr_time = 0;
@@ -11539,6 +11527,14 @@ void NC_STACK_ypabact::Renew()
     _scale_delay = 0;
     _beam_time = 0;
     _energy_time = 0;
+    _weaponRecoilVisualEndTime = 0;
+    _weaponRecoilVisualDuration = 0;
+    _weaponRecoilVisualPitch = 0.0f;
+    _weaponRecoilVisualOffset = vec3d(0.0, 0.0, 0.0);
+    _weaponRecoilAiRecoveryEndTime = 0;
+    _weaponRecoilPlayerRecoveryEndTime = 0;
+    _weaponRecoilPushVel = vec3d(0.0, 0.0, 0.0);
+    _aoePushVel = vec3d(0.0, 0.0, 0.0);
     ypabact_ResetDamagedFX(this);
     ClearActiveDebuff();
     _fe_time = -45000;

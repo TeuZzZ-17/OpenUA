@@ -102,6 +102,11 @@ public:
     
     static std::string Advanced(uint32_t id)
     {
+        // OpenUA-only confirmation string: old language.lng files can already
+        // contain unrelated text at this index, so keep the source default.
+        if ( id == ADV_RLYQUITGAME )
+            return DefaultStrings::Advanced[ id ];
+
         return Get(LBL_ADVANCED + id, DefaultStrings::Advanced[ id ]);
     }
     

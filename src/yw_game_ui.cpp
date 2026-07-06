@@ -7714,7 +7714,7 @@ void ypaworld_func64__sub7__sub6__sub3(NC_STACK_ypaworld *yw, int a2, int a4)
     sub_4DA8DC(yw, &exit_menu.itemBlock, a4 & 0x200, a2 & 0x200, Locale::Text::Common(Locale::CMN_SAVE));
     sub_4DA8DC(yw, &exit_menu.itemBlock, a4 & 0x400, a2 & 0x400, Locale::Text::Common(Locale::CMN_LOAD));
     sub_4DA8DC(yw, &exit_menu.itemBlock, a4 & 0x800, a2 & 0x800, Locale::Text::Common(Locale::CMN_RESTART));
-    sub_4DA8DC(yw, &exit_menu.itemBlock, a4 & 0x1000, a2 & 0x1000, Locale::Text::Common(Locale::CMN_CONTINUE));
+    sub_4DA8DC(yw, &exit_menu.itemBlock, a4 & 0x1000, a2 & 0x1000, Locale::Text::Common(Locale::CMN_QUITGAME));
 
     exit_menu.ItemsPostLayout(yw, &exit_menu.itemBlock, 0, "xyz");
 
@@ -7786,6 +7786,14 @@ void NC_STACK_ypaworld::ypaworld_func64__sub7__sub6(TInputState *inpt)
 
             case 11:
                 _levelInfo.State = TLevelInfo::STATE_RESTART;
+                break;
+
+            case 14:
+                _levelInfo.State = TLevelInfo::STATE_QUIT_GAME;
+
+                if ( _isNetGame )
+                    NetSendExitMsg(1);
+
                 break;
 
             case 13:
@@ -7922,8 +7930,14 @@ void NC_STACK_ypaworld::ypaworld_func64__sub7__sub6(TInputState *inpt)
                     a2 |= 0x1000;
 
                 if ( winpt->flag & TClickBoxInf::FLAG_BTN_UP )
-                    GuiWinClose( &exit_menu );
+                {
+                    dword_5C8B78 = 14;
 
+                    if ( sub_4C885C() != 3 )
+                        GuiWinClose( &exit_menu );
+
+                    sb_0x4c87fc(Locale::Text::Advanced(Locale::ADV_RLYQUITGAME), &exit_menu);
+                }
                 break;
 
             default:
@@ -9159,7 +9173,8 @@ void NC_STACK_ypaworld::VoiceMessagePlayMsg(NC_STACK_ypabact *unit, int priority
 
             if ( msgvals.v1 == 1 )
             {
-                World::TVhclProto &vhclProto = _vhclProtos[unit->_vehicleID];
+                uint8_t protoId = unit->_mimic_disguise_vehicleID ? unit->_mimic_disguise_vehicleID : unit->_vehicleID;
+                World::TVhclProto &vhclProto = _vhclProtos[protoId];
                 const char *voicepackEventKey = VoicepackEventKeyFromMsgID(msgID);
 
                 if ( voicepackEventKey && !vhclProto.voicepack.empty() )
@@ -10220,7 +10235,11 @@ void yw_RenderHUDVectorGFX(NC_STACK_ypaworld *yw, CmdStream *cur)
         GFX::Engine.raster_func221(Common::Rect());
 
     if ( yw->_userUnit && yw->_userUnit->_vehicleID >= 0 && (size_t)yw->_userUnit->_vehicleID < yw->_vhclProtos.size() )
-        StatusIconRenderCockpit(yw, wis, yw->_userUnit, &yw->_vhclProtos[yw->_userUnit->_vehicleID], -0.7, 0.3);
+    {
+        uint8_t protoId = yw->_userUnit->_mimic_disguise_vehicleID ? yw->_userUnit->_mimic_disguise_vehicleID : yw->_userUnit->_vehicleID;
+        if ( (size_t)protoId < yw->_vhclProtos.size() )
+            StatusIconRenderCockpit(yw, wis, yw->_userUnit, &yw->_vhclProtos[protoId], -0.7, 0.3);
+    }
 }
 
 void sb_0x4d7c08__sub0__sub4__sub0__sub0(NC_STACK_ypaworld *yw, CmdStream *cur, NC_STACK_ypabact *bact)
@@ -10358,8 +10377,9 @@ void yw_RenderUnitLifeBar(NC_STACK_ypaworld *yw, CmdStream *cur, NC_STACK_ypabac
                                 statusAnchorTop = mortarCooldownTop;
                             }
 
-                            if ( bact->_vehicleID >= 0 && (size_t)bact->_vehicleID < yw->_vhclProtos.size() )
-                                StatusIconRenderWorld(yw, bact, &yw->_vhclProtos[bact->_vehicleID], v42, statusAnchorTop, v43, barHeight);
+                            uint8_t protoId = bact->_mimic_disguise_vehicleID ? bact->_mimic_disguise_vehicleID : bact->_vehicleID;
+                            if ( (size_t)protoId < yw->_vhclProtos.size() )
+                                StatusIconRenderWorld(yw, bact, &yw->_vhclProtos[protoId], v42, statusAnchorTop, v43, barHeight);
                         }
                     }
                 }
@@ -10757,21 +10777,27 @@ void yw_RenderHUDTarget(NC_STACK_ypaworld *yw, sklt_wis *wis)
         World::TVhclProto *vhcl;
 
         if ( yw->_userUnit )
-            vhcl = &yw->_vhclProtos[ yw->_userUnit->_vehicleID ];
+        {
+            uint8_t protoId = yw->_userUnit->_mimic_disguise_vehicleID ? yw->_userUnit->_mimic_disguise_vehicleID : yw->_userUnit->_vehicleID;
+            if ( (size_t)protoId < yw->_vhclProtos.size() )
+                vhcl = &yw->_vhclProtos[ protoId ];
+            else
+                vhcl = NULL;
+        }
         else
             vhcl = NULL;
 
-        if ( vhcl->hud_wireframe )
+        if ( vhcl && vhcl->hud_wireframe )
             hud_wure = vhcl->hud_wireframe->GetSkelet();
         else
             hud_wure = NULL;
 
-        if ( vhcl->mg_wireframe )
+        if ( vhcl && vhcl->mg_wireframe )
             mg_wure = vhcl->mg_wireframe->GetSkelet();
         else
             mg_wure = wis->sklts_intern[4];
 
-        if ( vhcl->wpn_wireframe_1 )
+        if ( vhcl && vhcl->wpn_wireframe_1 )
             wpn_wure = vhcl->wpn_wireframe_1->GetSkelet();
         else if ( yw->_guiVisor.field_4 == 2)
             wpn_wure = wis->sklts_intern[5];
@@ -10780,7 +10806,7 @@ void yw_RenderHUDTarget(NC_STACK_ypaworld *yw, sklt_wis *wis)
         else if ( yw->_guiVisor.field_4 == 4 )
             wpn_wure = wis->sklts_intern[7];
 
-        if ( vhcl->wpn_wireframe_2 )
+        if ( vhcl && vhcl->wpn_wireframe_2 )
             wpn_wure2 = vhcl->wpn_wireframe_2->GetSkelet();
         else if ( yw->_guiVisor.field_4 == 2)
             wpn_wure2 = wis->sklts_intern[9];

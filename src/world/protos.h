@@ -466,7 +466,6 @@ struct TVhclProto
     int8_t radar = 0;
     float push_resistance = 0.0; // OpenUA custom: target-side resistance to push / aoe_unit_push
     bool has_push_resistance = false; // true only when push_resistance is explicitly authored
-    bool static_unit = false; // OpenUA custom: freeze this vehicle's spawned unit instances
     float mass = 0.0;
     float force = 0.0;
     float airconst = 0.0;
@@ -518,6 +517,9 @@ struct TVhclProto
 
     int is_dummy = 0;                       // OpenUA: model = dummy (attachable module proto)
     std::vector<TUnitDummy> unit_dummies;   // OpenUA: dummy attachment slots (parent side)
+
+    int is_mimic = 0;                       // OpenUA: model = mimic shell/disguise proto
+    std::vector<int16_t> mimic_vehicle_list;
 
     rbcolls coll;                           // OpenUA: universal compound collision spheres (coll_*)
 
@@ -636,6 +638,7 @@ struct TWeapProto
     // the direct-hit unit receives only push; nearby units receive aoe_unit_push.
     int push = 0;
     int push_at_death = 0; // OpenUA custom: corpse push when this weapon causes DEATH1
+    int armor_penetration_targets = 0; // OpenUA custom: direct-hit unit penetrations before final impact
     float recoil = 0.0; // OpenUA custom: shooter-side knockback multiplier, 0..10
 //    int field_87C = 0;
     int life_time = 0;
