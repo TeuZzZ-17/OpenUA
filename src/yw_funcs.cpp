@@ -17,6 +17,119 @@
 extern GuiList stru_5C91D0;
 
 
+static void FontPageNormalizeSurface(SDL_Surface *s)
+{
+    if ( !s || !s->format )
+        return;
+
+    if ( s->format->BitsPerPixel != 32 || !s->format->Amask )
+    {
+        SDL_SetSurfaceBlendMode(s, SDL_BLENDMODE_NONE);
+        return;
+    }
+
+    bool locked = false;
+    if ( SDL_MUSTLOCK(s) )
+    {
+        if ( SDL_LockSurface(s) != 0 )
+        {
+            SDL_SetSurfaceBlendMode(s, SDL_BLENDMODE_NONE);
+            return;
+        }
+        locked = true;
+    }
+
+    const uint32_t colorKey = SDL_MapRGB(s->format, 255, 255, 0);
+
+    for (int y = 0; y < s->h; y++)
+    {
+        uint8_t *row = (uint8_t *)s->pixels + y * s->pitch;
+        uint32_t *pixel = (uint32_t *)row;
+
+        for (int x = 0; x < s->w; x++)
+        {
+            uint8_t r, g, b, a;
+            SDL_GetRGBA(pixel[x], s->format, &r, &g, &b, &a);
+
+            if ( a < 128 )
+                pixel[x] = colorKey;
+            else
+                pixel[x] = SDL_MapRGBA(s->format, r, g, b, 255);
+        }
+    }
+
+    if ( locked )
+        SDL_UnlockSurface(s);
+
+    SDL_SetSurfaceBlendMode(s, SDL_BLENDMODE_NONE);
+}
+
+static std::string FontPageMakePngName(const std::string &bitmapName)
+{
+    std::string pngName = bitmapName;
+    size_t dotPos = pngName.find_last_of('.');
+    size_t sepPos = pngName.find_last_of("/\\");
+
+    if ( dotPos != std::string::npos && (sepPos == std::string::npos || dotPos > sepPos) )
+        pngName.resize(dotPos);
+
+    pngName += ".PNG";
+    return pngName;
+}
+
+static NC_STACK_bitmap *FontPageLoadImage(const std::string &bitmapName, bool disableShared)
+{
+    auto loadImage = [disableShared](const std::string &name) -> NC_STACK_bitmap *
+    {
+        IDVList attrs;
+        attrs.Add(NC_STACK_rsrc::RSRC_ATT_NAME, std::string(name));
+
+        if ( disableShared )
+            attrs.Add(NC_STACK_rsrc::RSRC_ATT_TRYSHARED, (int32_t)0);
+
+        attrs.Add(NC_STACK_bitmap::BMD_ATT_CONVCOLOR, (int32_t)1);
+        attrs.Add(NC_STACK_ilbm::ATT_ALPHAPALETTE, (int32_t)0);
+
+        return Utils::ProxyLoadImage(attrs);
+    };
+
+    std::string pngName = FontPageMakePngName(bitmapName);
+    if ( !uaFileExist("rsrc:" + pngName) )
+        return loadImage(bitmapName);
+
+    NC_STACK_bitmap *pngImage = loadImage(pngName);
+
+    if ( pngImage && pngImage->GetBitmap() && pngImage->GetSwTex() )
+    {
+        NC_STACK_bitmap *legacyImage = loadImage(bitmapName);
+        if ( legacyImage && legacyImage->GetBitmap() && pngImage->GetBitmap() )
+        {
+            ResBitmap *pngBitmap = pngImage->GetBitmap();
+            ResBitmap *legacyBitmap = legacyImage->GetBitmap();
+
+            if ( pngBitmap->width != legacyBitmap->width || pngBitmap->height != legacyBitmap->height )
+            {
+                ypa_log_out("FontPageLoadImage(): PNG override %s size %dx%d differs from legacy %s size %dx%d.\n",
+                            pngName.c_str(), pngBitmap->width, pngBitmap->height,
+                            bitmapName.c_str(), legacyBitmap->width, legacyBitmap->height);
+            }
+        }
+
+        if ( legacyImage )
+            legacyImage->Delete();
+
+        return pngImage;
+    }
+
+    if ( pngImage )
+        pngImage->Delete();
+
+    ypa_log_out("FontPageLoadImage(): PNG override %s exists but failed to load, falling back to %s.\n", pngName.c_str(), bitmapName.c_str());
+
+    return loadImage(bitmapName);
+}
+
+
 TileMap * NC_STACK_ypaworld::yw_LoadFont(const std::string &fontname)
 {
     FSMgr::FileHandle *fil = uaOpenFileAlloc("rsrc:hfonts/" + fontname, "r");
@@ -53,11 +166,7 @@ TileMap * NC_STACK_ypaworld::yw_LoadFont(const std::string &fontname)
         return NULL;
     }
 
-    tileset->img = Utils::ProxyLoadImage({
-        {NC_STACK_rsrc::RSRC_ATT_NAME, std::string(bitmap_name)},
-        {NC_STACK_rsrc::RSRC_ATT_TRYSHARED, (int32_t)0},
-        {NC_STACK_bitmap::BMD_ATT_CONVCOLOR, (int32_t)1},
-        {NC_STACK_ilbm::ATT_ALPHAPALETTE, (int32_t)0} });
+    tileset->img = FontPageLoadImage(bitmap_name, true);
     if ( !tileset->img )
     {
         delete tileset;
@@ -66,6 +175,7 @@ TileMap * NC_STACK_ypaworld::yw_LoadFont(const std::string &fontname)
         return NULL;
     }
 
+    FontPageNormalizeSurface(tileset->img->GetSwTex());
     SDL_SetColorKey(tileset->img->GetSwTex(), SDL_TRUE, SDL_MapRGB(tileset->img->GetSwTex()->format, 255, 255, 0));
 
     tileset->h = std::stol(fntHeight, NULL, 0);
@@ -129,16 +239,14 @@ TileMap * NC_STACK_ypaworld::yw_LoadTileSet(const std::string &bitmap, Common::P
     if ( !tileset )
         return NULL;
 
-    tileset->img = Utils::ProxyLoadImage({
-        {NC_STACK_rsrc::RSRC_ATT_NAME, std::string(bitmap)},
-        {NC_STACK_bitmap::BMD_ATT_CONVCOLOR, (int32_t)1}, // Speed up painting
-        {NC_STACK_ilbm::ATT_ALPHAPALETTE, (int32_t)0} });
+    tileset->img = FontPageLoadImage(bitmap, false);
     if ( !tileset->img )
     {
         delete tileset;
         return NULL;
     }
 
+    FontPageNormalizeSurface(tileset->img->GetSwTex());
     SDL_SetColorKey(tileset->img->GetSwTex(), SDL_TRUE, SDL_MapRGB(tileset->img->GetSwTex()->format, 255, 255, 0));
 
     tileset->h = chrSz.y;

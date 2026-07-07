@@ -17,6 +17,7 @@
 #include "env.h"
 #include "system/movie.h"
 #include "system/inivals.h"
+#include "system/system.h"
 #include "loaders.h"
 #include "obj3d.h"
 #include "ypaflyer.h"
@@ -41,8 +42,9 @@ static constexpr int SETTINGS_CHANGE_SPECTATOR_MODE = 0x8000;
 static constexpr int SETTINGS_CHANGE_VHS_FILTER             = 0x20000;
 static constexpr int SETTINGS_CHANGE_BLENDING              = 0x80000;
 static constexpr int SETTINGS_CHANGE_MOVIE_PLAYER          = 0x100000;
+static constexpr int SETTINGS_CHANGE_MENU_FONT             = 0x200000;
 static constexpr int SETTINGS_CHANGE_RESTART_REQUIRED_GRAPHICS =
-    SETTINGS_CHANGE_BLENDING;
+    SETTINGS_CHANGE_BLENDING | SETTINGS_CHANGE_MENU_FONT;
 
 static std::string BlendingLabel(int v)
 {
@@ -79,6 +81,21 @@ static std::string NormalizePaletteThemeName(std::string theme)
 static std::string PaletteThemeStorageValue(const std::string &theme)
 {
     return theme.empty() ? std::string("Standard") : theme;
+}
+
+static std::string NormalizeMenuFontName(std::string fontName)
+{
+    size_t first = fontName.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos)
+        return std::string("Default");
+
+    size_t last = fontName.find_last_not_of(" \t\r\n");
+    fontName = fontName.substr(first, last - first + 1);
+
+    if (!StriCmp(fontName, "Default"))
+        return std::string("Default");
+
+    return fontName;
 }
 
 static bool LoadPaletteThemeCache(std::string *theme)
@@ -1280,6 +1297,23 @@ void UserData::sb_0x46aa8c()
             ypa_log_out("WARNING: Could not save gfx.vhs_filter to nucleus.ini\n");
     }
 
+    if ( _settingsChangeOptions & SETTINGS_CHANGE_MENU_FONT )
+    {
+        // OpenUA: persist menu font with the same nucleus.ini writer used by
+        // gfx.blending, but store it as a safe single token because font display
+        // names contain spaces. Example on disk:
+        //   ui.menu_font = Liberation_Mono_Regular
+        // The menu still shows the decoded display name: Liberation Mono Regular.
+        menuFont = NormalizeMenuFontName(confMenuFont);
+        const std::string storedMenuFont = System::MenuFontStorageValue(menuFont);
+        System::IniConf::UiMenuFont.Value = storedMenuFont;
+
+        if ( !SaveKeyToNucleusIni("ui.menu_font", storedMenuFont) )
+            ypa_log_out("WARNING: Could not save ui.menu_font to nucleus.ini\n");
+        else
+            ypa_log_out("OpenUA: saved ui.menu_font = %s (%s)\n", menuFont.c_str(), storedMenuFont.c_str());
+    }
+
     if ( forceChange )
     {
         yw->SetGameShellVideoMode( IsWindowedFlag() );
@@ -1704,10 +1738,13 @@ void UserData::ShowOptionsMenu()
     titel_button->HideScreen();
 
     RefreshPaletteThemes();
+    RefreshMenuFonts();
     confPaletteTheme = paletteTheme;
+    confMenuFont = menuFont;
     confPlayerRoboAIBehavior = System::IniConf::GameRoboPlayerAIBehavior.Get<bool>();
     confSpectatorMode = System::IniConf::GameSpectatorMode.Get<bool>();
     UpdatePaletteThemeText();
+    UpdateMenuFontText();
 
     NC_STACK_button::button_66arg state;
     state.butID = 1174;
@@ -2055,6 +2092,7 @@ void UserData::sub_46A3C0()
     _settingsChangeOptions = 0;
     EnvMode = ENVMODE_TITLE;
     confPaletteTheme = paletteTheme;
+    confMenuFont = menuFont;
     confPlayerRoboAIBehavior = System::IniConf::GameRoboPlayerAIBehavior.Get<bool>();
     confSpectatorMode = System::IniConf::GameSpectatorMode.Get<bool>();
 
@@ -2069,6 +2107,7 @@ void UserData::sub_46A3C0()
 
     video_button->SetText(1156, _gfxMode.name);
     UpdatePaletteThemeText();
+    UpdateMenuFontText();
 
     video_button->SetText(1172, win3d_name);
 
@@ -2120,6 +2159,7 @@ void UserData::sub_46A3C0()
     confBlending = System::IniConf::GfxBlending.Get<int32_t>();
     confMoviePlayer = System::IniConf::GfxMoviePlayer.Get<bool>();
     confVhsFilter = System::IniConf::GfxVhsFilter.Get<bool>();
+    confMenuFont = menuFont;
     v10.field_4 = (!confMoviePlayer) + 1;
     v10.butID = 1184;
     video_button->SetState(&v10);
@@ -2127,6 +2167,7 @@ void UserData::sub_46A3C0()
     v10.butID = 1185;
     video_button->SetState(&v10);
     UpdateGfxOptionTexts();
+    UpdateMenuFontText();
 
     NC_STACK_button::Slider *tmp = video_button->GetSliderData(1159);
     tmp->value = fxnumber;
@@ -2264,6 +2305,72 @@ void UserData::CyclePaletteTheme()
     confPaletteTheme = paletteThemes[next];
     _settingsChangeOptions |= SETTINGS_CHANGE_PALETTE_THEME;
     UpdatePaletteThemeText();
+}
+
+void UserData::RefreshMenuFonts()
+{
+    menuFonts.clear();
+    menuFonts.push_back("Default");
+
+    System::RescanFonts();
+
+    std::vector<std::string> scannedFonts = System::GetScannedFontNames();
+    menuFonts.insert(menuFonts.end(), scannedFonts.begin(), scannedFonts.end());
+
+    // Use the committed in-memory value first. After OK this is updated by the
+    // same Options commit path as gfx.blending, so reopening Options in the same
+    // session shows the saved choice immediately. On first startup menuFont is
+    // empty, so we read the parsed nucleus.ini value.
+    std::string currentFont = NormalizeMenuFontName(menuFont.empty() ? System::GetConfiguredMenuFontName() : menuFont);
+    bool found = !StriCmp(currentFont, "Default");
+
+    if (!found)
+    {
+        for (const std::string &fontName : menuFonts)
+        {
+            if (!StriCmp(fontName, currentFont))
+            {
+                currentFont = fontName;
+                found = true;
+                break;
+            }
+        }
+    }
+
+    menuFont = found ? currentFont : std::string("Default");
+    confMenuFont = menuFont;
+}
+
+void UserData::UpdateMenuFontText()
+{
+    video_button->SetText(1186, NormalizeMenuFontName(confMenuFont));
+}
+
+void UserData::CycleMenuFont()
+{
+    if (menuFonts.empty())
+        RefreshMenuFonts();
+
+    if (menuFonts.size() <= 1)
+    {
+        confMenuFont = "Default";
+        UpdateMenuFontText();
+        return;
+    }
+
+    size_t next = 0;
+    for (size_t i = 0; i < menuFonts.size(); i++)
+    {
+        if (!StriCmp(menuFonts[i], confMenuFont))
+        {
+            next = (i + 1) % menuFonts.size();
+            break;
+        }
+    }
+
+    confMenuFont = menuFonts[next];
+    _settingsChangeOptions |= SETTINGS_CHANGE_MENU_FONT;
+    UpdateMenuFontText();
 }
 
 bool UserData::SavePaletteThemeToNucleusIni()
@@ -2805,15 +2912,127 @@ static std::string db_weapon_aoe_atk_display(const World::TWeapProto &p)
     return fmt::sprintf("%d", p.aoe_unit_energy / 100);
 }
 
-static std::string db_weapon_debuff_display(const World::TWeapProto &p)
+static std::string db_optional_int_display(int value)
 {
-    if ( !p.debuff.allow )
+    if ( value <= 0 )
         return "None";
 
-    if ( p.debuff.name.empty() )
-        return "Unnamed";
+    return fmt::sprintf("%d", value);
+}
 
-    return db_trunc(p.debuff.name, 18);
+static std::string db_float_display(float value)
+{
+    std::string out = fmt::sprintf("%.2f", value);
+    while ( out.size() > 1 && out.back() == '0' )
+        out.pop_back();
+    if ( !out.empty() && out.back() == '.' )
+        out.pop_back();
+    return out;
+}
+
+static bool db_static_gun_support_active(const World::TVhclProto &p)
+{
+    return p.model_id == BACT_TYPES_GUN &&
+           p.initParams.find(NC_STACK_ypagun::GUN_ATT_NO_FALL) != p.initParams.end();
+}
+
+static void db_add_speciality_lines(std::vector<std::string> *lines,
+                                    int maxLines,
+                                    const std::vector<std::string> &items)
+{
+    if ( !lines || (int)lines->size() >= maxLines )
+        return;
+
+    lines->push_back("Specialities:");
+
+    if ( items.empty() )
+    {
+        if ( (int)lines->size() < maxLines )
+            lines->push_back("- None");
+        return;
+    }
+
+    size_t shown = 0;
+    for (const std::string &item : items)
+    {
+        if ( (int)lines->size() >= maxLines )
+            break;
+
+        lines->push_back("- " + db_trunc(item, 30));
+        shown++;
+    }
+
+    if ( shown < items.size() && !lines->empty() )
+        lines->back() = "- ...";
+}
+
+static std::vector<std::string> db_weapon_specialties(const World::TWeapProto &p)
+{
+    std::vector<std::string> items;
+
+    if ( p.cluster.enable || p.cluster.generations > 0 || p.cluster.count > 0 )
+        items.push_back("Cluster Weapon");
+    if ( p.chain.allow )
+        items.push_back("Chain Weapon");
+    if ( p.armor_penetration_targets > 0 )
+        items.push_back("Armor Penetration");
+    if ( p.debuff.allow || p.debuff.damage != 0 || p.debuff.damage_percent != 0.0 ||
+         p.debuff.duration > 0 && (!p.debuff.name.empty() || p.debuff.mindcontrol ||
+         p.debuff.force_malus != 0.0 || p.debuff.maxrot_malus != 0.0 ||
+         p.debuff.shield_malus != 0.0 || p.debuff.snd_pitch_mult != 1.0 ||
+         !p.debuff.fx_vps.empty()) )
+        items.push_back("Debuff");
+    if ( p.missile_multi_target > 0 )
+        items.push_back("Multi-Target Missile");
+    return items;
+}
+
+static std::vector<std::string> db_vehicle_specialties(const World::TVhclProto &p)
+{
+    std::vector<std::string> items;
+
+    if ( p.spawn_units )
+        items.push_back("Spawner");
+    if ( p.spawn_at_death_units )
+        items.push_back("Spawn On Death");
+    if ( p.power > 0 )
+        items.push_back("Mobile Power Generator");
+    if ( p.radar >= 2 )
+        items.push_back("Radar Unit");
+    if ( !p.unit_guns.empty() )
+        items.push_back("Mobile Gun Platform");
+    if ( p.is_mimic )
+        items.push_back("Mimic");
+    if ( p.invisible )
+        items.push_back("Invisibility");
+    if ( p.invulnerable )
+        items.push_back("Invulnerable");
+    if ( p.seek_and_explode )
+        items.push_back("Seek And Explode");
+    if ( p.proximity_defense_enable || p.proximity_defense_at_death )
+        items.push_back(p.proximity_defense_at_death ? "Proximity Defense: At Death" : "Proximity Defense");
+    if ( p.extra_weapons[0] > 0 || p.extra_weapons[1] > 0 || p.extra_weapons[2] > 0 )
+        items.push_back("Multi-Weapon");
+    if ( db_static_gun_support_active(p) )
+        items.push_back("Static Gun Support");
+
+    return items;
+}
+
+static std::vector<std::string> db_building_specialties(const World::TBuildingProto &p)
+{
+    std::vector<std::string> items;
+
+    if ( p.Power > 0 )
+        items.push_back("Power Generator");
+    if ( p.spawn_units )
+        items.push_back("Spawner");
+    if ( !p.Guns.empty() )
+        items.push_back("Defensive Guns");
+    if ( p.ModelID == 2 )
+        items.push_back("Radar Building");
+
+    return items;
 }
 
 static std::string db_building_model_display_name(const World::TBuildingProto &p)
@@ -3393,7 +3612,7 @@ void UserData::PopulateDetailPane()
     database_button->SetText(UIWidgets::DB_DETAIL_HEADER, "Database");
     database_button->SetText(UIWidgets::DB_IMAGE_TEXT, " ");
     database_button->SetText(UIWidgets::DB_STATS_HEADER, " ");
-    for (int k = 0; k < 4; k++)
+    for (int k = 0; k < 12; k++)
         database_button->SetText(UIWidgets::DB_STATS_0 + k, " ");
 
     int abs_idx = db_page * LINES + db_selected;
@@ -3402,7 +3621,7 @@ void UserData::PopulateDetailPane()
         for (int k = 0; k < DETAIL_LINES; k++)
             database_button->SetText(UIWidgets::DB_DETAIL_0 + k, " ");
         database_button->SetText(UIWidgets::DB_STATS_HEADER, " ");
-        for (int k = 0; k < 4; k++)
+        for (int k = 0; k < 12; k++)
             database_button->SetText(UIWidgets::DB_STATS_0 + k, " ");
         ReleaseDatabaseEntryImage();
         db_entry_tab = -1;
@@ -3431,36 +3650,48 @@ void UserData::PopulateDetailPane()
 
     database_button->SetText(UIWidgets::DB_DETAIL_HEADER, db_trunc(entryName, 28));
 
-    std::string statLines[4] = { " ", " ", " ", " " };
+    static const int DB_STATS_LINES = 12;
+    std::vector<std::string> statLines;
+    statLines.reserve(DB_STATS_LINES);
     std::string statHeader = "STATS";
     if ( db_tab == 0 )
     {
         const World::TVhclProto &p = vhcls[pid];
-        statLines[0] = "Model: " + db_trunc(db_vehicle_model_display_name(p), 18);
-        statLines[1] = fmt::sprintf("HP: %d", p.energy);
-        statLines[2] = fmt::sprintf("DEF: %d", p.shield);
-        statLines[3] = "Weapon: " + db_trunc(db_weapon_display_name(wpns, p.weapon), 20);
+        statLines.push_back("Model: " + db_trunc(db_vehicle_model_display_name(p), 18));
+        statLines.push_back(fmt::sprintf("HP: %d", p.energy));
+        statLines.push_back(fmt::sprintf("DEF: %d", p.shield));
+        statLines.push_back("Weapon: " + db_trunc(db_weapon_display_name(wpns, p.weapon), 20));
+        statLines.push_back(p.has_push_resistance && p.push_resistance > 0.0 ?
+                            fmt::sprintf("Push Resistance: %.2f", p.push_resistance) :
+                            "Push Resistance: None");
+        db_add_speciality_lines(&statLines, DB_STATS_LINES, db_vehicle_specialties(p));
     }
     else if ( db_tab == 1 )
     {
         const World::TWeapProto &p = wpns[pid];
-        statLines[0] = "Model: " + db_trunc(db_weapon_model_display_name(p), 18);
-        statLines[1] = fmt::sprintf("ATK: %d", p.energy / 100);
-        statLines[2] = "AoE ATK: " + db_weapon_aoe_atk_display(p);
-        statLines[3] = "Debuff: " + db_weapon_debuff_display(p);
+        statLines.push_back("Model: " + db_trunc(db_weapon_model_display_name(p), 18));
+        statLines.push_back(fmt::sprintf("ATK: %d", p.energy / 100));
+        statLines.push_back("AoE ATK: " + db_weapon_aoe_atk_display(p));
+        statLines.push_back("Push: " + db_optional_int_display(p.push));
+        statLines.push_back("AoE Push: " + db_optional_int_display(p.aoe_unit_push));
+        statLines.push_back(p.recoil > 0.0 ?
+                            "Weapon Recoil: " + db_float_display(p.recoil) :
+                            "Weapon Recoil: None");
+        db_add_speciality_lines(&statLines, DB_STATS_LINES, db_weapon_specialties(p));
     }
     else
     {
         const World::TBuildingProto &p = blds[pid];
-        statLines[0] = "Model: " + db_trunc(db_building_model_display_name(p), 18);
-        statLines[1] = fmt::sprintf("HP: %d", p.Energy);
-        statLines[2] = fmt::sprintf("Power: %d", p.Power);
-        statLines[3] = fmt::sprintf("Guns: %d", (int)p.Guns.size());
+        statLines.push_back("Model: " + db_trunc(db_building_model_display_name(p), 18));
+        statLines.push_back(fmt::sprintf("HP: %d", p.Energy));
+        statLines.push_back(fmt::sprintf("Power: %d", p.Power));
+        statLines.push_back(fmt::sprintf("Guns: %d", (int)p.Guns.size()));
+        db_add_speciality_lines(&statLines, DB_STATS_LINES, db_building_specialties(p));
     }
 
     database_button->SetText(UIWidgets::DB_STATS_HEADER, statHeader);
-    for (int k = 0; k < 4; k++)
-        database_button->SetText(UIWidgets::DB_STATS_0 + k, statLines[k]);
+    for (int k = 0; k < DB_STATS_LINES; k++)
+        database_button->SetText(UIWidgets::DB_STATS_0 + k, k < (int)statLines.size() ? statLines[k] : " ");
 
     std::string body;
     if ( !db_load_database_text(db_tab, pid, &body) || body.empty() )
@@ -4347,7 +4578,7 @@ void UserData::GameShellUiHandleInput()
         // OpenUA: modern graphics options
         else if ( r.code == 1306 ) // Blending cycle
         {
-            if ( !(_settingsChangeOptions & SETTINGS_CHANGE_RESTART_REQUIRED_GRAPHICS) )
+            if ( !(_settingsChangeOptions & SETTINGS_CHANGE_BLENDING) )
                 ShowMenuMsgBox(0, "Restart Required", "Restart game to apply.", true);
             confBlending = CycleBlending(confBlending);
             video_button->SetText(1183, BlendingLabel(confBlending));
@@ -4372,6 +4603,16 @@ void UserData::GameShellUiHandleInput()
         {
             confVhsFilter = false;
             _settingsChangeOptions |= SETTINGS_CHANGE_VHS_FILTER;
+        }
+        else if ( r.code == 1311 ) // Menu Font cycle
+        {
+            bool alreadyWarnedForMenuFont = (_settingsChangeOptions & SETTINGS_CHANGE_MENU_FONT) != 0;
+            std::string oldMenuFont = confMenuFont;
+            CycleMenuFont();
+            if ( (_settingsChangeOptions & SETTINGS_CHANGE_MENU_FONT) &&
+                 !alreadyWarnedForMenuFont &&
+                 StriCmp(oldMenuFont, confMenuFont) )
+                ShowMenuMsgBox(0, "Restart Required", "Restart game to apply.", true);
         }
         else if ( r.code == 1124 )
         {

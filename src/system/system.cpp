@@ -1,11 +1,15 @@
 #include <string>
 #include <list>
+#include <algorithm>
+#include <cctype>
+#include <vector>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_net.h>
 #include "../fmtlib/printf.h"
 
 #include "system.h"
 #include "fsmgr.h"
+#include "inivals.h"
 #include "../utils.h"
 
 
@@ -105,6 +109,80 @@ static SDL_GLContext cont = NULL;
 static ResRatio winRes(640, 480);
 static bool curRelMouse = false;
 
+static std::string TrimFontString(std::string value)
+{
+    size_t first = value.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos)
+        return std::string();
+
+    size_t last = value.find_last_not_of(" \t\r\n");
+    return value.substr(first, last - first + 1);
+}
+
+static std::string FontDisplayName(const FontNode &fnt)
+{
+    std::string name = TrimFontString(fnt.Name);
+    std::string style = TrimFontString(fnt.Style);
+
+    if (name.empty())
+        return std::string();
+
+    if (!style.empty())
+        name += " " + style;
+
+    return name;
+}
+
+static std::string NormalizeMenuFontName(std::string fontName)
+{
+    fontName = TrimFontString(fontName);
+
+    if (fontName.empty() || !StriCmp(fontName, "Default"))
+        return std::string("Default");
+
+    return fontName;
+}
+
+std::string MenuFontStorageValue(const std::string &fontName)
+{
+    std::string value = NormalizeMenuFontName(fontName);
+    if (!StriCmp(value, "Default"))
+        return std::string("Default");
+
+    for (char &ch : value)
+    {
+        if (ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n')
+            ch = '_';
+    }
+
+    return value;
+}
+
+std::string MenuFontDisplayValue(const std::string &storedValue)
+{
+    std::string value = NormalizeMenuFontName(storedValue);
+    if (!StriCmp(value, "Default"))
+        return std::string("Default");
+
+    // Backward compatibility: older test builds saved the display name directly
+    // with spaces. If that value matches a scanned font, keep it.
+    if (IsFontAvailable(value))
+        return value;
+
+    std::string decoded = value;
+    for (char &ch : decoded)
+    {
+        if (ch == '_')
+            ch = ' ';
+    }
+
+    decoded = NormalizeMenuFontName(decoded);
+    if (!StriCmp(decoded, "Default") || !IsFontAvailable(decoded))
+        return std::string("Default");
+
+    return decoded;
+}
+
 void ScanFonts()
 {
     FontsList.clear();
@@ -126,7 +204,11 @@ void ScanFonts()
                     TTF_Font *fnt = TTF_OpenFont(nod->getPath().c_str(), 12);
                     if (fnt)
                     {
-                        FontsList.push_back( FontNode(nod->getPath(), TTF_FontFaceFamilyName(fnt), TTF_FontFaceStyleName(fnt)) );
+                        const char *familyName = TTF_FontFaceFamilyName(fnt);
+                        const char *styleName = TTF_FontFaceStyleName(fnt);
+
+                        if (familyName && familyName[0])
+                            FontsList.push_back( FontNode(nod->getPath(), familyName, styleName ? styleName : "") );
 
                         TTF_CloseFont(fnt);
                     }
@@ -154,6 +236,93 @@ std::string FindFont(const std::string &fontName)
     }
 
     return std::string();
+}
+
+void RescanFonts()
+{
+    ScanFonts();
+}
+
+std::vector<std::string> GetScannedFontNames()
+{
+    std::vector<std::string> names;
+    std::vector<std::string> namesLower;
+
+    for (const FontNode &fnt : FontsList)
+    {
+        std::string displayName = FontDisplayName(fnt);
+        if (displayName.empty())
+            continue;
+
+        std::string lowerName = displayName;
+        for (char &ch : lowerName)
+            ch = std::tolower((unsigned char)ch);
+
+        bool found = false;
+        for (const std::string &existing : namesLower)
+        {
+            if (existing == lowerName)
+            {
+                found = true;
+                break;
+            }
+        }
+
+        if (!found)
+        {
+            names.push_back(displayName);
+            namesLower.push_back(lowerName);
+        }
+    }
+
+    std::sort(names.begin(), names.end(),
+        [](const std::string &a, const std::string &b) { return StriCmp(a, b) < 0; });
+
+    return names;
+}
+
+bool IsFontAvailable(const std::string &fontname)
+{
+    std::string selected = TrimFontString(fontname);
+    if (selected.empty())
+        return false;
+
+    return !FindFont(selected).empty();
+}
+
+std::string GetConfiguredMenuFontName()
+{
+    // OpenUA: ui.menu_font is stored in nucleus.ini as a single safe token,
+    // e.g. Liberation_Mono_Regular. Decode it back to the display name used by
+    // the dynamic Fonts/ scanner. This avoids whitespace/parser edge cases while
+    // keeping the menu label human-readable.
+    return MenuFontDisplayValue(IniConf::UiMenuFont.Get<std::string>());
+}
+
+std::string ResolveMenuFontDescr(const std::string &defaultDescr)
+{
+    return ResolveMenuFontDescr(defaultDescr, GetConfiguredMenuFontName());
+}
+
+std::string ResolveMenuFontDescr(const std::string &defaultDescr, const std::string &menuFont)
+{
+    std::string selected = NormalizeMenuFontName(menuFont);
+
+    if (!StriCmp(selected, "Default"))
+        return defaultDescr;
+
+    if (!IsFontAvailable(selected))
+        return defaultDescr;
+
+    std::vector<std::string> parts = Stok::Split(defaultDescr, ",");
+    if (parts.size() < 2)
+        return defaultDescr;
+
+    std::string resolved = selected;
+    for (size_t i = 1; i < parts.size(); i++)
+        resolved += "," + TrimFontString(parts[i]);
+
+    return resolved;
 }
 
 

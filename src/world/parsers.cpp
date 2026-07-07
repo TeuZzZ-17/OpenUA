@@ -2380,44 +2380,35 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     }
     else if ( !StriCmp(p1, "hidden") )
     {
-        if (IsModsAllow(true))
-            _vhcl->hidden = StrGetBool(p2);
+        _vhcl->hidden = StrGetBool(p2);
     }
     else if ( !StriCmp(p1, "invisible") )
     {
         // OpenUA custom: vehicle-only total-stealth-until-first-attack flag.
         // Deliberately separate from the legacy "hidden"/"unhide_radar" system.
-        if (IsModsAllow(true))
-            _vhcl->invisible = StrGetBool(p2);
+        _vhcl->invisible = StrGetBool(p2);
     }
     else if ( !StriCmp(p1, "invisible_reveal_vp") )
     {
-        if (IsModsAllow(true))
-            _vhcl->invisible_reveal_vp = (int16_t)parser.stol(p2, NULL, 0);
+        _vhcl->invisible_reveal_vp = (int16_t)parser.stol(p2, NULL, 0);
     }
     else if ( !StriCmp(p1, "unhide_radar") )
     {
-        if (IsModsAllow(true))
-        {
-            _vhcl->unhideRadar = parser.stol(p2, NULL, 0);
+        _vhcl->unhideRadar = parser.stol(p2, NULL, 0);
 
-            if (_vhcl->unhideRadar < 0)
-                _vhcl->unhideRadar = 0;
-            else if (_vhcl->unhideRadar > _vhcl->radar)
-                _vhcl->unhideRadar = _vhcl->radar + 1;
-        }
+        if (_vhcl->unhideRadar < 0)
+            _vhcl->unhideRadar = 0;
+        else if (_vhcl->unhideRadar > _vhcl->radar)
+            _vhcl->unhideRadar = _vhcl->radar + 1;
     }
     else if ( !StriCmp(p1, "add_unhide_radar") )
     {
-        if (IsModsAllow(true))
-        {
-            _vhcl->unhideRadar += parser.stol(p2, NULL, 0);
+        _vhcl->unhideRadar += parser.stol(p2, NULL, 0);
 
-            if (_vhcl->unhideRadar < 0)
-                _vhcl->unhideRadar = 0;
-            else if (_vhcl->unhideRadar > _vhcl->radar)
-                _vhcl->unhideRadar = _vhcl->radar + 1;
-        }
+        if (_vhcl->unhideRadar < 0)
+            _vhcl->unhideRadar = 0;
+        else if (_vhcl->unhideRadar > _vhcl->radar)
+            _vhcl->unhideRadar = _vhcl->radar + 1;
     }
     else
         return ParseSndFX(parser, p1, p2);
@@ -4010,20 +4001,17 @@ int MiscParser::Handle(ScriptParser::Parser &parser, const std::string &p1, cons
     }
     else if ( !StriCmp(p1, "multi_building") )
     {
-        if (IsModsAllow(true))
-            _o._allowMultiBuildWorld = StrGetBool(p2);
+        _o._allowMultiBuildWorld = StrGetBool(p2);
     }
     else if ( !StriCmp(p1, "hidden_fractions") )
     {
-        if (IsModsAllow(true))
-            _o._worldHiddenFractions = parser.stol(p2, NULL, 0);
+        _o._worldHiddenFractions = parser.stol(p2, NULL, 0);
     }
     else if ( !StriCmp(p1, "fix_weapon_radius") )
     {
         // Legacy/deprecated: parsed for INI compatibility; gameplay no longer uses
         // class-specific weapon radii.
-        if (IsModsAllow(true))
-            _o._fixWeaponRadius = StrGetBool(p2);
+        _o._fixWeaponRadius = StrGetBool(p2);
     }
     else
         return ScriptParser::RESULT_UNKNOWN;
@@ -4275,18 +4263,15 @@ int LevelDataParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     }
     else if ( !StriCmp(p1, "lua_script") )
     {
-        if (IsModsAllow(true))
-            _o._luaScriptName = p2;
+        _o._luaScriptName = p2;
     }
     else if ( !StriCmp(p1, "multi_building") )
     {
-        if (IsModsAllow(true))
-            _o._allowMultiBuildLevel = StrGetBool(p2);
+        _o._allowMultiBuildLevel = StrGetBool(p2);
     }
     else if ( !StriCmp(p1, "hidden_fractions") )
     {
-        if (IsModsAllow(true))
-            _o._hiddenFractions = parser.stol(p2, NULL, 0);
+        _o._hiddenFractions = parser.stol(p2, NULL, 0);
     }
     else
         return ScriptParser::RESULT_UNKNOWN;

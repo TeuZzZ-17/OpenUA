@@ -19,6 +19,7 @@
 #include "gui/uamsgbox.h"
 #include "env.h"
 #include "system/inivals.h"
+#include "system/system.h"
 #include "locale/locale.h"
 #include "utils.h"
 
@@ -418,6 +419,7 @@ size_t NC_STACK_ypaworld::Init(IDVList &stak)
 
     yw_setInitScriptLoc(this);
 
+    System::IniConf::ReadFromNucleusIni();
     Locale::Text::SetLangDefault();
     ypaworld_func166("language"); // Load lang strings
 
@@ -2654,6 +2656,7 @@ bool NC_STACK_ypaworld::InitGameShell(UserData *usr)
 
     System::IniConf::ReadFromNucleusIni();
     usr->RefreshPaletteThemes();
+    usr->RefreshMenuFonts();
 
     _netExclusiveGem = System::IniConf::NetGameExclusiveGem.Get<bool>();
 
@@ -4661,6 +4664,55 @@ bool NC_STACK_ypaworld::CreateVideoControls()
             return false;
         }
 
+        // --- Menu Font cycle-button (row 7, left column) ---
+        btn_64arg.tileset_down = 16;
+        btn_64arg.tileset_up = 16;
+        btn_64arg.field_3A = 16;
+        btn_64arg.button_type = NC_STACK_button::TYPE_CAPTION;
+        btn_64arg.xpos = 0;
+        btn_64arg.ypos = 7 * (_fontH + vertMenuSpace);
+        btn_64arg.width = v98;
+        btn_64arg.caption = "Menu Font";
+        btn_64arg.caption2.clear();
+        btn_64arg.downCode = 0;
+        btn_64arg.upCode = 0;
+        btn_64arg.pressedCode = 0;
+        btn_64arg.button_id = 2;
+        btn_64arg.flags = NC_STACK_button::FLAG_TEXT;
+        btn_64arg.txt_r = _iniColors[60].r;
+        btn_64arg.txt_g = _iniColors[60].g;
+        btn_64arg.txt_b = _iniColors[60].b;
+
+        if ( !_GameShell->video_button->Add(&btn_64arg) )
+        {
+            ypa_log_out("Unable to add Menu Font label\n");
+            return false;
+        }
+
+        btn_64arg.tileset_down = 19;
+        btn_64arg.tileset_up = 18;
+        btn_64arg.field_3A = 30;
+        btn_64arg.button_type = NC_STACK_button::TYPE_BUTTON;
+        btn_64arg.xpos = buttonsSpace + v294 * 0.4;
+        btn_64arg.ypos = 7 * (_fontH + vertMenuSpace);
+        btn_64arg.width = v294 * 0.6;
+        btn_64arg.caption = "Default";
+        btn_64arg.caption2.clear();
+        btn_64arg.downCode = 0;
+        btn_64arg.upCode = 1311;
+        btn_64arg.pressedCode = 0;
+        btn_64arg.button_id = 1186;
+        btn_64arg.flags = NC_STACK_button::FLAG_BORDER | NC_STACK_button::FLAG_CENTER | NC_STACK_button::FLAG_TEXT;
+        btn_64arg.txt_r = _iniColors[68].r;
+        btn_64arg.txt_g = _iniColors[68].g;
+        btn_64arg.txt_b = _iniColors[68].b;
+
+        if ( !_GameShell->video_button->Add(&btn_64arg) )
+        {
+            ypa_log_out("Unable to add Menu Font button\n");
+            return false;
+        }
+
         int gv117 = dword_5A50B2 - 6 * buttonsSpace - 2 * checkBoxWidth;
         int gv120 = gv117 / 2;
 
@@ -4763,6 +4815,7 @@ bool NC_STACK_ypaworld::CreateVideoControls()
 
     _GameShell->UpdatePaletteThemeText();
     _GameShell->UpdateGfxOptionTexts();
+    _GameShell->UpdateMenuFontText();
 
     NC_STACK_button::button_66arg v229;
     v229.butID = 1151;
@@ -5437,7 +5490,7 @@ bool NC_STACK_ypaworld::CreateDatabaseControls()
     btn.button_id = UIWidgets::DB_STATS_HEADER;
     if (!_GameShell->database_button->Add(&btn)) ok = false;
 
-    for (int k = 0; k < 4; k++)
+    for (int k = 0; k < 12; k++)
     {
         btn.ypos      = (k + 3) * lh;
         btn.caption   = " ";
@@ -6898,6 +6951,7 @@ size_t NC_STACK_ypaworld::ypaworld_func166(const std::string &langname)
     else
         fontStr = Locale::Text::SmallFont();
 
+    fontStr = System::ResolveMenuFontDescr(fontStr);
     GFX::Engine.LoadFontByDescr(fontStr);
     Gui::UA::LoadFont(fontStr);
 
@@ -6994,6 +7048,7 @@ void NC_STACK_ypaworld::UpdateGameShell()
     _GameShell->confBlending = System::IniConf::GfxBlending.Get<int32_t>();
     _GameShell->confMoviePlayer = System::IniConf::GfxMoviePlayer.Get<bool>();
     _GameShell->confVhsFilter = System::IniConf::GfxVhsFilter.Get<bool>();
+    _GameShell->confMenuFont = _GameShell->menuFont;
 
     v16.butID = 1184; // Intro Movies checkbox
     v16.field_4 = (!_GameShell->confMoviePlayer) + 1;
@@ -7006,6 +7061,7 @@ void NC_STACK_ypaworld::UpdateGameShell()
     _GameShell->video_button->SetText(1156, _GameShell->p_YW->_gfxMode.name);
     _GameShell->UpdatePaletteThemeText();
     _GameShell->UpdateGfxOptionTexts();
+    _GameShell->UpdateMenuFontText();
 
     tmp = _GameShell->video_button->GetSliderData(1159);
     tmp->value = _GameShell->fxnumber;
@@ -7104,8 +7160,7 @@ int NC_STACK_ypaworld::LoadingParseSaveFile(const std::string &filename)
         new World::Parsers::SaveSuperBombParser(this),
     };
     
-    if (World::IsModsAllow(false))
-        parsers.push_back( new World::Parsers::SaveLuaScriptParser(this) );
+    parsers.push_back( new World::Parsers::SaveLuaScriptParser(this) );
 
     return ScriptParser::ParseFile(filename, parsers, ScriptParser::FLAG_NO_SCOPE_SKIP);
 }
@@ -7613,16 +7668,10 @@ size_t NC_STACK_ypaworld::SetGameShellVideoMode(bool windowed)
         GFX::Engine.setWDD_cursor(0);
     }
 
-    if ( _screenSize.x >= 512 )
-    {
-        GFX::Engine.LoadFontByDescr( Locale::Text::Font() );
-        Gui::UA::LoadFont( Locale::Text::Font() );
-    }
-    else
-    {
-        GFX::Engine.LoadFontByDescr( Locale::Text::SmallFont() );
-        Gui::UA::LoadFont( Locale::Text::SmallFont() );
-    }
+    std::string fontStr = _screenSize.x >= 512 ? Locale::Text::Font() : Locale::Text::SmallFont();
+    fontStr = System::ResolveMenuFontDescr(fontStr);
+    GFX::Engine.LoadFontByDescr(fontStr);
+    Gui::UA::LoadFont(fontStr);
 
     return 1;
 }

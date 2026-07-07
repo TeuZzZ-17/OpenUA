@@ -148,6 +148,14 @@ namespace UIWidgets {
         DB_STATS_1        = 2078,
         DB_STATS_2        = 2079,
         DB_STATS_3        = 2080,
+        DB_STATS_4        = 2081,
+        DB_STATS_5        = 2082,
+        DB_STATS_6        = 2083,
+        DB_STATS_7        = 2084,
+        DB_STATS_8        = 2085,
+        DB_STATS_9        = 2086,
+        DB_STATS_10       = 2087,
+        DB_STATS_11       = 2088,
     };
     enum DATABASE_EVENT_IDS {
         DB_UP_UNITS       = 2101,
@@ -646,6 +654,9 @@ public:
     std::vector<std::string> paletteThemes;
     std::string paletteTheme;
     std::string confPaletteTheme;
+    std::vector<std::string> menuFonts;
+    std::string menuFont;
+    std::string confMenuFont;
     bool confPlayerRoboAIBehavior;
     bool confSpectatorMode;
 
@@ -895,6 +906,9 @@ public:
     void RefreshPaletteThemes();
     void CyclePaletteTheme();
     void UpdatePaletteThemeText();
+    void RefreshMenuFonts();
+    void CycleMenuFont();
+    void UpdateMenuFontText();
     bool SavePaletteThemeToNucleusIni();
     // OpenUA: modern graphics options helpers
     void UpdateGfxOptionTexts();   // refresh Blending/Atmosphere-Strength captions

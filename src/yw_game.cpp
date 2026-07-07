@@ -17,6 +17,7 @@
 #include "font.h"
 #include "gui/uacommon.h"
 #include "system/inivals.h"
+#include "system/system.h"
 
 extern uint32_t bact_id;
 
@@ -248,16 +249,10 @@ int NC_STACK_ypaworld::LevelCommonLoader(TLevelDescription *mapp, int levelID, i
 
         GFX::Engine.setWDD_cursor( (_preferences & World::PREF_SOFTMOUSE) != 0 );
 
-        if ( _screenSize.x >= 512 )
-        {
-            GFX::Engine.LoadFontByDescr( Locale::Text::Font() );
-            Gui::UA::LoadFont( Locale::Text::Font() );
-        }
-        else
-        {
-            GFX::Engine.LoadFontByDescr( Locale::Text::SmallFont() );
-            Gui::UA::LoadFont( Locale::Text::SmallFont() );
-        }
+        std::string fontStr = _screenSize.x >= 512 ? Locale::Text::Font() : Locale::Text::SmallFont();
+        fontStr = System::ResolveMenuFontDescr(fontStr);
+        GFX::Engine.LoadFontByDescr(fontStr);
+        Gui::UA::LoadFont(fontStr);
     }
 
     NC_STACK_bitmap *diskScreenImage = loadDisk_screen(this);

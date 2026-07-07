@@ -4,9 +4,6 @@
 
 namespace World {
     
-static bool bAllowMods = false;
-static bool bAllowModsWarning = true;
-    
 Common::PlaneBytes GetPlaneBytesFromBitmap(NC_STACK_bitmap *bitmap)
 {
     Common::PlaneBytes plane;
@@ -55,25 +52,6 @@ Common::PlaneBytes LoadMapDataFromImage(const std::string &fileName)
     img->Delete();
     
     return plane;
-}
-
-
-bool IsModsAllow(bool warning)
-{
-    if (!bAllowMods && warning && bAllowModsWarning)
-    {
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Modify detection", "Custom modify detected and not allowed in \"vanilla\" game.\nModifications allowed only in MODs", NULL);
-        bAllowModsWarning = false;
-    }
-    
-    return bAllowMods;
-}
-
-bool AllowMods(bool allow)
-{
-    bool tmp = bAllowMods;
-    bAllowMods = allow;
-    return tmp;
 }
 
 }

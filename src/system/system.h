@@ -2,6 +2,7 @@
 #define UA_SYSTEM_H_INCLUDED
 
 #include <string>
+#include <vector>
 
 #if defined(__APPLE__) && defined(__MACH__)
 #include <OpenGL/gl.h>
@@ -49,6 +50,14 @@ namespace System
     void SetReleativeMouse(bool mode);
     
     TTF_Font *LoadFont(const std::string &fontname, int height);
+    void RescanFonts();
+    std::vector<std::string> GetScannedFontNames();
+    bool IsFontAvailable(const std::string &fontname);
+    std::string MenuFontStorageValue(const std::string &fontName);
+    std::string MenuFontDisplayValue(const std::string &storedValue);
+    std::string GetConfiguredMenuFontName();
+    std::string ResolveMenuFontDescr(const std::string &defaultDescr);
+    std::string ResolveMenuFontDescr(const std::string &defaultDescr, const std::string &menuFont);
     
     void PostQuitMessage();
     

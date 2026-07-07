@@ -637,14 +637,10 @@ std::string setLooseSetBasSourceKind(const std::string &resolvedSource, FSMgr::i
         return "unknown (resolved virtual path is not a file)";
 
     std::string source = setLooseLower(setLooseNormalizeSlashes(resolvedSource));
-    std::string disk = setLooseLower(setLooseNormalizeSlashes(node->getPath()));
     std::string objectsPrefix = "data/set" + std::to_string(setId) + "/objects/";
 
     if (source.find("/loose/") != std::string::npos)
         return "SET loose override path";
-
-    if (disk.find("/mods/") != std::string::npos)
-        return "virtual FS/mod path (filesystem file)";
 
     if (source.compare(0, objectsPrefix.size(), objectsPrefix) == 0)
         return "normal loose Data/SetN/Objects SET.BAS style file";

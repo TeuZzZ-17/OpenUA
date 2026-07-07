@@ -84,6 +84,9 @@ Common::Ini::Key IniConf::GfxVBO("gfx.vbo", Common::Ini::KT_BOOL, true);
 
 // OpenUA custom: hide the legacy passive menu hover/help description texts by default.
 Common::Ini::Key IniConf::UiHideMenuHints("ui.hide_menu_hints", Common::Ini::KT_BOOL, true);
+// Stored as a single token when saved by Options, e.g. Liberation_Mono_Regular.
+// KT_STRING is intentionally kept so older test builds with spaces still parse.
+Common::Ini::Key IniConf::UiMenuFont("ui.menu_font", Common::Ini::KT_STRING, std::string("Default"));
 
 
 // Input Engine
@@ -253,9 +256,6 @@ Common::Ini::Key IniConf::NetKickoff("net.kickoff", Common::Ini::KT_DIGIT, (int3
 Common::Ini::Key IniConf::ParticlesLimit("particles.limit", Common::Ini::KT_DIGIT, (int32_t)5000);
 
 Common::Ini::Key IniConf::MenuWindowed("menu.windowed", Common::Ini::KT_BOOL, false);
-
-// AllowMods
-Common::Ini::Key IniConf::DevMode("devmode", Common::Ini::KT_BOOL, false);
 
 void IniConf::Init()
 {
@@ -485,8 +485,7 @@ void IniConf::Init()
         , &GfxVhsFilterStrength
 
         , &UiHideMenuHints
-
-        , &DevMode
+        , &UiMenuFont
     };
 }
     
