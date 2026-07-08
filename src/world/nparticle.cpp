@@ -61,17 +61,25 @@ void ParticleSystem::UpdateRender(area_arg_65 *rndrParams, int32_t delta)
             it = _particles.erase(it);
             continue;
         }
-        
+
         f.Age += delta;
-        
+
         if (f.Age >= f.pParticleGen->_lifeTime)
         {
             it = _particles.erase(it);
             continue;
         }
-        
-        f.Vec += f.pParticleGen->_accelStart + f.pParticleGen->_accelDelta * f.Age;
-        f.Pos += f.Vec * fsec + NC_STACK_particle::RandVec() * f.pParticleGen->_noisePower;
+
+        // The acceleration and noise terms were historically applied once per
+        // rendered frame, tuned for the vanilla ~60fps frame of ~17 clock units
+        // (1024 units/s). Scale them by the actual frame delta so particles keep
+        // the same trajectories at any frame rate: at 60fps frameScale ~= 1.0
+        // (vanilla behavior), at 240fps each of the 4x more frequent steps
+        // contributes a quarter.
+        float frameScale = (float)delta * (60.0f / 1024.0f);
+
+        f.Vec += (f.pParticleGen->_accelStart + f.pParticleGen->_accelDelta * f.Age) * frameScale;
+        f.Pos += f.Vec * fsec + NC_STACK_particle::RandVec() * (f.pParticleGen->_noisePower * frameScale);
         float baseScale = f.pParticleGen->_scaleStart + f.pParticleGen->_scaleDelta * f.Age;
         vec3d scl(baseScale * f.Scale.x, baseScale * f.Scale.y, baseScale * f.Scale.z);
         

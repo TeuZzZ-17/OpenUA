@@ -760,19 +760,26 @@ void NC_STACK_ypatank::AI_layer3(update_msg *arg)
         {
             _fly_dir_length = 0;
 
-            if ( _tankWaitCount )
+            if ( _tankWaitCount > 0 )
             {
                 if ( _status_flg & BACT_STFLAG_DODGE_LEFT )
                     _rotation = mat3x3::RotateY(v244 * 0.33333334) * _rotation;
                 else if ( _status_flg & BACT_STFLAG_DODGE_RIGHT )
                     _rotation = mat3x3::RotateY(-v244 * 0.33333334) * _rotation;
 
-                _tankWaitCount--;
+                _tankWaitCount -= arg->frameTime;
             }
             else
             {
                 _status_flg &= ~(BACT_STFLAG_DODGE_LEFT | BACT_STFLAG_DODGE_RIGHT);
-                _tankWaitCount = arg->frameTime / 5;
+
+                // Was a per-frame counter reloaded with frameTime/5: 3 at the vanilla
+                // 60fps frame (~18 clock units), but it truncates to 0 at high frame
+                // rates (frameTime ~4 at 240fps), breaking the dodge cadence. Hold in
+                // clock units instead: 54 units == exactly 3 vanilla 60fps frames, so
+                // 60fps behavior is unchanged and the dodge phase keeps the same
+                // real-time duration at any frame rate.
+                _tankWaitCount = 54;
 
                 if ( _tankFlags & FLAG_TANK_ROTWAIT )
                 {

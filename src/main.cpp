@@ -430,6 +430,31 @@ int ProcessMenuFrame()
 }
 
 
+// OpenUA frame-rate independent simulation timing (game.fixed_tick, default yes;
+// the key name is historical, kept because it is already in users' Nucleus.ini).
+//
+// The game clock runs at 1024 units per second and the engine does exactly one
+// simulation step per rendered frame with DTime = measured frame delta + 1
+// (the historical Period++ bias). That couples gameplay speed to gfx.maxfps:
+// every rendered frame adds one extra clock unit, so 120/240 fps plays visibly
+// faster than 60 fps (~+17% at 240).
+//
+// Since almost all gameplay already scales by frameTime, feeding the TRUE
+// measured delta (no bias) makes the simulation advance in real time at any
+// frame cap, with native per-frame fluidity. Menu, replay and netplay keep the
+// legacy biased timing untouched.
+static bool FrameRateIndependentActive()
+{
+    if ( GameScreenMode != GAME_SCREEN_MODE_GAME || !ypaworld )
+        return false;
+
+    // Netplay keeps its own flush/sync timing assumptions.
+    if ( ypaworld->_isNetGame )
+        return false;
+
+    return System::IniConf::GameFixedTick.Get<bool>();
+}
+
 int ProcessNextFrame()
 {
     input_states = TInputState();
@@ -441,20 +466,33 @@ int ProcessNextFrame()
         userdata.ResetInputPeriod = false;
     }
 
-    input_states.Period++;
+    if ( FrameRateIndependentActive() )
+    {
+        // True measured delta, no +1 bias. Floor to 1 (itimer can round to 0
+        // above ~1024 fps and _FPS divides by DTime), clamp to ~250ms so an
+        // alt-tab or loading stall cannot become one giant physics step.
+        if ( input_states.Period < 1 )
+            input_states.Period = 1;
+        else if ( input_states.Period > 256 )
+            input_states.Period = 256;
+    }
+    else
+    {
+        input_states.Period++;
+    }
 
     world_update_arg.DTime = input_states.Period;
     world_update_arg.field_8 = &input_states;
 
     world_update_arg.TimeStamp += input_states.Period;
-    
+
 
     // If mouse captured, enable releative mouse control
     if (ypaworld->_mouseGrabbed)
         System::SetReleativeMouse(true);
     else
         System::SetReleativeMouse(false);
-    
+
     Gui::Root::Instance.TimersUpdate( input_states.Period );
 
     if ( GameScreenMode == GAME_SCREEN_MODE_MENU )

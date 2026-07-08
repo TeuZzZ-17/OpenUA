@@ -229,6 +229,11 @@ Common::Ini::Key IniConf::GameNewDebug("game.new.debug", Common::Ini::KT_WORD, s
 
 // Yparobo keys
 Common::Ini::Key IniConf::GameNewAI("game.newai",    Common::Ini::KT_BOOL, true);
+// OpenUA: frame-rate independent gameplay timing (historical key name).
+// game.fixed_tick = yes ; single-player simulation uses the true measured frame
+// delta (no legacy +1 bias): real-time gameplay speed at any gfx.maxfps.
+// "no" restores the legacy biased timing (higher fps = faster gameplay).
+Common::Ini::Key IniConf::GameFixedTick("game.fixed_tick", Common::Ini::KT_BOOL, true);
 Common::Ini::Key IniConf::GameTimeLine("game.timeline", Common::Ini::KT_DIGIT, (int32_t)600000);
 Common::Ini::Key IniConf::GameRoboPlayerAIBehavior("game.robo_player_ai_behavior", Common::Ini::KT_BOOL, false);
 Common::Ini::Key IniConf::GameSpectatorMode("game.spectator_mode", Common::Ini::KT_BOOL, false);
@@ -442,6 +447,7 @@ void IniConf::Init()
         , &GameNewDebug
 
         , &GameNewAI
+        , &GameFixedTick
         , &GameTimeLine
         , &GameRoboPlayerAIBehavior
         , &GameSpectatorMode

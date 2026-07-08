@@ -222,6 +222,12 @@ public:
     static bool IsGameNewDebugEnabled();
     
     static Common::Ini::Key GameNewAI;
+    // OpenUA: frame-rate independent gameplay timing (game.fixed_tick, default yes;
+    // historical key name). In single-player gameplay the simulation advances by the
+    // TRUE measured frame delta instead of delta+1 (the legacy Period++ bias), so
+    // gameplay speed stays real-time at any gfx.maxfps with native per-frame
+    // fluidity. "no" restores the legacy biased timing (high fps = faster game).
+    static Common::Ini::Key GameFixedTick;
     static Common::Ini::Key GameTimeLine;
     static Common::Ini::Key GameRoboPlayerAIBehavior;
     static Common::Ini::Key GameSpectatorMode;
