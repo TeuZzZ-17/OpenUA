@@ -662,6 +662,7 @@ public:
 
     // OpenUA: modern graphics options shown in the Options menu.
     int confBlending;             // gfx.blending  0=Default 1=Additive 2=Sharp
+    int confMaxFps;               // gfx.maxfps, validated against the Options FPS list
     bool confMoviePlayer;         // gfx.movie_player
     bool confVhsFilter;           // gfx.vhs_filter
 

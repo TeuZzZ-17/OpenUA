@@ -7,6 +7,7 @@
 #include "sound.h"
 #include "common/common.h"
 #include "inivals.h"
+#include "../utils.h"
 
 
 SFXEngine SFXEngine::SFXe;
@@ -254,7 +255,7 @@ void SFXEngine::SetMusicTrack(int trackID, int minDelay, int maxDelay)
 {
     if (digDriver && musPlayer && musOn && trackID > 0)
     {
-        if ( musPlayer->open( fmt::sprintf("music/%d.ogg", trackID) ) )
+        if ( musPlayer->open( uaDataFirstResolvedReadPath(fmt::sprintf("music/%d.ogg", trackID)) ) )
         {
             musTrack = trackID;
             musMinDelay = minDelay;

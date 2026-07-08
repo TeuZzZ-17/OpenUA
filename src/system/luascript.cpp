@@ -1,5 +1,6 @@
 #include "luascript.h"
 #include "../fmtlib/printf.h"
+#include "../utils.h"
 
 namespace System
 {
@@ -53,7 +54,7 @@ void LuaScript::RunScript(lua_State *l, const std::string &fname)
     int top = lua_gettop(l);
     
     
-    std::string tmp = fmt::sprintf("res/%s", fname);
+    std::string tmp = uaDataFirstResolvedReadPath(fmt::sprintf("res/%s", fname));
     if ( luaL_loadfile(l, tmp.c_str()) != LUA_OK )
     {
         printf("Err on loading script %s\n %s\n", fname.c_str(), lua_tostring(l, -1));

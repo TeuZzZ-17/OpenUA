@@ -392,6 +392,64 @@ bool setLooseSupportedExtension(const std::string &assetPath)
            ext == "anm";
 }
 
+bool set46RootPrefixActive()
+{
+    std::string prefix = setLooseLower(setLooseNormalizeSlashes(Common::Env.GetPrefix("rsrc")));
+    const std::string tag = "data:set46";
+
+    if (prefix.compare(0, tag.size(), tag) != 0)
+        return false;
+
+    return prefix.size() == tag.size() || prefix[tag.size()] == '/' || prefix[tag.size()] == ':';
+}
+
+std::string set46RootAssetFromRequest(const std::string &filename)
+{
+    std::string request = setLooseTrimResourceName(setLooseNormalizeSlashes(filename));
+    if ( request.empty() )
+        return std::string();
+
+    std::string lowered = setLooseLower(request);
+    const std::string setTag = "data:set46";
+
+    if (lowered.compare(0, setTag.size(), setTag) == 0)
+    {
+        size_t pos = setTag.size();
+        if (pos < request.size() && (request[pos] == ':' || request[pos] == '/' || request[pos] == '\\'))
+            pos++;
+
+        return setLooseStripLeadingSlashes(request.substr(pos));
+    }
+
+    size_t colonPos = request.find(':');
+    if (colonPos != std::string::npos)
+    {
+        std::string prefix = setLooseLower(request.substr(0, colonPos));
+        if (prefix == "rsrc" && set46RootPrefixActive())
+            return setLooseStripLeadingSlashes(request.substr(colonPos + 1));
+
+        return std::string();
+    }
+
+    if ( set46RootPrefixActive() )
+        return setLooseStripLeadingSlashes(request);
+
+    return std::string();
+}
+
+bool set46RootSupportedPngOverrideAsset(const std::string &assetPath)
+{
+    if ( assetPath.empty() || assetPath.find(':') != std::string::npos )
+        return false;
+
+    std::string normalized = setLooseStripLeadingSlashes(setLooseNormalizeSlashes(assetPath));
+    if ( normalized.find('/') != std::string::npos || normalized.find('\\') != std::string::npos )
+        return false;
+
+    std::string ext = setLooseExtension(normalized);
+    return ext.empty() || ext == "ilbm" || ext == "ilb" || ext == "iff";
+}
+
 bool setLooseWriteReport(SetLooseReport &report)
 {
     if (!SET_LOOSE_OVERRIDE_REPORT_ENABLED)
@@ -1455,6 +1513,49 @@ bool IFFile::FindSetHiEffectPngOverride(const std::string &filename, const std::
                 out->requested = assetPath;
                 out->resolvedPath = openPath;
                 out->extensionForm = "HI PNG effect override";
+                out->vanillaPath = setLooseNormalizeSlashes(correctSeparatorAndExt(Common::Env.ApplyPrefix("rsrc:" + assetPath)));
+                out->embedded = false;
+                out->sourceFunction = sourceFunction ? sourceFunction : "NC_STACK_ilbm::rsrc_func64";
+            }
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool IFFile::FindSet46RootPngOverride(const std::string &filename, const std::string &mode, SetLooseOverride *out, const char *sourceFunction)
+{
+    if (out)
+        *out = SetLooseOverride();
+
+    if ( !setLooseIsReadMode(mode) )
+        return false;
+
+    std::string assetPath = set46RootAssetFromRequest(filename);
+    assetPath = setLooseTrimResourceName(setLooseStripLeadingSlashes(setLooseNormalizeSlashes(assetPath)));
+    if ( !set46RootSupportedPngOverrideAsset(assetPath) )
+        return false;
+
+    std::vector<std::string> candidates;
+    candidates.push_back("Data/Set46/" + setLooseReplaceExtension(assetPath, ".PNG"));
+
+    std::string lowerCandidate = "Data/Set46/" + setLooseReplaceExtension(assetPath, ".png");
+    if ( setLooseNormalizeSlashes(lowerCandidate) != setLooseNormalizeSlashes(candidates.front()) )
+        candidates.push_back(lowerCandidate);
+
+    for (const std::string &candidate : candidates)
+    {
+        std::string openPath;
+        if ( setLooseResolveReadableFile(candidate, &openPath) )
+        {
+            if (out)
+            {
+                out->active = true;
+                out->setId = 46;
+                out->requested = assetPath;
+                out->resolvedPath = openPath;
+                out->extensionForm = "Data/Set46 PNG GUI override";
                 out->vanillaPath = setLooseNormalizeSlashes(correctSeparatorAndExt(Common::Env.ApplyPrefix("rsrc:" + assetPath)));
                 out->embedded = false;
                 out->sourceFunction = sourceFunction ? sourceFunction : "NC_STACK_ilbm::rsrc_func64";

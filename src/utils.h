@@ -4,6 +4,7 @@
 #include <math.h>
 #include <string.h>
 #include <regex>
+#include <vector>
 
 #define C_2PI		6.28318530717958647693
 #define C_PI		3.14159265358979323846
@@ -129,6 +130,10 @@ bool uaDeleteFile(const std::string &path);
 bool uaDeleteDir(const std::string &path);
 bool uaCreateDir(const std::string &path);
 bool uaFileExist(const std::string &path);
+std::string uaDataFirstNucleusIniPath();
+std::string uaDataFirstResolvedReadPath(const std::string &path);
+std::string uaDataFirstResolvedWritePath(const std::string &path);
+std::vector<std::string> uaDataFirstRootDirCandidates(const std::string &dirname);
 
 inline double clp_asin(double x)
 {

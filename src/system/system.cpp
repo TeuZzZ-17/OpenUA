@@ -183,11 +183,9 @@ std::string MenuFontDisplayValue(const std::string &storedValue)
     return decoded;
 }
 
-void ScanFonts()
+static void ScanFontDir(const std::string &path)
 {
-    FontsList.clear();
-
-    FSMgr::DirIter dir = FSMgr::iDir::readDir("fonts/");
+    FSMgr::DirIter dir = FSMgr::iDir::readDir(path);
     if (dir)
     {
         FSMgr::iNode *nod = NULL;
@@ -216,6 +214,14 @@ void ScanFonts()
             }
         }
     }
+}
+
+void ScanFonts()
+{
+    FontsList.clear();
+
+    for (const std::string &path : uaDataFirstRootDirCandidates("Fonts"))
+        ScanFontDir(path);
 }
 
 std::string FindFont(const std::string &fontName)

@@ -34,6 +34,19 @@ SDL_PixelFormat *GFXEngine::_pixfmt = NULL;
 GLint GFXEngine::_glPixfmt, GFXEngine::_glPixtype;
 bool GFXEngine::_staticInited = false;
 
+static int NormalizeFrameRateLimit(int value)
+{
+    static const int validLimits[] = {60, 75, 90, 120, 144, 165, 200, 240};
+
+    for (int limit : validLimits)
+    {
+        if (value == limit)
+            return value;
+    }
+
+    return 60;
+}
+
 const std::array<vec3d, 17> GFXEngine::_clrEff
 {   vec3d(1.0,  1.0,  1.0)
 ,   vec3d(1.21, 0.0,  0.29)
@@ -681,7 +694,7 @@ size_t GFXEngine::windd_func0(IDVList &stak)
             break;
     }
 
-    fpsLimitter(60); // OpenUA: hard-locked to 60Hz.
+    fpsLimitter(NormalizeFrameRateLimit(System::IniConf::GfxMaxFps.Get<int32_t>()));
 
     LoadFontByDescr("MS Sans Serif,12,400,0");
 
@@ -4806,7 +4819,7 @@ uint32_t GFXEngine::CompileShader(int32_t type, const std::string &string)
 
 uint32_t GFXEngine::LoadShader(int32_t type, const std::string &fl)
 {
-    FSMgr::FileHandle *f = FSMgr::iDir::openFileAlloc(fl, "rb");
+    FSMgr::FileHandle *f = FSMgr::iDir::openFileAlloc(uaDataFirstResolvedReadPath(fl), "rb");
     if (!f)
         return 0;
 

@@ -119,6 +119,7 @@ public:
     static bool FindSetLooseEmrsOverride(const std::string &filename, const std::string &mode, const std::string &className, const std::string &payload, SetLooseOverride *out, const char *sourceFunction = NULL, size_t currentOffset = (size_t)-1);
     static bool FindSetLooseEmrsPngOverride(const std::string &filename, const std::string &mode, const std::string &className, const std::string &payload, SetLooseOverride *out, const char *sourceFunction = NULL, size_t currentOffset = (size_t)-1);
     static bool FindSetHiEffectPngOverride(const std::string &filename, const std::string &mode, SetLooseOverride *out, const char *sourceFunction = NULL);
+    static bool FindSet46RootPngOverride(const std::string &filename, const std::string &mode, SetLooseOverride *out, const char *sourceFunction = NULL);
 
     static bool BeginSkyLooseScope(const std::string &skyName);
     static void EndSkyLooseScope();

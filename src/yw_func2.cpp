@@ -41,6 +41,7 @@ static constexpr int SETTINGS_CHANGE_PLAYER_ROBO_AI_BEHAVIOR = 0x4000;
 static constexpr int SETTINGS_CHANGE_SPECTATOR_MODE = 0x8000;
 // OpenUA: modern graphics options
 static constexpr int SETTINGS_CHANGE_VHS_FILTER             = 0x20000;
+static constexpr int SETTINGS_CHANGE_MAXFPS                 = 0x40000;
 static constexpr int SETTINGS_CHANGE_BLENDING              = 0x80000;
 static constexpr int SETTINGS_CHANGE_MOVIE_PLAYER          = 0x100000;
 static constexpr int SETTINGS_CHANGE_MENU_FONT             = 0x200000;
@@ -58,6 +59,33 @@ static std::string BlendingLabel(int v)
 }
 
 static int CycleBlending(int v)   { return (v == 0) ? 1 : (v == 1) ? 2 : 0; }
+
+static int NormalizeFrameRateLimit(int value)
+{
+    static const int validLimits[] = {60, 75, 90, 120, 144, 165, 200, 240};
+
+    for (int limit : validLimits)
+    {
+        if (value == limit)
+            return value;
+    }
+
+    return 60;
+}
+
+static int CycleFrameRateLimit(int value)
+{
+    static const int validLimits[] = {60, 75, 90, 120, 144, 165, 200, 240};
+    value = NormalizeFrameRateLimit(value);
+
+    for (size_t i = 0; i < sizeof(validLimits) / sizeof(validLimits[0]); i++)
+    {
+        if (validLimits[i] == value)
+            return validLimits[(i + 1) % (sizeof(validLimits) / sizeof(validLimits[0]))];
+    }
+
+    return 60;
+}
 
 // OpenUA: the "Atmosphere" dropdown now selects a modern fullscreen visual filter from
 // Data/Filters/*.pal (see GFXEngine::SetVisualFilter), NOT the legacy SET palette-theme.
@@ -1299,6 +1327,15 @@ void UserData::sb_0x46aa8c()
             ypa_log_out("WARNING: Could not save gfx.blending to nucleus.ini\n");
     }
 
+    if ( _settingsChangeOptions & SETTINGS_CHANGE_MAXFPS )
+    {
+        confMaxFps = NormalizeFrameRateLimit(confMaxFps);
+        System::IniConf::GfxMaxFps.Value = (int32_t)confMaxFps;
+        GFX::Engine.fpsLimitter(confMaxFps);
+        if ( !SaveKeyToNucleusIni("gfx.maxfps", std::to_string(confMaxFps)) )
+            ypa_log_out("WARNING: Could not save gfx.maxfps to nucleus.ini\n");
+    }
+
     if ( _settingsChangeOptions & SETTINGS_CHANGE_MOVIE_PLAYER )
     {
         System::IniConf::GfxMoviePlayer.Value = confMoviePlayer;
@@ -1760,8 +1797,10 @@ void UserData::ShowOptionsMenu()
     confMenuFont = menuFont;
     confPlayerRoboAIBehavior = System::IniConf::GameRoboPlayerAIBehavior.Get<bool>();
     confSpectatorMode = System::IniConf::GameSpectatorMode.Get<bool>();
+    confMaxFps = NormalizeFrameRateLimit(System::IniConf::GfxMaxFps.Get<int32_t>());
     UpdatePaletteThemeText();
     UpdateMenuFontText();
+    UpdateGfxOptionTexts();
 
     NC_STACK_button::button_66arg state;
     state.butID = 1174;
@@ -2112,6 +2151,7 @@ void UserData::sub_46A3C0()
     confMenuFont = menuFont;
     confPlayerRoboAIBehavior = System::IniConf::GameRoboPlayerAIBehavior.Get<bool>();
     confSpectatorMode = System::IniConf::GameSpectatorMode.Get<bool>();
+    confMaxFps = NormalizeFrameRateLimit(System::IniConf::GfxMaxFps.Get<int32_t>());
 
     int gfxId = GFX::GFXEngine::Instance.GetGfxModeIndex(p_YW->_gfxMode);
     
@@ -2398,8 +2438,9 @@ bool UserData::SavePaletteThemeToNucleusIni()
 
     std::vector<std::string> lines;
     bool replaced = false;
+    const std::string nucleusIni = uaDataFirstNucleusIniPath();
 
-    FSMgr::FileHandle *in = uaOpenFileAlloc("nucleus.ini", "r");
+    FSMgr::FileHandle *in = uaOpenFileAlloc(nucleusIni, "r");
     if (in)
     {
         std::string line;
@@ -2432,7 +2473,7 @@ bool UserData::SavePaletteThemeToNucleusIni()
     if (!replaced)
         lines.push_back(newLine);
 
-    FSMgr::FileHandle *out = uaOpenFileAlloc("nucleus.ini", "w");
+    FSMgr::FileHandle *out = uaOpenFileAlloc(nucleusIni, "w");
     if (!out)
         return false;
 
@@ -2456,8 +2497,9 @@ bool UserData::SaveKeyToNucleusIni(const std::string &key, const std::string &va
 
     std::vector<std::string> lines;
     bool replaced = false;
+    const std::string nucleusIni = uaDataFirstNucleusIniPath();
 
-    FSMgr::FileHandle *in = uaOpenFileAlloc("nucleus.ini", "r");
+    FSMgr::FileHandle *in = uaOpenFileAlloc(nucleusIni, "r");
     if (in)
     {
         std::string line;
@@ -2491,7 +2533,7 @@ bool UserData::SaveKeyToNucleusIni(const std::string &key, const std::string &va
     if (!replaced)
         lines.push_back(newLine);
 
-    FSMgr::FileHandle *out = uaOpenFileAlloc("nucleus.ini", "w");
+    FSMgr::FileHandle *out = uaOpenFileAlloc(nucleusIni, "w");
     if (!out)
         return false;
 
@@ -2506,6 +2548,7 @@ bool UserData::SaveKeyToNucleusIni(const std::string &key, const std::string &va
 void UserData::UpdateGfxOptionTexts()
 {
     video_button->SetText(1183, BlendingLabel(confBlending));
+    video_button->SetText(1187, std::to_string(NormalizeFrameRateLimit(confMaxFps)));
 }
 
 bool UserData::SavePlayerRoboAIBehaviorToNucleusIni()
@@ -2515,8 +2558,9 @@ bool UserData::SavePlayerRoboAIBehaviorToNucleusIni()
 
     std::vector<std::string> lines;
     bool replaced = false;
+    const std::string nucleusIni = uaDataFirstNucleusIniPath();
 
-    FSMgr::FileHandle *in = uaOpenFileAlloc("nucleus.ini", "r");
+    FSMgr::FileHandle *in = uaOpenFileAlloc(nucleusIni, "r");
     if (in)
     {
         std::string line;
@@ -2549,7 +2593,7 @@ bool UserData::SavePlayerRoboAIBehaviorToNucleusIni()
     if (!replaced)
         lines.push_back(newLine);
 
-    FSMgr::FileHandle *out = uaOpenFileAlloc("nucleus.ini", "w");
+    FSMgr::FileHandle *out = uaOpenFileAlloc(nucleusIni, "w");
     if (!out)
         return false;
 
@@ -2567,8 +2611,9 @@ bool UserData::SaveSpectatorModeToNucleusIni()
 
     std::vector<std::string> lines;
     bool replaced = false;
+    const std::string nucleusIni = uaDataFirstNucleusIniPath();
 
-    FSMgr::FileHandle *in = uaOpenFileAlloc("nucleus.ini", "r");
+    FSMgr::FileHandle *in = uaOpenFileAlloc(nucleusIni, "r");
     if (in)
     {
         std::string line;
@@ -2601,7 +2646,7 @@ bool UserData::SaveSpectatorModeToNucleusIni()
     if (!replaced)
         lines.push_back(newLine);
 
-    FSMgr::FileHandle *out = uaOpenFileAlloc("nucleus.ini", "w");
+    FSMgr::FileHandle *out = uaOpenFileAlloc(nucleusIni, "w");
     if (!out)
         return false;
 
@@ -4600,6 +4645,12 @@ void UserData::GameShellUiHandleInput()
             confBlending = CycleBlending(confBlending);
             video_button->SetText(1183, BlendingLabel(confBlending));
             _settingsChangeOptions |= SETTINGS_CHANGE_BLENDING;
+        }
+        else if ( r.code == 1312 ) // FPS Limit cycle
+        {
+            confMaxFps = CycleFrameRateLimit(confMaxFps);
+            video_button->SetText(1187, std::to_string(confMaxFps));
+            _settingsChangeOptions |= SETTINGS_CHANGE_MAXFPS;
         }
         else if ( r.code == 1307 ) // Intro Movies checkbox (checked)
         {

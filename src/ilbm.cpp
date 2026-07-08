@@ -514,6 +514,8 @@ static SDL_RWops *ILBM_PngRwFromFile(FSMgr::FileHandle *fil)
     return rwops;
 }
 
+static void ILBM_SkipEmbeddedChunk(IFFile *mfile);
+
 static UA_PALETTE *ILBM_CopyPngPalette(SDL_Surface *loaded)
 {
     UA_PALETTE *pal = new UA_PALETTE;
@@ -623,6 +625,53 @@ static SDL_Surface *ILBM_PrepareTruecolorPngSurface(SDL_Surface *loaded, int tra
     return rgba;
 }
 
+static void ILBM_NormalizeLegacyColorKeyPngSurface(SDL_Surface *s)
+{
+    if ( !s || !s->format )
+        return;
+
+    if ( s->format->BitsPerPixel != 32 || !s->format->Amask )
+    {
+        SDL_SetSurfaceBlendMode(s, SDL_BLENDMODE_NONE);
+        return;
+    }
+
+    bool locked = false;
+    if ( SDL_MUSTLOCK(s) )
+    {
+        if ( SDL_LockSurface(s) != 0 )
+        {
+            SDL_SetSurfaceBlendMode(s, SDL_BLENDMODE_NONE);
+            return;
+        }
+        locked = true;
+    }
+
+    const uint32_t colorKey = SDL_MapRGB(s->format, 255, 255, 0);
+
+    for (int y = 0; y < s->h; y++)
+    {
+        uint8_t *row = (uint8_t *)s->pixels + y * s->pitch;
+        uint32_t *pixel = (uint32_t *)row;
+
+        for (int x = 0; x < s->w; x++)
+        {
+            uint8_t r, g, b, a;
+            SDL_GetRGBA(pixel[x], s->format, &r, &g, &b, &a);
+
+            if ( a < 128 )
+                pixel[x] = colorKey;
+            else
+                pixel[x] = SDL_MapRGBA(s->format, r, g, b, 255);
+        }
+    }
+
+    if ( locked )
+        SDL_UnlockSurface(s);
+
+    SDL_SetSurfaceBlendMode(s, SDL_BLENDMODE_NONE);
+}
+
 static SDL_Surface *ILBM_NormalizeIndexedPngSurface(SDL_Surface *loaded, UA_PALETTE *pal, int alphaPalette, int transp)
 {
     if ( !loaded || !loaded->format->palette )
@@ -661,7 +710,7 @@ static SDL_Surface *ILBM_NormalizeIndexedPngSurface(SDL_Surface *loaded, UA_PALE
     return indexed;
 }
 
-static rsrc *ILBM_ReadPngOverride(NC_STACK_ilbm *obj, IDVList &stak, const std::string &path, int transp)
+static rsrc *ILBM_ReadPngOverride(NC_STACK_ilbm *obj, IDVList &stak, const std::string &path, int transp, bool legacyColorKey = false)
 {
     FSMgr::FileHandle *fil = FSMgr::iDir::openFileAlloc(path, "rb");
     if ( !fil )
@@ -688,6 +737,16 @@ static rsrc *ILBM_ReadPngOverride(NC_STACK_ilbm *obj, IDVList &stak, const std::
     {
         SDL_FreeSurface(loaded);
         return NULL;
+    }
+
+    if ( legacyColorKey && loaded->format->palette )
+    {
+        SDL_Surface *rgba = SDL_ConvertSurfaceFormat(loaded, SDL_PIXELFORMAT_ABGR8888, 0);
+        if ( rgba )
+        {
+            SDL_FreeSurface(loaded);
+            loaded = rgba;
+        }
     }
 
     rsrc *res = obj->NC_STACK_rsrc::rsrc_func64(stak);
@@ -739,7 +798,101 @@ static rsrc *ILBM_ReadPngOverride(NC_STACK_ilbm *obj, IDVList &stak, const std::
         }
     }
 
+    if ( legacyColorKey )
+        ILBM_NormalizeLegacyColorKeyPngSurface(bitm->swTex);
+
     return res;
+}
+
+static bool ILBM_ReadLegacyDimensions(const std::string &name, int *width, int *height)
+{
+    IFFile *mfile = IFFile::RsrcOpenIFFileVanilla(name, "rb");
+    if ( !mfile )
+        return false;
+
+    bool ok = false;
+
+    if ( !mfile->parse() )
+    {
+        const IFFile::Context &formChunk = mfile->GetCurrentChunk();
+        if ( formChunk.Is(TAG_FORM) && (formChunk.TAG_EXTENSION == TAG_ILBM || formChunk.TAG_EXTENSION == TAG_VBMP) )
+        {
+            while ( true )
+            {
+                int parseResult = mfile->parse();
+                if ( parseResult == IFFile::IFF_ERR_EOC )
+                    break;
+                if ( parseResult )
+                    break;
+
+                const IFFile::Context &chunk = mfile->GetCurrentChunk();
+                if ( chunk.Is(TAG_BMHD) )
+                {
+                    if (width)
+                        *width = mfile->readU16B();
+                    if (height)
+                        *height = mfile->readU16B();
+                    ok = true;
+                    break;
+                }
+                else if ( chunk.Is(TAG_HEAD) )
+                {
+                    if (width)
+                        *width = mfile->readU16B();
+                    if (height)
+                        *height = mfile->readU16B();
+                    ok = true;
+                    break;
+                }
+                else
+                {
+                    mfile->skipChunk();
+                }
+            }
+        }
+    }
+
+    delete mfile;
+    return ok;
+}
+
+static rsrc *ILBM_ReadSet46RootPngOverride(NC_STACK_ilbm *obj, IDVList &stak, const std::string &name, IFFile *embeddedFile)
+{
+    IFFile::SetLooseOverride overrideInfo;
+    if ( !IFFile::FindSet46RootPngOverride(name, "rb", &overrideInfo, "NC_STACK_ilbm::rsrc_func64") )
+        return NULL;
+
+    IDVList pngStak = stak;
+    pngStak.Add(NC_STACK_bitmap::BMD_ATT_CONVCOLOR, (int32_t)1);
+    pngStak.Add(NC_STACK_ilbm::ATT_ALPHAPALETTE, (int32_t)0);
+
+    rsrc *pngRes = ILBM_ReadPngOverride(obj, pngStak, overrideInfo.resolvedPath, 0, true);
+    if ( !pngRes )
+    {
+        ypa_log_out("WARNING: OpenUA Set46 PNG override failed for %s; falling back to legacy asset %s.\n",
+                    overrideInfo.resolvedPath.c_str(), name.c_str());
+        return NULL;
+    }
+
+    ResBitmap *pngBitmap = (ResBitmap *)pngRes->data;
+    int legacyWidth = 0;
+    int legacyHeight = 0;
+    if ( pngBitmap && ILBM_ReadLegacyDimensions(name, &legacyWidth, &legacyHeight) &&
+         (pngBitmap->width != legacyWidth || pngBitmap->height != legacyHeight) )
+    {
+        ypa_log_out("WARNING: OpenUA Set46 PNG override %s size %dx%d differs from legacy %s size %dx%d; falling back to legacy asset.\n",
+                    overrideInfo.resolvedPath.c_str(), pngBitmap->width, pngBitmap->height,
+                    name.c_str(), legacyWidth, legacyHeight);
+        obj->NC_STACK_rsrc::rsrc_func65(pngRes);
+        return NULL;
+    }
+
+    ypa_log_out("OpenUA Set46 PNG override used: %s -> %s\n", name.c_str(), overrideInfo.resolvedPath.c_str());
+
+    if ( embeddedFile )
+        ILBM_SkipEmbeddedChunk(embeddedFile);
+
+    return pngRes;
 }
 
 static void ILBM_SkipEmbeddedChunk(IFFile *mfile)
@@ -844,6 +997,10 @@ rsrc * NC_STACK_ilbm::rsrc_func64(IDVList &stak)
     }
     else
     {
+        rsrc *set46OverrideRes = ILBM_ReadSet46RootPngOverride(this, stak, resName, mfile);
+        if ( set46OverrideRes )
+            return set46OverrideRes;
+
         if ( mfile )
         {
             stak.Add(BMD_ATT_CONVCOLOR, (int32_t)1);
