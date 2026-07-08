@@ -119,6 +119,14 @@ public:
     static bool FindSetLooseEmrsOverride(const std::string &filename, const std::string &mode, const std::string &className, const std::string &payload, SetLooseOverride *out, const char *sourceFunction = NULL, size_t currentOffset = (size_t)-1);
     static bool FindSetLooseEmrsPngOverride(const std::string &filename, const std::string &mode, const std::string &className, const std::string &payload, SetLooseOverride *out, const char *sourceFunction = NULL, size_t currentOffset = (size_t)-1);
     static bool FindSetHiEffectPngOverride(const std::string &filename, const std::string &mode, SetLooseOverride *out, const char *sourceFunction = NULL);
+
+    static bool BeginSkyLooseScope(const std::string &skyName);
+    static void EndSkyLooseScope();
+    static bool IsSkyLooseScopeActive();
+    static bool FindSkyLooseArchiveOverride(const std::string &filename, const std::string &mode, std::string *outPath, const char *sourceFunction = NULL);
+    static bool FindSkyLooseEmrsOverride(const std::string &filename, const std::string &mode, const std::string &className, const std::string &payload, SetLooseOverride *out, const char *sourceFunction = NULL, size_t currentOffset = (size_t)-1);
+    static bool FindSkyLooseEmrsPngOverride(const std::string &filename, const std::string &mode, const std::string &className, const std::string &payload, SetLooseOverride *out, const char *sourceFunction = NULL, size_t currentOffset = (size_t)-1);
+
     static FSMgr::FileHandle UAOpenFileWithSetLooseOverride(const std::string &filename, const std::string &mode, SetLooseOverride *out, const char *sourceFunction = NULL);
     static FSMgr::FileHandle UAOpenFileWithSetLooseEmbeddedOverride(const std::string &filename, const std::string &mode, SetLooseOverride *out, const char *sourceFunction = NULL);
     static FSMgr::FileHandle UAOpenFileWithSetLooseEmrsOverride(const std::string &filename, const std::string &mode, const std::string &className, const std::string &payload, SetLooseOverride *out, const char *sourceFunction = NULL, size_t currentOffset = (size_t)-1);

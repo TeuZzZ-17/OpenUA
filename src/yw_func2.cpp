@@ -22,6 +22,7 @@
 #include "obj3d.h"
 #include "ypaflyer.h"
 #include "utils.h"
+#include "IFFile.h"
 
 extern int vertMenuSpace;
 extern int dword_5A50B2;
@@ -612,8 +613,23 @@ void NC_STACK_ypaworld::LoadKeyNames()
 
 int yw_loadSky(NC_STACK_ypaworld *yw, const std::string &skyname)
 {
+    struct SkyLooseScopeGuard
+    {
+        bool active = false;
+
+        explicit SkyLooseScopeGuard(const std::string &name)
+        {
+            active = IFFile::BeginSkyLooseScope(name);
+        }
+
+        ~SkyLooseScopeGuard()
+        {
+            if ( active )
+                IFFile::EndSkyLooseScope();
+        }
+    } skyLooseGuard(skyname);
+
     std::string tmprsrc = Common::Env.SetPrefix("rsrc", "data:");
-    
     std::string skyfilename = fmt::sprintf("data:%s", skyname);
 
     NC_STACK_base *sky = Utils::ProxyLoadBase(skyfilename);
@@ -621,11 +637,12 @@ int yw_loadSky(NC_STACK_ypaworld *yw, const std::string &skyname)
     if ( !sky )
     {
         ypa_log_out("Couldn't create %s\n", skyfilename.c_str());
+        Common::Env.SetPrefix("rsrc", tmprsrc);
         return 0;
     }
-    
+
     Common::Env.SetPrefix("rsrc", tmprsrc);
-    
+
     sky->SetStatic(true); // Don't rotate sky
     sky->SetVizLimit(yw->_skyVizLimit);
     sky->SetFadeLength(yw->_skyFadeLength);

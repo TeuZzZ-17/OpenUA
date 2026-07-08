@@ -504,7 +504,16 @@ bool setLooseEnsureReport(int32_t setId)
 
 void setLooseAddUsed(const IFFile::SetLooseOverride &overrideInfo)
 {
-    if (!overrideInfo.active || !setLooseEnsureReport(overrideInfo.setId))
+    if (!overrideInfo.active)
+        return;
+
+    if (overrideInfo.setId == 0 && overrideInfo.extensionForm.find("sky loose archive") != std::string::npos)
+    {
+        ypa_log_out("OpenUA sky loose archive override used: %s -> %s\n", overrideInfo.requested.c_str(), overrideInfo.resolvedPath.c_str());
+        return;
+    }
+
+    if (!setLooseEnsureReport(overrideInfo.setId))
         return;
 
     SetLooseReport &report = g_setLooseReports[overrideInfo.setId];
@@ -529,7 +538,19 @@ void setLooseAddUsed(const IFFile::SetLooseOverride &overrideInfo)
 
 void setLooseAddFailed(const IFFile::SetLooseOverride &overrideInfo, const std::string &reason)
 {
-    if (!overrideInfo.active || !setLooseEnsureReport(overrideInfo.setId))
+    if (!overrideInfo.active)
+        return;
+
+    if (overrideInfo.setId == 0 && overrideInfo.extensionForm.find("sky loose archive") != std::string::npos)
+    {
+        ypa_log_out("WARNING: OpenUA sky loose archive override failed for %s (%s); %s\n",
+                    overrideInfo.requested.c_str(),
+                    overrideInfo.resolvedPath.c_str(),
+                    reason.c_str());
+        return;
+    }
+
+    if (!setLooseEnsureReport(overrideInfo.setId))
         return;
 
     SetLooseReport &report = g_setLooseReports[overrideInfo.setId];
@@ -672,8 +693,338 @@ void setLooseAddSetBasParseTraceLine(int32_t setId, const std::string &line)
     report.setBasParseTrace.push_back(line);
     setLooseWriteReport(report);
 }
+
+struct SkyLooseScopeState
+{
+    bool active = false;
+    int depth = 0;
+    std::string stem;
+    std::vector<std::string> stemCandidates;
+};
+
+SkyLooseScopeState g_skyLooseScope;
+
+std::string skyLooseUpper(std::string str)
+{
+    std::transform(str.begin(), str.end(), str.begin(), [](unsigned char c) {
+        return (char)std::toupper(c);
+    });
+    return str;
 }
 
+void skyLoosePushUnique(std::vector<std::string> *items, const std::string &value)
+{
+    if (!items || value.empty())
+        return;
+
+    for (const std::string &existing : *items)
+    {
+        if (!StriCmp(existing, value))
+            return;
+    }
+    items->push_back(value);
+}
+
+std::vector<std::string> skyLooseBuildStemCandidates(const std::string &stem)
+{
+    std::vector<std::string> result;
+    skyLoosePushUnique(&result, stem);
+    skyLoosePushUnique(&result, skyLooseUpper(stem));
+    skyLoosePushUnique(&result, setLooseLower(stem));
+    return result;
+}
+
+std::string skyLooseStemFromName(std::string name)
+{
+    name = setLooseTrimResourceName(setLooseStripLeadingSlashes(setLooseNormalizeSlashes(name)));
+    if (name.empty())
+        return std::string();
+
+    size_t colonPos = name.find(':');
+    if (colonPos != std::string::npos)
+        name = setLooseStripLeadingSlashes(name.substr(colonPos + 1));
+
+    std::string lower = setLooseLower(name);
+    const std::string objectsTag = "objects/";
+    size_t objectsPos = lower.rfind(objectsTag);
+    if (objectsPos != std::string::npos)
+        name = name.substr(objectsPos + objectsTag.size());
+
+    std::string fileName = setLooseFileName(name);
+    size_t dotPos = fileName.rfind('.');
+    if (dotPos != std::string::npos)
+        fileName.resize(dotPos);
+
+    return setLooseTrimResourceName(fileName);
+}
+
+std::string skyLooseResourceName(std::string name)
+{
+    name = setLooseTrimResourceName(setLooseStripLeadingSlashes(setLooseNormalizeSlashes(name)));
+    if (name.empty())
+        return std::string();
+
+    size_t colonPos = name.find(':');
+    if (colonPos != std::string::npos)
+        name = setLooseStripLeadingSlashes(name.substr(colonPos + 1));
+
+    return setLooseTrimResourceName(name);
+}
+
+bool skyLooseClassSupported(const std::string &className)
+{
+    std::string cls = setLooseLower(className);
+    return cls == "ilbm.class" ||
+           cls == "sklt.class" ||
+           cls == "bmpanim.class";
+}
+
+bool skyLooseResolveFirst(const std::vector<std::string> &candidates, std::string *openPath)
+{
+    for (const std::string &candidate : candidates)
+    {
+        std::string resolved;
+        if (setLooseResolveReadableFile(candidate, &resolved))
+        {
+            if (openPath)
+                *openPath = resolved;
+            return true;
+        }
+    }
+    return false;
+}
+
+void skyLoosePushPathCandidate(std::vector<std::string> *candidates, const std::string &path)
+{
+    if (!candidates || path.empty())
+        return;
+
+    skyLoosePushUnique(candidates, path);
+
+    std::string legacyPath = setLooseNormalizeSlashes(correctSeparatorAndExt(path));
+    if (legacyPath != setLooseNormalizeSlashes(path))
+        skyLoosePushUnique(candidates, legacyPath);
+}
+
+std::vector<std::string> skyLooseClassFolders(const std::string &className)
+{
+    std::vector<std::string> folders;
+    std::string cls = setLooseLower(className);
+
+    if (cls == "sklt.class")
+    {
+        folders.push_back("SKLT");
+        folders.push_back("Skeleton");
+        folders.push_back("skeleton");
+    }
+    else if (cls == "ilbm.class")
+    {
+        folders.push_back("ILBM");
+        folders.push_back("Textures");
+        folders.push_back("Texture");
+        folders.push_back("textures");
+        folders.push_back("texture");
+    }
+    else if (cls == "bmpanim.class")
+    {
+        folders.push_back("VANM");
+        folders.push_back("ANM");
+        folders.push_back("Animations");
+        folders.push_back("animations");
+    }
+
+    return folders;
+}
+
+std::vector<std::string> skyLooseBuildEmbeddedCandidates(const std::string &stem, const std::string &assetPath, const std::string &className, bool pngTexture)
+{
+    std::vector<std::string> candidates;
+    std::string root = "Data/Objects/Loose/" + stem + "/";
+    std::string normalizedAsset = setLooseStripLeadingSlashes(setLooseNormalizeSlashes(assetPath));
+    std::string fileName = setLooseFileName(normalizedAsset);
+    std::vector<std::string> classFolders = skyLooseClassFolders(className);
+
+    if (normalizedAsset.empty())
+        return candidates;
+
+    if (pngTexture)
+    {
+        std::string exactUpper = setLooseReplaceExtension(normalizedAsset, ".PNG");
+        std::string exactLower = setLooseReplaceExtension(normalizedAsset, ".png");
+        std::string baseUpper = setLooseReplaceExtension(fileName, ".PNG");
+        std::string baseLower = setLooseReplaceExtension(fileName, ".png");
+
+        skyLoosePushPathCandidate(&candidates, root + exactUpper);
+        skyLoosePushPathCandidate(&candidates, root + exactLower);
+        skyLoosePushPathCandidate(&candidates, root + baseUpper);
+        skyLoosePushPathCandidate(&candidates, root + baseLower);
+
+        for (const std::string &folder : classFolders)
+        {
+            skyLoosePushPathCandidate(&candidates, root + folder + "/" + baseUpper);
+            skyLoosePushPathCandidate(&candidates, root + folder + "/" + baseLower);
+        }
+    }
+    else
+    {
+        skyLoosePushPathCandidate(&candidates, root + normalizedAsset);
+        skyLoosePushPathCandidate(&candidates, root + fileName);
+
+        for (const std::string &folder : classFolders)
+            skyLoosePushPathCandidate(&candidates, root + folder + "/" + fileName);
+    }
+
+    return candidates;
+}
+}
+
+
+bool IFFile::BeginSkyLooseScope(const std::string &skyName)
+{
+    std::string stem = skyLooseStemFromName(skyName);
+    if (stem.empty())
+        return false;
+
+    g_skyLooseScope.active = true;
+    g_skyLooseScope.depth++;
+    g_skyLooseScope.stem = stem;
+    g_skyLooseScope.stemCandidates = skyLooseBuildStemCandidates(stem);
+    return true;
+}
+
+void IFFile::EndSkyLooseScope()
+{
+    if (g_skyLooseScope.depth > 0)
+        g_skyLooseScope.depth--;
+
+    if (g_skyLooseScope.depth <= 0)
+    {
+        g_skyLooseScope.active = false;
+        g_skyLooseScope.depth = 0;
+        g_skyLooseScope.stem.clear();
+        g_skyLooseScope.stemCandidates.clear();
+    }
+}
+
+bool IFFile::IsSkyLooseScopeActive()
+{
+    return g_skyLooseScope.active && !g_skyLooseScope.stem.empty();
+}
+
+bool IFFile::FindSkyLooseArchiveOverride(const std::string &filename, const std::string &mode, std::string *outPath, const char *sourceFunction)
+{
+    (void)sourceFunction;
+
+    if (outPath)
+        outPath->clear();
+
+    if (!IsSkyLooseScopeActive() || !setLooseIsReadMode(mode))
+        return false;
+
+    std::string requestedStem = skyLooseStemFromName(filename);
+    if (!requestedStem.empty() && StriCmp(requestedStem, g_skyLooseScope.stem))
+        return false;
+
+    std::vector<std::string> candidates;
+    for (const std::string &stem : g_skyLooseScope.stemCandidates)
+    {
+        candidates.push_back("Data/Objects/Loose/" + stem + ".BASE");
+        candidates.push_back("Data/Objects/Loose/" + stem + ".BAS");
+        candidates.push_back("Data/Objects/Loose/" + stem + ".base");
+        candidates.push_back("Data/Objects/Loose/" + stem + ".bas");
+    }
+
+    return skyLooseResolveFirst(candidates, outPath);
+}
+
+bool IFFile::FindSkyLooseEmrsOverride(const std::string &filename, const std::string &mode, const std::string &className, const std::string &payload, SetLooseOverride *out, const char *sourceFunction, size_t currentOffset)
+{
+    (void)currentOffset;
+
+    if (out)
+        *out = SetLooseOverride();
+
+    if (!IsSkyLooseScopeActive() || !setLooseIsReadMode(mode) || !skyLooseClassSupported(className))
+        return false;
+
+    std::string assetPath = skyLooseResourceName(filename);
+    if (assetPath.empty() || assetPath.find(':') != std::string::npos)
+        return false;
+
+    std::vector<std::string> candidates;
+    for (const std::string &stem : g_skyLooseScope.stemCandidates)
+    {
+        std::vector<std::string> stemCandidates = skyLooseBuildEmbeddedCandidates(stem, assetPath, className, false);
+        candidates.insert(candidates.end(), stemCandidates.begin(), stemCandidates.end());
+    }
+
+    std::string openPath;
+    if (!skyLooseResolveFirst(candidates, &openPath))
+        return false;
+
+    if (out)
+    {
+        out->active = true;
+        out->setId = 0;
+        out->requested = assetPath;
+        out->resolvedPath = openPath;
+        out->extensionForm = "Data/Objects sky loose embedded override";
+        out->embedded = true;
+        out->sourceFunction = sourceFunction ? sourceFunction : "NC_STACK_embed::LoadingFromIFF";
+        out->emrs = true;
+        out->emrsClass = className;
+        out->embeddedPayload = payload;
+    }
+    return true;
+}
+
+bool IFFile::FindSkyLooseEmrsPngOverride(const std::string &filename, const std::string &mode, const std::string &className, const std::string &payload, SetLooseOverride *out, const char *sourceFunction, size_t currentOffset)
+{
+    (void)currentOffset;
+
+    if (out)
+        *out = SetLooseOverride();
+
+    if (!IsSkyLooseScopeActive() || !setLooseIsReadMode(mode))
+        return false;
+
+    if (setLooseLower(className) != "ilbm.class")
+        return false;
+
+    std::string assetPath = skyLooseResourceName(filename);
+    if (assetPath.empty() || assetPath.find(':') != std::string::npos)
+        return false;
+
+    std::string ext = setLooseExtension(assetPath);
+    if (ext != "ilbm" && ext != "ilb")
+        return false;
+
+    std::vector<std::string> candidates;
+    for (const std::string &stem : g_skyLooseScope.stemCandidates)
+    {
+        std::vector<std::string> stemCandidates = skyLooseBuildEmbeddedCandidates(stem, assetPath, className, true);
+        candidates.insert(candidates.end(), stemCandidates.begin(), stemCandidates.end());
+    }
+
+    std::string openPath;
+    if (!skyLooseResolveFirst(candidates, &openPath))
+        return false;
+
+    if (out)
+    {
+        out->active = true;
+        out->setId = 0;
+        out->requested = assetPath;
+        out->resolvedPath = openPath;
+        out->extensionForm = "Data/Objects sky loose PNG texture override";
+        out->embedded = true;
+        out->sourceFunction = sourceFunction ? sourceFunction : "NC_STACK_embed::LoadingFromIFF";
+        out->emrs = true;
+        out->emrsClass = className;
+        out->embeddedPayload = payload;
+    }
+    return true;
+}
 
 
 IFFile::IFFile(const std::string &diskPath, const std::string &mode)
@@ -1090,6 +1441,29 @@ bool IFFile::FindSetHiEffectPngOverride(const std::string &filename, const std::
 FSMgr::FileHandle IFFile::UAOpenFileWithSetLooseOverride(const std::string &filename, const std::string &mode, SetLooseOverride *out, const char *sourceFunction)
 {
     SetLooseOverride overrideInfo;
+
+    std::string skyArchiveOverridePath;
+    if ( FindSkyLooseArchiveOverride(filename, mode, &skyArchiveOverridePath, sourceFunction) )
+    {
+        FSMgr::FileHandle fil = FSMgr::iDir::openFile(skyArchiveOverridePath, mode);
+        if ( fil.OK() )
+        {
+            overrideInfo.active = true;
+            overrideInfo.setId = 0;
+            overrideInfo.requested = filename;
+            overrideInfo.resolvedPath = skyArchiveOverridePath;
+            overrideInfo.extensionForm = "Data/Objects sky loose archive override";
+            overrideInfo.vanillaPath = setLooseNormalizeSlashes(correctSeparatorAndExt(Common::Env.ApplyPrefix(filename)));
+            overrideInfo.sourceFunction = sourceFunction ? sourceFunction : "IFFile::UAOpenFileWithSetLooseOverride";
+
+            if (out)
+                *out = overrideInfo;
+
+            return fil;
+        }
+
+        ypa_log_out("WARNING: OpenUA sky loose archive override failed to open: %s; vanilla Data/Objects fallback used.\n", skyArchiveOverridePath.c_str());
+    }
 
     if ( FindSetLooseOverride(filename, mode, &overrideInfo, sourceFunction) )
     {

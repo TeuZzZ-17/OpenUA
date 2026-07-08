@@ -108,6 +108,89 @@ size_t NC_STACK_embed::LoadingFromIFF(IFFile **file)
                 else if ( !payloadParse )
                     payload = IFFile::ChunkLabel(mfile->GetCurrentChunk());
 
+                if ( IFFile::IsSkyLooseScopeActive() )
+                {
+                    if ( classname == "ilbm.class" )
+                    {
+                        IFFile::SetLooseOverride skyPngOverrideInfo;
+                        if ( IFFile::FindSkyLooseEmrsPngOverride(resname,
+                                                                  "rb",
+                                                                  classname,
+                                                                  payload,
+                                                                  &skyPngOverrideInfo,
+                                                                  "NC_STACK_embed::LoadingFromIFF",
+                                                                  emrsOffset) )
+                        {
+                            NC_STACK_rsrc *png_class = Nucleus::CTFInit<NC_STACK_rsrc>(classname,
+                               {{NC_STACK_rsrc::RSRC_ATT_NAME, resname},
+                                {NC_STACK_rsrc::RSRC_ATT_TRYSHARED, (int32_t)1},
+                                {NC_STACK_rsrc::RSRC_ATT_SET_LOOSE_PNG_PATH, skyPngOverrideInfo.resolvedPath},
+                                {NC_STACK_rsrc::RSRC_ATT_SKIP_SET_LOOSE_OVERRIDE, (int32_t)1}});
+
+                            if ( png_class )
+                            {
+                                if ( SkipCurrentOrNextPayload(mfile, payloadParse) )
+                                {
+                                    ypa_log_out("OpenUA sky loose PNG override used: %s -> %s\n", resname.c_str(), skyPngOverrideInfo.resolvedPath.c_str());
+                                    _resources.push_back(png_class);
+                                    continue;
+                                }
+
+                                png_class->Delete();
+                                ypa_log_out("WARNING: OpenUA sky loose PNG override failed for %s (%s); falling back to embedded BAS payload.\n", resname.c_str(), skyPngOverrideInfo.resolvedPath.c_str());
+                            }
+                            else
+                            {
+                                ypa_log_out("WARNING: OpenUA sky loose PNG override failed for %s (%s); falling back to embedded BAS payload.\n", resname.c_str(), skyPngOverrideInfo.resolvedPath.c_str());
+                            }
+                        }
+                    }
+
+                    IFFile::SetLooseOverride skyOverrideInfo;
+                    if ( IFFile::FindSkyLooseEmrsOverride(resname,
+                                                          "rb",
+                                                          classname,
+                                                          payload,
+                                                          &skyOverrideInfo,
+                                                          "NC_STACK_embed::LoadingFromIFF",
+                                                          emrsOffset) )
+                    {
+                        FSMgr::FileHandle looseHandle = FSMgr::iDir::openFile(skyOverrideInfo.resolvedPath, "rb");
+                        if ( looseHandle.OK() )
+                        {
+                            IFFile looseFile(std::move(looseHandle));
+                            NC_STACK_rsrc *override_class = Nucleus::CTFInit<NC_STACK_rsrc>(classname,
+                               {{NC_STACK_rsrc::RSRC_ATT_NAME, resname},
+                                {NC_STACK_rsrc::RSRC_ATT_TRYSHARED, (int32_t)1},
+                                {NC_STACK_rsrc::RSRC_ATT_PIFFFILE, &looseFile},
+                                {NC_STACK_rsrc::RSRC_ATT_SKIP_SET_LOOSE_OVERRIDE, (int32_t)1}});
+
+                            if ( override_class )
+                            {
+                                bool payloadSkipped = SkipCurrentOrNextPayload(mfile, payloadParse);
+
+                                if ( payloadSkipped )
+                                {
+                                    ypa_log_out("OpenUA sky loose embedded override used: %s -> %s\n", resname.c_str(), skyOverrideInfo.resolvedPath.c_str());
+                                    _resources.push_back(override_class);
+                                    continue;
+                                }
+
+                                override_class->Delete();
+                                ypa_log_out("WARNING: OpenUA sky loose embedded override failed for %s (%s); embedded payload skip failed, falling back.\n", resname.c_str(), skyOverrideInfo.resolvedPath.c_str());
+                            }
+                            else
+                            {
+                                ypa_log_out("WARNING: OpenUA sky loose embedded override failed for %s (%s); falling back to embedded BAS payload.\n", resname.c_str(), skyOverrideInfo.resolvedPath.c_str());
+                            }
+                        }
+                        else
+                        {
+                            ypa_log_out("WARNING: OpenUA sky loose embedded override failed for %s (%s); failed to open, falling back.\n", resname.c_str(), skyOverrideInfo.resolvedPath.c_str());
+                        }
+                    }
+                }
+
                 if ( classname == "ilbm.class" )
                 {
                     IFFile::SetLooseOverride pngOverrideInfo;
