@@ -14,6 +14,8 @@
 
 namespace
 {
+constexpr bool SET_LOOSE_OVERRIDE_REPORT_ENABLED = false;
+
 struct SetLooseReportEntry
 {
     std::string requested;
@@ -392,6 +394,9 @@ bool setLooseSupportedExtension(const std::string &assetPath)
 
 bool setLooseWriteReport(SetLooseReport &report)
 {
+    if (!SET_LOOSE_OVERRIDE_REPORT_ENABLED)
+        return false;
+
     if (!report.available)
         return false;
 
@@ -496,7 +501,12 @@ bool setLooseEnsureReport(int32_t setId)
         report.available = rootNode && rootNode->getType() == FSMgr::iNode::NTYPE_DIR;
 
         if (report.available)
-            setLooseWriteReport(report);
+        {
+            if (SET_LOOSE_OVERRIDE_REPORT_ENABLED)
+                setLooseWriteReport(report);
+            else
+                FSMgr::iDir::deleteFile(report.reportPath);
+        }
     }
 
     return report.available;
@@ -512,6 +522,9 @@ void setLooseAddUsed(const IFFile::SetLooseOverride &overrideInfo)
         ypa_log_out("OpenUA sky loose archive override used: %s -> %s\n", overrideInfo.requested.c_str(), overrideInfo.resolvedPath.c_str());
         return;
     }
+
+    if (!SET_LOOSE_OVERRIDE_REPORT_ENABLED)
+        return;
 
     if (!setLooseEnsureReport(overrideInfo.setId))
         return;
@@ -550,6 +563,9 @@ void setLooseAddFailed(const IFFile::SetLooseOverride &overrideInfo, const std::
         return;
     }
 
+    if (!SET_LOOSE_OVERRIDE_REPORT_ENABLED)
+        return;
+
     if (!setLooseEnsureReport(overrideInfo.setId))
         return;
 
@@ -582,6 +598,9 @@ void setLooseAddLookup(int32_t setId,
                        const char *sourceFunction,
                        bool embedded)
 {
+    if (!SET_LOOSE_OVERRIDE_REPORT_ENABLED)
+        return;
+
     if (!setLooseEnsureReport(setId))
         return;
 
@@ -615,6 +634,9 @@ void setLooseAddEmrsLookup(int32_t setId,
                            bool legacyExists,
                            const char *sourceFunction)
 {
+    if (!SET_LOOSE_OVERRIDE_REPORT_ENABLED)
+        return;
+
     if (!setLooseEnsureReport(setId))
         return;
 
@@ -671,6 +693,9 @@ std::string setLooseSetBasSourceKind(const std::string &resolvedSource, FSMgr::i
 
 void setLooseAddSetBasRawScan(const SetBasRawScanEntry &scan, int32_t setId)
 {
+    if (!SET_LOOSE_OVERRIDE_REPORT_ENABLED)
+        return;
+
     if (!setLooseEnsureReport(setId))
         return;
 
@@ -686,6 +711,9 @@ void setLooseAddSetBasRawScan(const SetBasRawScanEntry &scan, int32_t setId)
 
 void setLooseAddSetBasParseTraceLine(int32_t setId, const std::string &line)
 {
+    if (!SET_LOOSE_OVERRIDE_REPORT_ENABLED)
+        return;
+
     if (!setLooseEnsureReport(setId))
         return;
 
@@ -1607,6 +1635,9 @@ void IFFile::ReportSetLooseOverrideFailed(const SetLooseOverride &overrideInfo, 
 
 void IFFile::ReportSetBasRawScan(const std::string &filename, const char *sourceFunction)
 {
+    if (!SET_LOOSE_OVERRIDE_REPORT_ENABLED)
+        return;
+
     int32_t setId = setLooseCurrentSetId();
     if ( !setId || !setLooseEnsureReport(setId) )
         return;
@@ -1695,6 +1726,9 @@ void IFFile::ReportSetBasRawScan(const std::string &filename, const char *source
 
 void IFFile::FlushSetLooseOverrideReport()
 {
+    if (!SET_LOOSE_OVERRIDE_REPORT_ENABLED)
+        return;
+
     int32_t setId = setLooseCurrentSetId();
     if ( !setId || !setLooseEnsureReport(setId) )
         return;
@@ -1704,6 +1738,9 @@ void IFFile::FlushSetLooseOverrideReport()
 
 void IFFile::BeginSetBasParseTrace(const std::string &filename)
 {
+    if (!SET_LOOSE_OVERRIDE_REPORT_ENABLED)
+        return;
+
     int32_t setId = setLooseCurrentSetId();
     if ( !setId || !setLooseEnsureReport(setId) )
         return;
