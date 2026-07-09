@@ -45,8 +45,14 @@ static constexpr int SETTINGS_CHANGE_MAXFPS                 = 0x40000;
 static constexpr int SETTINGS_CHANGE_BLENDING              = 0x80000;
 static constexpr int SETTINGS_CHANGE_MOVIE_PLAYER          = 0x100000;
 static constexpr int SETTINGS_CHANGE_MENU_FONT             = 0x200000;
+static constexpr int SETTINGS_CHANGE_DEFAULT_CAMERA_VIEW   = 0x400000;
 static constexpr int SETTINGS_CHANGE_RESTART_REQUIRED_GRAPHICS =
     SETTINGS_CHANGE_BLENDING | SETTINGS_CHANGE_MENU_FONT;
+
+static std::string DefaultCameraViewLabel(bool cockpit)
+{
+    return cockpit ? "Cockpit" : "POV";
+}
 
 static std::string BlendingLabel(int v)
 {
@@ -1368,6 +1374,11 @@ void UserData::sb_0x46aa8c()
             ypa_log_out("OpenUA: saved ui.menu_font = %s (%s)\n", menuFont.c_str(), storedMenuFont.c_str());
     }
 
+    if ( _settingsChangeOptions & SETTINGS_CHANGE_DEFAULT_CAMERA_VIEW )
+    {
+        defaultCockpitCamera = confDefaultCockpitCamera;
+    }
+
     if ( forceChange )
     {
         yw->SetGameShellVideoMode( IsWindowedFlag() );
@@ -1797,6 +1808,7 @@ void UserData::ShowOptionsMenu()
     confMenuFont = menuFont;
     confPlayerRoboAIBehavior = System::IniConf::GameRoboPlayerAIBehavior.Get<bool>();
     confSpectatorMode = System::IniConf::GameSpectatorMode.Get<bool>();
+    confDefaultCockpitCamera = defaultCockpitCamera;
     confMaxFps = NormalizeFrameRateLimit(System::IniConf::GfxMaxFps.Get<int32_t>());
     UpdatePaletteThemeText();
     UpdateMenuFontText();
@@ -2151,6 +2163,7 @@ void UserData::sub_46A3C0()
     confMenuFont = menuFont;
     confPlayerRoboAIBehavior = System::IniConf::GameRoboPlayerAIBehavior.Get<bool>();
     confSpectatorMode = System::IniConf::GameSpectatorMode.Get<bool>();
+    confDefaultCockpitCamera = defaultCockpitCamera;
     confMaxFps = NormalizeFrameRateLimit(System::IniConf::GfxMaxFps.Get<int32_t>());
 
     int gfxId = GFX::GFXEngine::Instance.GetGfxModeIndex(p_YW->_gfxMode);
@@ -2549,6 +2562,7 @@ void UserData::UpdateGfxOptionTexts()
 {
     video_button->SetText(1183, BlendingLabel(confBlending));
     video_button->SetText(1187, std::to_string(NormalizeFrameRateLimit(confMaxFps)));
+    video_button->SetText(1188, DefaultCameraViewLabel(confDefaultCockpitCamera));
 }
 
 bool UserData::SavePlayerRoboAIBehaviorToNucleusIni()
@@ -4681,6 +4695,12 @@ void UserData::GameShellUiHandleInput()
                  !alreadyWarnedForMenuFont &&
                  StriCmp(oldMenuFont, confMenuFont) )
                 ShowMenuMsgBox(0, "Restart Required", "Restart game to apply.", true);
+        }
+        else if ( r.code == 1313 ) // Default View cycle
+        {
+            confDefaultCockpitCamera = !confDefaultCockpitCamera;
+            video_button->SetText(1188, DefaultCameraViewLabel(confDefaultCockpitCamera));
+            _settingsChangeOptions |= SETTINGS_CHANGE_DEFAULT_CAMERA_VIEW;
         }
         else if ( r.code == 1124 )
         {

@@ -4746,12 +4746,12 @@ bool NC_STACK_ypaworld::CreateVideoControls()
 
         int gv117 = dword_5A50B2 - 6 * buttonsSpace - 2 * checkBoxWidth;
         int gv120 = gv117 / 2;
-        int fpsButtonWidth = checkBoxWidth * 3;
+        int fpsButtonWidth = checkBoxWidth * 4;
         int fpsLabelWidth = gv120 - buttonsSpace - fpsButtonWidth;
         if ( fpsLabelWidth < checkBoxWidth * 3 )
             fpsLabelWidth = checkBoxWidth * 3;
 
-        // --- FPS Limit cycle-button (row 7, right column) ---
+        // --- Default View cycle-button (row 7, right column, below Menu Font) ---
         btn_64arg.tileset_down = 16;
         btn_64arg.tileset_up = 16;
         btn_64arg.field_3A = 16;
@@ -4759,7 +4759,7 @@ bool NC_STACK_ypaworld::CreateVideoControls()
         btn_64arg.xpos = 3 * buttonsSpace + checkBoxWidth + gv120;
         btn_64arg.ypos = 7 * (_fontH + vertMenuSpace);
         btn_64arg.width = fpsLabelWidth;
-        btn_64arg.caption = "FPS Limit";
+        btn_64arg.caption = "Default View";
         btn_64arg.caption2.clear();
         btn_64arg.downCode = 0;
         btn_64arg.upCode = 0;
@@ -4772,7 +4772,7 @@ bool NC_STACK_ypaworld::CreateVideoControls()
 
         if ( !_GameShell->video_button->Add(&btn_64arg) )
         {
-            ypa_log_out("Unable to add FPS Limit label\n");
+            ypa_log_out("Unable to add Default View label\n");
             return false;
         }
 
@@ -4782,12 +4782,12 @@ bool NC_STACK_ypaworld::CreateVideoControls()
         btn_64arg.button_type = NC_STACK_button::TYPE_BUTTON;
         btn_64arg.xpos = 3 * buttonsSpace + checkBoxWidth + gv120 + fpsLabelWidth + buttonsSpace;
         btn_64arg.width = fpsButtonWidth;
-        btn_64arg.caption = "60";
+        btn_64arg.caption = "Cockpit";
         btn_64arg.caption2.clear();
         btn_64arg.downCode = 0;
-        btn_64arg.upCode = 1312;
+        btn_64arg.upCode = 1313;
         btn_64arg.pressedCode = 0;
-        btn_64arg.button_id = 1187;
+        btn_64arg.button_id = 1188;
         btn_64arg.flags = NC_STACK_button::FLAG_BORDER | NC_STACK_button::FLAG_CENTER | NC_STACK_button::FLAG_TEXT;
         btn_64arg.txt_r = _iniColors[68].r;
         btn_64arg.txt_g = _iniColors[68].g;
@@ -4795,7 +4795,7 @@ bool NC_STACK_ypaworld::CreateVideoControls()
 
         if ( !_GameShell->video_button->Add(&btn_64arg) )
         {
-            ypa_log_out("Unable to add FPS Limit button\n");
+            ypa_log_out("Unable to add Default View button\n");
             return false;
         }
 
@@ -4891,6 +4891,57 @@ bool NC_STACK_ypaworld::CreateVideoControls()
         if ( !_GameShell->video_button->Add(&btn_64arg) )
         {
             ypa_log_out("Unable to add Intro Movies label\n");
+            return false;
+        }
+    }
+
+    // --- FPS Limit cycle-button (row 14, below the volume sliders) ---
+    {
+        btn_64arg.tileset_down = 16;
+        btn_64arg.tileset_up = 16;
+        btn_64arg.field_3A = 16;
+        btn_64arg.button_type = NC_STACK_button::TYPE_CAPTION;
+        btn_64arg.xpos = 0;
+        btn_64arg.ypos = 14 * (_fontH + vertMenuSpace);
+        btn_64arg.width = v98;
+        btn_64arg.caption = "FPS Limit";
+        btn_64arg.caption2.clear();
+        btn_64arg.downCode = 0;
+        btn_64arg.upCode = 0;
+        btn_64arg.pressedCode = 0;
+        btn_64arg.button_id = 2;
+        btn_64arg.flags = NC_STACK_button::FLAG_TEXT;
+        btn_64arg.txt_r = _iniColors[60].r;
+        btn_64arg.txt_g = _iniColors[60].g;
+        btn_64arg.txt_b = _iniColors[60].b;
+
+        if ( !_GameShell->video_button->Add(&btn_64arg) )
+        {
+            ypa_log_out("Unable to add FPS Limit label\n");
+            return false;
+        }
+
+        btn_64arg.tileset_down = 19;
+        btn_64arg.tileset_up = 18;
+        btn_64arg.field_3A = 30;
+        btn_64arg.button_type = NC_STACK_button::TYPE_BUTTON;
+        btn_64arg.xpos = buttonsSpace + v294 * 0.4;
+        btn_64arg.ypos = 14 * (_fontH + vertMenuSpace);
+        btn_64arg.width = v294 * 0.6;
+        btn_64arg.caption = "60";
+        btn_64arg.caption2.clear();
+        btn_64arg.downCode = 0;
+        btn_64arg.upCode = 1312;
+        btn_64arg.pressedCode = 0;
+        btn_64arg.button_id = 1187;
+        btn_64arg.flags = NC_STACK_button::FLAG_BORDER | NC_STACK_button::FLAG_CENTER | NC_STACK_button::FLAG_TEXT;
+        btn_64arg.txt_r = _iniColors[68].r;
+        btn_64arg.txt_g = _iniColors[68].g;
+        btn_64arg.txt_b = _iniColors[68].b;
+
+        if ( !_GameShell->video_button->Add(&btn_64arg) )
+        {
+            ypa_log_out("Unable to add FPS Limit button\n");
             return false;
         }
     }
@@ -7134,6 +7185,7 @@ void NC_STACK_ypaworld::UpdateGameShell()
     _GameShell->confMoviePlayer = System::IniConf::GfxMoviePlayer.Get<bool>();
     _GameShell->confVhsFilter = System::IniConf::GfxVhsFilter.Get<bool>();
     _GameShell->confMenuFont = _GameShell->menuFont;
+    _GameShell->confDefaultCockpitCamera = _GameShell->defaultCockpitCamera;
 
     v16.butID = 1184; // Intro Movies checkbox
     v16.field_4 = (!_GameShell->confMoviePlayer) + 1;

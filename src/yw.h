@@ -660,6 +660,8 @@ public:
     std::string confMenuFont;
     bool confPlayerRoboAIBehavior;
     bool confSpectatorMode;
+    bool defaultCockpitCamera = true;
+    bool confDefaultCockpitCamera = true;
 
     // OpenUA: modern graphics options shown in the Options menu.
     int confBlending;             // gfx.blending  0=Default 1=Additive 2=Sharp

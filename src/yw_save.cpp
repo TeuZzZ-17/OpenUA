@@ -216,6 +216,7 @@ int yw_write_video(FSMgr::FileHandle *fil, UserData *usr)
         fil->printf("    enemyindicator = no\n");
 
     fil->printf("    fxnumber = %d\n", usr->fxnumber);
+    fil->printf("    default_view = %s\n", usr->defaultCockpitCamera ? "cockpit" : "pov");
     fil->printf("    palette_theme = %s\n", usr->paletteTheme.empty() ? "Original" : usr->paletteTheme.c_str());
     
     if (usr->IsWindowedFlag())

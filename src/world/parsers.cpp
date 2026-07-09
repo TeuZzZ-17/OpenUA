@@ -5394,6 +5394,13 @@ int VideoParser::Handle(ScriptParser::Parser &parser, const std::string &p1, con
         _o._fxLimit = parser.stoi(p2);
         _o._GameShell->fxnumber = _o._fxLimit;
     }
+    else if ( !StriCmp(p1, "default_view") )
+    {
+        if ( !StriCmp(p2, "pov") )
+            _o._GameShell->defaultCockpitCamera = false;
+        else if ( !StriCmp(p2, "cockpit") )
+            _o._GameShell->defaultCockpitCamera = true;
+    }
     else if ( !StriCmp(p1, "palette_theme") )
     {
         std::string theme = p2;

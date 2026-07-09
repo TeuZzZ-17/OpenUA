@@ -220,7 +220,7 @@ vec3d NC_STACK_ypabact::GetCockpitCameraPosition() const
 
 void NC_STACK_ypabact::ResetCockpitCameraMode()
 {
-    _cockpit_camera_user_disabled = false;
+    _cockpit_camera_user_disabled = !(_world && _world->_GameShell && _world->_GameShell->defaultCockpitCamera);
 }
 
 void NC_STACK_ypabact::ToggleCockpitCameraMode()
@@ -5629,6 +5629,35 @@ void NC_STACK_ypabact::FightWithSect(bact_arg75 *arg)
             else
             {
                 _status_flg &= ~BACT_STFLAG_ATTACK;
+            }
+
+            vec3d mgunDir = arg->pos - _position;
+            float mgunDistance = mgunDir.normalise();
+
+            if ( mgunDistance < 1000.0 && HasMinigun() && mgunDir.dot(_rotation.AxisZ()) > 0.85 )
+            {
+                if ( v64 )
+                    _status_flg |= BACT_STFLAG_FIGHT_S;
+                else
+                    _status_flg |= BACT_STFLAG_FIGHT_P;
+
+                if ( !UsesVehicleMinigunTiming() && !(_status_flg & BACT_STFLAG_FIRE) )
+                {
+                    setState_msg arg78;
+                    arg78.unsetFlags = 0;
+                    arg78.newStatus = BACT_STATUS_NOPE;
+                    arg78.setFlags = BACT_STFLAG_FIRE;
+
+                    SetState(&arg78);
+                }
+
+                bact_arg105 arg105;
+
+                arg105.field_C = arg->fperiod;
+                arg105.field_10 = _clock;
+                arg105.field_0 = _rotation.AxisZ();
+
+                FireMinigun(&arg105);
             }
         }
         break;
