@@ -149,6 +149,48 @@ static bool ypamissile_NormalizeXZ(vec3d *dir)
     return true;
 }
 
+static bool ypamissile_GetDirectDeathPushDir(NC_STACK_ypamissile *missile, NC_STACK_ypabact *target,
+                                             const vec3d &fallbackDir, vec3d *outDir)
+{
+    if ( !missile || !target || !outDir )
+        return false;
+
+    vec3d dir;
+
+    if ( missile->GetLauncherBact() && missile->GetLauncherBact() != target )
+    {
+        dir = target->_position - missile->GetLauncherBact()->_position;
+        if ( ypamissile_NormalizeXZ(&dir) )
+        {
+            *outDir = dir;
+            return true;
+        }
+    }
+
+    dir = missile->_position - missile->_old_pos;
+    if ( ypamissile_NormalizeXZ(&dir) )
+    {
+        *outDir = dir;
+        return true;
+    }
+
+    dir = missile->_fly_dir;
+    if ( ypamissile_NormalizeXZ(&dir) )
+    {
+        *outDir = dir;
+        return true;
+    }
+
+    dir = fallbackDir;
+    if ( ypamissile_NormalizeXZ(&dir) )
+    {
+        *outDir = dir;
+        return true;
+    }
+
+    return false;
+}
+
 static NC_STACK_ypabact *ypamissile_FindLiveBactByGid(World::RefBactList &list, int32_t gid)
 {
     for (NC_STACK_ypabact *unit : list)
@@ -1311,21 +1353,9 @@ void NC_STACK_ypamissile::ApplyPushAtDeath(NC_STACK_ypabact *bct, const vec3d &f
     if ( !(bct->_status_flg & BACT_STFLAG_DEATH1) )
         return;
 
-    vec3d deathPushDir = bct->_position - _position;
-    if ( !ypamissile_NormalizeXZ(&deathPushDir) )
-    {
-        deathPushDir = fallbackDir;
-        if ( !ypamissile_NormalizeXZ(&deathPushDir) )
-        {
-            deathPushDir = _fly_dir;
-            if ( !ypamissile_NormalizeXZ(&deathPushDir) )
-            {
-                deathPushDir = _position - _old_pos;
-                if ( !ypamissile_NormalizeXZ(&deathPushDir) )
-                    return;
-            }
-        }
-    }
+    vec3d deathPushDir;
+    if ( !ypamissile_GetDirectDeathPushDir(this, bct, fallbackDir, &deathPushDir) )
+        return;
 
     float pushStrength = (float)_mislPushAtDeath * ypamissile_GetTargetPushMultiplier(_world, bct);
     if ( pushStrength > 0.0f )
