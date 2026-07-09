@@ -660,7 +660,11 @@ public:
     std::string confMenuFont;
     bool confPlayerRoboAIBehavior;
     bool confSpectatorMode;
+    // OpenUA: saved menu default and current in-game camera preference are intentionally separate.
+    // The runtime value is changed by the cockpit-camera hotkey and must survive vehicle/missile-camera
+    // transitions until the player toggles it again or applies a new setting from the Options menu.
     bool defaultCockpitCamera = true;
+    bool cockpitCameraRuntimeMode = true;
     bool confDefaultCockpitCamera = true;
 
     // OpenUA: modern graphics options shown in the Options menu.

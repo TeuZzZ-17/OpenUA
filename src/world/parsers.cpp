@@ -1872,6 +1872,22 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
         _vhcl->mgun_angle = parser.stof(p2, 0);
         _vhcl->mgun_angle_set = true;
     }
+    else if ( !StriCmp(p1, "mgun_ai_range") )
+    {
+        float range = parser.stof(p2, 0);
+        _vhcl->mgun_ai_range = range > 0.0 ? range : 1000.0;
+    }
+    else if ( !StriCmp(p1, "mgun_ai_fire_alignment") )
+    {
+        float alignment = parser.stof(p2, 0);
+
+        if ( alignment < -1.0 )
+            alignment = -1.0;
+        else if ( alignment > 1.0 )
+            alignment = 1.0;
+
+        _vhcl->mgun_ai_fire_alignment = alignment;
+    }
     else if ( !StriCmp(p1, "weapon_spread_x") )
     {
         _vhcl->weapon_spread_x = parser.stof(p2, 0);
@@ -2514,6 +2530,8 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->mgun_angle = 0.0;
         _vhcl->mgun_power_set = false;
         _vhcl->mgun_angle_set = false;
+        _vhcl->mgun_ai_range = 1000.0;
+        _vhcl->mgun_ai_fire_alignment = 0.85;
         _vhcl->weapon_spread_x = 0.0;
         _vhcl->weapon_spread_y = 0.0;
         _vhcl->mgun_spread_x = 0.0;
@@ -5397,9 +5415,15 @@ int VideoParser::Handle(ScriptParser::Parser &parser, const std::string &p1, con
     else if ( !StriCmp(p1, "default_view") )
     {
         if ( !StriCmp(p2, "pov") )
+        {
             _o._GameShell->defaultCockpitCamera = false;
+            _o._GameShell->cockpitCameraRuntimeMode = false;
+        }
         else if ( !StriCmp(p2, "cockpit") )
+        {
             _o._GameShell->defaultCockpitCamera = true;
+            _o._GameShell->cockpitCameraRuntimeMode = true;
+        }
     }
     else if ( !StriCmp(p1, "palette_theme") )
     {

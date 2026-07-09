@@ -378,6 +378,8 @@ struct TVhclProto
     float mgun_angle = 0.0;
     bool mgun_power_set = false;
     bool mgun_angle_set = false;
+    float mgun_ai_range = 1000.0;
+    float mgun_ai_fire_alignment = 0.85;
     float weapon_spread_x = 0.0;
     float weapon_spread_y = 0.0;
     float mgun_spread_x = 0.0;

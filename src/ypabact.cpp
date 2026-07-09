@@ -195,7 +195,10 @@ bool NC_STACK_ypabact::IsCockpitCameraAvailable() const
 
 bool NC_STACK_ypabact::IsCockpitCameraActive() const
 {
-    return IsCockpitCameraAvailable() && !_cockpit_camera_user_disabled;
+    return IsCockpitCameraAvailable() &&
+           _world &&
+           _world->_GameShell &&
+           _world->_GameShell->cockpitCameraRuntimeMode;
 }
 
 bool NC_STACK_ypabact::IsPlayerFirstPersonCameraActive() const
@@ -220,13 +223,19 @@ vec3d NC_STACK_ypabact::GetCockpitCameraPosition() const
 
 void NC_STACK_ypabact::ResetCockpitCameraMode()
 {
-    _cockpit_camera_user_disabled = !(_world && _world->_GameShell && _world->_GameShell->defaultCockpitCamera);
+    const bool cockpitMode = _world &&
+                             _world->_GameShell &&
+                             _world->_GameShell->cockpitCameraRuntimeMode;
+    _cockpit_camera_user_disabled = !cockpitMode;
 }
 
 void NC_STACK_ypabact::ToggleCockpitCameraMode()
 {
-    if ( IsCockpitCameraAvailable() )
-        _cockpit_camera_user_disabled = !_cockpit_camera_user_disabled;
+    if ( !_world || !_world->_GameShell )
+        return;
+
+    _world->_GameShell->cockpitCameraRuntimeMode = !_world->_GameShell->cockpitCameraRuntimeMode;
+    ResetCockpitCameraMode();
 }
 
 static float ypabact_GetDamagedThreshold(const NC_STACK_ypabact *bact)
@@ -1487,6 +1496,8 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _mgun_angle = 0.0;
     _mgun_power_set = false;
     _mgun_angle_set = false;
+    _mgun_ai_range = 1000.0;
+    _mgun_ai_fire_alignment = 0.85;
     _mgun_vp_fire_end_time = 0;
     _weapon_spread_x = 0.0;
     _weapon_spread_y = 0.0;
@@ -5264,7 +5275,7 @@ void NC_STACK_ypabact::FightWithBact(bact_arg75 *arg)
                     _status_flg &= ~BACT_STFLAG_ATTACK;
             }
 
-            if ( v45 < 1000.0 &&   HasMinigun() &&   v40.dot(_rotation.AxisZ()) > 0.85 )
+            if ( v45 < _mgun_ai_range &&   HasMinigun() &&   v40.dot(_rotation.AxisZ()) > _mgun_ai_fire_alignment )
             {
                 if ( isSecTarget )
                     _status_flg |= BACT_STFLAG_FIGHT_S;
@@ -5634,7 +5645,7 @@ void NC_STACK_ypabact::FightWithSect(bact_arg75 *arg)
             vec3d mgunDir = arg->pos - _position;
             float mgunDistance = mgunDir.normalise();
 
-            if ( mgunDistance < 1000.0 && HasMinigun() && mgunDir.dot(_rotation.AxisZ()) > 0.85 )
+            if ( mgunDistance < _mgun_ai_range && HasMinigun() && mgunDir.dot(_rotation.AxisZ()) > _mgun_ai_fire_alignment )
             {
                 if ( v64 )
                     _status_flg |= BACT_STFLAG_FIGHT_S;
@@ -11627,6 +11638,8 @@ void NC_STACK_ypabact::Renew()
     _mgun_angle = 0.0;
     _mgun_power_set = false;
     _mgun_angle_set = false;
+    _mgun_ai_range = 1000.0;
+    _mgun_ai_fire_alignment = 0.85;
     _mgun_soundcarrier.Clear();
     _mimic_soundcarrier.Clear();
     _mgun_sound_index = 0;

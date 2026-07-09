@@ -1720,6 +1720,8 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_mgun_angle = vhcl.mgun_angle;
         bacto->_mgun_power_set = vhcl.mgun_power_set;
         bacto->_mgun_angle_set = vhcl.mgun_angle_set;
+        bacto->_mgun_ai_range = vhcl.mgun_ai_range > 0.0 ? vhcl.mgun_ai_range : 1000.0;
+        bacto->_mgun_ai_fire_alignment = vhcl.mgun_ai_fire_alignment;
         bacto->_weapon_spread_x = vhcl.weapon_spread_x;
         bacto->_weapon_spread_y = vhcl.weapon_spread_y;
         bacto->_mgun_spread_x = vhcl.mgun_spread_x;
@@ -7185,6 +7187,7 @@ void NC_STACK_ypaworld::UpdateGameShell()
     _GameShell->confMoviePlayer = System::IniConf::GfxMoviePlayer.Get<bool>();
     _GameShell->confVhsFilter = System::IniConf::GfxVhsFilter.Get<bool>();
     _GameShell->confMenuFont = _GameShell->menuFont;
+    _GameShell->cockpitCameraRuntimeMode = _GameShell->defaultCockpitCamera;
     _GameShell->confDefaultCockpitCamera = _GameShell->defaultCockpitCamera;
 
     v16.butID = 1184; // Intro Movies checkbox
@@ -8134,7 +8137,12 @@ void NC_STACK_ypaworld::setYW_userVehicle(NC_STACK_ypabact *bact)
             _prevUnitId = oldpBact->_gid;
 
         _userUnit = bact;
-        _userUnit->ResetCockpitCameraMode();
+
+        bool missileCameraTransition = oldpBact &&
+                                       (oldpBact->_bact_type == BACT_TYPES_MISSLE ||
+                                        _userUnit->_bact_type == BACT_TYPES_MISSLE);
+        if ( !missileCameraTransition )
+            _userUnit->ResetCockpitCameraMode();
 
         _vehicleTakenControlTimestamp = _timeStamp;
         _vehicleTakenCommandId = _userUnit->_commandID;
