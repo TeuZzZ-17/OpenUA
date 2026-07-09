@@ -222,11 +222,8 @@ public:
     static bool IsGameNewDebugEnabled();
     
     static Common::Ini::Key GameNewAI;
-    // OpenUA: frame-rate independent gameplay timing (game.fixed_tick, default yes;
-    // historical key name). In single-player gameplay the simulation advances by the
-    // TRUE measured frame delta instead of delta+1 (the legacy Period++ bias), so
-    // gameplay speed stays real-time at any gfx.maxfps with native per-frame
-    // fluidity. "no" restores the legacy biased timing (high fps = faster game).
+    // OpenUA: frame-rate independent gameplay timing (game.fixed_tick, default no).
+    // "no" keeps vanilla biased timing; "yes" uses the true measured frame delta.
     static Common::Ini::Key GameFixedTick;
     static Common::Ini::Key GameTimeLine;
     static Common::Ini::Key GameRoboPlayerAIBehavior;
@@ -234,6 +231,7 @@ public:
     static Common::Ini::Key GameSpectatorVehicleID;
     static Common::Ini::Key GameWeaponWeaponCollision;
     static Common::Ini::Key GameRoboBuildingCollisionDamagePercent;
+    static Common::Ini::Key GamePowerStationEnergyMultiplier;
 
     // OpenUA: Black Sect "imperfect grey clone" runtime balance (owner/faction 5 only).
     // Pure runtime maluses applied to live actors; never mutate shared prototypes.

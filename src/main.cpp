@@ -430,7 +430,7 @@ int ProcessMenuFrame()
 }
 
 
-// OpenUA frame-rate independent simulation timing (game.fixed_tick, default yes;
+// OpenUA frame-rate independent simulation timing (game.fixed_tick, default no;
 // the key name is historical, kept because it is already in users' Nucleus.ini).
 //
 // The game clock runs at 1024 units per second and the engine does exactly one

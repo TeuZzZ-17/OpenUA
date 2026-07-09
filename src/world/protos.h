@@ -380,6 +380,7 @@ struct TVhclProto
     bool mgun_angle_set = false;
     float mgun_ai_range = 1000.0;
     float mgun_ai_fire_alignment = 0.85;
+    bool mgun_damage_sectors = false;
     float weapon_spread_x = 0.0;
     float weapon_spread_y = 0.0;
     float mgun_spread_x = 0.0;
@@ -481,12 +482,12 @@ struct TVhclProto
     float vwr_overeof = 0.0;
     bool cockpit_camera_enable = false;    // OpenUA custom: optional per-vehicle cockpit/player camera offset
     vec3d cockpit_camera_offset = vec3d(0.0, 0.0, 0.0);
-    bool pov_mgun_fx_enable = false;
-    int16_t pov_mgun_fx_vp = -1;
-    int16_t pov_num_mguns_fx = 1;
-    float pov_mgun_fx_scale = 1.0;
-    vec3d pov_mgun_fx_offset = vec3d(0.0, 0.0, 0.0);
-    vec3d pov_mgun_fx_rot = vec3d(0.0, 0.0, 0.0);
+    bool mgun_pov_fx_enable = false;
+    int16_t mgun_pov_fx_vp = -1;
+    int16_t mgun_pov_num_mguns_fx = 1;
+    float mgun_pov_fx_scale = 1.0;
+    vec3d mgun_pov_fx_offset = vec3d(0.0, 0.0, 0.0);
+    vec3d mgun_pov_fx_rot = vec3d(0.0, 0.0, 0.0);
     float gun_angle = 0.0;
     float fire_x = 0.0;
     float fire_y = 0.0;

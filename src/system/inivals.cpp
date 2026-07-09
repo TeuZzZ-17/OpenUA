@@ -230,16 +230,18 @@ Common::Ini::Key IniConf::GameNewDebug("game.new.debug", Common::Ini::KT_WORD, s
 // Yparobo keys
 Common::Ini::Key IniConf::GameNewAI("game.newai",    Common::Ini::KT_BOOL, true);
 // OpenUA: frame-rate independent gameplay timing (historical key name).
-// game.fixed_tick = yes ; single-player simulation uses the true measured frame
-// delta (no legacy +1 bias): real-time gameplay speed at any gfx.maxfps.
-// "no" restores the legacy biased timing (higher fps = faster gameplay).
-Common::Ini::Key IniConf::GameFixedTick("game.fixed_tick", Common::Ini::KT_BOOL, true);
+// game.fixed_tick = no keeps vanilla biased timing. Set yes to use the true
+// measured frame delta (no legacy +1 bias) for frame-rate independent gameplay.
+Common::Ini::Key IniConf::GameFixedTick("game.fixed_tick", Common::Ini::KT_BOOL, false);
 Common::Ini::Key IniConf::GameTimeLine("game.timeline", Common::Ini::KT_DIGIT, (int32_t)600000);
 Common::Ini::Key IniConf::GameRoboPlayerAIBehavior("game.robo_player_ai_behavior", Common::Ini::KT_BOOL, false);
 Common::Ini::Key IniConf::GameSpectatorMode("game.spectator_mode", Common::Ini::KT_BOOL, false);
 Common::Ini::Key IniConf::GameSpectatorVehicleID("game.spectator_vehicle_id", Common::Ini::KT_DIGIT, (int32_t)0);
 Common::Ini::Key IniConf::GameWeaponWeaponCollision("game.weapon_weapon_collision", Common::Ini::KT_BOOL, false);
-Common::Ini::Key IniConf::GameRoboBuildingCollisionDamagePercent("game.robo_building_collision_damage_percent", Common::Ini::KT_DIGIT, (int32_t)8);
+Common::Ini::Key IniConf::GameRoboBuildingCollisionDamagePercent("game.robo_building_collision_damage_percent", Common::Ini::KT_DIGIT, (int32_t)0);
+// OpenUA custom: multiplier for the vanilla power-station sector energy effect.
+// game.powerstation_energy_multiplier = 1.0 keeps vanilla; 3.0 triples recharge/drain.
+Common::Ini::Key IniConf::GamePowerStationEnergyMultiplier("game.powerstation_energy_multiplier", Common::Ini::KT_WORD, std::string("1.0"));
 
 // OpenUA custom: Black Sect "imperfect grey clone" runtime balance (owner/faction 5).
 // When enabled, live Black Sect actors get a small malus (default 5%) to effective
@@ -454,6 +456,7 @@ void IniConf::Init()
         , &GameSpectatorVehicleID
         , &GameWeaponWeaponCollision
         , &GameRoboBuildingCollisionDamagePercent
+        , &GamePowerStationEnergyMultiplier
         , &GameBlackSectCloneBalance
         , &GameBlackSectCloneMalusPercent
         , &GameBlackSectCloneTint

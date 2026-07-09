@@ -3014,7 +3014,7 @@ public:
     bool _allowMultiBuildLevel = false;
     
     /* Fix original bug */
-    // inactive: parsed (fix_weapon_radius) but never read; per-class radii disabled, collision uses weapon.radius
+    // begin_misc fix_weapon_radius: optional per-class weapon collision radii.
     bool _fixWeaponRadius = false;
     
     /* */

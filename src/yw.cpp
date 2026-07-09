@@ -1722,6 +1722,8 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_mgun_angle_set = vhcl.mgun_angle_set;
         bacto->_mgun_ai_range = vhcl.mgun_ai_range > 0.0 ? vhcl.mgun_ai_range : 1000.0;
         bacto->_mgun_ai_fire_alignment = vhcl.mgun_ai_fire_alignment;
+        bacto->_mgun_damage_sectors = vhcl.mgun_damage_sectors;
+        bacto->_mgun_sector_damage_accum = 0.0;
         bacto->_weapon_spread_x = vhcl.weapon_spread_x;
         bacto->_weapon_spread_y = vhcl.weapon_spread_y;
         bacto->_mgun_spread_x = vhcl.mgun_spread_x;
@@ -1734,14 +1736,13 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_fire_pos.y = vhcl.fire_y;
         bacto->_fire_pos.z = vhcl.fire_z;
         bacto->_cockpit_camera_enable = vhcl.cockpit_camera_enable;
-        bacto->_cockpit_camera_user_disabled = false;
         bacto->_cockpit_camera_offset = vhcl.cockpit_camera_offset;
-        bacto->_pov_mgun_fx_enable = vhcl.pov_mgun_fx_enable;
-        bacto->_pov_mgun_fx_vp = vhcl.pov_mgun_fx_vp;
-        bacto->_pov_num_mguns_fx = vhcl.pov_num_mguns_fx;
-        bacto->_pov_mgun_fx_scale = vhcl.pov_mgun_fx_scale;
-        bacto->_pov_mgun_fx_offset = vhcl.pov_mgun_fx_offset;
-        bacto->_pov_mgun_fx_rot = vhcl.pov_mgun_fx_rot;
+        bacto->_mgun_pov_fx_enable = vhcl.mgun_pov_fx_enable;
+        bacto->_mgun_pov_fx_vp = vhcl.mgun_pov_fx_vp;
+        bacto->_mgun_pov_num_mguns_fx = vhcl.mgun_pov_num_mguns_fx;
+        bacto->_mgun_pov_fx_scale = vhcl.mgun_pov_fx_scale;
+        bacto->_mgun_pov_fx_offset = vhcl.mgun_pov_fx_offset;
+        bacto->_mgun_pov_fx_rot = vhcl.mgun_pov_fx_rot;
         bacto->_gun_angle = vhcl.gun_angle;
         bacto->_gun_angle_user = vhcl.gun_angle;
         bacto->_num_weapons = vhcl.num_weapons;
@@ -2083,12 +2084,20 @@ NC_STACK_ypamissile * NC_STACK_ypaworld::ypaworld_func147(ypaworld_arg146 *arg)
        instead it was passed as 64-bit floats, so it's
        break TAG-Val array alignment.*/
     
-    // Experimental OpenUA behavior: fix_weapon_radius no longer switches
-    // class-specific unit collision radii. weapon.radius is the only radius.
-    wobj->SetRadiusHeli(0.0);
-    wobj->SetRadiusTank(0.0);
-    wobj->SetRadiusFlyer(0.0);
-    wobj->SetRadiusRobo(0.0);
+    if (_fixWeaponRadius)
+    {
+        wobj->SetRadiusHeli(wproto.radius_heli);
+        wobj->SetRadiusTank(wproto.radius_tank);
+        wobj->SetRadiusFlyer(wproto.radius_flyer);
+        wobj->SetRadiusRobo(wproto.radius_robo);
+    }
+    else
+    {
+        wobj->SetRadiusHeli(0.0);
+        wobj->SetRadiusTank(0.0);
+        wobj->SetRadiusFlyer(0.0);
+        wobj->SetRadiusRobo(0.0);
+    }
 
     wobj->_soundcarrier.Resize(wproto.sndFXes.size());
 
@@ -4056,8 +4065,8 @@ bool NC_STACK_ypaworld::CreateVideoControls()
                                             btn_64arg.upCode = 1107;
                                             btn_64arg.button_type = NC_STACK_button::TYPE_CHECKBX;
                                             btn_64arg.downCode = 1106;
-                                            btn_64arg.xpos = 0; // OpenUA repack: Sky -> left column, row 8
-                                            btn_64arg.ypos = 8 * (vertMenuSpace + _fontH);
+                                            btn_64arg.xpos = 0; // OpenUA repack: Sky -> left column, row 10
+                                            btn_64arg.ypos = 10 * (vertMenuSpace + _fontH);
                                             btn_64arg.pressedCode = 0;
                                             btn_64arg.flags = 0;
                                             btn_64arg.button_id = 1160;
@@ -4126,7 +4135,7 @@ bool NC_STACK_ypaworld::CreateVideoControls()
                                                             btn_64arg.upCode = 1131;
                                                             btn_64arg.button_id = 1166;
                                                             btn_64arg.xpos = 3 * buttonsSpace + checkBoxWidth + v120;
-                                                            btn_64arg.ypos = 8 * (vertMenuSpace + _fontH); // OpenUA repack: Windowed -> right column, row 8
+                                                            btn_64arg.ypos = 9 * (vertMenuSpace + _fontH); // OpenUA repack: Windowed -> right column, row 9
 
                                                             if ( _GameShell->video_button->Add(&btn_64arg) )
                                                             {
@@ -4180,8 +4189,8 @@ bool NC_STACK_ypaworld::CreateVideoControls()
                                                                             btn_64arg.tileset_up = 16;
                                                                             btn_64arg.field_3A = 16;
                                                                             btn_64arg.button_type = NC_STACK_button::TYPE_CAPTION;
-                                                                            btn_64arg.xpos = checkBoxWidth + buttonsSpace; // OpenUA repack: Music label -> left column, row 9
-                                                                            btn_64arg.ypos = 9 * (vertMenuSpace + _fontH);
+                                                                            btn_64arg.xpos = checkBoxWidth + buttonsSpace; // OpenUA repack: Music label -> left column, row 11
+                                                                            btn_64arg.ypos = 11 * (vertMenuSpace + _fontH);
                                                                             btn_64arg.width = v120;
                                                                             btn_64arg.caption = Locale::Text::Dialogs(Locale::DLG_S_ENCDAUD);
                                                                             btn_64arg.caption2.clear();
@@ -4205,7 +4214,7 @@ bool NC_STACK_ypaworld::CreateVideoControls()
                                                                                 btn_64arg.caption2 = "g";
                                                                                 btn_64arg.upCode = 1129;
                                                                                 btn_64arg.button_id = 1164;
-                                                                                btn_64arg.xpos = 0; // OpenUA repack: Music checkbox -> left column, row 9
+                                                                                btn_64arg.xpos = 0; // OpenUA repack: Music checkbox -> left column, row 11
 
                                                                                 if ( _GameShell->video_button->Add(&btn_64arg) )
                                                                                 {
@@ -4246,8 +4255,8 @@ bool NC_STACK_ypaworld::CreateVideoControls()
                                                                                             btn_64arg.tileset_down = 19;
                                                                                             btn_64arg.tileset_up = 18;
                                                                                             btn_64arg.field_3A = 30;
-                                                                                            btn_64arg.xpos = 3 * buttonsSpace + checkBoxWidth + v120; // OpenUA repack: Host Station AI -> right column, row 10
-                                                                                            btn_64arg.ypos = 10 * (vertMenuSpace + _fontH);
+                                                                                            btn_64arg.xpos = 3 * buttonsSpace + checkBoxWidth + v120; // OpenUA repack: Host Station AI -> right column, row 11
+                                                                                            btn_64arg.ypos = 11 * (vertMenuSpace + _fontH);
                                                                                             btn_64arg.button_type = NC_STACK_button::TYPE_CHECKBX;
                                                                                             btn_64arg.pressedCode = 0;
                                                                                             btn_64arg.flags = 0;
@@ -4287,8 +4296,8 @@ bool NC_STACK_ypaworld::CreateVideoControls()
                                                                                             btn_64arg.tileset_down = 19;
                                                                                             btn_64arg.tileset_up = 18;
                                                                                             btn_64arg.field_3A = 30;
-                                                                                            btn_64arg.xpos = 0; // OpenUA repack: Spectator Mode -> left column, row 10
-                                                                                            btn_64arg.ypos = 10 * (vertMenuSpace + _fontH);
+                                                                                            btn_64arg.xpos = 0; // OpenUA repack: Spectator Mode -> left column, row 12
+                                                                                            btn_64arg.ypos = 12 * (vertMenuSpace + _fontH);
                                                                                             btn_64arg.button_type = NC_STACK_button::TYPE_CHECKBX;
                                                                                             btn_64arg.pressedCode = 0;
                                                                                             btn_64arg.flags = 0;
@@ -4362,7 +4371,7 @@ bool NC_STACK_ypaworld::CreateVideoControls()
                                                                                                     btn_64arg.field_3A = 16;
                                                                                                     btn_64arg.button_type = NC_STACK_button::TYPE_CAPTION;
                                                                                                     btn_64arg.xpos = 0;
-                                                                                                    btn_64arg.ypos = 11 * (vertMenuSpace + _fontH); // OpenUA repack: Explosion Effects row 11
+                                                                                                    btn_64arg.ypos = 13 * (vertMenuSpace + _fontH); // OpenUA repack: Explosion Effects row 13
                                                                                                     btn_64arg.width = (dword_5A50B2 - 5 * buttonsSpace) * 0.3;
                                                                                                     btn_64arg.caption = Locale::Text::Dialogs(Locale::DLG_S_DESTRFX);
                                                                                                     btn_64arg.caption2.clear();
@@ -4415,7 +4424,7 @@ bool NC_STACK_ypaworld::CreateVideoControls()
                                                                                                             {
                                                                                                                 btn_64arg.button_type = NC_STACK_button::TYPE_CAPTION;
                                                                                                                 btn_64arg.xpos = 0;
-                                                                                                                btn_64arg.ypos = 12 * (vertMenuSpace + _fontH); // OpenUA repack: Sound Volume row 12
+                                                                                                                btn_64arg.ypos = 14 * (vertMenuSpace + _fontH); // OpenUA repack: Sound Volume row 14
                                                                                                                 btn_64arg.width = (dword_5A50B2 - 5 * buttonsSpace) * 0.3;
                                                                                                                 btn_64arg.caption = Locale::Text::Dialogs(Locale::DLG_S_FXVOL);
                                                                                                                 btn_64arg.caption2.clear();
@@ -4468,7 +4477,7 @@ bool NC_STACK_ypaworld::CreateVideoControls()
                                                                                                                             btn_64arg.button_type = NC_STACK_button::TYPE_CAPTION;
                                                                                                                             btn_64arg.xpos = 0;
                                                                                                                             btn_64arg.width = (dword_5A50B2 - 5 * buttonsSpace) * 0.3;
-                                                                                                                            btn_64arg.ypos = 13 * (vertMenuSpace + _fontH); // OpenUA repack: Music Volume row 13
+                                                                                                                            btn_64arg.ypos = 15 * (vertMenuSpace + _fontH); // OpenUA repack: Music Volume row 15
                                                                                                                             btn_64arg.caption = Locale::Text::Dialogs(Locale::DLG_S_CDVOL);
                                                                                                                             btn_64arg.caption2.clear();
                                                                                                                             btn_64arg.downCode = 0;
@@ -4748,19 +4757,15 @@ bool NC_STACK_ypaworld::CreateVideoControls()
 
         int gv117 = dword_5A50B2 - 6 * buttonsSpace - 2 * checkBoxWidth;
         int gv120 = gv117 / 2;
-        int fpsButtonWidth = checkBoxWidth * 4;
-        int fpsLabelWidth = gv120 - buttonsSpace - fpsButtonWidth;
-        if ( fpsLabelWidth < checkBoxWidth * 3 )
-            fpsLabelWidth = checkBoxWidth * 3;
 
-        // --- Default View cycle-button (row 7, right column, below Menu Font) ---
+        // --- Default View cycle-button (row 8, full-width bar below FPS Limit) ---
         btn_64arg.tileset_down = 16;
         btn_64arg.tileset_up = 16;
         btn_64arg.field_3A = 16;
         btn_64arg.button_type = NC_STACK_button::TYPE_CAPTION;
-        btn_64arg.xpos = 3 * buttonsSpace + checkBoxWidth + gv120;
-        btn_64arg.ypos = 7 * (_fontH + vertMenuSpace);
-        btn_64arg.width = fpsLabelWidth;
+        btn_64arg.xpos = 0;
+        btn_64arg.ypos = 8 * (_fontH + vertMenuSpace);
+        btn_64arg.width = v98;
         btn_64arg.caption = "Default View";
         btn_64arg.caption2.clear();
         btn_64arg.downCode = 0;
@@ -4782,8 +4787,9 @@ bool NC_STACK_ypaworld::CreateVideoControls()
         btn_64arg.tileset_up = 18;
         btn_64arg.field_3A = 30;
         btn_64arg.button_type = NC_STACK_button::TYPE_BUTTON;
-        btn_64arg.xpos = 3 * buttonsSpace + checkBoxWidth + gv120 + fpsLabelWidth + buttonsSpace;
-        btn_64arg.width = fpsButtonWidth;
+        btn_64arg.xpos = buttonsSpace + v294 * 0.4;
+        btn_64arg.ypos = 8 * (_fontH + vertMenuSpace);
+        btn_64arg.width = v294 * 0.6;
         btn_64arg.caption = "Cockpit";
         btn_64arg.caption2.clear();
         btn_64arg.downCode = 0;
@@ -4801,13 +4807,13 @@ bool NC_STACK_ypaworld::CreateVideoControls()
             return false;
         }
 
-        // --- VHS Filter checkbox (row 7, left column, above Sky) ---
+        // --- VHS Filter checkbox (row 9, left column) ---
         btn_64arg.tileset_down = 19;
         btn_64arg.tileset_up = 18;
         btn_64arg.field_3A = 30;
         btn_64arg.button_type = NC_STACK_button::TYPE_CHECKBX;
         btn_64arg.xpos = 0;
-        btn_64arg.ypos = 7 * (_fontH + vertMenuSpace);
+        btn_64arg.ypos = 9 * (_fontH + vertMenuSpace);
         btn_64arg.width = checkBoxWidth;
         btn_64arg.caption = "g";
         btn_64arg.caption2 = "g";
@@ -4847,7 +4853,7 @@ bool NC_STACK_ypaworld::CreateVideoControls()
         }
     }
 
-    // --- Intro Movies checkbox (row 9, right column, paired with Music) ---
+    // --- Intro Movies checkbox (row 10, right column) ---
     {
         int gv117 = dword_5A50B2 - 6 * buttonsSpace - 2 * checkBoxWidth;
         int gv120 = gv117 / 2;
@@ -4857,7 +4863,7 @@ bool NC_STACK_ypaworld::CreateVideoControls()
         btn_64arg.field_3A = 30;
         btn_64arg.button_type = NC_STACK_button::TYPE_CHECKBX;
         btn_64arg.xpos = 3 * buttonsSpace + checkBoxWidth + gv120;
-        btn_64arg.ypos = 9 * (_fontH + vertMenuSpace);
+        btn_64arg.ypos = 10 * (_fontH + vertMenuSpace);
         btn_64arg.width = checkBoxWidth;
         btn_64arg.caption = "g";
         btn_64arg.caption2 = "g";
@@ -4897,14 +4903,14 @@ bool NC_STACK_ypaworld::CreateVideoControls()
         }
     }
 
-    // --- FPS Limit cycle-button (row 14, below the volume sliders) ---
+    // --- FPS Limit cycle-button (row 7, below Menu Font) ---
     {
         btn_64arg.tileset_down = 16;
         btn_64arg.tileset_up = 16;
         btn_64arg.field_3A = 16;
         btn_64arg.button_type = NC_STACK_button::TYPE_CAPTION;
         btn_64arg.xpos = 0;
-        btn_64arg.ypos = 14 * (_fontH + vertMenuSpace);
+        btn_64arg.ypos = 7 * (_fontH + vertMenuSpace);
         btn_64arg.width = v98;
         btn_64arg.caption = "FPS Limit";
         btn_64arg.caption2.clear();
@@ -4928,7 +4934,7 @@ bool NC_STACK_ypaworld::CreateVideoControls()
         btn_64arg.field_3A = 30;
         btn_64arg.button_type = NC_STACK_button::TYPE_BUTTON;
         btn_64arg.xpos = buttonsSpace + v294 * 0.4;
-        btn_64arg.ypos = 14 * (_fontH + vertMenuSpace);
+        btn_64arg.ypos = 7 * (_fontH + vertMenuSpace);
         btn_64arg.width = v294 * 0.6;
         btn_64arg.caption = "60";
         btn_64arg.caption2.clear();
@@ -8137,12 +8143,6 @@ void NC_STACK_ypaworld::setYW_userVehicle(NC_STACK_ypabact *bact)
             _prevUnitId = oldpBact->_gid;
 
         _userUnit = bact;
-
-        bool missileCameraTransition = oldpBact &&
-                                       (oldpBact->_bact_type == BACT_TYPES_MISSLE ||
-                                        _userUnit->_bact_type == BACT_TYPES_MISSLE);
-        if ( !missileCameraTransition )
-            _userUnit->ResetCockpitCameraMode();
 
         _vehicleTakenControlTimestamp = _timeStamp;
         _vehicleTakenCommandId = _userUnit->_commandID;

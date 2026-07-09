@@ -538,7 +538,6 @@ public:
     bool IsPlayerFirstPersonCameraActive() const;
     bool ShouldRenderCockpitCameraBody() const;
     vec3d GetCockpitCameraPosition() const;
-    void ResetCockpitCameraMode();
     void ToggleCockpitCameraMode();
     bool HasMinigun() const;
     bool UsesVehicleMinigunTiming() const { return !_mgun_set && _mgun_shot_time > 0; }
@@ -837,14 +836,13 @@ public:
     float _overeof;
     float _viewer_overeof;
     bool _cockpit_camera_enable;
-    bool _cockpit_camera_user_disabled;
     vec3d _cockpit_camera_offset;
-    bool _pov_mgun_fx_enable;
-    int16_t _pov_mgun_fx_vp;
-    int16_t _pov_num_mguns_fx;
-    float _pov_mgun_fx_scale;
-    vec3d _pov_mgun_fx_offset;
-    vec3d _pov_mgun_fx_rot;
+    bool _mgun_pov_fx_enable;
+    int16_t _mgun_pov_fx_vp;
+    int16_t _mgun_pov_num_mguns_fx;
+    float _mgun_pov_fx_scale;
+    vec3d _mgun_pov_fx_offset;
+    vec3d _mgun_pov_fx_rot;
 //    float pos_x_cntr;
 //
 //    float pos_y_cntr;
@@ -892,6 +890,8 @@ public:
     bool _mgun_angle_set;
     float _mgun_ai_range;
     float _mgun_ai_fire_alignment;
+    bool _mgun_damage_sectors;
+    float _mgun_sector_damage_accum;
     float _weapon_spread_x;
     float _weapon_spread_y;
     float _mgun_spread_x;

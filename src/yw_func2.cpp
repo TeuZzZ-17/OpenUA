@@ -1379,8 +1379,6 @@ void UserData::sb_0x46aa8c()
         defaultCockpitCamera = confDefaultCockpitCamera;
         cockpitCameraRuntimeMode = confDefaultCockpitCamera;
 
-        if ( p_YW && p_YW->_userUnit )
-            p_YW->_userUnit->ResetCockpitCameraMode();
     }
 
     if ( forceChange )

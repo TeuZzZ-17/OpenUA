@@ -1888,6 +1888,10 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
 
         _vhcl->mgun_ai_fire_alignment = alignment;
     }
+    else if ( !StriCmp(p1, "mgun_damage_sectors") )
+    {
+        _vhcl->mgun_damage_sectors = parser.stol(p2, NULL, 0) != 0;
+    }
     else if ( !StriCmp(p1, "weapon_spread_x") )
     {
         _vhcl->weapon_spread_x = parser.stof(p2, 0);
@@ -1942,48 +1946,48 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     {
         _vhcl->cockpit_camera_offset.z = parser.stof(p2, 0);
     }
-    else if ( !StriCmp(p1, "pov_mgun_fx_enable") )
+    else if ( !StriCmp(p1, "mgun_pov_fx_enable") )
     {
-        _vhcl->pov_mgun_fx_enable = StrGetBool(p2);
+        _vhcl->mgun_pov_fx_enable = StrGetBool(p2);
     }
-    else if ( !StriCmp(p1, "pov_mgun_fx_vp") )
+    else if ( !StriCmp(p1, "mgun_pov_fx_vp") )
     {
         int vp = parser.stol(p2, 0);
-        _vhcl->pov_mgun_fx_vp = vp > 0 ? vp : -1;
+        _vhcl->mgun_pov_fx_vp = vp > 0 ? vp : -1;
     }
-    else if ( !StriCmp(p1, "pov_num_mguns_fx") )
+    else if ( !StriCmp(p1, "mgun_pov_num_mguns_fx") )
     {
         int num = parser.stol(p2, 0);
-        _vhcl->pov_num_mguns_fx = num > 0 ? num : 1;
+        _vhcl->mgun_pov_num_mguns_fx = num > 0 ? num : 1;
     }
-    else if ( !StriCmp(p1, "pov_mgun_fx_scale") )
+    else if ( !StriCmp(p1, "mgun_pov_fx_scale") )
     {
         float scale = parser.stof(p2, 0);
-        _vhcl->pov_mgun_fx_scale = scale > 0.0 ? scale : 1.0;
+        _vhcl->mgun_pov_fx_scale = scale > 0.0 ? scale : 1.0;
     }
-    else if ( !StriCmp(p1, "pov_mgun_fx_offset_x") )
+    else if ( !StriCmp(p1, "mgun_pov_fx_offset_x") )
     {
-        _vhcl->pov_mgun_fx_offset.x = parser.stof(p2, 0);
+        _vhcl->mgun_pov_fx_offset.x = parser.stof(p2, 0);
     }
-    else if ( !StriCmp(p1, "pov_mgun_fx_offset_y") )
+    else if ( !StriCmp(p1, "mgun_pov_fx_offset_y") )
     {
-        _vhcl->pov_mgun_fx_offset.y = parser.stof(p2, 0);
+        _vhcl->mgun_pov_fx_offset.y = parser.stof(p2, 0);
     }
-    else if ( !StriCmp(p1, "pov_mgun_fx_offset_z") )
+    else if ( !StriCmp(p1, "mgun_pov_fx_offset_z") )
     {
-        _vhcl->pov_mgun_fx_offset.z = parser.stof(p2, 0);
+        _vhcl->mgun_pov_fx_offset.z = parser.stof(p2, 0);
     }
-    else if ( !StriCmp(p1, "pov_mgun_fx_rot_x") )
+    else if ( !StriCmp(p1, "mgun_pov_fx_rot_x") )
     {
-        _vhcl->pov_mgun_fx_rot.x = parser.stof(p2, 0);
+        _vhcl->mgun_pov_fx_rot.x = parser.stof(p2, 0);
     }
-    else if ( !StriCmp(p1, "pov_mgun_fx_rot_y") )
+    else if ( !StriCmp(p1, "mgun_pov_fx_rot_y") )
     {
-        _vhcl->pov_mgun_fx_rot.y = parser.stof(p2, 0);
+        _vhcl->mgun_pov_fx_rot.y = parser.stof(p2, 0);
     }
-    else if ( !StriCmp(p1, "pov_mgun_fx_rot_z") )
+    else if ( !StriCmp(p1, "mgun_pov_fx_rot_z") )
     {
-        _vhcl->pov_mgun_fx_rot.z = parser.stof(p2, 0);
+        _vhcl->mgun_pov_fx_rot.z = parser.stof(p2, 0);
     }
     else if ( !StriCmp(p1, "gun_radius") )
     {
@@ -2532,6 +2536,7 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->mgun_angle_set = false;
         _vhcl->mgun_ai_range = 1000.0;
         _vhcl->mgun_ai_fire_alignment = 0.85;
+        _vhcl->mgun_damage_sectors = false;
         _vhcl->weapon_spread_x = 0.0;
         _vhcl->weapon_spread_y = 0.0;
         _vhcl->mgun_spread_x = 0.0;
@@ -2622,12 +2627,12 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->vwr_overeof = 30.0;
         _vhcl->cockpit_camera_enable = false;
         _vhcl->cockpit_camera_offset = vec3d(0.0, 0.0, 0.0);
-        _vhcl->pov_mgun_fx_enable = false;
-        _vhcl->pov_mgun_fx_vp = -1;
-        _vhcl->pov_num_mguns_fx = 1;
-        _vhcl->pov_mgun_fx_scale = 1.0;
-        _vhcl->pov_mgun_fx_offset = vec3d(0.0, 0.0, 0.0);
-        _vhcl->pov_mgun_fx_rot = vec3d(0.0, 0.0, 0.0);
+        _vhcl->mgun_pov_fx_enable = false;
+        _vhcl->mgun_pov_fx_vp = -1;
+        _vhcl->mgun_pov_num_mguns_fx = 1;
+        _vhcl->mgun_pov_fx_scale = 1.0;
+        _vhcl->mgun_pov_fx_offset = vec3d(0.0, 0.0, 0.0);
+        _vhcl->mgun_pov_fx_rot = vec3d(0.0, 0.0, 0.0);
         _vhcl->gun_power = 4000.0;
         _vhcl->gun_radius = 5.0;
         _vhcl->max_pitch = -1.0;

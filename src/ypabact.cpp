@@ -15,6 +15,7 @@
 #include "ypamissile.h"
 #include "yw_net.h"
 
+#include "system/inivals.h"
 #include "world/clonebalance.h"
 
 #include "log.h"
@@ -26,6 +27,27 @@ extern int dword_5B1128;
 static bool ypabact_IsSeekAndExplodeArmed(NC_STACK_ypabact *unit);
 static void ypabact_FireProximityDefenseAtDeath(NC_STACK_ypabact *unit);
 static void ypabact_ApplyDeathDamage(NC_STACK_ypabact *unit, bool megadethPhase);
+
+static float ypabact_ReadPowerStationEnergyMultiplier()
+{
+    std::string value = System::IniConf::GamePowerStationEnergyMultiplier.Get<std::string>();
+    if ( value.empty() || value.find(',') != std::string::npos )
+        return 1.0f;
+
+    try
+    {
+        size_t pos = 0;
+        float multiplier = std::stof(value, &pos);
+        if ( value.find_first_not_of(" \t\r\n", pos) != std::string::npos || multiplier < 0.0f )
+            return 1.0f;
+
+        return multiplier;
+    }
+    catch (...)
+    {
+        return 1.0f;
+    }
+}
 
 static bool ypabact_IsAirVehicle(const NC_STACK_ypabact *unit)
 {
@@ -221,21 +243,12 @@ vec3d NC_STACK_ypabact::GetCockpitCameraPosition() const
     return _position + _rotation.Transpose().Transform(_cockpit_camera_offset);
 }
 
-void NC_STACK_ypabact::ResetCockpitCameraMode()
-{
-    const bool cockpitMode = _world &&
-                             _world->_GameShell &&
-                             _world->_GameShell->cockpitCameraRuntimeMode;
-    _cockpit_camera_user_disabled = !cockpitMode;
-}
-
 void NC_STACK_ypabact::ToggleCockpitCameraMode()
 {
     if ( !_world || !_world->_GameShell )
         return;
 
     _world->_GameShell->cockpitCameraRuntimeMode = !_world->_GameShell->cockpitCameraRuntimeMode;
-    ResetCockpitCameraMode();
 }
 
 static float ypabact_GetDamagedThreshold(const NC_STACK_ypabact *bact)
@@ -1453,14 +1466,13 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _overeof = 0.0;
     _viewer_overeof = 0.0;
     _cockpit_camera_enable = false;
-    _cockpit_camera_user_disabled = false;
     _cockpit_camera_offset = vec3d(0.0, 0.0, 0.0);
-    _pov_mgun_fx_enable = false;
-    _pov_mgun_fx_vp = -1;
-    _pov_num_mguns_fx = 1;
-    _pov_mgun_fx_scale = 1.0;
-    _pov_mgun_fx_offset = vec3d(0.0, 0.0, 0.0);
-    _pov_mgun_fx_rot = vec3d(0.0, 0.0, 0.0);
+    _mgun_pov_fx_enable = false;
+    _mgun_pov_fx_vp = -1;
+    _mgun_pov_num_mguns_fx = 1;
+    _mgun_pov_fx_scale = 1.0;
+    _mgun_pov_fx_offset = vec3d(0.0, 0.0, 0.0);
+    _mgun_pov_fx_rot = vec3d(0.0, 0.0, 0.0);
     _clock = 0;
     _AI_time1 = 0;
     _AI_time2 = 0;
@@ -1498,6 +1510,8 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _mgun_angle_set = false;
     _mgun_ai_range = 1000.0;
     _mgun_ai_fire_alignment = 0.85;
+    _mgun_damage_sectors = false;
+    _mgun_sector_damage_accum = 0.0;
     _mgun_vp_fire_end_time = 0;
     _weapon_spread_x = 0.0;
     _weapon_spread_y = 0.0;
@@ -1660,14 +1674,13 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _overeof = 10.0;
     _viewer_overeof = 40.0;
     _cockpit_camera_enable = false;
-    _cockpit_camera_user_disabled = false;
     _cockpit_camera_offset = vec3d(0.0, 0.0, 0.0);
-    _pov_mgun_fx_enable = false;
-    _pov_mgun_fx_vp = -1;
-    _pov_num_mguns_fx = 1;
-    _pov_mgun_fx_scale = 1.0;
-    _pov_mgun_fx_offset = vec3d(0.0, 0.0, 0.0);
-    _pov_mgun_fx_rot = vec3d(0.0, 0.0, 0.0);
+    _mgun_pov_fx_enable = false;
+    _mgun_pov_fx_vp = -1;
+    _mgun_pov_num_mguns_fx = 1;
+    _mgun_pov_fx_scale = 1.0;
+    _mgun_pov_fx_offset = vec3d(0.0, 0.0, 0.0);
+    _mgun_pov_fx_rot = vec3d(0.0, 0.0, 0.0);
     _energy = 10000;
     _shield = 0;
     _base_snd_normal_pitch = 0;
@@ -1699,6 +1712,8 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _mgun_soundcarrier.Clear();
     _mimic_soundcarrier.Clear();
     _mgun_sound_index = 0;
+    _mgun_damage_sectors = false;
+    _mgun_sector_damage_accum = 0.0;
     _mgun_vp_fire_end_time = 0;
 //    ypabact.field_3CE = 0;
     _height_max_user = 1600.0;
@@ -10194,7 +10209,7 @@ void NC_STACK_ypabact::EnergyInteract(update_msg *arg)
 
             float v14 = v16 / 1000.0;
 
-            float denerg = 2.0 * _energy_max * v14 * _pSector->energy_power * arg176.field_4 / 7000.0;
+            float denerg = ypabact_ReadPowerStationEnergyMultiplier() * _energy_max * v14 * _pSector->energy_power * arg176.field_4 / 7000.0;
 
             if ( _owner == _pSector->owner )
                 _energy += denerg;
@@ -11640,19 +11655,20 @@ void NC_STACK_ypabact::Renew()
     _mgun_angle_set = false;
     _mgun_ai_range = 1000.0;
     _mgun_ai_fire_alignment = 0.85;
+    _mgun_damage_sectors = false;
+    _mgun_sector_damage_accum = 0.0;
     _mgun_soundcarrier.Clear();
     _mimic_soundcarrier.Clear();
     _mgun_sound_index = 0;
     _mgun_vp_fire_end_time = 0;
     _cockpit_camera_enable = false;
-    _cockpit_camera_user_disabled = false;
     _cockpit_camera_offset = vec3d(0.0, 0.0, 0.0);
-    _pov_mgun_fx_enable = false;
-    _pov_mgun_fx_vp = -1;
-    _pov_num_mguns_fx = 1;
-    _pov_mgun_fx_scale = 1.0;
-    _pov_mgun_fx_offset = vec3d(0.0, 0.0, 0.0);
-    _pov_mgun_fx_rot = vec3d(0.0, 0.0, 0.0);
+    _mgun_pov_fx_enable = false;
+    _mgun_pov_fx_vp = -1;
+    _mgun_pov_num_mguns_fx = 1;
+    _mgun_pov_fx_scale = 1.0;
+    _mgun_pov_fx_offset = vec3d(0.0, 0.0, 0.0);
+    _mgun_pov_fx_rot = vec3d(0.0, 0.0, 0.0);
     _spawn_units = 0;
     _spawn_vehicle = 0;
     _spawn_interval = 5000;
@@ -12359,22 +12375,22 @@ static bool ypabact_SpawnVehicleMinigunImpact(NC_STACK_ypabact *bact, const vec3
 
 static void ypabact_SpawnFirstPersonMinigunFX(NC_STACK_ypabact *bact)
 {
-    if ( !bact || !bact->_pov_mgun_fx_enable || !bact->IsPlayerFirstPersonCameraActive() || !bact->getBACT_pWorld() )
+    if ( !bact || !bact->_mgun_pov_fx_enable || !bact->IsPlayerFirstPersonCameraActive() || !bact->getBACT_pWorld() )
         return;
 
-    int fxVp = bact->_pov_mgun_fx_vp;
+    int fxVp = bact->_mgun_pov_fx_vp;
     if ( fxVp <= 0 )
         return;
 
-    int lanes = bact->_pov_num_mguns_fx > 0 ? bact->_pov_num_mguns_fx : 1;
+    int lanes = bact->_mgun_pov_num_mguns_fx > 0 ? bact->_mgun_pov_num_mguns_fx : 1;
     if ( lanes > 3 )
         lanes = 3;
 
-    float fxScale = bact->_pov_mgun_fx_scale > 0.0 ? bact->_pov_mgun_fx_scale : 1.0;
-    float spacing = fabs(bact->_pov_mgun_fx_offset.x);
+    float fxScale = bact->_mgun_pov_fx_scale > 0.0 ? bact->_mgun_pov_fx_scale : 1.0;
+    float spacing = fabs(bact->_mgun_pov_fx_offset.x);
     for (int i = 0; i < lanes; i++)
     {
-        vec3d localOffset = bact->_pov_mgun_fx_offset;
+        vec3d localOffset = bact->_mgun_pov_fx_offset;
 
         if ( lanes == 1 )
             localOffset.x = 0.0;
@@ -12394,8 +12410,53 @@ static void ypabact_SpawnFirstPersonMinigunFX(NC_STACK_ypabact *bact)
             vec3d(1.0, 1.0, 1.0),
             vec3d(0.0, 0.0, 0.0),
             true,
-            bact->_pov_mgun_fx_rot);
+            bact->_mgun_pov_fx_rot);
     }
+}
+
+static int ypabact_GetMinigunSectorDamageStep(NC_STACK_ypabact *bact, const vec3d &pos)
+{
+    if ( !bact || !bact->getBACT_pWorld() )
+        return 0;
+
+    NC_STACK_ypaworld *world = bact->getBACT_pWorld();
+    TLaserWorldHit hit;
+    if ( !ypabact_LaserGetSectorHit(world, pos, &hit) )
+        return 0;
+
+    cellArea &cell = world->SectorAt(hit.cellId);
+    int shield = world->_legoArray[ world->GetLegoBld(&cell, hit.bldX, hit.bldY) ].Shield;
+    int damagePercent = 100 - shield;
+    if ( damagePercent <= 0 )
+        return 0;
+
+    return (40000 + damagePercent - 1) / damagePercent;
+}
+
+static void ypabact_ApplyMinigunSectorDamage(NC_STACK_ypabact *bact, const vec3d &pos, float energy)
+{
+    if ( !bact || energy <= 0.0 )
+        return;
+
+    int stepEnergy = ypabact_GetMinigunSectorDamageStep(bact, pos);
+    if ( stepEnergy <= 0 )
+        return;
+
+    bact->_mgun_sector_damage_accum += energy;
+
+    int sectorEnergy = (int)bact->_mgun_sector_damage_accum;
+    if ( sectorEnergy < stepEnergy )
+        return;
+
+    sectorEnergy = (sectorEnergy / stepEnergy) * stepEnergy;
+    bact->_mgun_sector_damage_accum -= sectorEnergy;
+
+    yw_arg129 dmg;
+    dmg.field_0 = 0;
+    dmg.pos = pos;
+    dmg.field_10 = sectorEnergy;
+    dmg.unit = bact;
+    bact->ChangeSectorEnergy(&dmg);
 }
 
 size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
@@ -12501,6 +12562,7 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
         if ( cockpitAim )
             fireDir = ypabact_GetCockpitViewDirection(this, fireDir);
         vec3d shotDir = ypabact_ApplyDirectionalSpread(_rotation, fireDir, spreadX, spreadY);
+        float minigunTraceRange = v88 ? 1000.0 : (_mgun_ai_range > 0.0 ? _mgun_ai_range : 1000.0);
 
         NC_STACK_ypabact *v108 = NULL;
         float v123 = 0.0;
@@ -12511,7 +12573,7 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
         arg130.pos_x = shotPos.x;
         arg130.pos_z = shotPos.z;
 
-        vec2d tmp = shotPos.XZ() + shotDir.XZ() * 1000.0;
+        vec2d tmp = shotPos.XZ() + shotDir.XZ() * minigunTraceRange;
 
         if ( !_world->GetSectorInfo(&arg130) )
             continue;
@@ -12608,7 +12670,7 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
 
                                             if ( v37 > v110 )
                                             {
-                                                if ( sqrt( POW2(v110) + 1000000.0 ) > v111 )
+                                                if ( sqrt( POW2(v110) + POW2(minigunTraceRange) ) > v111 )
                                                 {
                                                     if ( !v22 )
                                                     {
@@ -12659,15 +12721,40 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
             }
         }
 
+        int v55 = 0;
+        int v96 = 0;
+        ypaworld_arg136 v59;
+        vec3d v80;
+        bool minigunWorldHit = false;
+
+        if ( !v108 )
+        {
+            v59.stPos = shotPos;
+            v59.vect = shotDir * minigunTraceRange;
+            v59.flags = 0;
+
+            _world->ypaworld_func149(&v59);
+
+            if ( v59.isect )
+            {
+                v80 = v59.isectPos;
+                v96 = 1;
+                minigunWorldHit = true;
+            }
+        }
+
+        if ( _mgun_damage_sectors && minigunWorldHit )
+        {
+            NC_STACK_ypabact *userHost = _world->getYW_userHostStation();
+            bool canApplyDamage = !_world->_isNetGame ||
+                                  (userHost && userHost->_owner == _owner);
+
+            if ( canApplyDamage )
+                ypabact_ApplyMinigunSectorDamage(this, v80, mgunPower * arg->field_C);
+        }
+
         if ( spawnVisual )
         {
-            int v55 = 0;
-            int v96 = 0;
-
-            ypaworld_arg136 v59;
-
-            vec3d v80;
-
             if ( v108 )
             {
                 v55 = 1;
@@ -12678,25 +12765,9 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
                 else
                     v80 = v66;
             }
-            else
+            else if ( minigunWorldHit )
             {
-                v59.stPos = shotPos;
-                v59.vect = shotDir * 1000.0;
-                v59.flags = 0;
-
-                _world->ypaworld_func149(&v59);
-
-                if ( v59.isect )
-                {
-                    v80 = v59.isectPos;
-
-                    v96 = 1;
-                    v55 = 1;
-                }
-                else
-                {
-                    v55 = 0;
-                }
+                v55 = 1;
             }
 
             bool spawnedVehicleImpact = false;
