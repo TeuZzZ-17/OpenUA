@@ -12449,13 +12449,15 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
 
     for (int shotId = 0; shotId < mgunShots; shotId++)
     {
-        vec3d shotPos = _position;
-        vec3d shotOldPos = _old_pos;
+        bool cockpitAim = IsCockpitCameraActive();
+        vec3d shotPos = cockpitAim ? GetCockpitCameraPosition() : _position;
+        vec3d shotOldPos = cockpitAim ? shotPos : _old_pos;
         float spreadX = _mgun_spread_x;
         float spreadY = _mgun_spread_y;
 
         vec3d fireDir = ypabact_GetMinigunFireDir(this, arg->field_0);
-        fireDir = ypabact_GetCockpitAimDirection(this, shotPos, fireDir, fireDir, 1000.0);
+        if ( cockpitAim )
+            fireDir = ypabact_GetCockpitViewDirection(this, fireDir);
         vec3d shotDir = ypabact_ApplyDirectionalSpread(_rotation, fireDir, spreadX, spreadY);
 
         NC_STACK_ypabact *v108 = NULL;
