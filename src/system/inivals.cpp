@@ -233,6 +233,9 @@ Common::Ini::Key IniConf::GameNewAI("game.newai",    Common::Ini::KT_BOOL, true)
 // game.fixed_tick = no keeps vanilla biased timing. Set yes to use the true
 // measured frame delta (no legacy +1 bias) for frame-rate independent gameplay.
 Common::Ini::Key IniConf::GameFixedTick("game.fixed_tick", Common::Ini::KT_BOOL, false);
+// OpenUA custom: tank ground-pose response used only when game.fixed_tick = yes.
+// 2.0 is the vanilla alignment speed; 10.0 is quicker but still smoothed.
+Common::Ini::Key IniConf::GameFixedTickTankGroundPoseMult("game.fixed_tick_tank_ground_pose_mult", Common::Ini::KT_WORD, std::string("10.0"));
 Common::Ini::Key IniConf::GameTimeLine("game.timeline", Common::Ini::KT_DIGIT, (int32_t)600000);
 Common::Ini::Key IniConf::GameRoboPlayerAIBehavior("game.robo_player_ai_behavior", Common::Ini::KT_BOOL, false);
 Common::Ini::Key IniConf::GameSpectatorMode("game.spectator_mode", Common::Ini::KT_BOOL, false);
@@ -450,6 +453,7 @@ void IniConf::Init()
 
         , &GameNewAI
         , &GameFixedTick
+        , &GameFixedTickTankGroundPoseMult
         , &GameTimeLine
         , &GameRoboPlayerAIBehavior
         , &GameSpectatorMode

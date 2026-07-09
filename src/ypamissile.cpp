@@ -137,6 +137,18 @@ static bool ypamissile_TargetHasPushResistance(NC_STACK_ypaworld *world, NC_STAC
     return protos.at(protoId).has_push_resistance;
 }
 
+static bool ypamissile_NormalizeXZ(vec3d *dir)
+{
+    dir->y = 0.0f;
+
+    float len = dir->length();
+    if ( !isfinite(len) || len <= 0.001f )
+        return false;
+
+    *dir /= len;
+    return true;
+}
+
 static NC_STACK_ypabact *ypamissile_FindLiveBactByGid(World::RefBactList &list, int32_t gid)
 {
     for (NC_STACK_ypabact *unit : list)
@@ -1176,7 +1188,7 @@ void NC_STACK_ypamissile::ApplyDirectHitToBact(NC_STACK_ypabact *bct)
     RememberDirectHitUnit(bct);
 
     bool wasAlive = ypamissile_IsAliveForPushAtDeath(bct);
-    vec3d pushDir;
+    vec3d pushDir(0.0, 0.0, 0.0);
     float pushStrength = 0.0f;
     bool hasDirectPush = ApplyDirectPushToBact(bct, &pushDir, &pushStrength, false);
 
@@ -1299,15 +1311,19 @@ void NC_STACK_ypamissile::ApplyPushAtDeath(NC_STACK_ypabact *bct, const vec3d &f
     if ( !(bct->_status_flg & BACT_STFLAG_DEATH1) )
         return;
 
-    vec3d deathPushDir = _fly_dir;
-    if ( deathPushDir.normalise() <= 0.001f )
+    vec3d deathPushDir = bct->_position - _position;
+    if ( !ypamissile_NormalizeXZ(&deathPushDir) )
     {
-        deathPushDir = _position - _old_pos;
-        if ( deathPushDir.normalise() <= 0.001f )
+        deathPushDir = fallbackDir;
+        if ( !ypamissile_NormalizeXZ(&deathPushDir) )
         {
-            deathPushDir = fallbackDir;
-            if ( deathPushDir.normalise() <= 0.001f )
-                return;
+            deathPushDir = _fly_dir;
+            if ( !ypamissile_NormalizeXZ(&deathPushDir) )
+            {
+                deathPushDir = _position - _old_pos;
+                if ( !ypamissile_NormalizeXZ(&deathPushDir) )
+                    return;
+            }
         }
     }
 
@@ -1331,7 +1347,7 @@ void NC_STACK_ypamissile::ApplyAoePushAtDeath(NC_STACK_ypabact *bct, const vec3d
         return;
 
     vec3d deathPushDir = pushDir;
-    if ( deathPushDir.normalise() <= 0.001f )
+    if ( !ypamissile_NormalizeXZ(&deathPushDir) )
         return;
 
     float pushStrength = (float)_mislAoeUnitPushAtDeath;

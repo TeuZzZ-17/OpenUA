@@ -225,6 +225,7 @@ public:
     // OpenUA: frame-rate independent gameplay timing (game.fixed_tick, default no).
     // "no" keeps vanilla biased timing; "yes" uses the true measured frame delta.
     static Common::Ini::Key GameFixedTick;
+    static Common::Ini::Key GameFixedTickTankGroundPoseMult;
     static Common::Ini::Key GameTimeLine;
     static Common::Ini::Key GameRoboPlayerAIBehavior;
     static Common::Ini::Key GameSpectatorMode;

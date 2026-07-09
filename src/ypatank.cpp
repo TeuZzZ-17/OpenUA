@@ -3,10 +3,12 @@
 #include <stddef.h>
 #include <string.h>
 #include <math.h>
+#include <string>
 #include "yw.h"
 #include "ypatank.h"
 #include "yparobo.h"
 #include "log.h"
+#include "system/inivals.h"
 
 #include "yw_net.h"
 
@@ -36,6 +38,47 @@ static bool ypatank_IsPlayerRecoilRecoveryActive(const NC_STACK_ypatank *tank)
 }
 
 static const float YPATANK_PLAYER_RECOIL_FORWARD_SCALE = 0.20f;
+static const float YPATANK_FIXED_TICK_GROUND_POSE_ROT_MULT_DEFAULT = 10.0f;
+
+static bool ypatank_UseFixedTickGroundPose()
+{
+    return System::IniConf::GameFixedTick.Get<bool>();
+}
+
+static float ypatank_FixedTickGroundPoseRotMult()
+{
+    static bool parsed = false;
+    static float mult = YPATANK_FIXED_TICK_GROUND_POSE_ROT_MULT_DEFAULT;
+
+    if ( parsed )
+        return mult;
+
+    parsed = true;
+
+    std::string value = System::IniConf::GameFixedTickTankGroundPoseMult.Get<std::string>();
+    if ( value.empty() || value.find(',') != std::string::npos )
+        return mult;
+
+    try
+    {
+        size_t pos = 0;
+        float parsedMult = std::stof(value, &pos);
+        if ( value.find_first_not_of(" \t\r\n", pos) != std::string::npos )
+            return mult;
+
+        if ( parsedMult < 2.0f )
+            parsedMult = 2.0f;
+        else if ( parsedMult > 30.0f )
+            parsedMult = 30.0f;
+
+        mult = parsedMult;
+    }
+    catch (...)
+    {
+    }
+
+    return mult;
+}
 
 size_t NC_STACK_ypatank::Init(IDVList &stak)
 {
@@ -1948,7 +1991,9 @@ int NC_STACK_ypatank::AlignVehicleAI(float dtime, vec3d *pNormal)
         return ALIGN_NORMAL;
     }
 
-    if ( _tankFlags & FLAG_TANK_TIP )
+    bool fixedTickGroundPose = ypatank_UseFixedTickGroundPose();
+
+    if ( !fixedTickGroundPose && (_tankFlags & FLAG_TANK_TIP) )
         normal = TankTip(normal);
 
     vec3d vaxis = _rotation.AxisY() * normal;
@@ -1959,13 +2004,17 @@ int NC_STACK_ypatank::AlignVehicleAI(float dtime, vec3d *pNormal)
     {
         float v57 = clp_acos( normal.dot( _rotation.AxisY() ) );
 
-        float v47 = _maxrot * 2.0 * dtime;
+        float poseRotMult = fixedTickGroundPose ? ypatank_FixedTickGroundPoseRotMult() : 2.0f;
+        float v47 = _maxrot * poseRotMult * dtime;
 
         if ( v57 > v47 )
             v57 = v47;
 
-        if ( fabs(v57) < 0.01 )
-            v57 = 0.0;
+        if ( !fixedTickGroundPose )
+        {
+            if ( fabs(v57) < 0.01 )
+                v57 = 0.0;
+        }
 
         vaxis /= v46;
 
@@ -2256,7 +2305,9 @@ int NC_STACK_ypatank::AlignVehicleUser(float dtime, const vec3d &oldDir)
         if ( v170.y < -0.1 )
             v170 = -v170;
 
-        if ( _tankFlags & FLAG_TANK_TIP )
+        bool fixedTickGroundPose = ypatank_UseFixedTickGroundPose();
+
+        if ( !fixedTickGroundPose && (_tankFlags & FLAG_TANK_TIP) )
             v170 = TankTip(v170);
 
         float v74 = fabs(_fly_dir_length);
@@ -2276,10 +2327,12 @@ int NC_STACK_ypatank::AlignVehicleUser(float dtime, const vec3d &oldDir)
 
             float v166 = clp_acos( v170.dot( _rotation.AxisY() ) );
 
-            if ( v166 > _maxrot * 2.0 * dtime )
-                v166 = _maxrot * 2.0 * dtime;
+            float poseRotMult = fixedTickGroundPose ? ypatank_FixedTickGroundPoseRotMult() : 2.0f;
+            float maxPoseStep = _maxrot * poseRotMult * dtime;
+            if ( v166 > maxPoseStep )
+                v166 = maxPoseStep;
 
-            if ( fabs(v166) > v163 )
+            if ( fixedTickGroundPose || fabs(v166) > v163 )
                 _rotation *= mat3x3::AxisAngle(vaxis, v166);
         }
     }
