@@ -1461,6 +1461,9 @@ bool NC_STACK_ypamissile::CanCollideWithWeapon(NC_STACK_ypamissile *other) const
     if ( !other || other == this || other == _mislEmitter )
         return false;
 
+    if ( _owner == other->_owner )
+        return false;
+
     if ( other->_mislEmitter == this )
         return false;
 
