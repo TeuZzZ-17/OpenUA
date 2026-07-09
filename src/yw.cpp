@@ -542,15 +542,37 @@ void sub_445230(NC_STACK_ypaworld *yw)
     {
         NC_STACK_ypabact *v4 = yw->_viewerBact;
 
-        yw->_viewerPosition = v4->_position + v4->_rotation.Transpose().Transform(v4->_viewer_position);
+        if ( v4->IsCockpitCameraActive() )
+            yw->_viewerPosition = v4->GetCockpitCameraPosition();
+        else
+            yw->_viewerPosition = v4->_position + v4->_rotation.Transpose().Transform(v4->_viewer_position);
 
         yw->_viewerRotation = yw->_viewerBact->_viewer_rotation;
     }
     else
     {
-        yw->_viewerPosition = yw->_viewerBact->_position;
+        if ( yw->_viewerBact->IsCockpitCameraActive() )
+            yw->_viewerPosition = yw->_viewerBact->GetCockpitCameraPosition();
+        else
+            yw->_viewerPosition = yw->_viewerBact->_position;
 
         yw->_viewerRotation = yw->_viewerBact->_rotation;
+    }
+}
+
+static void yw_UpdateCockpitCameraToggle(NC_STACK_ypaworld *yw, TInputState *inpt)
+{
+    if ( !yw || !inpt || !yw->_GameShell || !yw->_userUnit )
+        return;
+
+    const UserData::TInputConf &bind = yw->_GameShell->InputConfig[World::INPUT_BIND_COCKPIT_CAMERA];
+    if ( bind.Type != World::INPUT_BIND_TYPE_HOTKEY || inpt->HotKeyID != bind.KeyID )
+        return;
+
+    if ( yw->_userUnit->IsCockpitCameraAvailable() )
+    {
+        yw->_userUnit->ToggleCockpitCameraMode();
+        inpt->HotKeyID = -1;
     }
 }
 
@@ -616,6 +638,7 @@ size_t NC_STACK_ypaworld::Process(base_64arg *arg)
         if ( !_doNotRender )
         {
             ypaworld_func64__sub1(arg->field_8); //Precompute input (add mouse turn)
+            yw_UpdateCockpitCameraToggle(this, arg->field_8);
 
             TClickBoxInf *winp = &arg->field_8->ClickInf;
 
@@ -1708,6 +1731,15 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_fire_pos.x = vhcl.fire_x;
         bacto->_fire_pos.y = vhcl.fire_y;
         bacto->_fire_pos.z = vhcl.fire_z;
+        bacto->_cockpit_camera_enable = vhcl.cockpit_camera_enable;
+        bacto->_cockpit_camera_user_disabled = false;
+        bacto->_cockpit_camera_offset = vhcl.cockpit_camera_offset;
+        bacto->_pov_mgun_fx_enable = vhcl.pov_mgun_fx_enable;
+        bacto->_pov_mgun_fx_vp = vhcl.pov_mgun_fx_vp;
+        bacto->_pov_num_mguns_fx = vhcl.pov_num_mguns_fx;
+        bacto->_pov_mgun_fx_scale = vhcl.pov_mgun_fx_scale;
+        bacto->_pov_mgun_fx_offset = vhcl.pov_mgun_fx_offset;
+        bacto->_pov_mgun_fx_rot = vhcl.pov_mgun_fx_rot;
         bacto->_gun_angle = vhcl.gun_angle;
         bacto->_gun_angle_user = vhcl.gun_angle;
         bacto->_num_weapons = vhcl.num_weapons;
@@ -2636,7 +2668,7 @@ void UserData::sub_46D2B4()
     for (int i = 0; i <= 48; i++)
         Input::Engine.SetHotKey(i, "nop");
 
-    for (int i = 1; i <= 45; i++)
+    for (int i = 1; i < World::INPUT_BIND_MAX; i++)
     {
         inpListActiveElement = i;
         p_YW->ReloadInput(i);
@@ -2742,6 +2774,7 @@ bool NC_STACK_ypaworld::InitGameShell(UserData *usr)
     usr->InputConfig[World::INPUT_BIND_LAST_SEAT]   = UserData::TInputConf(World::INPUT_BIND_TYPE_HOTKEY, 44, Input::KC_NONE);
     usr->InputConfig[World::INPUT_BIND_SET_COMM]    = UserData::TInputConf(World::INPUT_BIND_TYPE_HOTKEY, 45, Input::KC_NONE);
     usr->InputConfig[World::INPUT_BIND_ANALYZER]    = UserData::TInputConf(World::INPUT_BIND_TYPE_HOTKEY, 46, Input::KC_NONE);
+    usr->InputConfig[World::INPUT_BIND_COCKPIT_CAMERA] = UserData::TInputConf(World::INPUT_BIND_TYPE_HOTKEY, 47, Input::KC_NONE);
 
     usr->sub_46D2B4();
 
@@ -3463,7 +3496,7 @@ bool NC_STACK_ypaworld::CreateInputControls()
     
     GuiList::tInit args;
     args.resizeable = false;
-    args.numEntries = 45;
+    args.numEntries = World::INPUT_BIND_MAX - 1;
     args.shownEntries = 8;
     args.firstShownEntry = 0;
     args.selectedEntry = 0;
@@ -6168,6 +6201,7 @@ bool NC_STACK_ypaworld::OpenGameShell()
     _GameShell->InputConfigTitle[World::INPUT_BIND_TO_ALL]      = Locale::Text::Inputs(Locale::INPUTS_MSGTOALL);
     _GameShell->InputConfigTitle[World::INPUT_BIND_HELP]        = Locale::Text::Inputs(Locale::INPUTS_HELP);
     _GameShell->InputConfigTitle[World::INPUT_BIND_ANALYZER]    = Locale::Text::Inputs(Locale::INPUTS_ANALYZER);
+    _GameShell->InputConfigTitle[World::INPUT_BIND_COCKPIT_CAMERA] = "Toggle Cockpit Camera";
 
  
 
@@ -8048,6 +8082,7 @@ void NC_STACK_ypaworld::setYW_userVehicle(NC_STACK_ypabact *bact)
             _prevUnitId = oldpBact->_gid;
 
         _userUnit = bact;
+        _userUnit->ResetCockpitCameraMode();
 
         _vehicleTakenControlTimestamp = _timeStamp;
         _vehicleTakenCommandId = _userUnit->_commandID;

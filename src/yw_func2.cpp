@@ -6604,7 +6604,7 @@ int UserData::InputIndexFromConfig(uint32_t type, uint32_t index)
         World::INPUT_BIND_DRIVE_SPEED,World::INPUT_BIND_GUN_HEIGHT,
     };
 
-    static const std::array<int, 47> HOTKEY
+    static const std::array<int, 48> HOTKEY
     {
         World::INPUT_BIND_ORDER,      World::INPUT_BIND_ATTACK,
         World::INPUT_BIND_NEW,        World::INPUT_BIND_ADD,
@@ -6637,7 +6637,7 @@ int UserData::InputIndexFromConfig(uint32_t type, uint32_t index)
         World::INPUT_BIND_AGGR_3,     World::INPUT_BIND_AGGR_4,
         World::INPUT_BIND_AGGR_5,     World::INPUT_BIND_HELP,
         World::INPUT_BIND_LAST_SEAT,  World::INPUT_BIND_SET_COMM,
-        World::INPUT_BIND_ANALYZER
+        World::INPUT_BIND_ANALYZER,    World::INPUT_BIND_COCKPIT_CAMERA
     };
 
     if ( type == World::INPUT_BIND_TYPE_BUTTON && index < BUTTON.size())

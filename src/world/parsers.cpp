@@ -288,8 +288,12 @@ bool InputParser::IsScope(ScriptParser::Parser &parser, const std::string &word,
 {
     if ( !StriCmp(word, "new_input") )
     {
-        for( UserData::TInputConf &k: _o._GameShell->InputConfig )
+        for (size_t i = 0; i < _o._GameShell->InputConfig.size(); i++)
         {
+            if ( i == World::INPUT_BIND_COCKPIT_CAMERA )
+                continue;
+
+            UserData::TInputConf &k = _o._GameShell->InputConfig[i];
             k.PKeyCode = 0;
             k.NKeyCode = 0;
         }
@@ -1906,6 +1910,65 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     {
         _vhcl->fire_z = parser.stof(p2, 0);
     }
+    else if ( !StriCmp(p1, "cockpit_camera_enable") )
+    {
+        _vhcl->cockpit_camera_enable = StrGetBool(p2);
+    }
+    else if ( !StriCmp(p1, "cockpit_camera_offset_x") )
+    {
+        _vhcl->cockpit_camera_offset.x = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "cockpit_camera_offset_y") )
+    {
+        _vhcl->cockpit_camera_offset.y = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "cockpit_camera_offset_z") )
+    {
+        _vhcl->cockpit_camera_offset.z = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "pov_mgun_fx_enable") )
+    {
+        _vhcl->pov_mgun_fx_enable = StrGetBool(p2);
+    }
+    else if ( !StriCmp(p1, "pov_mgun_fx_vp") )
+    {
+        int vp = parser.stol(p2, 0);
+        _vhcl->pov_mgun_fx_vp = vp > 0 ? vp : -1;
+    }
+    else if ( !StriCmp(p1, "pov_num_mguns_fx") )
+    {
+        int num = parser.stol(p2, 0);
+        _vhcl->pov_num_mguns_fx = num > 0 ? num : 1;
+    }
+    else if ( !StriCmp(p1, "pov_mgun_fx_scale") )
+    {
+        float scale = parser.stof(p2, 0);
+        _vhcl->pov_mgun_fx_scale = scale > 0.0 ? scale : 1.0;
+    }
+    else if ( !StriCmp(p1, "pov_mgun_fx_offset_x") )
+    {
+        _vhcl->pov_mgun_fx_offset.x = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "pov_mgun_fx_offset_y") )
+    {
+        _vhcl->pov_mgun_fx_offset.y = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "pov_mgun_fx_offset_z") )
+    {
+        _vhcl->pov_mgun_fx_offset.z = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "pov_mgun_fx_rot_x") )
+    {
+        _vhcl->pov_mgun_fx_rot.x = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "pov_mgun_fx_rot_y") )
+    {
+        _vhcl->pov_mgun_fx_rot.y = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "pov_mgun_fx_rot_z") )
+    {
+        _vhcl->pov_mgun_fx_rot.z = parser.stof(p2, 0);
+    }
     else if ( !StriCmp(p1, "gun_radius") )
     {
         _vhcl->gun_radius = parser.stof(p2, 0);
@@ -2539,6 +2602,14 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->overeof = 25.0;
         _vhcl->vwr_radius = 30.0;
         _vhcl->vwr_overeof = 30.0;
+        _vhcl->cockpit_camera_enable = false;
+        _vhcl->cockpit_camera_offset = vec3d(0.0, 0.0, 0.0);
+        _vhcl->pov_mgun_fx_enable = false;
+        _vhcl->pov_mgun_fx_vp = -1;
+        _vhcl->pov_num_mguns_fx = 1;
+        _vhcl->pov_mgun_fx_scale = 1.0;
+        _vhcl->pov_mgun_fx_offset = vec3d(0.0, 0.0, 0.0);
+        _vhcl->pov_mgun_fx_rot = vec3d(0.0, 0.0, 0.0);
         _vhcl->gun_power = 4000.0;
         _vhcl->gun_radius = 5.0;
         _vhcl->max_pitch = -1.0;

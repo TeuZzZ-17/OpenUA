@@ -477,6 +477,14 @@ struct TVhclProto
     float overeof = 0.0;
     float vwr_radius = 0.0;
     float vwr_overeof = 0.0;
+    bool cockpit_camera_enable = false;    // OpenUA custom: optional per-vehicle cockpit/player camera offset
+    vec3d cockpit_camera_offset = vec3d(0.0, 0.0, 0.0);
+    bool pov_mgun_fx_enable = false;
+    int16_t pov_mgun_fx_vp = -1;
+    int16_t pov_num_mguns_fx = 1;
+    float pov_mgun_fx_scale = 1.0;
+    vec3d pov_mgun_fx_offset = vec3d(0.0, 0.0, 0.0);
+    vec3d pov_mgun_fx_rot = vec3d(0.0, 0.0, 0.0);
     float gun_angle = 0.0;
     float fire_x = 0.0;
     float fire_y = 0.0;

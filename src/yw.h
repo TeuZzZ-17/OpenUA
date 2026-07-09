@@ -341,8 +341,9 @@ enum INPUT_BIND
     INPUT_BIND_TO_ALL     = 43,
     INPUT_BIND_HELP       = 44,
     INPUT_BIND_ANALYZER   = 45,
+    INPUT_BIND_COCKPIT_CAMERA = 46,
 
-    INPUT_BIND_MAX        = 46,
+    INPUT_BIND_MAX        = 47,
 };
 
 enum SOUND_ID
@@ -2514,7 +2515,7 @@ public:
 
     int32_t SpawnTransientVP(int32_t modelId, const vec3d &pos, const mat3x3 &rot, int32_t lifeTime, float scale = 1.0, const World::TVisualTint &tint = World::TVisualTint(), const vec3d &axisScale = vec3d(1.0, 1.0, 1.0), const vec3d &spin = vec3d(0.0, 0.0, 0.0));
     void SpawnChainFX(const World::TChainFXConfig &config, const vec3d &pos, const mat3x3 &rot);
-    int32_t SpawnAttachedTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime, float scale = 1.0, bool useOwnerTransform = false, const World::TVisualTint &tint = World::TVisualTint(), const vec3d &axisScale = vec3d(1.0, 1.0, 1.0), const vec3d &spin = vec3d(0.0, 0.0, 0.0));
+    int32_t SpawnAttachedTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime, float scale = 1.0, bool useOwnerTransform = false, const World::TVisualTint &tint = World::TVisualTint(), const vec3d &axisScale = vec3d(1.0, 1.0, 1.0), const vec3d &spin = vec3d(0.0, 0.0, 0.0), bool playerFirstPersonOnly = false, const vec3d &localRotation = vec3d(0.0, 0.0, 0.0));
     bool UpdateRandomFXTimer(int intervalMin, int intervalMax, int32_t &nextTime);
     int32_t SpawnRandomizedTransientVP(int32_t modelId, const vec3d &ownerPos, float randomPos, const World::TVisualTint &tint = World::TVisualTint(), int32_t lifeTime = 1000, float scale = 1.0, const vec3d &offset = vec3d(0.0, 0.0, 0.0), const vec3d &axisScale = vec3d(1.0, 1.0, 1.0), const vec3d &spin = vec3d(0.0, 0.0, 0.0));
     bool HasTransientVP(int32_t id) const;
@@ -2572,6 +2573,8 @@ public:
         int32_t followOwnerGid = 0;
         vec3d followLocalOffset;
         bool followUseOwnerTransform = false;
+        bool playerFirstPersonOnly = false;
+        vec3d localRotation = vec3d(0.0, 0.0, 0.0);
         float scale = 1.0;
         vec3d axisScale = vec3d(1.0, 1.0, 1.0);
         vec3d spin = vec3d(0.0, 0.0, 0.0);

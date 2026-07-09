@@ -2584,7 +2584,7 @@ void NC_STACK_ypaworld::UpdateDecorationFX(const World::TDecorationFXConfig &con
                                    config.vp_spin);
 }
 
-int32_t NC_STACK_ypaworld::SpawnAttachedTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime, float scale, bool useOwnerTransform, const World::TVisualTint &tint, const vec3d &axisScale, const vec3d &spin)
+int32_t NC_STACK_ypaworld::SpawnAttachedTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime, float scale, bool useOwnerTransform, const World::TVisualTint &tint, const vec3d &axisScale, const vec3d &spin, bool playerFirstPersonOnly, const vec3d &localRotation)
 {
     if ( !owner || modelId <= 0 || modelId >= (int32_t)_vhclModels.size() )
         return 0;
@@ -2605,6 +2605,8 @@ int32_t NC_STACK_ypaworld::SpawnAttachedTransientVP(int32_t modelId, NC_STACK_yp
     fx.followOwnerGid = owner->_gid;
     fx.followLocalOffset = localOffset;
     fx.followUseOwnerTransform = useOwnerTransform;
+    fx.playerFirstPersonOnly = playerFirstPersonOnly;
+    fx.localRotation = localRotation;
     fx.scale = scale > 0.0 ? scale : 1.0;
     fx.axisScale = vec3d(axisScale.x > 0.0f ? axisScale.x : 1.0f,
                          axisScale.y > 0.0f ? axisScale.y : 1.0f,
@@ -3134,9 +3136,30 @@ static mat3x3 yw_BuildTransientVPSpinMatrix(const vec3d &degreesPerSecond, int32
     return spin;
 }
 
+static mat3x3 yw_BuildTransientVPRotationMatrix(const vec3d &degrees)
+{
+    const float degToRad = 0.01745329251994329577f;
+    vec3d angle = degrees * degToRad;
+    mat3x3 rot = mat3x3::Ident();
+
+    if ( angle.x != 0.0 )
+        rot *= mat3x3::RotateX(angle.x);
+    if ( angle.y != 0.0 )
+        rot *= mat3x3::RotateY(angle.y);
+    if ( angle.z != 0.0 )
+        rot *= mat3x3::RotateZ(angle.z);
+
+    return rot;
+}
+
 static bool yw_HasTransientVPSpin(const vec3d &spin)
 {
     return spin.x != 0.0 || spin.y != 0.0 || spin.z != 0.0;
+}
+
+static bool yw_HasTransientVPRotation(const vec3d &rotation)
+{
+    return rotation.x != 0.0 || rotation.y != 0.0 || rotation.z != 0.0;
 }
 
 static void yw_RenderTransientVPs(NC_STACK_ypaworld *world, std::list<NC_STACK_ypaworld::TTransientVP> *effects, baseRender_msg *arg)
@@ -3156,6 +3179,13 @@ static void yw_RenderTransientVPs(NC_STACK_ypaworld *world, std::list<NC_STACK_y
             if ( !owner )
             {
                 it = effects->erase(it);
+                continue;
+            }
+
+            if ( it->playerFirstPersonOnly && (!owner->IsPlayerFirstPersonCameraActive() || world->_viewerBact != owner) )
+            {
+                it->age += arg->frameTime;
+                ++it;
                 continue;
             }
 
@@ -3213,6 +3243,8 @@ static void yw_RenderTransientVPs(NC_STACK_ypaworld *world, std::list<NC_STACK_y
 
         vec3d renderScale = it->axisScale * scale;
         mat3x3 renderRot = it->rot.Transpose();
+        if ( yw_HasTransientVPRotation(it->localRotation) )
+            renderRot *= yw_BuildTransientVPRotationMatrix(it->localRotation);
         if ( yw_HasTransientVPSpin(it->spin) )
             renderRot *= yw_BuildTransientVPSpinMatrix(it->spin, it->age);
 

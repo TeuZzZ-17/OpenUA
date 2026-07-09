@@ -156,6 +156,79 @@ static bool ypabact_IsAiTankWeaponRecoilUnit(const NC_STACK_ypabact *unit)
            !(unit->_oflags & BACT_OFLAG_USERINPT);
 }
 
+static bool ypabact_IsCockpitCameraSupportedType(const NC_STACK_ypabact *unit)
+{
+    if ( !unit )
+        return false;
+
+    switch ( unit->_bact_type )
+    {
+        case BACT_TYPES_BACT:
+        case BACT_TYPES_TANK:
+        case BACT_TYPES_FLYER:
+        case BACT_TYPES_UFO:
+        case BACT_TYPES_CAR:
+        case BACT_TYPES_HOVER:
+            return true;
+
+        case BACT_TYPES_GUN:
+        {
+            const NC_STACK_ypagun *gun = dynamic_cast<const NC_STACK_ypagun *>(unit);
+            return gun && !(gun->_gunFlags & NC_STACK_ypagun::GUN_FLAGS_ROBO);
+        }
+
+        default:
+            return false;
+    }
+}
+
+bool NC_STACK_ypabact::IsCockpitCameraAvailable() const
+{
+    return _cockpit_camera_enable &&
+           ypabact_IsCockpitCameraSupportedType(this) &&
+           _world &&
+           _world->_userUnit == this &&
+           _world->_viewerBact == this &&
+           (_oflags & BACT_OFLAG_VIEWER) &&
+           (_oflags & BACT_OFLAG_USERINPT);
+}
+
+bool NC_STACK_ypabact::IsCockpitCameraActive() const
+{
+    return IsCockpitCameraAvailable() && !_cockpit_camera_user_disabled;
+}
+
+bool NC_STACK_ypabact::IsPlayerFirstPersonCameraActive() const
+{
+    return _world &&
+           _world->_userUnit == this &&
+           _world->_viewerBact == this &&
+           (_oflags & BACT_OFLAG_VIEWER) &&
+           (_oflags & BACT_OFLAG_USERINPT) &&
+           !IsCockpitCameraActive();
+}
+
+bool NC_STACK_ypabact::ShouldRenderCockpitCameraBody() const
+{
+    return IsCockpitCameraActive();
+}
+
+vec3d NC_STACK_ypabact::GetCockpitCameraPosition() const
+{
+    return _position + _rotation.Transpose().Transform(_cockpit_camera_offset);
+}
+
+void NC_STACK_ypabact::ResetCockpitCameraMode()
+{
+    _cockpit_camera_user_disabled = false;
+}
+
+void NC_STACK_ypabact::ToggleCockpitCameraMode()
+{
+    if ( IsCockpitCameraAvailable() )
+        _cockpit_camera_user_disabled = !_cockpit_camera_user_disabled;
+}
+
 static float ypabact_GetDamagedThreshold(const NC_STACK_ypabact *bact)
 {
     float threshold = bact->_damaged_fx.threshold;
@@ -1370,6 +1443,15 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _viewer_radius = 0.0;
     _overeof = 0.0;
     _viewer_overeof = 0.0;
+    _cockpit_camera_enable = false;
+    _cockpit_camera_user_disabled = false;
+    _cockpit_camera_offset = vec3d(0.0, 0.0, 0.0);
+    _pov_mgun_fx_enable = false;
+    _pov_mgun_fx_vp = -1;
+    _pov_num_mguns_fx = 1;
+    _pov_mgun_fx_scale = 1.0;
+    _pov_mgun_fx_offset = vec3d(0.0, 0.0, 0.0);
+    _pov_mgun_fx_rot = vec3d(0.0, 0.0, 0.0);
     _clock = 0;
     _AI_time1 = 0;
     _AI_time2 = 0;
@@ -1566,6 +1648,15 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _viewer_radius = 40.0;
     _overeof = 10.0;
     _viewer_overeof = 40.0;
+    _cockpit_camera_enable = false;
+    _cockpit_camera_user_disabled = false;
+    _cockpit_camera_offset = vec3d(0.0, 0.0, 0.0);
+    _pov_mgun_fx_enable = false;
+    _pov_mgun_fx_vp = -1;
+    _pov_num_mguns_fx = 1;
+    _pov_mgun_fx_scale = 1.0;
+    _pov_mgun_fx_offset = vec3d(0.0, 0.0, 0.0);
+    _pov_mgun_fx_rot = vec3d(0.0, 0.0, 0.0);
     _energy = 10000;
     _shield = 0;
     _base_snd_normal_pitch = 0;
@@ -2584,7 +2675,9 @@ void NC_STACK_ypabact::Update(update_msg *arg)
 
     if ( _oflags & BACT_OFLAG_VIEWER )
     {
-        if ( _oflags & BACT_OFLAG_EXTRAVIEW )
+        if ( IsCockpitCameraActive() )
+            bact_cam.Pos = GetCockpitCameraPosition();
+        else if ( _oflags & BACT_OFLAG_EXTRAVIEW )
             bact_cam.Pos = _position + _rotation.Transpose().Transform(_viewer_position);
         else
             bact_cam.Pos = _position;
@@ -3312,7 +3405,7 @@ void NC_STACK_ypabact::Render(baseRender_msg *arg)
     {
         if ( !(_status_flg & BACT_STFLAG_NORENDER) )
         {
-            if ( !(_oflags & BACT_OFLAG_VIEWER) || _oflags & BACT_OFLAG_ALWAYSREND )
+            if ( !(_oflags & BACT_OFLAG_VIEWER) || _oflags & BACT_OFLAG_ALWAYSREND || ShouldRenderCockpitCameraBody() )
             {
                 _current_vp->Bas->TForm().Pos = _tForm.Pos;
                 if ( ypabact_IsAiTankWeaponRecoilUnit(this) && ypabact_IsMainVPBase(this, _current_vp->Bas) )
@@ -5944,6 +6037,7 @@ void NC_STACK_ypabact::SetState(setState_msg *arg)
 }
 
 static vec3d ypabact_ApplyDirectionalSpread(const mat3x3 &rotation, const vec3d &direction, float spreadX, float spreadY);
+static vec3d ypabact_GetCockpitAimDirection(NC_STACK_ypabact *bact, const vec3d &origin, const vec3d &viewDir, const vec3d &fallbackDir, float range);
 
 static bool ypabact_IsValidWeaponId(NC_STACK_ypabact *bact, int weaponId)
 {
@@ -9628,6 +9722,15 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
         return 0;
 
     World::TWeapProto &cooldownProto = _world->GetWeaponsProtos().at(cooldownWeapon);
+    bact_arg79 cockpitAimArg;
+    if ( arg && arg->tgType == BACT_TGT_TYPE_DRCT && IsCockpitCameraActive() )
+    {
+        cockpitAimArg = *arg;
+        vec3d origin = _position + _rotation.Transpose().Transform(arg->start_point);
+        cockpitAimArg.direction = ypabact_GetCockpitAimDirection(this, origin, arg->direction, _rotation.AxisZ(), 1400.0);
+        cockpitAimArg.tgt_pos = cockpitAimArg.direction;
+        arg = &cockpitAimArg;
+    }
 
     // OpenUA custom: a laser weapon does not spawn projectiles and is not rate-limited
     // by shot_time. It registers a per-frame fire request that UpdateLaser() turns into
@@ -9783,6 +9886,9 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
         {
             missileArg.tgType = BACT_TGT_TYPE_DRCT;
         }
+
+        if ( missileArg.tgType == BACT_TGT_TYPE_DRCT && IsCockpitCameraActive() )
+            missileArg.direction = ypabact_GetCockpitAimDirection(this, arg147.pos, missileArg.direction, _rotation.AxisZ(), 1400.0);
 
         if ( _bact_type != BACT_TYPES_GUN && !_invulnerable )
             _energy -= wobj->_energy / 300;
@@ -11496,6 +11602,15 @@ void NC_STACK_ypabact::Renew()
     _mimic_soundcarrier.Clear();
     _mgun_sound_index = 0;
     _mgun_vp_fire_end_time = 0;
+    _cockpit_camera_enable = false;
+    _cockpit_camera_user_disabled = false;
+    _cockpit_camera_offset = vec3d(0.0, 0.0, 0.0);
+    _pov_mgun_fx_enable = false;
+    _pov_mgun_fx_vp = -1;
+    _pov_num_mguns_fx = 1;
+    _pov_mgun_fx_scale = 1.0;
+    _pov_mgun_fx_offset = vec3d(0.0, 0.0, 0.0);
+    _pov_mgun_fx_rot = vec3d(0.0, 0.0, 0.0);
     _spawn_units = 0;
     _spawn_vehicle = 0;
     _spawn_interval = 5000;
@@ -12053,6 +12168,54 @@ static vec3d ypabact_ApplyDirectionalSpread(const mat3x3 &rotation, const vec3d 
     return direction;
 }
 
+static vec3d ypabact_GetCockpitViewDirection(NC_STACK_ypabact *bact, const vec3d &viewDir)
+{
+    vec3d forward = viewDir;
+    if ( forward.normalise() > 0.001 )
+        return forward;
+
+    if ( bact->getBACT_extraViewer() )
+        forward = bact->_viewer_rotation.AxisZ();
+    else
+        forward = bact->_rotation.AxisZ();
+
+    if ( forward.normalise() <= 0.001 )
+        forward = vec3d::OZ(1.0);
+
+    return forward;
+}
+
+static vec3d ypabact_GetCockpitAimTarget(NC_STACK_ypabact *bact, const vec3d &viewDir, float range)
+{
+    vec3d forward = ypabact_GetCockpitViewDirection(bact, viewDir);
+    vec3d cameraPos = bact->GetCockpitCameraPosition();
+    vec3d farTarget = cameraPos + forward * range;
+
+    ypaworld_arg136 ray;
+    ray.stPos = cameraPos;
+    ray.vect = forward * range;
+    ray.flags = 0;
+
+    bact->getBACT_pWorld()->ypaworld_func136(&ray);
+
+    if ( ray.isect )
+        return ray.isectPos;
+
+    return farTarget;
+}
+
+static vec3d ypabact_GetCockpitAimDirection(NC_STACK_ypabact *bact, const vec3d &origin, const vec3d &viewDir, const vec3d &fallbackDir, float range)
+{
+    if ( !bact || !bact->IsCockpitCameraActive() || !bact->getBACT_pWorld() )
+        return fallbackDir;
+
+    vec3d dir = ypabact_GetCockpitAimTarget(bact, viewDir, range) - origin;
+    if ( dir.normalise() > 0.001 )
+        return dir;
+
+    return fallbackDir;
+}
+
 static void ypabact_PlayVehicleMinigunPulse(NC_STACK_ypabact *bact)
 {
     static const size_t MGUN_PULSE_SOUND_SLOTS = 8;
@@ -12152,6 +12315,47 @@ static bool ypabact_SpawnVehicleMinigunImpact(NC_STACK_ypabact *bact, const vec3
     return true;
 }
 
+static void ypabact_SpawnFirstPersonMinigunFX(NC_STACK_ypabact *bact)
+{
+    if ( !bact || !bact->_pov_mgun_fx_enable || !bact->IsPlayerFirstPersonCameraActive() || !bact->getBACT_pWorld() )
+        return;
+
+    int fxVp = bact->_pov_mgun_fx_vp;
+    if ( fxVp <= 0 )
+        return;
+
+    int lanes = bact->_pov_num_mguns_fx > 0 ? bact->_pov_num_mguns_fx : 1;
+    if ( lanes > 3 )
+        lanes = 3;
+
+    float fxScale = bact->_pov_mgun_fx_scale > 0.0 ? bact->_pov_mgun_fx_scale : 1.0;
+    float spacing = fabs(bact->_pov_mgun_fx_offset.x);
+    for (int i = 0; i < lanes; i++)
+    {
+        vec3d localOffset = bact->_pov_mgun_fx_offset;
+
+        if ( lanes == 1 )
+            localOffset.x = 0.0;
+        else if ( lanes == 2 )
+            localOffset.x = (i == 0) ? -spacing : spacing;
+        else
+            localOffset.x = (i == 0) ? -spacing : (i == 1 ? 0.0 : spacing);
+
+        bact->getBACT_pWorld()->SpawnAttachedTransientVP(
+            fxVp,
+            bact,
+            localOffset,
+            90,
+            fxScale,
+            true,
+            World::TVisualTint(),
+            vec3d(1.0, 1.0, 1.0),
+            vec3d(0.0, 0.0, 0.0),
+            true,
+            bact->_pov_mgun_fx_rot);
+    }
+}
+
 size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
 {
     if ( _world && _world->IsSpectatorBact(this) )
@@ -12240,6 +12444,9 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
         }
     }
 
+    if ( spawnVisual )
+        ypabact_SpawnFirstPersonMinigunFX(this);
+
     for (int shotId = 0; shotId < mgunShots; shotId++)
     {
         vec3d shotPos = _position;
@@ -12248,6 +12455,7 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
         float spreadY = _mgun_spread_y;
 
         vec3d fireDir = ypabact_GetMinigunFireDir(this, arg->field_0);
+        fireDir = ypabact_GetCockpitAimDirection(this, shotPos, fireDir, fireDir, 1000.0);
         vec3d shotDir = ypabact_ApplyDirectionalSpread(_rotation, fireDir, spreadX, spreadY);
 
         NC_STACK_ypabact *v108 = NULL;
