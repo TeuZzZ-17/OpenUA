@@ -49,6 +49,70 @@ static float ypabact_ReadPowerStationEnergyMultiplier()
     }
 }
 
+static float ypabact_ReadNonNegativeFloatIni(Common::Ini::Key &key, float dflt)
+{
+    std::string value = key.Get<std::string>();
+    if ( value.empty() || value.find(',') != std::string::npos )
+        return dflt;
+
+    try
+    {
+        size_t pos = 0;
+        float parsed = std::stof(value, &pos);
+        if ( value.find_first_not_of(" \t\r\n", pos) != std::string::npos || parsed < 0.0f )
+            return dflt;
+
+        return parsed;
+    }
+    catch (...)
+    {
+        return dflt;
+    }
+}
+
+static float ypabact_ReadFallDamageMultiplier()
+{
+    return ypabact_ReadNonNegativeFloatIni(System::IniConf::GameFallDamageMultiplier, 1.0f);
+}
+
+
+static bool ypabact_IsCustomFallDamageConfigActive()
+{
+    return fabs(ypabact_ReadFallDamageMultiplier() - 1.0f) > 0.0001f;
+}
+
+static bool ypabact_IsCustomUnitCollisionConfigActive()
+{
+    return ypabact_ReadNonNegativeFloatIni(System::IniConf::GameUnitCollisionPush, 0.0f) > 0.0f ||
+           ypabact_ReadNonNegativeFloatIni(System::IniConf::GameUnitCollisionDamageMultiplier, 0.0f) > 0.0f;
+}
+
+static bool ypabact_ShouldPlayCustomAiCrashlandSound(const NC_STACK_ypabact *unit)
+{
+    return unit &&
+           unit->_bact_type == BACT_TYPES_TANK &&
+           !(unit->_oflags & BACT_OFLAG_USERINPT) &&
+           !(unit->_oflags & BACT_OFLAG_VIEWER) &&
+           ypabact_IsCustomFallDamageConfigActive();
+}
+
+static bool ypabact_ShouldPlayCrashlandSound(const NC_STACK_ypabact *unit, float speed, float minSpeed)
+{
+    if ( fabs(speed) <= minSpeed )
+        return false;
+
+    if ( unit->_oflags & BACT_OFLAG_USERINPT )
+        return true;
+
+    return ypabact_ShouldPlayCustomAiCrashlandSound(unit);
+}
+
+static void ypabact_StartSoundOnce(NC_STACK_ypabact *unit, int soundId)
+{
+    if ( unit && !unit->_soundcarrier.Sounds[soundId].IsEnabled() )
+        SFXEngine::SFXe.startSound(&unit->_soundcarrier, soundId);
+}
+
 static bool ypabact_IsAirVehicle(const NC_STACK_ypabact *unit)
 {
     return unit &&
@@ -3125,6 +3189,9 @@ static bool ypabact_IsAoePushGroundAlignedUnit(NC_STACK_ypabact *unit)
     if ( !unit )
         return false;
 
+    if ( !(unit->_status_flg & BACT_STFLAG_LAND) )
+        return false;
+
     return unit->_bact_type == BACT_TYPES_TANK ||
            unit->_bact_type == BACT_TYPES_CAR ||
            unit->_bact_type == BACT_TYPES_HOVER;
@@ -3149,6 +3216,36 @@ static bool ypabact_NormalizeXZ(vec3d *dir)
 
     *dir /= dirLen;
     return true;
+}
+
+static bool ypabact_IsUnitCollisionEffectEligible(const NC_STACK_ypabact *unit)
+{
+    if ( !unit || unit->_status == BACT_STATUS_DEAD )
+        return false;
+
+    return unit->_bact_type != BACT_TYPES_GUN &&
+           unit->_bact_type != BACT_TYPES_ROBO &&
+           unit->_bact_type != BACT_TYPES_MISSLE;
+}
+
+static float ypabact_GetPushResistanceMultiplier(NC_STACK_ypabact *unit)
+{
+    if ( !unit || !unit->getBACT_pWorld() )
+        return 1.0f;
+
+    const std::vector<World::TVhclProto> &protos = unit->getBACT_pWorld()->GetVhclProtos();
+    uint8_t protoId = unit->_mimic_disguise_vehicleID ? unit->_mimic_disguise_vehicleID : unit->_vehicleID;
+
+    if ( protoId >= protos.size() )
+        return 1.0f;
+
+    float resistance = protos.at(protoId).push_resistance;
+    if ( resistance < 0.0f )
+        resistance = 0.0f;
+    else if ( resistance > 1.0f )
+        resistance = 1.0f;
+
+    return 1.0f - resistance;
 }
 
 static bool ypabact_SnapAoePushGroundUnit(NC_STACK_ypabact *unit)
@@ -3340,6 +3437,57 @@ void NC_STACK_ypabact::ApplyWeaponRecoil(const vec3d &dir, float recoil)
     }
 
     _weaponRecoilPushVel += recoilDir * ((recoil * WEAPON_RECOIL_DISTANCE_PER_UNIT) / WEAPON_RECOIL_TAU);
+}
+
+bool NC_STACK_ypabact::ApplyUnitCollisionEffects(NC_STACK_ypabact *target, const vec3d &dirToTarget, float impactSpeed)
+{
+    if ( !ypabact_IsUnitCollisionEffectEligible(this) || !ypabact_IsUnitCollisionEffectEligible(target) )
+        return false;
+
+    float speed = fabs(impactSpeed);
+    if ( !isfinite(speed) || speed < 0.1f )
+        return false;
+
+    vec3d pushDir = dirToTarget;
+    if ( !ypabact_NormalizeXZ(&pushDir) )
+    {
+        float dirLen = pushDir.length();
+        if ( !isfinite(dirLen) || dirLen <= 0.001f )
+            return false;
+
+        pushDir /= dirLen;
+    }
+
+    bool applied = false;
+    float push = ypabact_ReadNonNegativeFloatIni(System::IniConf::GameUnitCollisionPush, 0.0f);
+    if ( push > 0.0f )
+    {
+        float distance = push * speed;
+        AddAoePush(pushDir * -1.0f, distance * ypabact_GetPushResistanceMultiplier(this));
+        target->AddAoePush(pushDir, distance * ypabact_GetPushResistanceMultiplier(target));
+        applied = true;
+    }
+
+    float damageMult = ypabact_ReadNonNegativeFloatIni(System::IniConf::GameUnitCollisionDamageMultiplier, 0.0f);
+    if ( damageMult > 0.0f )
+    {
+        applied = true;
+        int damage = (int)(speed * 10.0f * damageMult);
+        if ( damage > 0 )
+        {
+            bact_arg84 selfDamage;
+            selfDamage.unit = target;
+            selfDamage.energy = -damage;
+            ModifyEnergy(&selfDamage);
+
+            bact_arg84 targetDamage;
+            targetDamage.unit = this;
+            targetDamage.energy = -damage;
+            target->ModifyEnergy(&targetDamage);
+        }
+    }
+
+    return applied;
 }
 
 void NC_STACK_ypabact::UpdateAoePush(update_msg *arg)
@@ -10661,7 +10809,7 @@ size_t NC_STACK_ypabact::CrashOrLand(bact_arg86 *arg)
                         if ( arg->field_one & 1 )
                         {
                             if ( !_invulnerable )
-                                _energy -= fabs(_fly_dir_length) * 10.0;
+                                _energy -= fabs(_fly_dir_length) * 10.0 * ypabact_ReadFallDamageMultiplier();
 
                             if ( _energy <= 0 || (GetVP() == _vp_dead && _status == BACT_STATUS_DEAD) )
                             {
@@ -10673,11 +10821,12 @@ size_t NC_STACK_ypabact::CrashOrLand(bact_arg86 *arg)
                                 SetState(&arg78);
                             }
 
+                            bool playCrashlandSound = ypabact_ShouldPlayCrashlandSound(this, _fly_dir_length, 7.0f);
+                            if ( playCrashlandSound )
+                                ypabact_StartSoundOnce(this, 5);
+
                             if ( _oflags & BACT_OFLAG_USERINPT )
                             {
-                                if ( fabs(_fly_dir_length) > 7.0 )
-                                    SFXEngine::SFXe.startSound(&_soundcarrier, 5);
-
                                 yw_arg180 arg180_1;
 
                                 arg180_1.effects_type = 5;
@@ -10753,7 +10902,7 @@ size_t NC_STACK_ypabact::CrashOrLand(bact_arg86 *arg)
                         if ( arg->field_one & 1 )
                         {
                             if ( !_invulnerable )
-                                _energy -= fabs(_fly_dir_length) * 10.0;
+                                _energy -= fabs(_fly_dir_length) * 10.0 * ypabact_ReadFallDamageMultiplier();
 
                             if ( _energy <= 0 || (GetVP() == _vp_dead && _status == BACT_STATUS_DEAD) )
                             {
@@ -10765,11 +10914,12 @@ size_t NC_STACK_ypabact::CrashOrLand(bact_arg86 *arg)
                                 SetState(&arg78);
                             }
 
+                            bool playCrashlandSound = ypabact_ShouldPlayCrashlandSound(this, _fly_dir_length, 7.0f);
+                            if ( playCrashlandSound )
+                                ypabact_StartSoundOnce(this, 5);
+
                             if ( _oflags & BACT_OFLAG_USERINPT )
                             {
-                                if ( fabs(_fly_dir_length) > 7.0 )
-                                    SFXEngine::SFXe.startSound(&_soundcarrier, 5);
-
                                 yw_arg180 arg180;
 
                                 arg180.effects_type = 5;
@@ -10910,6 +11060,8 @@ size_t NC_STACK_ypabact::CollisionWithBact(int arg)
     vec3d stru_5150E8(0.0, 0.0, 0.0);
 
     int v45 = 0;
+    NC_STACK_ypabact *collisionEffectTarget = NULL;
+    float collisionEffectTargetDist = std::numeric_limits<float>::max();
 
     World::rbcolls *v55;
 
@@ -10955,13 +11107,20 @@ size_t NC_STACK_ypabact::CollisionWithBact(int arg)
                         continue;
                 }
 
-                if ( (_position - v41).length() <= trad + ttrad )
+                float collDist = (_position - v41).length();
+                if ( collDist <= trad + ttrad )
                 {
                     if ( !v53 )
                     {
                         stru_5150E8 += v41;
 
                         v45++;
+
+                        if ( collDist < collisionEffectTargetDist )
+                        {
+                            collisionEffectTargetDist = collDist;
+                            collisionEffectTarget = bnode;
+                        }
                     }
                     else
                     {
@@ -11021,9 +11180,13 @@ size_t NC_STACK_ypabact::CollisionWithBact(int arg)
 
     if ( !(_status_flg & BACT_STFLAG_BCRASH) )
     {
+        bool collisionEffectsApplied = false;
+        if ( collisionEffectTarget )
+            collisionEffectsApplied = ApplyUnitCollisionEffects(collisionEffectTarget, collisionEffectTarget->_position - _position, _fly_dir_length);
+
         if ( isViewer )
         {
-            SFXEngine::SFXe.startSound(&_soundcarrier, 6);
+            ypabact_StartSoundOnce(this, 6);
 
             _status_flg |= BACT_STFLAG_BCRASH;
 
@@ -11034,6 +11197,13 @@ size_t NC_STACK_ypabact::CollisionWithBact(int arg)
             v40.effects_type = 5;
 
             _world->ypaworld_func180(&v40);
+        }
+        else if ( collisionEffectsApplied )
+        {
+            if ( ypabact_IsCustomUnitCollisionConfigActive() )
+                ypabact_StartSoundOnce(this, 6);
+
+            _status_flg |= BACT_STFLAG_BCRASH;
         }
     }
 

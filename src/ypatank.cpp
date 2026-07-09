@@ -38,7 +38,57 @@ static bool ypatank_IsPlayerRecoilRecoveryActive(const NC_STACK_ypatank *tank)
 }
 
 static const float YPATANK_PLAYER_RECOIL_FORWARD_SCALE = 0.20f;
-static const float YPATANK_FIXED_TICK_GROUND_POSE_ROT_MULT_DEFAULT = 10.0f;
+
+
+static float ypatank_ReadNonNegativeFloatIni(Common::Ini::Key &key, float dflt)
+{
+    std::string value = key.Get<std::string>();
+    if ( value.empty() || value.find(',') != std::string::npos )
+        return dflt;
+
+    try
+    {
+        size_t pos = 0;
+        float parsed = std::stof(value, &pos);
+        if ( value.find_first_not_of(" \t\r\n", pos) != std::string::npos || parsed < 0.0f )
+            return dflt;
+
+        return parsed;
+    }
+    catch (...)
+    {
+        return dflt;
+    }
+}
+
+static bool ypatank_IsCustomFallDamageConfigActive()
+{
+    return fabs(ypatank_ReadNonNegativeFloatIni(System::IniConf::GameFallDamageMultiplier, 1.0f) - 1.0f) > 0.0001f;
+}
+
+static bool ypatank_IsCustomUnitCollisionConfigActive()
+{
+    return ypatank_ReadNonNegativeFloatIni(System::IniConf::GameUnitCollisionPush, 0.0f) > 0.0f ||
+           ypatank_ReadNonNegativeFloatIni(System::IniConf::GameUnitCollisionDamageMultiplier, 0.0f) > 0.0f;
+}
+
+static bool ypatank_ShouldPlayCrashlandSound(const NC_STACK_ypatank *tank, float speed, float minSpeed)
+{
+    if ( fabs(speed) <= minSpeed )
+        return false;
+
+    if ( tank->getBACT_inputting() )
+        return true;
+
+    return !(tank->_oflags & BACT_OFLAG_VIEWER) && ypatank_IsCustomFallDamageConfigActive();
+}
+
+static void ypatank_StartSoundOnce(NC_STACK_ypatank *tank, int soundId)
+{
+    if ( tank && !tank->_soundcarrier.Sounds[soundId].IsEnabled() )
+        SFXEngine::SFXe.startSound(&tank->_soundcarrier, soundId);
+}
+static const float YPATANK_FIXED_TICK_GROUND_POSE_ROT_MULT_DEFAULT = 5.5f;
 
 static bool ypatank_UseFixedTickGroundPose()
 {
@@ -1540,6 +1590,9 @@ size_t NC_STACK_ypatank::CollisionWithBact(int arg)
             return 0;
         }
 
+        if ( v106 && !(_status_flg & BACT_STFLAG_BCRASH) )
+            ApplyUnitCollisionEffects(v117, v117->_position - _position, _fly_dir_length);
+
         if ( a4 )
         {
             if ( v106 && v113 )
@@ -1658,7 +1711,12 @@ size_t NC_STACK_ypatank::CollisionWithBact(int arg)
                 _status_flg &= ~BACT_STFLAG_MOVE;
 
                 if ( !(_status_flg & BACT_STFLAG_BCRASH) )
+                {
+                    if ( ypatank_IsCustomUnitCollisionConfigActive() )
+                        ypatank_StartSoundOnce(this, 6);
+
                     _status_flg |= BACT_STFLAG_BCRASH;
+                }
 
                 if ( v108 || !v105 )
                 {
@@ -2120,10 +2178,12 @@ int NC_STACK_ypatank::AlignVehicleUser(float dtime, const vec3d &oldDir)
 
                 if ( _fly_dir_length > 2.333333333333334 )
                 {
+                    bool playCrashlandSound = ypatank_ShouldPlayCrashlandSound(this, _fly_dir_length, 2.333333333333334f);
+                    if ( playCrashlandSound )
+                        ypatank_StartSoundOnce(this, 5);
+
                     if ( v143 )
                     {
-                        SFXEngine::SFXe.startSound(&_soundcarrier, 5);
-
                         yw_arg180 arg180;
                         arg180.field_4 = 1.0;
                         arg180.field_8 = arg136.isectPos.x;
@@ -2176,10 +2236,12 @@ int NC_STACK_ypatank::AlignVehicleUser(float dtime, const vec3d &oldDir)
             {
                 if ( _fly_dir_length > 2.333333333333334 )
                 {
+                    bool playCrashlandSound = ypatank_ShouldPlayCrashlandSound(this, _fly_dir_length, 2.333333333333334f);
+                    if ( playCrashlandSound )
+                        ypatank_StartSoundOnce(this, 5);
+
                     if ( v143 )
                     {
-                        SFXEngine::SFXe.startSound(&_soundcarrier, 5);
-
                         yw_arg180 arg180_3;
                         arg180_3.field_8 = arg136_1.isectPos.x;
                         arg180_3.field_C = arg136_1.isectPos.z;
@@ -2223,10 +2285,12 @@ int NC_STACK_ypatank::AlignVehicleUser(float dtime, const vec3d &oldDir)
 
             if ( _fly_dir_length < -2.333333333333334 )
             {
+                bool playCrashlandSound = ypatank_ShouldPlayCrashlandSound(this, _fly_dir_length, 2.333333333333334f);
+                if ( playCrashlandSound )
+                    ypatank_StartSoundOnce(this, 5);
+
                 if ( v143 )
                 {
-                    SFXEngine::SFXe.startSound(&_soundcarrier, 5);
-
                     yw_arg180 arg180_1;
                     arg180_1.field_4 = 1.0;
                     arg180_1.field_8 = arg136_2.isectPos.x;
@@ -2266,10 +2330,12 @@ int NC_STACK_ypatank::AlignVehicleUser(float dtime, const vec3d &oldDir)
                 {
                     if ( _fly_dir_length > 2.333333333333334 )
                     {
+                        bool playCrashlandSound = ypatank_ShouldPlayCrashlandSound(this, _fly_dir_length, 2.333333333333334f);
+                        if ( playCrashlandSound )
+                            ypatank_StartSoundOnce(this, 5);
+
                         if ( v143 )
                         {
-                            SFXEngine::SFXe.startSound(&_soundcarrier, 5);
-
                             yw_arg180 arg180_2;
                             arg180_2.effects_type = 5;
                             arg180_2.field_4 = 1.0;

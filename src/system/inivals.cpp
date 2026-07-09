@@ -234,8 +234,8 @@ Common::Ini::Key IniConf::GameNewAI("game.newai",    Common::Ini::KT_BOOL, true)
 // measured frame delta (no legacy +1 bias) for frame-rate independent gameplay.
 Common::Ini::Key IniConf::GameFixedTick("game.fixed_tick", Common::Ini::KT_BOOL, false);
 // OpenUA custom: tank ground-pose response used only when game.fixed_tick = yes.
-// 2.0 is the vanilla alignment speed; 10.0 is quicker but still smoothed.
-Common::Ini::Key IniConf::GameFixedTickTankGroundPoseMult("game.fixed_tick_tank_ground_pose_mult", Common::Ini::KT_WORD, std::string("10.0"));
+// 2.0 is near vanilla alignment; 5.5 is the balanced default; 10.0 is very reactive.
+Common::Ini::Key IniConf::GameFixedTickTankGroundPoseMult("game.fixed_tick_tank_ground_pose_mult", Common::Ini::KT_WORD, std::string("5.5"));
 Common::Ini::Key IniConf::GameTimeLine("game.timeline", Common::Ini::KT_DIGIT, (int32_t)600000);
 Common::Ini::Key IniConf::GameRoboPlayerAIBehavior("game.robo_player_ai_behavior", Common::Ini::KT_BOOL, false);
 Common::Ini::Key IniConf::GameSpectatorMode("game.spectator_mode", Common::Ini::KT_BOOL, false);
@@ -245,6 +245,11 @@ Common::Ini::Key IniConf::GameRoboBuildingCollisionDamagePercent("game.robo_buil
 // OpenUA custom: multiplier for the vanilla power-station sector energy effect.
 // game.powerstation_energy_multiplier = 1.0 keeps vanilla; 3.0 triples recharge/drain.
 Common::Ini::Key IniConf::GamePowerStationEnergyMultiplier("game.powerstation_energy_multiplier", Common::Ini::KT_WORD, std::string("1.0"));
+// OpenUA custom: crash/collision tuning. Defaults preserve vanilla/OpenUA behavior:
+// fall/world crash damage stays unchanged, unit collision push/damage stay disabled.
+Common::Ini::Key IniConf::GameFallDamageMultiplier("game.fall_damage_mult", Common::Ini::KT_WORD, std::string("1.0"));
+Common::Ini::Key IniConf::GameUnitCollisionPush("game.unit_collision_push", Common::Ini::KT_WORD, std::string("0"));
+Common::Ini::Key IniConf::GameUnitCollisionDamageMultiplier("game.unit_collision_damage_mult", Common::Ini::KT_WORD, std::string("0.0"));
 
 // OpenUA custom: Black Sect "imperfect grey clone" runtime balance (owner/faction 5).
 // When enabled, live Black Sect actors get a small malus (default 5%) to effective
@@ -461,6 +466,9 @@ void IniConf::Init()
         , &GameWeaponWeaponCollision
         , &GameRoboBuildingCollisionDamagePercent
         , &GamePowerStationEnergyMultiplier
+        , &GameFallDamageMultiplier
+        , &GameUnitCollisionPush
+        , &GameUnitCollisionDamageMultiplier
         , &GameBlackSectCloneBalance
         , &GameBlackSectCloneMalusPercent
         , &GameBlackSectCloneTint

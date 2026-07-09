@@ -468,6 +468,7 @@ public:
     void UpdateDecorationFX(update_msg *arg);
     void AddAoePush(const vec3d &dir, float distance); // queue aoe_unit_push knockback
     void ApplyWeaponRecoil(const vec3d &dir, float recoil);
+    bool ApplyUnitCollisionEffects(NC_STACK_ypabact *target, const vec3d &dirToTarget, float impactSpeed);
     void UpdateWeaponRecoilPush(update_msg *arg);      // integrate/decay weapon recoil push or visual offset
     void UpdateAoePush(update_msg *arg);               // integrate/decay it per frame
     void ApplyWeaponDebuff(World::TWeaponDebuffConfig &debuff, NC_STACK_ypabact *source);
