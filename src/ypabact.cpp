@@ -2958,7 +2958,10 @@ void NC_STACK_ypabact::UpdateActiveDebuff(update_msg *)
     if ( _active_debuff.source_gid )
         source = ypabact_FindLiveBactByGid(_world->_unitsList, _active_debuff.source_gid);
 
-    int tickDamage = _active_debuff.damage;
+    int tickDamage = 0;
+    if ( _active_debuff.damage > 0 )
+        tickDamage = ypabact_CalcShieldedCustomDamage(this, _active_debuff.damage);
+
     if ( _active_debuff.damage_percent > 0.0 && _energy_max > 0 )
     {
         double percentDamage = (double)_energy_max * ((double)_active_debuff.damage_percent / 100.0);
@@ -2970,11 +2973,6 @@ void NC_STACK_ypabact::UpdateActiveDebuff(update_msg *)
             else
                 tickDamage += (int)(percentDamage + 0.5);
         }
-    }
-
-    if ( tickDamage > 0 )
-    {
-        tickDamage = ypabact_CalcShieldedCustomDamage(this, tickDamage);
     }
 
     if ( tickDamage > 0 )
@@ -12629,6 +12627,50 @@ static void ypabact_ApplyMinigunSectorDamage(NC_STACK_ypabact *bact, const vec3d
     bact->ChangeSectorEnergy(&dmg);
 }
 
+static bool ypabact_GetMinigunSpreadImpactPoint(const vec3d &origin, const vec3d &dir,
+                                                const vec3d &center, float radius,
+                                                vec3d *outPos, float *outDistance)
+{
+    if ( radius <= 0.0f )
+        return false;
+
+    vec3d rayDir = dir;
+    if ( rayDir.normalise() <= 0.001f )
+        return false;
+
+    vec3d toCenter = center - origin;
+    float along = toCenter.dot(rayDir);
+
+    if ( along < 0.0f )
+        return false;
+
+    vec3d closest = origin + rayDir * along;
+    vec3d offset = center - closest;
+    float visualRadius = radius * 0.7f;
+    float impactDistance = along;
+
+    if ( visualRadius > 0.0f )
+    {
+        float offsetSq = offset.dot(offset);
+        float radiusSq = visualRadius * visualRadius;
+
+        if ( offsetSq < radiusSq )
+        {
+            impactDistance = along - sqrt(radiusSq - offsetSq);
+            if ( impactDistance < 0.0f )
+                impactDistance = along;
+        }
+    }
+
+    if ( outPos )
+        *outPos = origin + rayDir * impactDistance;
+
+    if ( outDistance )
+        *outDistance = impactDistance;
+
+    return true;
+}
+
 size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
 {
     if ( _world && _world->IsSpectatorBact(this) )
@@ -12738,6 +12780,7 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
         float v123 = 0.0;
         float v121 = 0.0;
         vec3d v66;
+        bool minigunSpreadImpactPoint = false;
 
         yw_130arg arg130;
         arg130.pos_x = shotPos.x;
@@ -12868,12 +12911,23 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
 
                                                     v22 = 1;
 
-                                                    if ( !v108 || v123 > v111 )
+                                                    vec3d minigunImpactPoint = cellUnit->_position;
+                                                    float minigunImpactDistance = v111;
+                                                    bool hasMinigunSpreadImpactPoint = false;
+
+                                                    if ( spreadX > 0.0f || spreadY > 0.0f )
+                                                    {
+                                                        if ( ypabact_GetMinigunSpreadImpactPoint(shotPos, shotDir, v77, v27, &minigunImpactPoint, &minigunImpactDistance) )
+                                                            hasMinigunSpreadImpactPoint = true;
+                                                    }
+
+                                                    if ( !v108 || v123 > minigunImpactDistance )
                                                     {
                                                         v108 = cellUnit;
-                                                        v123 = v111;
-
-                                                        v66 = cellUnit->_position;
+                                                        v123 = minigunImpactDistance;
+                                                        v121 = v27;
+                                                        minigunSpreadImpactPoint = hasMinigunSpreadImpactPoint;
+                                                        v66 = minigunImpactPoint;
                                                     }
                                                 }
                                             }
@@ -12930,7 +12984,9 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
                 v55 = 1;
                 v96 = 0;
 
-                if (isnormal(v123)) // Not NULL, NAN, INF
+                if ( minigunSpreadImpactPoint )
+                    v80 = v66;
+                else if (isnormal(v123)) // Not NULL, NAN, INF
                     v80 = v66 - (v66 - shotPos) * (v121 * 0.7) / v123;
                 else
                     v80 = v66;

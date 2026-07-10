@@ -149,8 +149,8 @@ static bool ypamissile_NormalizeXZ(vec3d *dir)
     return true;
 }
 
-static bool ypamissile_GetDirectDeathPushDir(NC_STACK_ypamissile *missile, NC_STACK_ypabact *target,
-                                             const vec3d &fallbackDir, vec3d *outDir)
+static bool ypamissile_GetDirectPushDir(NC_STACK_ypamissile *missile, NC_STACK_ypabact *target,
+                                        const vec3d &fallbackDir, vec3d *outDir)
 {
     if ( !missile || !target || !outDir )
         return false;
@@ -1292,26 +1292,14 @@ bool NC_STACK_ypamissile::ApplyDirectPushToBact(NC_STACK_ypabact *bct, vec3d *ap
     if ( GetAreaPushSkipReason(bct, allowFriendly) )
         return false;
 
-    // Single-target version of aoe_unit_push. Prefer a true radial direction away
-    // from the impact point; fall back to projectile travel direction for exact
-    // center hits, then to old->current movement, then a harmless axis.
-    vec3d pushDir = bct->_position - _position;
-    float distance = pushDir.length();
-
-    if ( distance > 1.0f )
-    {
-        pushDir /= distance;
-    }
-    else
-    {
-        pushDir = _fly_dir;
-        if ( pushDir.normalise() <= 0.001f )
-        {
-            pushDir = _position - _old_pos;
-            if ( pushDir.normalise() <= 0.001f )
-                pushDir = vec3d(1.0f, 0.0f, 0.0f);
-        }
-    }
+    // Direct push uses the same robust direction as push_at_death: prefer the
+    // launcher->target line, then projectile travel, then fall back to the old
+    // impact-point radial direction. This avoids tiny collision-radius offsets
+    // sending the unit in the wrong direction.
+    vec3d fallbackDir = bct->_position - _position;
+    vec3d pushDir;
+    if ( !ypamissile_GetDirectPushDir(this, bct, fallbackDir, &pushDir) )
+        return false;
 
     float pushStrength = (float)_mislDirectPush * ypamissile_GetTargetPushMultiplier(_world, bct);
     if ( pushStrength <= 0.0f )
@@ -1354,7 +1342,7 @@ void NC_STACK_ypamissile::ApplyPushAtDeath(NC_STACK_ypabact *bct, const vec3d &f
         return;
 
     vec3d deathPushDir;
-    if ( !ypamissile_GetDirectDeathPushDir(this, bct, fallbackDir, &deathPushDir) )
+    if ( !ypamissile_GetDirectPushDir(this, bct, fallbackDir, &deathPushDir) )
         return;
 
     float pushStrength = (float)_mislPushAtDeath * ypamissile_GetTargetPushMultiplier(_world, bct);
