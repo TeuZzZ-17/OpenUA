@@ -7028,7 +7028,7 @@ void NC_STACK_ypaworld::debug_draw_coll_spheres()
         vec3d pos = unit->_position;
 
         // Red broad/fallback radius. Skip only the self radius to avoid cockpit cross lines.
-        if (!isSelfControlled)
+        if (!isSelfControlled && !unit->UsesAutoCollisionSpheres())
         {
             float R = unit->_radius;
             if (R > 0.01f)

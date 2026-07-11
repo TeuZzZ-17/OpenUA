@@ -629,6 +629,11 @@ public:
     virtual World::rbcolls *getBACT_collNodes()
     { return _collNodes.roboColls.empty() ? NULL : &_collNodes; } // OpenUA: universal compound spheres
 
+    bool UsesAutoCollisionSpheres() const
+    { return _autoCollisionSpheres; }
+
+    void GetClosestCollisionBodySphere(const vec3d &target, vec3d *center, float *radius) const;
+
     virtual bool getBACT_extraViewer() const
     { return (_oflags & BACT_OFLAG_EXTRAVIEW) != 0; }    
     
@@ -1036,6 +1041,7 @@ public:
     bool _isDummy;
     // OpenUA custom: universal compound collision spheres for non-robo vehicles
     World::rbcolls _collNodes;
+    bool _autoCollisionSpheres = false;
     float _heading_speed;
     NC_STACK_ypabact *_killer;
     int16_t _killer_owner;

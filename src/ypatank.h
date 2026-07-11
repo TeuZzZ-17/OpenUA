@@ -67,6 +67,7 @@ public:
 
     vec3d TankTip(vec3d v);
     void ypatank_func87__sub0(NC_STACK_ypabact *bact2);
+    bool AutoCollisionSpheresHitWorld(const vec3d &from, const vec3d &to, vec3d *hitNormal = NULL);
 
     //Data
 public:

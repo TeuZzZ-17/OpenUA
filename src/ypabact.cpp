@@ -11037,6 +11037,33 @@ void CollisionWithBact__sub0(NC_STACK_ypabact *bact, NC_STACK_ypabact *a2)
     }
 }
 
+void NC_STACK_ypabact::GetClosestCollisionBodySphere(const vec3d &target, vec3d *center, float *radius) const
+{
+    *center = _position;
+    *radius = _radius;
+
+    if ( !_autoCollisionSpheres || _collNodes.roboColls.empty() )
+        return;
+
+    float bestSeparation = std::numeric_limits<float>::max();
+    mat3x3 rotT = _rotation.Transpose();
+
+    for (const World::TRoboColl &sphere : _collNodes.roboColls)
+    {
+        if ( sphere.robo_coll_radius <= 0.01 )
+            continue;
+
+        vec3d sphereCenter = _position + rotT.Transform(sphere.coll_pos);
+        float separation = (target - sphereCenter).length() - sphere.robo_coll_radius;
+        if ( separation < bestSeparation )
+        {
+            bestSeparation = separation;
+            *center = sphereCenter;
+            *radius = sphere.robo_coll_radius;
+        }
+    }
+}
+
 size_t NC_STACK_ypabact::CollisionWithBact(int arg)
 {
     bool isViewer = getBACT_viewer();
@@ -11105,8 +11132,13 @@ size_t NC_STACK_ypabact::CollisionWithBact(int arg)
                         continue;
                 }
 
-                float collDist = (_position - v41).length();
-                if ( collDist <= trad + ttrad )
+                vec3d selfCenter = _position;
+                float selfRadius = trad;
+                if ( _autoCollisionSpheres )
+                    GetClosestCollisionBodySphere(v41, &selfCenter, &selfRadius);
+
+                float collDist = (selfCenter - v41).length();
+                if ( collDist <= selfRadius + ttrad )
                 {
                     if ( !v53 )
                     {
@@ -11151,7 +11183,7 @@ size_t NC_STACK_ypabact::CollisionWithBact(int arg)
         }
     }
 
-    if ( !v45 || (v46 && !v49) )
+    if ( !v45 || (v46 && !v49 && !_autoCollisionSpheres) )
     {
         _status_flg &= ~BACT_STFLAG_BCRASH;
         return 0;

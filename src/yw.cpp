@@ -3,6 +3,7 @@
 #include <math.h>
 #include <algorithm>
 #include <cctype>
+#include <limits>
 #include <string>
 #include "includes.h"
 #include "yw.h"
@@ -80,6 +81,267 @@ static int yw_SelectMimicVehicleID(std::vector<World::TVhclProto> &protos, int s
 
     size_t randomIndex = (size_t)(rand() % (int)validIds.size());
     return validIds[randomIndex];
+}
+
+struct yw_ModelPointCloud
+{
+    std::vector<vec3d> points;
+    vec3d min;
+    vec3d max;
+    bool valid = false;
+};
+
+static mat3x3 yw_BuildVPRotationMatrix(const vec3d &degrees)
+{
+    vec3d angle = degrees * C_PI_180;
+    mat3x3 rot = mat3x3::Ident();
+
+    if ( angle.x != 0.0 )
+        rot *= mat3x3::RotateX(angle.x);
+    if ( angle.y != 0.0 )
+        rot *= mat3x3::RotateY(angle.y);
+    if ( angle.z != 0.0 )
+        rot *= mat3x3::RotateZ(angle.z);
+
+    return rot;
+}
+
+static vec3d yw_SafeVPScale(const vec3d &scale)
+{
+    return vec3d(scale.x > 0.001 ? scale.x : 1.0,
+                 scale.y > 0.001 ? scale.y : 1.0,
+                 scale.z > 0.001 ? scale.z : 1.0);
+}
+
+static void yw_AddModelPoint(yw_ModelPointCloud *cloud, const vec3d &point)
+{
+    if ( !cloud->valid )
+    {
+        cloud->min = point;
+        cloud->max = point;
+        cloud->valid = true;
+    }
+    else
+    {
+        cloud->min.x = std::min(cloud->min.x, point.x);
+        cloud->min.y = std::min(cloud->min.y, point.y);
+        cloud->min.z = std::min(cloud->min.z, point.z);
+        cloud->max.x = std::max(cloud->max.x, point.x);
+        cloud->max.y = std::max(cloud->max.y, point.y);
+        cloud->max.z = std::max(cloud->max.z, point.z);
+    }
+
+    cloud->points.push_back(point);
+}
+
+static void yw_CollectVPModelPoints(NC_STACK_base *base, const mat3x3 &rot, const vec3d &pos, yw_ModelPointCloud *cloud)
+{
+    if ( !base )
+        return;
+
+    if ( NC_STACK_skeleton *skel = base->GetSkeleton() )
+    {
+        UAskeleton::Data *data = skel->GetSkelet();
+        if ( data )
+        {
+            bool sampledPolygons = false;
+
+            for (const UAskeleton::Polygon &poly : data->polygons)
+            {
+                if ( poly.num_vertices < 3 )
+                    continue;
+
+                vec3d center(0.0, 0.0, 0.0);
+                bool valid = true;
+                for (int i = 0; i < poly.num_vertices; i++)
+                {
+                    int index = poly.v[i];
+                    if ( index < 0 || (size_t)index >= data->POO.size() )
+                    {
+                        valid = false;
+                        break;
+                    }
+                    center += static_cast<vec3d>(data->POO[index]);
+                }
+
+                if ( !valid )
+                    continue;
+
+                center /= (float)poly.num_vertices;
+                yw_AddModelPoint(cloud, pos + rot.Transform(center));
+
+                vec3d a = static_cast<vec3d>(data->POO[poly.v[0]]);
+                for (int triangle = 1; triangle < poly.num_vertices - 1; triangle++)
+                {
+                    vec3d b = static_cast<vec3d>(data->POO[poly.v[triangle]]);
+                    vec3d c = static_cast<vec3d>(data->POO[poly.v[triangle + 1]]);
+                    float longestEdge = std::max((float)(b - a).length(),
+                                                 std::max((float)(c - b).length(), (float)(a - c).length()));
+                    int divisions = (int)ceil(longestEdge / 18.0f);
+                    if ( divisions < 1 )
+                        divisions = 1;
+                    if ( divisions > 8 )
+                        divisions = 8;
+
+                    for (int row = 0; row <= divisions; row++)
+                    {
+                        for (int column = 0; column <= divisions - row; column++)
+                        {
+                            float u = (float)row / (float)divisions;
+                            float v = (float)column / (float)divisions;
+                            vec3d sample = a + (b - a) * u + (c - a) * v;
+                            yw_AddModelPoint(cloud, pos + rot.Transform(sample));
+                        }
+                    }
+                }
+
+                sampledPolygons = true;
+            }
+
+            // A few simple legacy VPs have no polygon table. POO is the only
+            // useful geometry in that case; SEN remains excluded because it is
+            // metadata and often lies far outside the rendered model.
+            if ( !sampledPolygons )
+            {
+                for (const UAskeleton::Vertex &v : data->POO)
+                    yw_AddModelPoint(cloud, pos + rot.Transform(static_cast<vec3d>(v)));
+            }
+        }
+    }
+
+    for (NC_STACK_base *kid : base->GetKidList())
+    {
+        TF::TForm3D &tf = kid->TForm();
+        mat3x3 kidRot = rot * tf.SclRot;
+        vec3d kidPos = pos + rot.Transform(tf.Pos);
+        yw_CollectVPModelPoints(kid, kidRot, kidPos, cloud);
+    }
+}
+
+static void yw_CollectVPPointCloud(NC_STACK_base *vp, const vec3d &scale, const vec3d &orientation, yw_ModelPointCloud *cloud)
+{
+    if ( !vp )
+        return;
+
+    yw_ModelPointCloud raw;
+    yw_CollectVPModelPoints(vp, mat3x3::Ident(), vec3d(0.0, 0.0, 0.0), &raw);
+
+    if ( !raw.valid )
+        return;
+
+    mat3x3 vpTransform = yw_BuildVPRotationMatrix(orientation);
+    vpTransform *= mat3x3::Scale(yw_SafeVPScale(scale));
+
+    for (const vec3d &p : raw.points)
+        yw_AddModelPoint(cloud, vpTransform.Transform(p));
+}
+
+static float yw_ClampFloat(float v, float minv, float maxv)
+{
+    if ( v < minv )
+        return minv;
+    if ( v > maxv )
+        return maxv;
+    return v;
+}
+
+static int yw_AutoCollCellCount(float extent, float targetSpan, float verticalScale)
+{
+    if ( extent < 8.0 )
+        return 1;
+
+    int count = (int)ceil(extent / (targetSpan * verticalScale));
+    if ( count < 1 )
+        count = 1;
+    if ( count > 8 )
+        count = 8;
+    return count;
+}
+
+static void yw_LimitAutoCollGrid(const vec3d &size, int *nx, int *ny, int *nz)
+{
+    const int maxSpheres = 16;
+
+    while ((*nx) * (*ny) * (*nz) > maxSpheres)
+    {
+        float xCell = *nx > 1 ? size.x / (float)(*nx) : std::numeric_limits<float>::max();
+        float yCell = *ny > 1 ? size.y / (float)(*ny) : std::numeric_limits<float>::max();
+        float zCell = *nz > 1 ? size.z / (float)(*nz) : std::numeric_limits<float>::max();
+
+        if ( xCell <= yCell && xCell <= zCell )
+            (*nx)--;
+        else if ( yCell <= zCell )
+            (*ny)--;
+        else
+            (*nz)--;
+    }
+}
+
+static World::rbcolls yw_GenerateAutoCollSpheresFromVP(NC_STACK_base *vp, const vec3d &scale, const vec3d &orientation)
+{
+    World::rbcolls out;
+
+    yw_ModelPointCloud cloud;
+    yw_CollectVPPointCloud(vp, scale, orientation, &cloud);
+    if ( !cloud.valid || cloud.points.size() < 3 )
+        return out;
+
+    vec3d size = cloud.max - cloud.min;
+    float shortHorizontal = std::min(size.x, size.z);
+    if ( shortHorizontal < 1.0 )
+        shortHorizontal = std::max(size.x, size.z);
+
+    float targetSpan = yw_ClampFloat(shortHorizontal * 0.55f, 24.0f, 48.0f);
+    int nx = yw_AutoCollCellCount(size.x, targetSpan, 1.0f);
+    int ny = yw_AutoCollCellCount(size.y, targetSpan, 1.35f);
+    int nz = yw_AutoCollCellCount(size.z, targetSpan, 1.0f);
+    yw_LimitAutoCollGrid(size, &nx, &ny, &nz);
+
+    std::vector<yw_ModelPointCloud> cells(nx * ny * nz);
+    for (const vec3d &p : cloud.points)
+    {
+        int ix = size.x > 0.001 ? (int)(((p.x - cloud.min.x) / size.x) * nx) : 0;
+        int iy = size.y > 0.001 ? (int)(((p.y - cloud.min.y) / size.y) * ny) : 0;
+        int iz = size.z > 0.001 ? (int)(((p.z - cloud.min.z) / size.z) * nz) : 0;
+
+        if ( ix >= nx ) ix = nx - 1;
+        if ( iy >= ny ) iy = ny - 1;
+        if ( iz >= nz ) iz = nz - 1;
+
+        yw_AddModelPoint(&cells[(iy * nz + iz) * nx + ix], p);
+    }
+
+    out.roboColls.reserve(cells.size());
+
+    for (const yw_ModelPointCloud &cell : cells)
+    {
+        if ( !cell.valid )
+            continue;
+
+        vec3d center = (cell.min + cell.max) * 0.5;
+        float radius = 0.0;
+        for (const vec3d &p : cell.points)
+            radius = std::max(radius, (float)(p - center).length());
+
+        radius += yw_ClampFloat(radius * 0.05f, 1.5f, 4.0f);
+        if ( radius < 4.0 )
+            radius = 4.0;
+
+        World::TRoboColl sphere;
+        sphere.coll_pos = center;
+        sphere.robo_coll_radius = radius;
+        out.roboColls.push_back(sphere);
+    }
+
+    if ( out.roboColls.empty() )
+    {
+        World::TRoboColl sphere;
+        sphere.coll_pos = (cloud.min + cloud.max) * 0.5;
+        sphere.robo_coll_radius = std::max(4.0f, (float)((cloud.max - cloud.min).length() * 0.5));
+        out.roboColls.push_back(sphere);
+    }
+
+    return out;
 }
 
 static std::string yw_TrimConfigValue(std::string s)
@@ -1663,13 +1925,41 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_radius = vhcl.radius;
         bacto->_viewer_radius = vhcl.vwr_radius;
 
-        // OpenUA: universal compound collision spheres. If the prototype defines
-        // coll_* spheres, copy them so getBACT_collNodes() exposes them to the
-        // existing narrow-phase collision/hit tests (same path Robo uses). The
-        // broad-phase radius is never shrunk; it is only grown to cover spheres
-        // that stick out beyond the authored radius. Robo/Host Station keep their
-        // own _roboColls path, so vhcl.coll is empty for them (no change).
-        bacto->_collNodes = vhcl.coll;
+        // OpenUA: universal compound collision spheres. Authored coll_* spheres
+        // win. If no coll_* and no explicit radius were written, generate a
+        // modern compound footprint from the visible VP; radius remains the
+        // vanilla/legacy fallback and broad-phase value.
+        World::rbcolls spawnColl = vhcl.coll;
+        bool useAutoCollisionSpheres = vhcl.model_id != BACT_TYPES_ROBO &&
+                                       !vhcl.coll_defined && !vhcl.radius_defined;
+        if ( useAutoCollisionSpheres && spawnColl.roboColls.empty() )
+        {
+            auto getModel = [this](int16_t id) -> NC_STACK_base *
+            {
+                if ( id < 0 || (size_t)id >= _vhclModels.size() )
+                    return NULL;
+                return _vhclModels.at(id);
+            };
+
+            NC_STACK_base *autoCollVP = getModel(vhcl.vp_normal);
+            if ( !autoCollVP )
+                autoCollVP = getModel(vhcl.vp_wait);
+            if ( !autoCollVP )
+                autoCollVP = getModel(vhcl.vp_fire);
+            if ( !autoCollVP )
+                autoCollVP = getModel(vhcl.vp_genesis);
+
+            spawnColl = yw_GenerateAutoCollSpheresFromVP(autoCollVP, vhcl.vp_scale, vhcl.vp_orientation);
+
+            // Cache successful generation in the shared prototype. This keeps
+            // repeated spawns cheap while preserving coll_defined=false, so the
+            // data still knows these were automatic, not authored.
+            if ( !spawnColl.roboColls.empty() )
+                vhcl.coll = spawnColl;
+        }
+
+        bacto->_collNodes = spawnColl;
+        bacto->_autoCollisionSpheres = useAutoCollisionSpheres && !spawnColl.roboColls.empty();
         for (const World::TRoboColl &cs : bacto->_collNodes.roboColls)
         {
             if ( cs.robo_coll_radius > 0.01 )
@@ -2028,6 +2318,46 @@ NC_STACK_ypamissile * NC_STACK_ypaworld::ypaworld_func147(ypaworld_arg146 *arg)
     wobj->_vp_trail_scale = wproto.vp_trail_scale;
     wobj->_vp_trail_tint = wproto.vp_trail_tint;
     wobj->_vp_trail_spin_speed = wproto.vp_trail_spin;
+
+    // Physical projectiles without an authored radius use the same cached VP
+    // compound generation as vehicles. Beam weapons keep radius as hitscan
+    // thickness and never enter this path.
+    bool useAutoCollisionSpheres = !wproto.radius_defined &&
+                                   !wproto.IsLaser() && !wproto.IsVerticalLaser();
+    World::rbcolls spawnColl = wproto.coll;
+    if ( useAutoCollisionSpheres && spawnColl.roboColls.empty() )
+    {
+        auto getModel = [this](int16_t id) -> NC_STACK_base *
+        {
+            if ( id < 0 || (size_t)id >= _vhclModels.size() )
+                return NULL;
+            return _vhclModels.at(id);
+        };
+
+        NC_STACK_base *autoCollVP = getModel(wproto.vp_normal);
+        if ( !autoCollVP )
+            autoCollVP = getModel(wproto.vp_wait);
+        if ( !autoCollVP )
+            autoCollVP = getModel(wproto.vp_fire);
+        if ( !autoCollVP )
+            autoCollVP = getModel(wproto.vp_genesis);
+
+        spawnColl = yw_GenerateAutoCollSpheresFromVP(autoCollVP, wproto.vp_scale, wproto.vp_orientation);
+        if ( !spawnColl.roboColls.empty() )
+            wproto.coll = spawnColl;
+    }
+
+    wobj->_collNodes = spawnColl;
+    wobj->_autoCollisionSpheres = useAutoCollisionSpheres && !spawnColl.roboColls.empty();
+    for (const World::TRoboColl &sphere : wobj->_collNodes.roboColls)
+    {
+        if ( sphere.robo_coll_radius <= 0.01 )
+            continue;
+
+        float extent = sphere.coll_pos.length() + sphere.robo_coll_radius;
+        if ( extent > wobj->_radius )
+            wobj->_radius = extent;
+    }
 
     wobj->_destroyFX = wproto.dfx;
     wobj->_extDestroyFX = wproto.ExtDestroyFX;

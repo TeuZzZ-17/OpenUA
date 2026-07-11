@@ -133,6 +133,8 @@ public:
     bool TubeCollisionTest(bool applyDirectDamage = true, NC_STACK_ypabact **hitTarget = NULL);
 
 protected:
+    bool AutoCollisionSpheresHitBact(NC_STACK_ypabact *target) const;
+    bool AutoCollisionSpheresHitWorld(vec3d *impactPos, vec3d *impactNormal);
     int CalcDamageForBact(NC_STACK_ypabact *bct, int baseEnergy);
     int ApplyDamageToBact(NC_STACK_ypabact *bct, int baseEnergy);
     void ApplyDirectHitToBact(NC_STACK_ypabact *bct);

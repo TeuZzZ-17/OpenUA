@@ -477,6 +477,7 @@ struct TVhclProto
     float maxrot = 0.0;
     float height = 0.0;
     float radius = 0.0;
+    bool radius_defined = false;             // OpenUA: true only when radius is explicitly authored
     float overeof = 0.0;
     float vwr_radius = 0.0;
     float vwr_overeof = 0.0;
@@ -537,6 +538,7 @@ struct TVhclProto
     TVhclSound snd_mimic;                   // OpenUA: model = mimic persistent shell loop
 
     rbcolls coll;                           // OpenUA: universal compound collision spheres (coll_*)
+    bool coll_defined = false;              // OpenUA: true when coll_* was explicitly authored
 
     ~TVhclProto();
 };
@@ -697,9 +699,11 @@ struct TWeapProto
     float airconst = 0.0;
     float maxrot = 0.0;
     float heightStd = 0;
-    // radius is direct projectile collision. AoE has separate unit/building/sector values.
-    // vp_scale never affects any gameplay radius.
+    // Explicit radius keeps legacy direct projectile collision. When omitted on
+    // a physical projectile, OpenUA may derive compound spheres from its VP.
     float radius = 0.0;
+    bool radius_defined = false;
+    rbcolls coll; // cached automatic projectile collision spheres
     float aoe_unit_radius = 0.0;
     float aoe_building_radius = 0.0;
     float aoe_sector_radius = 0.0;

@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <string.h>
 #include <math.h>
+#include <limits>
 #include <string>
 #include "yw.h"
 #include "ypatank.h"
@@ -1265,6 +1266,13 @@ void NC_STACK_ypatank::Move(move_msg *arg)
 
     CorrectPositionInLevelBox(NULL);
 
+    if ( (_status_flg & BACT_STFLAG_LAND) && AutoCollisionSpheresHitWorld(_old_pos, _position) )
+    {
+        _position = _old_pos;
+        _fly_dir_length = 0.0;
+        _thraction = 0.0;
+    }
+
     _soundcarrier.Sounds[0].Pitch = _pitch;
     _soundcarrier.Sounds[0].Volume = _volume;
 
@@ -1283,6 +1291,70 @@ void NC_STACK_ypatank::Move(move_msg *arg)
 
     if ( _soundcarrier.Sounds[0].PSample )
         _soundcarrier.Sounds[0].Pitch += (float)(_soundcarrier.Sounds[0].PSample->SampleRate + _soundcarrier.Sounds[0].Pitch) * v49;
+}
+
+bool NC_STACK_ypatank::AutoCollisionSpheresHitWorld(const vec3d &from, const vec3d &to, vec3d *hitNormal)
+{
+    if ( !_autoCollisionSpheres || _collNodes.roboColls.empty() || !_world )
+        return false;
+
+    vec3d motion = to - from;
+    float distance = motion.length();
+    if ( distance <= 0.001 )
+        return false;
+
+    vec3d direction = motion / distance;
+    float minRadius = std::numeric_limits<float>::max();
+    for (const World::TRoboColl &sphere : _collNodes.roboColls)
+    {
+        if ( sphere.robo_coll_radius > 0.01 )
+            minRadius = std::min(minRadius, sphere.robo_coll_radius);
+    }
+
+    if ( minRadius == std::numeric_limits<float>::max() )
+        return false;
+
+    float sampleStep = std::max(4.0f, minRadius * 0.45f);
+    int samples = (int)ceil(distance / sampleStep);
+    if ( samples < 1 )
+        samples = 1;
+    if ( samples > 8 )
+        samples = 8;
+
+    mat3x3 rotT = _rotation.Transpose();
+    for (int sample = 1; sample <= samples; sample++)
+    {
+        vec3d samplePos = from + motion * ((float)sample / (float)samples);
+
+        for (const World::TRoboColl &sphere : _collNodes.roboColls)
+        {
+            if ( sphere.robo_coll_radius <= 0.01 )
+                continue;
+
+            yw_137col collisions[32];
+            ypaworld_arg137 arg137;
+            arg137.pos = samplePos + rotT.Transform(sphere.coll_pos);
+            arg137.pos2 = direction;
+            arg137.radius = sphere.robo_coll_radius;
+            arg137.collisions = collisions;
+            arg137.coll_max = 32;
+            arg137.field_30 = 0;
+
+            _world->ypaworld_func137(&arg137);
+
+            for (int i = 0; i < arg137.coll_count; i++)
+            {
+                if ( fabs(collisions[i].pos2.y) < 0.6 )
+                {
+                    if ( hitNormal )
+                        *hitNormal = collisions[i].pos2;
+                    return true;
+                }
+            }
+        }
+    }
+
+    return false;
 }
 
 size_t NC_STACK_ypatank::SetPosition(bact_arg80 *arg)
@@ -1477,13 +1549,17 @@ size_t NC_STACK_ypatank::CollisionWithBact(int arg)
 
                     if (!v96 || v19 >= 0.01 )
                     {
-                        vec3d v93 = v89 - _position;
+                        vec3d selfCenter;
+                        float selfRadius;
+                        GetClosestCollisionBodySphere(v89, &selfCenter, &selfRadius);
+
+                        vec3d v93 = v89 - selfCenter;
 
                         float v126 = v93.length();
 
                         if ( v126 < 300.0 )
                         {
-                            float v115 = _radius + v19;
+                            float v115 = selfRadius + v19;
 
                             if ( v114 && v126 < v115 )
                             {
