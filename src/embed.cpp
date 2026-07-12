@@ -46,9 +46,9 @@ size_t NC_STACK_embed::Deinit()
 {
     for ( NC_STACK_rsrc *res : _resources )
         res->Delete();
-    
+
     _resources.clear();
-    
+
     return NC_STACK_nucleus::Deinit();
 }
 
@@ -87,7 +87,7 @@ size_t NC_STACK_embed::LoadingFromIFF(IFFile **file)
             std::string classname = mfile->readStr(255);
             size_t emrsOffset = mfile->tell();
             int payloadParse = mfile->parse();
-            
+
             std::string resname;
             size_t fnd = classname.find('\0');
             if (fnd != std::string::npos)
@@ -286,7 +286,7 @@ size_t NC_STACK_embed::LoadingFromIFF(IFFile **file)
                 Deinit();
                 return 0;
             }
-            
+
             _resources.push_back(embd_class);
         }
         else
@@ -307,7 +307,7 @@ size_t NC_STACK_embed::SavingIntoIFF(IFFile **file)
 
     if ( !NC_STACK_nucleus::SavingIntoIFF(file) )
         return 0;
-    
+
     for ( NC_STACK_rsrc *embd_obj : _resources )
     {
         if ( embd_obj )
@@ -330,6 +330,6 @@ size_t NC_STACK_embed::SavingIntoIFF(IFFile **file)
                 return 0;
         }
     }
-    
+
     return mfile->popChunk() == IFFile::IFF_ERR_OK;
 }

@@ -30,16 +30,16 @@ uint8_t DestFX::ParseTypeName(const std::string &in)
 {
     if ( !StriCmp(in, "death") )
         return FX_DEATH;
-    
+
     if ( !StriCmp(in, "megadeth") )
         return FX_MEGADETH;
-    
+
     if ( !StriCmp(in, "create") )
         return FX_CREATE;
-    
+
     if ( !StriCmp(in, "beam") )
         return FX_BEAM;
-    
+
     return FX_NONE;
 }
 
@@ -65,7 +65,7 @@ void TVhclSound::LoadSamples()
             for (size_t i = 0; i < extS.size(); i++)
             {
                 TSampleParams &pprm = extS.at(i);
-                
+
                 ExtSamples.at(i).Sample = Nucleus::CInit<NC_STACK_wav>( {{NC_STACK_rsrc::RSRC_ATT_NAME, ExtSamples.at(i).Name}} );
 
                 if ( ExtSamples.at(i).Sample )
@@ -150,7 +150,7 @@ void TVhclSound::ClearSounds()
     }
 }
 
-    
+
 TVhclProto::~TVhclProto()
 {
     if ( wireframe )
@@ -182,7 +182,7 @@ TVhclProto::~TVhclProto()
         wpn_wireframe_2->Delete();
         wpn_wireframe_2 = NULL;
     }
-    
+
     Common::DeleteAndNull(&RoboProto);
 }
 
@@ -194,5 +194,5 @@ TWeapProto::~TWeapProto()
         wireframe = NULL;
     }
 }
-    
+
 }

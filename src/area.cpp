@@ -113,9 +113,9 @@ int NC_STACK_area::area_func5__sub0(IFFile *mfile)
         _colorVal = tmp.clrVal;
         _tracyVal = tmp.trcVal;
         _shadeVal = tmp.shdVal;
-        
+
         setADE_bkCheck( (tmp.flags & AREA_FLAG_BKCHECK) != 0 );
-        setADE_depthFade( (tmp.flags & AREA_FLAG_DPTHFADE) != 0 );        
+        setADE_depthFade( (tmp.flags & AREA_FLAG_DPTHFADE) != 0 );
     }
 
     return 1;
@@ -225,7 +225,7 @@ size_t NC_STACK_area::SaveIntoIFF(IFFile **file)
         return 0;
 
     mfile->pushChunk(0, TAG_STRC, -1);
-    
+
     uint16_t tmpflg = 0;
     if (flags & ADE_FLAG_BKCHECK)
         tmpflg |= AREA_FLAG_BKCHECK;
@@ -292,15 +292,15 @@ void NC_STACK_area::GenMesh(std::list<GFX::TMesh> *meshList, NC_STACK_skeleton *
 
     else if (renderFlags == (AREA_POL_FLAG_LINEARMAPPED | AREA_POL_FLAG_NOSHADE | AREA_POL_FLAG_FLATTRACY) )
         renderFlags = GFX::RFLAGS_TEXTURED | GFX::RFLAGS_LUMTRACY;
-    
+
     if (flags & ADE_FLAG_DPTHFADE)
         renderFlags |= GFX::RFLAGS_FOG;
-    
+
     float alpha = 1.0;
-        
+
     if (renderFlags & GFX::RFLAGS_LUMTRACY)
         alpha = GFX::Engine.GetAlpha();
-    
+
     float clr = 1.0;
     if (renderFlags & GFX::RFLAGS_SHADED)
     {
@@ -310,16 +310,16 @@ void NC_STACK_area::GenMesh(std::list<GFX::TMesh> *meshList, NC_STACK_skeleton *
         if (clr > 1.0)
             clr = 1.0;
     }
-    
+
     if (!_texImg)
         clr = 0.0;
-    
+
     GFX::TRenderParams mat(renderFlags);
-    
+
     if (_texImg)
     {
         mat.TexSource = _texImg;
-        
+
         if ( _texImg->IsDynamic() )
             mat.Flags |= GFX::RFLAGS_DYNAMIC_TEXTURE;
         else
@@ -327,24 +327,24 @@ void NC_STACK_area::GenMesh(std::list<GFX::TMesh> *meshList, NC_STACK_skeleton *
     }
 
     GFX::TMesh *msh = NC_STACK_base::FindMeshByRenderParams(meshList, mat);
-    
+
     if (!msh)
     {
         meshList->emplace_back();
         msh = &(meshList->back());
-        
+
         msh->Mat = mat;
     }
-    
+
     UAskeleton::Data *dat = skelet->GetSkelet();
     UAskeleton::Polygon &pol = dat->polygons[_polyID];
 
     uint32_t fid = msh->Vertexes.size();
-    
+
     std::vector<tUtV> *coords = NULL;
     if (_texImg && !_texImg->IsDynamic())
         coords = &(_texImg->GetOutline());
-    
+
     if (pol.num_vertices >= 3)
     {
         for(int i = 0; i < pol.num_vertices; ++i)
@@ -353,13 +353,13 @@ void NC_STACK_area::GenMesh(std::list<GFX::TMesh> *meshList, NC_STACK_skeleton *
             msh->Vertexes.back().Pos = dat->POO[ pol.v[i] ];
             msh->Vertexes.back().TexCoordId = i;
             msh->Vertexes.back().Color = GFX::TGLColor(clr, clr, clr, alpha);
-            
+
             if (coords)
                 msh->Vertexes.back().TexCoord = coords->at(i);
-            
+
             msh->BoundBox.Add( dat->POO[ pol.v[i] ] );
         }
-        
+
         for(int j = 2; j < pol.num_vertices; ++j)
             {
                 msh->Indixes.push_back(fid + 0);
@@ -369,8 +369,8 @@ void NC_STACK_area::GenMesh(std::list<GFX::TMesh> *meshList, NC_STACK_skeleton *
     }
 }
 
-GFX::TRenderParams NC_STACK_area::GetRenderParams( size_t ) 
-{ 
+GFX::TRenderParams NC_STACK_area::GetRenderParams( size_t )
+{
     uint32_t renderFlags = _polflags & ~(AREA_POL_FLAG_SCANLN | AREA_POL_FLAG_TEXBIT | AREA_POL_FLAG_TRACYBIT3);
 
     if (renderFlags == 0)
@@ -401,10 +401,10 @@ GFX::TRenderParams NC_STACK_area::GetRenderParams( size_t )
 
     else if (renderFlags == (AREA_POL_FLAG_LINEARMAPPED | AREA_POL_FLAG_NOSHADE | AREA_POL_FLAG_FLATTRACY) )
         renderFlags = GFX::RFLAGS_TEXTURED | GFX::RFLAGS_LUMTRACY;
-    
+
     if (flags & ADE_FLAG_DPTHFADE)
         renderFlags |= GFX::RFLAGS_FOG;
-    
+
     float clr = 1.0;
     if (renderFlags & GFX::RFLAGS_SHADED)
     {
@@ -414,16 +414,16 @@ GFX::TRenderParams NC_STACK_area::GetRenderParams( size_t )
         if (clr > 1.0)
             clr = 1.0;
     }
-    
+
     GFX::TRenderParams params;
-    
+
     params.Flags = renderFlags;
-    
+
     if (_texImg)
     {
         params.Color = GFX::TGLColor(clr, clr, clr, 1.0);
         params.TexSource = _texImg;
-        
+
         if (_texImg->IsDynamic())
             params.Flags |= GFX::RFLAGS_DYNAMIC_TEXTURE;
         else
@@ -433,8 +433,8 @@ GFX::TRenderParams NC_STACK_area::GetRenderParams( size_t )
     {
         params.Color = GFX::TGLColor(0.0, 0.0, 0.0, 1.0);
     }
-    
-    return params; 
+
+    return params;
 };
 
 void NC_STACK_area::setAREA_bitm(NC_STACK_bitmap *bitm)

@@ -10,7 +10,7 @@
 class NC_STACK_winp: public NC_STACK_idev
 {
 public:
-    enum 
+    enum
     {
         MAXCHARQUEUE = 8,
         MAXJOYMAP    = 32,
@@ -23,60 +23,60 @@ public:
 public:
     virtual size_t Init(IDVList &stak);
     virtual size_t Deinit();
-    
+
     virtual bool GetState();
     virtual float GetSlider();
-    
+
     virtual bool BindKey(const std::string &keyName);
     virtual void ResetSlider();
 
     NC_STACK_winp() {};
     virtual ~NC_STACK_winp() {};
-    
+
     virtual const std::string ClassName() const {
         return __ClassName;
     };
-  
+
 public:
     static void InitFirst();
-    
+
     static void OnMouseDown(Common::Point pos, int btn, int clkNum);
     static void OnMouseUp(Common::Point pos, int btn, int clkNum);
     static void OnMouseMove(Common::Point pos, Common::Point rel);
-    
+
     static SDL_Haptic * GetJoyHaptic() { return _joyHaptic; };
-    
+
     static void QueryKeyboard(TInputState *arg);
     static void QueryPointer(TClickBoxInf *arg);
     static bool HasFocus() { return true; };
-    
+
     static Input::TQueryState GetQueryInterface()
     { return Input::TQueryState(__ClassName, QueryKeyboard, QueryPointer, HasFocus); };
-    
+
 protected:
     static void CheckJoy();
     static void KeyDown(int16_t vk);
     static void KeyUp(int16_t vk);
     static int InputWatch(void *, SDL_Event *event);
-    
+
     static SDL_JoystickGUID sdlReadJoyGuid();
     static bool sdlGUIDcmp(SDL_JoystickGUID &gd1, SDL_JoystickGUID &gd2);
     static int sdlJoyAxis(SDL_Joystick* joystick, int axis);
     static void sdlJoyReadMapping(SDL_Joystick* joystick);
-   
+
 
 public:
     int16_t _bindedKey = -1;
     int32_t _sliderPos = 0;
-    
+
     static std::map<int16_t, int16_t> KBDMapping;
-    
+
 protected:
     static int _kbdLastDown;
     static int _kbdLastHit;
     static std::queue<int32_t> _inputText;
-    
-    
+
+
     static bool _mLstate;
     static bool _mRstate;
     static bool _mMstate;
@@ -98,8 +98,8 @@ protected:
     static Common::Point _mLUpos;
     static Common::Point _mRUpos;
     static Common::Point _mMUpos;
-    
-    
+
+
     static bool                 _joyEnable;
     static SDL_JoystickGUID     _joyWantGuid;
 

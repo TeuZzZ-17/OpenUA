@@ -15,7 +15,7 @@ class NC_STACK_nucleus;
 
 namespace Nucleus
 {
-    
+
 struct ClassDescr
 {
     const std::string _classname;
@@ -32,8 +32,8 @@ static NC_STACK_nucleus * __ClassInstanciator() { return new _T(); };
 
 template <class _T>
 static ClassDescr MakeClassDescr()
-{ 
-    return ClassDescr(_T::__ClassName, __ClassInstanciator<_T>); 
+{
+    return ClassDescr(_T::__ClassName, __ClassInstanciator<_T>);
 }
 
 }
@@ -71,7 +71,7 @@ public:
     //Load/Save from/to IFF
     static NC_STACK_nucleus *LoadObjectFromIFF(IFFile *mfile);
     bool SaveObjectIntoIFF(IFFile *mfile);
-    
+
     void Delete() {
         Deinit();
         delete this;

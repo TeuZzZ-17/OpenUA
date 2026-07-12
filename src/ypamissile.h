@@ -11,16 +11,16 @@ class NC_STACK_ypamissile: public NC_STACK_ypabact
 protected:
     // Bomb rotation speed
     const double BOMB_MIN_ANGLE = 0.001;
-        
+
 public:
-    
+
     enum FLAG_MISL
     {
         FLAG_MISL_VIEW          = (1 << 0),
         FLAG_MISL_COUNTDELAY    = (1 << 1),
         FLAG_MISL_IGNOREBUILDS  = (1 << 2),
     };
-    
+
     enum MISL_TYPE
     {
         MISL_BOMB       = 1, // Drop down
@@ -30,7 +30,7 @@ public:
         MISL_OBSAVOID   = 5, // Obstacle avoiding
         MISL_INTERNAL   = 6, // Only for internal use
     };
-    
+
 public:
     virtual size_t Init(IDVList &stak) override;
     virtual size_t Deinit() override;
@@ -43,7 +43,7 @@ public:
     virtual void SetState(setState_msg *arg) override;
     virtual void Renew() override;
     virtual size_t SetStateInternal(setState_msg *arg) override;
-    
+
     virtual void ResetViewing(); // Detach camera
     virtual void Impact(); // Apply impulse to all in sector
 
@@ -59,7 +59,7 @@ public:
 
     NC_STACK_ypamissile();
     virtual ~NC_STACK_ypamissile() {};
-    
+
     virtual const std::string ClassName() const {
         return __ClassName;
     };
@@ -84,7 +84,7 @@ public:
     };
 
     virtual void setBACT_viewer(bool) override;
-    
+
     virtual void SetLauncherBact(NC_STACK_ypabact *);
     virtual void SetMissileType(int);
     virtual void SetLifeTime(int);
@@ -98,16 +98,8 @@ public:
     virtual void SetAreaDamage(float unitRadius, int unitEnergy, float buildingRadius, int buildingEnergy,
                                float sectorRadius, int sectorEnergy, int falloff);
     virtual void SetAoeUnitPush(int push);
-    virtual void SetAoeUnitPushAtDeath(int push);
     virtual void SetDirectPush(int push);
-    virtual void SetPushAtDeath(int push);
     virtual void SetArmorPenetrationTargets(int targets);
-    // Per-class weapon radius API: inactive (always set to 0.0) but kept for ABI/object-system
-    // compatibility. Collision uses weapon.radius only. Do not remove. See GetRadius* below.
-    virtual void SetRadiusHeli(float);
-    virtual void SetRadiusTank(float);
-    virtual void SetRadiusFlyer(float);
-    virtual void SetRadiusRobo(float);
     virtual void SetStartHeight(float);
     virtual void SetClusterSpawnedChild(bool child);
 
@@ -121,14 +113,9 @@ public:
     virtual int GetPowerTank();
     virtual int GetPowerFlyer();
     virtual int GetPowerRobo();
-    // Inactive per-class weapon radius accessors (currently no callers); kept for
-    // ABI/object-system compatibility alongside SetRadius* above. Do not remove.
-    virtual float GetRadiusHeli();
-    virtual float GetRadiusTank();
-    virtual float GetRadiusFlyer();
-    virtual float GetRadiusRobo();
     virtual float GetStartHeight();
-    
+    virtual float getBACT_collPadding() const override;
+
     vec3d CalcForceVector();
     bool TubeCollisionTest(bool applyDirectDamage = true, NC_STACK_ypabact **hitTarget = NULL);
 
@@ -139,9 +126,6 @@ protected:
     int ApplyDamageToBact(NC_STACK_ypabact *bct, int baseEnergy);
     void ApplyDirectHitToBact(NC_STACK_ypabact *bct);
     bool ApplyDirectPushToBact(NC_STACK_ypabact *bct, vec3d *appliedDir = NULL, float *appliedStrength = NULL, bool enqueue = true);
-    bool IsNewDeath1ForPushAtDeath(NC_STACK_ypabact *bct, bool wasAlive) const;
-    void ApplyPushAtDeath(NC_STACK_ypabact *bct, const vec3d &fallbackDir);
-    void ApplyAoePushAtDeath(NC_STACK_ypabact *bct, const vec3d &pushDir, float distance);
     const char *GetAreaDamageSkipReason(NC_STACK_ypabact *bct, bool allowFriendly) const;
     const char *GetAreaPushSkipReason(NC_STACK_ypabact *bct, bool allowFriendly) const;
     bool CanCollideWithWeapon(NC_STACK_ypamissile *other) const;
@@ -189,7 +173,7 @@ protected:
     //Data
 public:
     static constexpr const char * __ClassName = "ypamissile.class";
-    
+
 protected:
     int _mislType = 0;
     NC_STACK_ypabact *_mislEmitter = NULL;
@@ -210,9 +194,7 @@ protected:
     int _mislAoeSectorEnergy     = 0;
     int _mislAoeFalloff          = 0;
     int _mislAoeUnitPush         = 0;
-    int _mislAoeUnitPushAtDeath  = 0;
     int _mislDirectPush          = 0;
-    int _mislPushAtDeath = 0;
     int _mislArmorPenetrationRemaining = 0;
     int _mislClusterAge          = 0;
     int _mislClusterGeneration   = 0;
@@ -239,12 +221,6 @@ protected:
     std::vector<NC_STACK_ypabact *> _mislDirectHitUnits;
     std::vector<TBuildingHitRef> _mislDirectHitBuildings;
     std::vector<TBuildingHitRef> _mislDirectHitSectors;
-    // Legacy/deprecated: kept for script/API compatibility, ignored for gameplay.
-    float _mislRadiusHeli   = 0.0;
-    float _mislRadiusTank   = 0.0;
-    float _mislRadiusFlyer  = 0.0;
-    float _mislRadiusRobo   = 0.0;
-
     // OpenUA custom mortar shell state (only meaningful when _isMortarProjectile).
     bool  _isMortarProjectile = false;
     vec3d _mortarStartPos;

@@ -21,7 +21,7 @@ public:
     int16_t h = 0;
 
     ButtonBox() = default;
-    ButtonBox(int16_t _x, int16_t _y, int16_t _w, int16_t _h) 
+    ButtonBox(int16_t _x, int16_t _y, int16_t _w, int16_t _h)
     : x(_x), y(_y), w(_w), h(_h) {};
 
     explicit operator bool() const
@@ -81,7 +81,7 @@ struct TClickBoxInf
 struct TInputState
 {
     uint32_t Period = 0;
-    
+
     int16_t  KbdLastDown = 0;
     int16_t  KbdLastHit = 0;
     int16_t  HotKeyID = 0;
@@ -102,19 +102,19 @@ namespace Input
         ITYPE_TIMER     = 2,
         ITYPE_KBD       = 3
     };
-    
+
     struct KeyInfo
     {
         int16_t KeyCode;
         const bool IsSlider = false;
         bool down = false;
-        
+
         KeyInfo(int16_t k, bool s = false)
         : KeyCode(k)
         , IsSlider(s)
         {}
     };
-    
+
     enum KEYCODE
     {
         KC_NONE,
@@ -243,17 +243,17 @@ namespace Input
         KC_JOYHATX,
         KC_JOYHATY,
         KC_JOYRUDDER,
-        
-        
+
+
         KC_MAX
     };
-    
+
     struct KeyMapName
     {
         const std::string Name;
         KEYCODE   ID;
     };
-    
+
     enum FF_TYPE
     {
         FF_TYPE_ALL = 0,
@@ -275,21 +275,21 @@ namespace Input
         FF_STATE_STOP = 1,
         FF_STATE_UPDATE = 2
     };
-    
+
     struct TQueryState
     {
         std::string ClassName;
         std::function<void(TInputState *arg)> KeyboardQuery;
         std::function<void(TClickBoxInf *arg)> PointerQuery;
         std::function<bool()> HasFocus;
-        
+
         TQueryState() = default;
         TQueryState(TQueryState&&) = default;
         TQueryState(const TQueryState&) = default;
         TQueryState & operator=(const TQueryState&) = default;
-        
-        TQueryState(const std::string &clsName, 
-                    std::function<void(TInputState *arg)> kbd = NULL, 
+
+        TQueryState(const std::string &clsName,
+                    std::function<void(TInputState *arg)> kbd = NULL,
                     std::function<void(TClickBoxInf *arg)> pnt = NULL,
                     std::function<bool()> fcs = NULL)
         : ClassName(clsName)
@@ -309,7 +309,7 @@ struct InputNode
         FLAG_INV    = 1 << 2,
         FLAG_FSLIDE = 1 << 3, // Force slider
     };
-    
+
     NC_STACK_idev *DriverObj  = NULL;
     int Flags                 = 0;
     bool IsSlider             = false;
@@ -323,17 +323,17 @@ class INPEngine
 {
 public:
     typedef std::list<InputNode> InputNodeList;
-    
+
 public:
     int Init();
     void Deinit();
 
     void QueryInput(TInputState *state);
-    
+
     void AddClickBoxFront(ClickBox *box);
     void AddClickBoxBack(ClickBox *box);
     void RemClickBox(ClickBox *box);
-    
+
     virtual bool SetInputExpression(bool slider, uint32_t index, const std::string &val);
     bool InitDriver(uint8_t type, const std::string &val);
 
@@ -342,26 +342,26 @@ public:
     virtual void ForceFeedback(uint8_t state, uint8_t effID, float p1 = 0.0, float p2 = 0.0, float p3 = 0.0, float p4 = 0.0);
 
     virtual void ResetSlider(int sldr);
-    
+
     int16_t GetHotKeyID(int16_t keycode);
     int16_t GetHotKey(uint16_t id);
-    
+
     void RegisterInterface(const TQueryState& iface);
-    
+
     static bool GetKeyState(uint16_t id)
     {
         return KeyMatrix.at(id).down;
     }
-    
+
 protected:
     static void FreeKNodes(InputNodeList *lst);
     static std::string ParseInputNodeNext(const std::string &inputStr, InputNodeList *lst);
     static void UpdateList(InputNodeList *lst, bool *btn = NULL, float *slider = NULL);
-    
+
     int16_t CheckHotKey(int16_t key);
-    
-    TQueryState FindInterface(const std::string &name);    
-    
+
+    TQueryState FindInterface(const std::string &name);
+
     void FFstopAll();
     void FFDOTankEngine(int state, float p1, float p2);
     void FFDOJetEngine(int state, float p1, float p2);
@@ -373,13 +373,13 @@ protected:
     void FFDOBombFire(int state);
     void FFDOCollision(int state, float a2, float a3, float a4);
     void FFDOShake(int state, float a2, float a3, float a4, float a5);
-    
+
 public:
     static INPEngine Instance;
-    
+
 protected:
     std::vector<TQueryState> Interfaces;
-    
+
 public:
     NC_STACK_itimer *_timer    = NULL;
     TQueryState _wimp;
@@ -387,14 +387,14 @@ public:
     std::array<InputNodeList, 32> _buttons;
     std::array<InputNodeList, 32> _sliders;
     std::array<int16_t, 48>       _hotKeys;
-    
+
     static std::array<KeyInfo, KC_MAX>      KeyMatrix;
     static std::array<std::string, KC_MAX>  KeyTitle;
     static std::array<KeyMapName, KC_MAX>   KeyNamesTable;
     static std::vector<KeyMapName>          KeyAltNamesTable;
-    
+
     static int16_t GetKeyIDByName(const std::string &name);
-    
+
     FF::TankEngine     _ffTankEngine;
     FF::JetEngine      _ffJetEngine;
     FF::CopterEngine   _ffCopterEngine;
@@ -405,7 +405,7 @@ public:
     FF::BombFire       _ffBombFire;
     FF::Collision      _ffCollide;
     FF::Shake          _ffShake;
-    
+
     struct TClickCheck
     {
         void CheckClick(TClickBoxInf *arg);
@@ -415,7 +415,7 @@ public:
         std::list<ClickBox *> CBoxList;
         ClickBox *SelectedCbox = NULL;
         int32_t SelectedButton = -1;
-        
+
     } ClickCheck;
 };
 

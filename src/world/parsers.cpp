@@ -547,7 +547,7 @@ bool FxParser::ParseExtSampleDef(ScriptParser::Parser &parser, TVhclSound *sndfx
 
     sndfx->extS.emplace_back();
     sndfx->ExtSamples.emplace_back();
-    
+
     sndfx->ExtSamples.back().Name = pname;
 
     TSampleParams &sndEx = sndfx->extS.back();
@@ -557,7 +557,7 @@ bool FxParser::ParseExtSampleDef(ScriptParser::Parser &parser, TVhclSound *sndfx
     sndEx.SampleRate = parser.stol(pp3, NULL, 0);
     sndEx.Offset = parser.stol(pp4, NULL, 0);
     sndEx.SampleCnt = parser.stol(pp5, NULL, 0);
-    
+
     return true;
 }
 
@@ -1120,9 +1120,9 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
 {
     TRoboProto *robo = _vhcl->RoboProto;
     int damagedFxSlot = -1;
-    
+
     if (!robo)
-        robo = &_roboTmp;    
+        robo = &_roboTmp;
 
     auto getUnitGun = [this]() -> TRoboGun *
     {
@@ -1154,7 +1154,7 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
         {
             if (!_vhcl->RoboProto)
                 _vhcl->RoboProto = new TRoboProto(_roboTmp);
-            
+
             _vhcl->initParams.Add(NC_STACK_yparobo::ROBO_ATT_PROTO, _vhcl->RoboProto);
         }
 
@@ -1301,6 +1301,10 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     {
         _vhcl->radius = parser.stof(p2, 0);
         _vhcl->radius_defined = true;
+    }
+    else if ( !StriCmp(p1, "auto_collision") )
+    {
+        _vhcl->auto_collision = parser.stol(p2, NULL, 0) != 0;
     }
     else if ( !StriCmp(p1, "overeof") )
     {
@@ -1749,7 +1753,7 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
             dfx.Pos.x = parser.stof(pp2, 0);
             dfx.Pos.y = parser.stof(pp3, 0);
             dfx.Pos.z = parser.stof(pp4, 0);
-            
+
             std::string pp5;
             if ( stok.GetNext(&pp5) )
             {
@@ -1772,9 +1776,9 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
         if ( stok.GetNext(&fx_type) && stok.GetNext(&pp1) && stok.GetNext(&pp2) && stok.GetNext(&pp3) && stok.GetNext(&pp4) )
         {
             _vhcl->ExtDestroyFX.emplace_back();
-            
+
             DestFX &dfx = _vhcl->ExtDestroyFX.back();
-            
+
             dfx.Type = DestFX::ParseTypeName(fx_type);
 
             if (dfx.Type == DestFX::FX_NONE)
@@ -1784,7 +1788,7 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
             dfx.Pos.x = parser.stof(pp2, 0);
             dfx.Pos.y = parser.stof(pp3, 0);
             dfx.Pos.z = parser.stof(pp4, 0);
-            
+
             std::string pp5;
             if ( stok.GetNext(&pp5) )
             {
@@ -1872,11 +1876,6 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     {
         _vhcl->mgun_angle = parser.stof(p2, 0);
         _vhcl->mgun_angle_set = true;
-    }
-    else if ( !StriCmp(p1, "mgun_ai_range") )
-    {
-        float range = parser.stof(p2, 0);
-        _vhcl->mgun_ai_range = range > 0.0 ? range : 1000.0;
     }
     else if ( !StriCmp(p1, "mgun_ai_fire_alignment") )
     {
@@ -2080,7 +2079,7 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     {
         if ( _vhcl->wireframe )
             _vhcl->wireframe->Delete();
-        
+
         _vhcl->wireframe = Nucleus::CInit<NC_STACK_sklt>( {{NC_STACK_rsrc::RSRC_ATT_NAME, std::string(p2)}} );
     }
     else if ( !StriCmp(p1, "hud_wireframe") )
@@ -2418,7 +2417,7 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     }
     else if ( !StriCmp(p1, "robo_coll_act") )
     {
-        _collID = parser.stol(p2, NULL, 0);         
+        _collID = parser.stol(p2, NULL, 0);
     }
     else if ( !StriCmp(p1, "robo_coll_radius") )
     {
@@ -2518,9 +2517,9 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _collID = -1;
         _vhclID = parser.stol(opt, NULL, 0);
         _vhcl = &_o._vhclProtos.at(_vhclID);
-        
+
         *_vhcl = TVhclProto();
-        
+
         _vhcl->Index = _vhclID;
 
         _vhcl->model_id = BACT_TYPES_TANK;
@@ -2541,7 +2540,6 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->mgun_angle = 0.0;
         _vhcl->mgun_power_set = false;
         _vhcl->mgun_angle_set = false;
-        _vhcl->mgun_ai_range = 1000.0;
         _vhcl->mgun_ai_fire_alignment = 0.85;
         _vhcl->mgun_damage_sectors = false;
         _vhcl->weapon_spread_x = 0.0;
@@ -2630,6 +2628,7 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->height = 150.0;
         _vhcl->radius = 25.0;
         _vhcl->radius_defined = false;
+        _vhcl->auto_collision = false;
         _vhcl->overeof = 25.0;
         _vhcl->vwr_radius = 30.0;
         _vhcl->vwr_overeof = 30.0;
@@ -2681,9 +2680,9 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _collID = -1;
         _vhclID = parser.stol(opt, NULL, 0);
         _vhcl = &_o._vhclProtos.at(_vhclID);
-        
+
         _vhcl->Index = _vhclID;
-        
+
         _o._upgradeVehicleId = _vhclID;
         return true;
     }
@@ -2711,7 +2710,7 @@ bool WeaponProtoParser::IsScope(ScriptParser::Parser &parser, const std::string 
         _wpn = &_o._weaponProtos[wpnId];
 
         *_wpn = TWeapProto();
-        
+
         _wpn->unitID = 4;
         _wpn->name.clear();
         _wpn->energy = 10000;
@@ -2720,9 +2719,7 @@ bool WeaponProtoParser::IsScope(ScriptParser::Parser &parser, const std::string 
         _wpn->aoe_sector_energy = 0;
         _wpn->aoe_falloff = 0;
         _wpn->aoe_unit_push = 0;
-        _wpn->aoe_unit_push_at_death = 0;
         _wpn->push = 0;
-        _wpn->push_at_death = 0;
         _wpn->armor_penetration_targets = 0;
         _wpn->recoil = 0.0;
         _wpn->mass = 50.0;
@@ -2731,6 +2728,7 @@ bool WeaponProtoParser::IsScope(ScriptParser::Parser &parser, const std::string 
         _wpn->maxrot = 2.0;
         _wpn->radius = 20.0;
         _wpn->radius_defined = false;
+        _wpn->auto_collision = false;
         _wpn->coll = rbcolls();
         _wpn->aoe_unit_radius = 0.0;
         _wpn->aoe_building_radius = 0.0;
@@ -2891,17 +2889,9 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     {
         _wpn->aoe_unit_push = parser.stol(p2, NULL, 0);
     }
-    else if ( !StriCmp(p1, "aoe_unit_push_at_death") )
-    {
-        _wpn->aoe_unit_push_at_death = std::max(parser.stol(p2, NULL, 0), 0L);
-    }
     else if ( !StriCmp(p1, "push") )
     {
         _wpn->push = parser.stol(p2, NULL, 0);
-    }
-    else if ( !StriCmp(p1, "push_at_death") )
-    {
-        _wpn->push_at_death = std::max(parser.stol(p2, NULL, 0), 0L);
     }
     else if ( !StriCmp(p1, "armor_penetration_targets") )
     {
@@ -3062,6 +3052,10 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     {
         _wpn->radius = parser.stof(p2, 0);
         _wpn->radius_defined = true;
+    }
+    else if ( !StriCmp(p1, "auto_collision") )
+    {
+        _wpn->auto_collision = parser.stol(p2, NULL, 0) != 0;
     }
     else if ( !StriCmp(p1, "aoe_unit_radius") )
     {
@@ -3413,7 +3407,7 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
             dfx.Pos.x = parser.stof(pp2, 0);
             dfx.Pos.y = parser.stof(pp3, 0);
             dfx.Pos.z = parser.stof(pp4, 0);
-            
+
             std::string pp5;
             if ( stok.GetNext(&pp5) )
             {
@@ -3434,9 +3428,9 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
         if ( stok.GetNext(&fx_type) && stok.GetNext(&pp1) && stok.GetNext(&pp2) && stok.GetNext(&pp3) && stok.GetNext(&pp4) )
         {
             _wpn->ExtDestroyFX.emplace_back();
-            
+
             DestFX &dfx = _wpn->ExtDestroyFX.back();
-            
+
             dfx.Type = DestFX::ParseTypeName(fx_type);
 
             if (dfx.Type == DestFX::FX_NONE)
@@ -3446,7 +3440,7 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
             dfx.Pos.x = parser.stof(pp2, 0);
             dfx.Pos.y = parser.stof(pp3, 0);
             dfx.Pos.z = parser.stof(pp4, 0);
-            
+
             std::string pp5;
             if ( stok.GetNext(&pp5) )
             {
@@ -4060,8 +4054,8 @@ int MiscParser::Handle(ScriptParser::Parser &parser, const std::string &p1, cons
     }
     else if ( !StriCmp(p1, "shell_default_res") )
     {
-    	Stok stok(p2, "_ \t");
-    	std::string pp1, pp2;
+		Stok stok(p2, "_ \t");
+		std::string pp1, pp2;
         if ( stok.GetNext(&pp1) && stok.GetNext(&pp2) )
         {
             _o._shellDefaultRes = Common::Point(parser.stol(pp1, NULL, 0), parser.stol(pp2, NULL, 0));
@@ -4070,7 +4064,7 @@ int MiscParser::Handle(ScriptParser::Parser &parser, const std::string &p1, cons
     }
     else if ( !StriCmp(p1, "game_default_res") )
     {
-    	Stok stok(p2, "_ \t");
+		Stok stok(p2, "_ \t");
         std::string pp1, pp2;
         if ( stok.GetNext(&pp1) && stok.GetNext(&pp2) )
         {
@@ -4113,12 +4107,6 @@ int MiscParser::Handle(ScriptParser::Parser &parser, const std::string &p1, cons
     else if ( !StriCmp(p1, "hidden_fractions") )
     {
         _o._worldHiddenFractions = parser.stol(p2, NULL, 0);
-    }
-    else if ( !StriCmp(p1, "fix_weapon_radius") )
-    {
-        // Legacy/deprecated: parsed for INI compatibility; gameplay no longer uses
-        // class-specific weapon radii.
-        _o._fixWeaponRadius = StrGetBool(p2);
     }
     else
         return ScriptParser::RESULT_UNKNOWN;
@@ -4724,7 +4712,7 @@ int LevelSquadParser::Handle(ScriptParser::Parser &parser, const std::string &p1
             ypa_log_out("Squad init: squad[%d] no pos given!\n", _m.Squads.size() - 1);
             return ScriptParser::RESULT_BAD_DATA;
         }
-        
+
         return ScriptParser::RESULT_SCOPE_END;
     }
 
@@ -4878,7 +4866,7 @@ bool LevelMbMapParser::IsScope(ScriptParser::Parser &parser, const std::string &
 {
     if ( StriCmp(word, "begin_mbmap") )
         return false;
-    
+
     _m.Mbmaps.emplace_back();
     _d = &_m.Mbmaps.back();
     return true;
@@ -5136,7 +5124,7 @@ bool LevelSuperItemsParser::IsScope(ScriptParser::Parser &parser, const std::str
         return false;
 
     _o._levelInfo.SuperItems.emplace_back();
-    
+
     _s = &_o._levelInfo.SuperItems.back();
     _s->Type = 0;
     _s->TimerValue = 60000; //1hour
@@ -5253,10 +5241,10 @@ Common::PlaneBytes MapAsPlaneBytes::ReadMapAsPlaneBytes(ScriptParser::Parser &pa
     int w = parser.stol(tmp, NULL, 0);
     stok.GetNext(&tmp);
     int h = parser.stol(tmp, NULL, 0);
-    
+
     if (w <= 0 || h <= 0)
         return Common::PlaneBytes();
-    
+
     Common::PlaneBytes bmp(w, h);
 
     for (int j = 0; j < h; j++)
@@ -5350,7 +5338,7 @@ int VideoParser::Handle(ScriptParser::Parser &parser, const std::string &p1, con
             _o._GameShell->GFXFlags |= World::GFX_FLAG_16BITTEXTURE;
         else
             _o._GameShell->GFXFlags &= ~World::GFX_FLAG_16BITTEXTURE;
-        
+
         return ScriptParser::RESULT_SCOPE_END;
     }
 
@@ -5470,13 +5458,13 @@ int VideoParser::Handle(ScriptParser::Parser &parser, const std::string &p1, con
     {
         Stok stok(p2, " _");
         std::string resW, resH, resWin;
-        
+
         if ( stok.GetNext(&resW) && stok.GetNext(&resH) && stok.GetNext(&resWin))
         {
             int w = parser.stoi(resW);
             int h = parser.stoi(resH);
             int win = parser.stoi(resWin);
-            
+
             const std::vector<GFX::GfxMode> &pModes = GFX::GFXEngine::Instance.GetAvailableModes();
             for (size_t i = 0; i < pModes.size(); ++i)
             {
@@ -5590,8 +5578,8 @@ int LevelStatusParser::Handle(ScriptParser::Parser &parser, const std::string &p
     return ScriptParser::RESULT_OK;
 }
 
-bool BuddyParser::IsScope(ScriptParser::Parser &parser, const std::string &word, const std::string &opt) 
-{ 
+bool BuddyParser::IsScope(ScriptParser::Parser &parser, const std::string &word, const std::string &opt)
+{
     if (!StriCmp(word, "begin_buddy"))
     {
         _o._levelInfo.Buddies.emplace_back();

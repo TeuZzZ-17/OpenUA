@@ -16,7 +16,7 @@ public:
     virtual size_t SetPosition(bact_arg80 *arg);
     virtual void Renew();
 
-    NC_STACK_ypaufo() 
+    NC_STACK_ypaufo()
     {
         _ufoTogo        = 0.0;
         _ufoTogoRisidue = 0.0;
@@ -25,7 +25,7 @@ public:
         _ufoFlags       = 0;
     };
     virtual ~NC_STACK_ypaufo() {};
-    
+
     virtual const std::string ClassName() const {
         return __ClassName;
     };
@@ -43,7 +43,7 @@ public:
     //Data
     static constexpr const char * __ClassName = "ypaufo.class";
 
-    
+
     float _ufoTogo        = 0.0;
     float _ufoTogoRisidue = 0.0;
     float _ufoBoost       = 0.0;

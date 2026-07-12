@@ -8,14 +8,14 @@
 
 namespace Utils
 {
-    
+
 NC_STACK_bitmap *ProxyLoadImage(IDVList &stak)
 {
     std::string name = stak.Get<std::string>(NC_STACK_rsrc::RSRC_ATT_NAME, "");
     size_t pos = name.rfind('.');
     if (pos != std::string::npos)
         name = name.substr(pos + 1);
-    
+
     if ( !StriCmp(name, "jpg") ||
          !StriCmp(name, "png") ||
          !StriCmp(name, "tiff") ||
@@ -42,12 +42,12 @@ NC_STACK_base *ProxyLoadBase(const std::string &fname)
     size_t pos = name.rfind('.');
     if (pos != std::string::npos)
         name = name.substr(pos + 1);
-    
+
     if ( !StriCmp(name, "3ds") )
         return NC_STACK_3ds::Load3DS(fname);
     else if ( !StriCmp(name, "obj") )
         return NC_STACK_Obj3D::LoadObj3D(fname);
-    
+
     return NC_STACK_base::LoadBaseFromFile(fname);
 }
 

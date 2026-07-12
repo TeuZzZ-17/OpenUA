@@ -2,7 +2,7 @@
 #include <stdexcept>
 
 namespace GFX
-{   
+{
 PFNGLGENFRAMEBUFFERSPROC Glext::GLGenFramebuffers = NULL;
 PFNGLBINDFRAMEBUFFERPROC Glext::GLBindFramebuffer = NULL;
 PFNGLGENRENDERBUFFERSPROC Glext::GLGenRenderbuffers = NULL;
@@ -72,8 +72,8 @@ template<typename T>
 inline void SetGLFunc(T &pFunc, const char *name)
 {
     pFunc = (T)SDL_GL_GetProcAddress(name);
-    
-    if (!pFunc) 
+
+    if (!pFunc)
         throw std::runtime_error(std::string("Can't get GL extension address for ") + std::string(name));
 }
 
@@ -83,10 +83,10 @@ bool Glext::init()
     int major = 0, minor = 0;
     SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, &major);
     SDL_GL_GetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, &minor);
-    
+
     if (major < 2)
         return false;
-    
+
     try {
     SetGLFunc(GLGenFramebuffers, "glGenFramebuffers");
     SetGLFunc(GLBindFramebuffer, "glBindFramebuffer");
@@ -117,24 +117,24 @@ bool Glext::init()
     SetGLFunc(GLUniform3i, "glUniform3i");
     SetGLFunc(GLUniform4f, "glUniform4f");
     SetGLFunc(GLUniform4i, "glUniform4i");
-    
+
     SetGLFunc(GLUniformMatrix2fv, "glUniformMatrix2fv");
     SetGLFunc(GLUniformMatrix3fv, "glUniformMatrix3fv");
     SetGLFunc(GLUniformMatrix4fv, "glUniformMatrix4fv");
-    
+
     SetGLFunc(GLGetAttribLocation, "glGetAttribLocation");
     SetGLFunc(GLVertexAttribPointer, "glVertexAttribPointer");
     SetGLFunc(GLDisableVertexAttribArray, "glDisableVertexAttribArray");
     SetGLFunc(GLEnableVertexAttribArray, "glEnableVertexAttribArray");
-    
+
     SetGLFunc(GLBindVertexArray, "glBindVertexArray");
     SetGLFunc(GLDeleteVertexArrays, "glDeleteVertexArrays");
     SetGLFunc(GLGenVertexArrays, "glGenVertexArrays");
 
     SetGLFunc(GLGetShaderiv, "glGetShaderiv");
     SetGLFunc(GLGetShaderInfoLog, "glGetShaderInfoLog");
-    
-    
+
+
     SetGLFunc(GLBindBuffer, "glBindBuffer");
     SetGLFunc(GLDeleteBuffers, "glDeleteBuffers");
     SetGLFunc(GLGenBuffers, "glGenBuffers");
@@ -147,7 +147,7 @@ bool Glext::init()
     SetGLFunc(GLUnmapBuffer, "glUnmapBuffer");
     SetGLFunc(GLGetBufferParameteriv, "glGetBufferParameteriv");
     SetGLFunc(GLGetBufferPointerv, "glGetBufferPointerv");
-    
+
     SetGLFunc(GLGetUniformBlockIndex, "glGetUniformBlockIndex");
     SetGLFunc(GLUniformBlockBinding, "glUniformBlockBinding");
     SetGLFunc(GLBindBufferBase, "glBindBufferBase");
@@ -158,7 +158,7 @@ bool Glext::init()
     {
         return false;
     }
-    
+
     return true;
 }
 

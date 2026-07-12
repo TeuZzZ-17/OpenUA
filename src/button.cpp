@@ -110,7 +110,7 @@ void NC_STACK_button::UpdateSlider(button_str2 *sbt)
 
     CmdStream captionbuf;
     captionbuf.reserve(512);
-    
+
     if ( sbttt->field_6_ > 0 )
     {
         if ( sbt->flags & FLAG_BORDER )
@@ -154,7 +154,7 @@ void NC_STACK_button::UpdateSlider(button_str2 *sbt)
         FontUA::store_u8(&captionbuf, field_1A0);
     }
     FontUA::set_end(&captionbuf);
-    
+
     sbt->caption.assign(captionbuf.begin(), captionbuf.end());
 }
 
@@ -729,7 +729,7 @@ size_t NC_STACK_button::Draw()
     static CmdStream button_tmpbuf;
     button_tmpbuf.reserve(5008);
     button_tmpbuf.clear();
-    
+
     if ( visible )
     {
         for (WidgetArr::iterator it = field_d8.begin(); it != field_d8.end(); it++)

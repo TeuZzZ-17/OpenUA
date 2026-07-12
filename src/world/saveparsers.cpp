@@ -622,7 +622,7 @@ bool SaveBuildingMapParser::IsScope(ScriptParser::Parser &parser, const std::str
         return false;
 
     _o._lvlBuildingsMap = ReadMapAsPlaneBytes(parser);
-    
+
     if ( _o._lvlBuildingsMap.IsNotNull() )
     {
         for (int y = 0; y < _o._mapSize.y; y++)
@@ -631,7 +631,7 @@ bool SaveBuildingMapParser::IsScope(ScriptParser::Parser &parser, const std::str
             {
                 cellArea &cell = _o._cells(x, y);
                 int blg = _o._lvlBuildingsMap(x, y);
-                
+
                 if (blg > 0 && cell.owner != 0)
                 {
                     ypaworld_arg148 arg148;
@@ -729,7 +729,7 @@ int SaveHistoryParser::Handle(ScriptParser::Parser &parser, const std::string &p
                 k++;
             }
         }
-        
+
         History::Instance decoders;
 
         k = 0;
@@ -737,7 +737,7 @@ int SaveHistoryParser::Handle(ScriptParser::Parser &parser, const std::string &p
         {
             size_t sz = decoders[ hh.at(k) ]->dataSize + 1;
             _o._history.Write(&hh.at(k), sz);
-            k += sz;            
+            k += sz;
         }
     }
     else
@@ -841,13 +841,13 @@ bool SaveLuaScriptParser::IsScope(ScriptParser::Parser &parser, const std::strin
         {
             if (_o._script)
                 _o._script->RunBuffer(script);
-                
+
             break;
         }
-        
+
         script += buf;
     }
-    
+
     return true;
 }
 

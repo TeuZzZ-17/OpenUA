@@ -29,23 +29,23 @@ void Root::AddWidget(Widget *w, bool top)
 
     w->Unparent();
     w->_rooted = LAYER_NORMAL;
-    
+
     if (w->_modal)
     {
         top = true;
         _modals.push_front(w);
-    }    
-    
+    }
+
     if (top)
         _normal.push_front(w);
     else
         _normal.push_back(w);
-    
+
     w->OnAttachDetach(true);
-    
+
     if (w->IsEnabled() && w->_fOnHideShow) // If it's already enabled do call hide/show
         w->_fOnHideShow(w, w->_fOnHideShowData, true);
-        
+
 }
 
 WidgetList& Root::GetLayerList(int l)
@@ -66,9 +66,9 @@ void Root::RemoveWidget(Widget *w)
 {
     if (!w->IsRooted())
         return;
-    
+
     _modals.remove(w);
-    
+
     GetLayerList(w->_rooted).remove(w);
 
     if (_miceOn == w)
@@ -81,9 +81,9 @@ void Root::RemoveWidget(Widget *w)
         _dragging = NULL;
 
     w->_rooted = LAYER_UNK;
-    
+
     w->OnAttachDetach(false);
-    
+
     if (w->IsEnabled() && w->_fOnHideShow) // If enabled do call hide/show
         w->_fOnHideShow(w, w->_fOnHideShowData, false);
 }
@@ -101,18 +101,18 @@ void Root::Draw(SDL_Surface *screen)
         for(Widget *w : _normal)
             HwPrepareWidget(w);
     }
-    
+
     /*if (_miceOn)
     {
         Common::Rect rct = _miceOn->GetScreenVisibleRect();
-        
+
         SDL_Surface *srf = SDL_CreateRGBSurfaceWithFormat(0, rct.Width(), rct.Height(), screen->format->BitsPerPixel, screen->format->format);
         SDL_FillRect(srf, NULL, SDL_MapRGBA(srf->format, 255, 0, 255, 128) );
-        
+
         SDL_Rect pz = rct;
-        
+
         SDL_BlitSurface(srf, NULL, screen, &pz);
-        
+
         SDL_FreeSurface(srf);
     }*/
 }
@@ -126,12 +126,12 @@ void Root::ModAlpha(SDL_Surface *surf, Common::Rect space, uint8_t alpha)
         //uint32_t aloss = surf->format->Aloss;
         uint32_t amask = surf->format->Amask;
         uint32_t anmask = ~amask;
-        
+
         if (space.IsEmpty())
             space = Common::Rect(surf->w, surf->h);
-        
+
         space.ClipBy(surf->w, surf->h);
-        
+
         if (!space.IsEmpty())
         {
             if ( SDL_LockSurface(surf) == 0 )
@@ -139,7 +139,7 @@ void Root::ModAlpha(SDL_Surface *surf, Common::Rect space, uint8_t alpha)
                 for (int y = space.top; y < space.bottom; y++)
                 {
                     uint32_t *pixels = (uint32_t *)((uint8_t *)surf->pixels + y * surf->pitch + space.left * bpp);
-                    
+
                     for (int x = space.left; x < space.right; x++)
                     {
                         uint32_t clr = *pixels;
@@ -149,7 +149,7 @@ void Root::ModAlpha(SDL_Surface *surf, Common::Rect space, uint8_t alpha)
                         ++pixels;
                     }
                 }
-                
+
                 SDL_UnlockSurface(surf);
             }
         }
@@ -190,7 +190,7 @@ void Root::DrawWidget(SDL_Surface *screen, Common::Rect space, Common::Point par
             Common::Rect dirtRect = widgetSpace;
             dirtRect.Translate(-parentOffset);
             dirtRect.Translate(-w->GetPos());
-            
+
             if (drawWidget)
                 w->Draw(_dirtSurface, dirtRect);
 
@@ -210,7 +210,7 @@ void Root::DrawWidget(SDL_Surface *screen, Common::Rect space, Common::Point par
             {
                 if (effA != 255)
                     ModAlpha(_dirtSurface, srcRect, effA);
-                
+
                 SDL_BlitSurface(_dirtSurface, &srcRect, screen, &dstRect);
             }
 
@@ -244,7 +244,7 @@ void Root::HwPrepareWidget(Widget *w)
     if (w && w->IsEnabled() && w->_alpha != 0 && !w->_rect.IsEmpty())
     {
         bool drawWidget = (w->_flags & Widget::FLAG_NODRAW) == 0;
-        
+
         if ( drawWidget || !w->_childs.empty() )
         {
             if (!w->_hwSurface || w->_hwSurface->w != w->_rect.Width() || w->_hwSurface->h != w->_rect.Height())
@@ -287,7 +287,7 @@ void Root::HwPrepareWidget(Widget *w)
 bool Root::MouseDown(Common::Point pos, int button, int clkNum)
 {
     ValidateWidgets();
-        
+
     _micePos = pos;
 
     int btn = 0;
@@ -298,14 +298,14 @@ bool Root::MouseDown(Common::Point pos, int button, int clkNum)
     case SDL_BUTTON_MIDDLE  : btn = MICE_MIDDLE;  break;
     default: return false;
     }
-    
+
     bool firstBtn = _buttons == 0;
     _buttons |= btn;
 
     if (_dragging)
         return true;
     else
-    {       
+    {
         if (firstBtn)
             UpdateWidgetOnMice( FindByMouse(pos) );
 
@@ -317,7 +317,7 @@ bool Root::MouseDown(Common::Point pos, int button, int clkNum)
                     RootWidgetToFront(_miceOn);
                 ChangeFocus(_miceOn);
             }
-            
+
             _miceOn->MouseDown(_miceOn->ScreenCoordToWidget(pos), pos, btn);
             return true;
         }
@@ -328,7 +328,7 @@ bool Root::MouseDown(Common::Point pos, int button, int clkNum)
 bool Root::MouseUp(Common::Point pos, int button, int clkNum)
 {
     ValidateWidgets();
-    
+
     _micePos = pos;
 
     int btn = 0;
@@ -341,15 +341,15 @@ bool Root::MouseUp(Common::Point pos, int button, int clkNum)
     }
 
     _buttons &= ~btn;
-    
+
     if (_dragging)
     {
         if (!_buttons)
         {
             _dragging->MoveTo(pos - _dragPos);
             _dragging = NULL;
-            
-            
+
+
             UpdateWidgetOnMice( FindByMouse(pos) );
         }
         return true;
@@ -366,7 +366,7 @@ bool Root::MouseUp(Common::Point pos, int button, int clkNum)
             }
 
             _miceOn->MouseUp(_miceOn->ScreenCoordToWidget(pos), pos, btn);
-            
+
             if (!_buttons)
                 UpdateWidgetOnMice( FindByMouse(pos) );
 
@@ -379,7 +379,7 @@ bool Root::MouseUp(Common::Point pos, int button, int clkNum)
 bool Root::MouseMove(Common::Point pos, Common::Point relMove)
 {
     ValidateWidgets();
-    
+
     _micePos = pos;
 
     if (_dragging)
@@ -430,7 +430,7 @@ Widget *Root::_FindByMouse(WidgetList& lst, const Common::Point& pos)
         if (w->IsEnabled() && w->GetScreenVisibleRect().IsIn(pos))
         {
             Widget *ret = w->FindByMouse(pos);
-            
+
             if (ret)
                 return ret;
         }
@@ -439,7 +439,7 @@ Widget *Root::_FindByMouse(WidgetList& lst, const Common::Point& pos)
 }
 
 Widget *Root::FindByPos(const Common::Point &pos)
-{           
+{
     Widget *w = _FindByPos(_foreground, pos);
     if (w)
         return w;
@@ -465,7 +465,7 @@ Widget *Root::FindByMouse(const Common::Point& pos)
             }
         }
     }
-            
+
     Widget *w = _FindByMouse(_foreground, pos);
     if (w)
         return w;
@@ -532,13 +532,13 @@ void Root::StartDragging(Widget *w)
 void Root::SetScreenSize(Common::Point sz)
 {
     _screenSize = sz;
-    
+
     for(Widget *& w : _foreground)
         w->OnParentResize(sz);
-    
+
     for(Widget *& w : _normal)
         w->OnParentResize(sz);
-    
+
     for(Widget *& w : _background)
         w->OnParentResize(sz);
 }
@@ -563,10 +563,10 @@ void Root::ValidateWidgets()
 {
     if (_dragging && !CheckEnable(_dragging))
         _dragging = NULL;
-    
+
     if (_miceOn && !CheckEnable(_miceOn))
         _miceOn = NULL;
-    
+
     if (_focused && !CheckEnable(_focused))
         ChangeFocus(NULL);
 }
@@ -576,12 +576,12 @@ void Root::UpdateWidgetOnMice(Widget *w)
 {
     if ( _miceOn == w )
         return;
-    
+
     if (_miceOn)
         _miceOn->MouseLeave();
-    
+
     _miceOn = w;
-    
+
     if (w)
         w->MouseEnter();
 }
@@ -593,12 +593,12 @@ uint32_t Root::TimerAdd(uint32_t wID, uint32_t time, uint32_t code)
         _timersNew.push_back( Timer(_nextTimerID, _timeStamp + time, wID, code) );
     else
         _timers.push_back( Timer(_nextTimerID, _timeStamp + time, wID, code) );
-    
+
     auto tmID = _nextTimerID;
     _nextTimerID = (_nextTimerID + 2) & ~(1 << ((sizeof(_nextTimerID) << 3) - 1));
     return tmID;
 }
-    
+
 int32_t Root::_TimerGet(std::list<Timer> &list, uint32_t id)
 {
     for ( const Timer &t : list)
@@ -606,7 +606,7 @@ int32_t Root::_TimerGet(std::list<Timer> &list, uint32_t id)
         if (t.ID == id)
             return t.EndTime;
     }
-    
+
     return -1;
 }
 
@@ -615,25 +615,25 @@ int32_t Root::TimerGet(uint32_t id)
     int32_t t = _TimerGet(_timers, id);
     if (t != -1)
         return t - _timeStamp;
-    
+
     t = _TimerGet(_timersNew, id);
     if (t != -1)
         return t - _timeStamp;
-        
+
     return -1;
 }
-   
+
 bool Root::_TimerDelete(std::list<Timer> &list, uint32_t id)
 {
     for ( auto it = list.begin(); it != list.end(); it++ )
     {
         if (it->ID == id)
         {
-            list.erase( it );                
+            list.erase( it );
             return true;
         }
     }
-    
+
     return false;
 }
 
@@ -641,17 +641,17 @@ bool Root::TimerDelete(uint32_t id)
 {
     if (_TimerDelete(_timers, id))
         return true;
-    
+
     if (_TimerDelete(_timersNew, id))
         return true;
-    
+
     return false;
 }
 
 int Root::_TimerDeleteByWidget(std::list<Timer> &list, uint32_t wID, uint32_t code)
 {
     int c = 0;
-    
+
     for ( auto it = list.begin(); it != list.end(); )
     {
         if (it->WidgetID == wID && (code == Timer::CODE_ANY || it->Code == code))
@@ -675,7 +675,7 @@ int Root::TimerDeleteByWidget(uint32_t wID, uint32_t code)
 void Root::TimersUpdate(uint32_t dtime)
 {
     _timeStamp += dtime;
-    
+
     _timersToNew = true;
     for ( auto it = _timers.begin(); it != _timers.end(); )
     {
@@ -694,9 +694,9 @@ void Root::TimersUpdate(uint32_t dtime)
             it++;
     }
     _timersToNew = false;
-    
+
     for( auto it = _timersNew.begin(); it != _timersNew.end(); it = _timersNew.erase(it) )
-        _timers.push_back( *it );    
+        _timers.push_back( *it );
 }
 
 
@@ -704,15 +704,15 @@ SDL_Surface *Root::CreateScreenFmtSurface(uint32_t w, uint32_t h)
 {
     if (w == 0 || h == 0)
         return NULL;
-   
+
     SDL_PixelFormat *fmt = GFX::Engine.GetPixelFormat();
-    
+
 #if SDL_VERSION_ATLEAST(2,0,5)
     return SDL_CreateRGBSurfaceWithFormat(0, w, h, fmt->BitsPerPixel, fmt->format);
 #else
     return SDL_CreateRGBSurface(0, w, h, fmt->BitsPerPixel, fmt->Rmask, fmt->Gmask, fmt->Bmask, fmt->Amask );
 #endif
-    
+
 }
 
 void Root::HwCompose()
@@ -721,20 +721,20 @@ void Root::HwCompose()
     {
         GFX::Engine.SetProjectionMatrix( mat4x4f::Ortho(0, _screenSize.x, _screenSize.y, 0, -1, 1) );
         GFX::Engine.SetModelViewMatrix( mat4x4f() );
-        
+
         GFX::GfxStates &pStates = GFX::Engine.States();
-        
+
         GFX::GfxStates saved = pStates;
-        
+
         pStates.Zwrite = false;
         pStates.DepthTest = false;
         pStates.AlphaBlend = true;
         pStates.SrcBlend = GL_SRC_ALPHA;
         pStates.DstBlend = GL_ONE_MINUS_SRC_ALPHA;
         pStates.Prog = GFX::Engine.GetStdShaderProg();
-        
+
         GFX::Engine.SetRenderStates(0);
-        
+
         for(auto it = _normal.rbegin(); it != _normal.rend(); it++)
             HwRenderWidget(*it);
 
@@ -752,17 +752,17 @@ void Root::HwRenderWidget(Widget *w)
         SDL_LockSurface(w->_hwSurface);
         if (!w->_hwTex)
             w->_hwTex = new StreamTex();
-        
+
         w->_hwTex->Stream(Common::Point(w->_hwSurface->w, w->_hwSurface->h), GFX::Engine.GetGlPixFormat(), GFX::Engine.GetGlPixType(), w->_hwSurface->pixels);
         SDL_UnlockSurface(w->_hwSurface);
-        
+
         static std::array<GFX::TVertex, 4> vtx = {
             GFX::TVertex( vec3f(w->_rect.left,  w->_rect.top,    0.0), tUtV(0.0, 0.0), GFX::TGLColor(1.0, 1.0, 1.0, w->_alpha / 255.0) ),
             GFX::TVertex( vec3f(w->_rect.left,  w->_rect.bottom, 0.0), tUtV(0.0, 1.0), GFX::TGLColor(1.0, 1.0, 1.0, w->_alpha / 255.0) ),
             GFX::TVertex( vec3f(w->_rect.right, w->_rect.bottom, 0.0), tUtV(1.0, 1.0), GFX::TGLColor(1.0, 1.0, 1.0, w->_alpha / 255.0) ),
             GFX::TVertex( vec3f(w->_rect.right, w->_rect.top,    0.0), tUtV(1.0, 0.0), GFX::TGLColor(1.0, 1.0, 1.0, w->_alpha / 255.0) )
         };
-        
+
         GFX::Engine.DrawVtxQuad(vtx);
     }
 }
@@ -809,9 +809,9 @@ StreamTex::~StreamTex()
 void StreamTex::Stream(Common::Point sz, int32_t fmt, int32_t type, const void *data)
 {
     GFX::GfxStates &pStates = GFX::Engine.States();
-    
+
     pStates.TexBlend = 2;
-    
+
     if (sz != Size)
     {
         Size = sz;
@@ -821,18 +821,18 @@ void StreamTex::Stream(Common::Point sz, int32_t fmt, int32_t type, const void *
             {
                 pStates.Tex = t;
                 GFX::Engine.SetRenderStates(0);
-                
+
                 glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, Size.x, Size.y, 0, fmt, type, NULL);
             }
         }
     }
-    
+
     pStates.Tex = Texs[nextTex];
     pStates.LinearFilter = true;
     GFX::Engine.SetRenderStates(0);
-    
+
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, Size.x, Size.y, fmt, type, data);
-    
+
     nextTex = (nextTex + 1) % Texs.size();
 }
 

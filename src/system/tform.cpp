@@ -232,10 +232,10 @@ void TForm3D::CalcGlobal()
 int32_t TForm3D::IntAngle::ClampRawAngle(int32_t angle)
 {
     angle %= (360 << 16);
-    
+
     if (angle < 0)
         angle += (360 << 16);
-    
+
     return angle;
 }
 
@@ -244,13 +244,13 @@ TForm3D::IntAngle &TForm3D::IntAngle::operator=(int32_t angle)
     RawAngle = ClampRawAngle(angle << 16);
     return *this;
 }
-        
+
 TForm3D::IntAngle &TForm3D::IntAngle::operator+=(int32_t angle)
 {
     RawAngle = ClampRawAngle(RawAngle + (angle << 16));
     return *this;
 }
-        
+
 TForm3D::IntAngle::operator int32_t()
 {
     return (RawAngle) >> 16;

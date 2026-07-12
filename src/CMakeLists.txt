@@ -5,7 +5,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 set(CMAKE_CXX_STANDARD 14)
 
-set(SOURCES 
+set(SOURCES
 	3ds.cpp
 	ade.cpp
 	area.cpp
@@ -161,9 +161,9 @@ target_link_libraries(UA_source ${SDL2_LIBRARIES}
 							 FFmpeg::swresample)
 
 target_include_directories(UA_source PUBLIC
-										${PROJECT_SOURCE_DIR} 
-										${SDL2_INCLUDE_DIRS} 
-										${SDL2_IMAGE_INCLUDE_DIRS} 
+										${PROJECT_SOURCE_DIR}
+										${SDL2_INCLUDE_DIRS}
+										${SDL2_IMAGE_INCLUDE_DIRS}
 										${SDL2_TTF_INCLUDE_DIRS}
 										${SDL2_NET_INCLUDE_DIRS}
 										${OpenGL_INCLUDE_DIR}
@@ -173,7 +173,7 @@ target_include_directories(UA_source PUBLIC
 
 if(CMAKE_BUILD_TYPE MATCHES [dD][eE][bB][uU][gG])
    target_compile_options(UA_source PUBLIC "-g" "-O0")
-   
+
    if(NOT WIN32)
       target_compile_options(UA_source PUBLIC "-fsanitize=address")
       target_link_libraries(UA_source "-fsanitize=address")

@@ -37,10 +37,10 @@ public:
     void BroadcastData(void *data, uint32_t sz, uint8_t flags = 0, uint8_t channel = CHANNEL_USR);
 
     void ShowSession(bool show);
-    
+
     uint64_t GetMyID();
     std::string GetMyName();
-    
+
     uint64_t GetMySesID();
 
 protected:

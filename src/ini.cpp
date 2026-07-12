@@ -6,7 +6,7 @@
 
 namespace Common {
 namespace Ini {
-    
+
 Key::Key(const std::string &k, KEYTYPE t, nonstd::any v)
 : Name(k), Type(t), Value(v)
 {}
@@ -45,12 +45,12 @@ inline Key& Deref(Key *a)
 
 template <typename T>
 void ParseLine(std::string line, std::vector<T> *lst)
-{    
+{
     size_t endp = line.find_first_of(";\r\n");
-    
+
     if (endp != std::string::npos)
         line.erase(endp);
-    
+
     Stok splt(line, "= \t");
     std::string token;
 
@@ -87,7 +87,7 @@ void ParseLine(std::string line, std::vector<T> *lst)
                     if ( splt.GetNext(&tmp, "=") )
                         Deref(v).Value = std::string(tmp);
                     break;
-                    
+
                 default:
                     break;
                 }
@@ -109,9 +109,9 @@ bool ParseIniFile(std::string iniFile, KeyList *lst)
     std::string buf;
     while ( fil->ReadLine(&buf) )
         ParseLine(buf, lst);
-    
+
     delete fil;
-    
+
     for( const std::string &str : Env._predefinedIniKeys )
         ParseLine(str, lst);
 
@@ -131,9 +131,9 @@ bool ParseIniFile(std::string iniFile, PKeyList *lst)
     std::string buf;
     while ( fil->ReadLine(&buf) )
         ParseLine(buf, lst);
-    
+
     delete fil;
-    
+
     for( const std::string &str : Env._predefinedIniKeys )
         ParseLine<Key *>(str, lst);
 

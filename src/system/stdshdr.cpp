@@ -83,5 +83,5 @@ void main()\
     smoothColor = clr;\
     if (Textured) texCoords = vUV;\
 }";
- 
+
 }

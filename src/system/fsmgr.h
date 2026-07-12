@@ -25,7 +25,7 @@ class iNode
 public:
     iNode(const std::string &name, const std::string &path);
     virtual ~iNode() { Detach(); };
-    
+
     iDir *GetParent() const { return parent; }
 
     int getType();
@@ -34,7 +34,7 @@ public:
     std::string getVPath() const;
     std::string getName() const;
     //const std::string &getName();
-    
+
     bool Detach();
 
     enum NTYPE
@@ -75,11 +75,11 @@ public:
     void _dumpdir();
 
     void flush();
-    
+
     iDir *MakeDir(const std::string &name);
-    
+
     void Override(iDir *nod);
-    
+
     static iDir *GetRoot();
 
     static iNode *findNode(const std::string &path);
@@ -96,9 +96,9 @@ public:
     static FileHandle openFile(const std::string &path, const std::string &mode);
     static FileHandle openFile(iNode *nod, const std::string &mode);
     static bool deleteFile(const std::string &path);
-    
+
     bool Detach(iNode *node);
-    
+
     bool Detach(const std::string &name);
 
 
@@ -107,7 +107,7 @@ protected:
 
     static iDir *_scanDir(iDir *_node, const std::string &_name, const std::string &_path, iDir *_parent);
     static iNode *_createNodeFromPath(const std::string &diskPath);
-    
+
     iNode *_parseNodePath(const std::string &path, std::string *out);
 };
 
@@ -133,18 +133,18 @@ class iFileHandle
 {
 public:
     virtual ~iFileHandle() {};
-    
+
     virtual void close() = 0;
-    
+
     virtual size_t read(void *buf, size_t num) = 0;
     virtual size_t write(const void *buf, size_t num) = 0;
 
     virtual size_t tell() const = 0;
     virtual int seek(long int offset, int origin) = 0;
-    
+
     virtual bool OK() const = 0;
     virtual bool eof() const = 0;
-    
+
     virtual bool readErr();
 
     virtual uint8_t readU8();
@@ -172,7 +172,7 @@ public:
     virtual bool writeS32B(int32_t val);
     virtual bool writeFloatL(float val);
     virtual bool writeFloatB(float val);
-    
+
 protected:
     bool _ReadERR = false;
     bool _WriteERR = false;
@@ -186,12 +186,12 @@ public:
     FileHandle() = default;
     FileHandle(const std::string &diskPath, const std::string &mode);
     virtual ~FileHandle();
-    
+
     FileHandle(FileHandle &&b) = default;
     FileHandle& operator=(FileHandle &&b) = default;
-    
+
     FileHandle(FileHandle *b, bool del = true);
-    
+
     FileHandle(const FileHandle&) = delete;
     FileHandle& operator=(const FileHandle &) = delete;
 
@@ -200,9 +200,9 @@ public:
 
     virtual size_t tell() const override;
     virtual int seek(long int offset, int origin) override;
-    
+
     virtual void close() override;
-    
+
     virtual char *gets(char *str, int num);
     virtual int puts(const std::string &str);
     virtual int printf(const std::string &format, ...);
@@ -210,24 +210,24 @@ public:
     virtual bool ReadLine(std::string *out);
 
     virtual bool eof() const override;
-    
+
 
     virtual bool OK() const override;
 
     static void closeFile(FileHandle *fl) {
         if (fl) delete fl;
     };
-    
+
     bool IsWriting() const {
         return _writeMode;
     }
 
 protected:
     typedef std::unique_ptr<FILE, decltype(&fclose)> __FPtr;
-    
+
     __FPtr hndl = {nullptr, nullptr};
     bool _writeMode = false;
-    
+
 };
 
 void dumpDir();

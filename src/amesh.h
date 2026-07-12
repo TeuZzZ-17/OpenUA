@@ -18,7 +18,7 @@ public:
         uint8_t tracyVal = 0;
         uint8_t pad = 0;
     };
-    
+
 public:
     virtual size_t Init(IDVList &stak);
     virtual size_t LoadingFromIFF(IFFile **file);
@@ -26,7 +26,7 @@ public:
 
     NC_STACK_amesh() {};
     virtual ~NC_STACK_amesh() {};
-    
+
     virtual const std::string ClassName() const {
         return __ClassName;
     };
@@ -44,9 +44,9 @@ public:
     virtual int setAMESH_otls(std::vector< std::vector<tUtV> >*);
 
     virtual int getAMESH_numpoly();
-    
+
     virtual void GenMesh(std::list<GFX::TMesh> *meshList, NC_STACK_skeleton * skelet) override;
-    
+
     virtual GFX::TRenderParams GetRenderParams( size_t polyID = 0 ) override
     {
         printf("Amesh::GetRenderParams not supported\n!");
@@ -55,7 +55,7 @@ public:
 
     //Data
     static constexpr const char * __ClassName = "amesh.class";
-    
+
 public:
     int16_t polyCnt = 0;
     std::vector<ATTS> atts;       // ATTS heap

@@ -25,7 +25,7 @@ static float ypamissile_Clamp01(float value)
     return value;
 }
 
-static bool ypamissile_IsAliveForPushAtDeath(NC_STACK_ypabact *target)
+static bool ypamissile_IsAliveForDeathPush(NC_STACK_ypabact *target)
 {
     return target &&
            target->_bact_type != BACT_TYPES_MISSLE &&
@@ -33,6 +33,52 @@ static bool ypamissile_IsAliveForPushAtDeath(NC_STACK_ypabact *target)
            target->_status != BACT_STATUS_DEAD &&
            target->_energy > 0 &&
            !(target->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2));
+}
+
+static float ypamissile_GetPushAtDeathMultiplier()
+{
+    std::string value = System::IniConf::GamePushAtDeathMultiplier.Get<std::string>();
+    if ( value.empty() || value.find(',') != std::string::npos )
+        return 1.0f;
+
+    try
+    {
+        size_t pos = 0;
+        float multiplier = std::stof(value, &pos);
+        if ( value.find_first_not_of(" \t\r\n", pos) != std::string::npos ||
+             !isfinite(multiplier) || multiplier < 0.0f )
+            return 1.0f;
+
+        return multiplier;
+    }
+    catch (...)
+    {
+        return 1.0f;
+    }
+}
+
+static float ypamissile_GetTargetPushMultiplier(NC_STACK_ypaworld *world, NC_STACK_ypabact *target)
+{
+    if ( !world || !target )
+        return 1.0f;
+
+    const std::vector<World::TVhclProto> &protos = world->GetVhclProtos();
+    uint8_t protoId = target->_mimic_disguise_vehicleID ? target->_mimic_disguise_vehicleID : target->_vehicleID;
+
+    if ( protoId >= protos.size() )
+        return 1.0f;
+
+    return 1.0f - ypamissile_Clamp01(protos.at(protoId).push_resistance);
+}
+
+static bool ypamissile_TargetHasPushResistance(NC_STACK_ypaworld *world, NC_STACK_ypabact *target)
+{
+    if ( !world || !target )
+        return false;
+
+    const std::vector<World::TVhclProto> &protos = world->GetVhclProtos();
+    uint8_t protoId = target->_mimic_disguise_vehicleID ? target->_mimic_disguise_vehicleID : target->_vehicleID;
+    return protoId < protos.size() && protos.at(protoId).has_push_resistance;
 }
 
 static float ypamissile_SegmentSegmentDistanceSq(const vec3d &p1, const vec3d &q1, const vec3d &p2, const vec3d &q2)
@@ -108,34 +154,6 @@ static int ypamissile_ScaleAoeEnergy(int energy, float factor)
         return 0;
 
     return (int)((float)energy * factor);
-}
-
-static float ypamissile_GetTargetPushMultiplier(NC_STACK_ypaworld *world, NC_STACK_ypabact *target)
-{
-    if ( !world || !target )
-        return 1.0f;
-
-    const std::vector<World::TVhclProto> &protos = world->GetVhclProtos();
-    uint8_t protoId = target->_mimic_disguise_vehicleID ? target->_mimic_disguise_vehicleID : target->_vehicleID;
-
-    if ( protoId >= protos.size() )
-        return 1.0f;
-
-    return 1.0f - ypamissile_Clamp01(protos.at(protoId).push_resistance);
-}
-
-static bool ypamissile_TargetHasPushResistance(NC_STACK_ypaworld *world, NC_STACK_ypabact *target)
-{
-    if ( !world || !target )
-        return false;
-
-    const std::vector<World::TVhclProto> &protos = world->GetVhclProtos();
-    uint8_t protoId = target->_mimic_disguise_vehicleID ? target->_mimic_disguise_vehicleID : target->_vehicleID;
-
-    if ( protoId >= protos.size() )
-        return false;
-
-    return protos.at(protoId).has_push_resistance;
 }
 
 static bool ypamissile_NormalizeXZ(vec3d *dir)
@@ -268,8 +286,6 @@ size_t NC_STACK_ypamissile::Init(IDVList &stak)
     _mislDelayTime = 0;
     _mislType = MISL_BOMB;
     _mislAoeUnitPush = 0;
-    _mislAoeUnitPushAtDeath = 0;
-    _mislPushAtDeath = 0;
     _mislArmorPenetrationRemaining = 0;
     _mislArmorPenetratedGids.clear();
     _mislClusterAge = 0;
@@ -404,19 +420,11 @@ size_t NC_STACK_ypamissile::SetParameters(IDVList &stak)
                 break;
 
             case MISS_ATT_RAD_HELI:
-                SetRadiusHeli(val.Get<float>());
-                break;
-
             case MISS_ATT_RAD_TANK:
-                SetRadiusTank(val.Get<float>());
-                break;
-
             case MISS_ATT_RAD_FLYER:
-                SetRadiusFlyer(val.Get<float>());
-                break;
-
             case MISS_ATT_RAD_ROBO:
-                SetRadiusRobo(val.Get<float>());
+                // Legacy object tags remain accepted, but class-specific collision
+                // radii are obsolete and intentionally ignored.
                 break;
 
             case MISS_ATT_STHEIGHT:
@@ -935,7 +943,7 @@ bool NC_STACK_ypamissile::AutoCollisionSpheresHitBact(NC_STACK_ypabact *target) 
     if ( !_autoCollisionSpheres || _collNodes.roboColls.empty() || !target )
         return false;
 
-    float broadRadius = _radius + target->_radius;
+    float broadRadius = _radius + target->GetCollisionBroadRadius();
     float broadDistanceSq = ypamissile_SegmentSegmentDistanceSq(_old_pos, _position,
                                                                  target->_position, target->_position);
     if ( broadDistanceSq > broadRadius * broadRadius )
@@ -944,6 +952,7 @@ bool NC_STACK_ypamissile::AutoCollisionSpheresHitBact(NC_STACK_ypabact *target) 
     World::rbcolls *targetColls = target->getBACT_collNodes();
     mat3x3 missileRotT = _rotation.Transpose();
     mat3x3 targetRotT = target->_rotation.Transpose();
+    float hitPadding = getBACT_collPadding();
 
     for (const World::TRoboColl &missileSphere : _collNodes.roboColls)
     {
@@ -970,7 +979,7 @@ bool NC_STACK_ypamissile::AutoCollisionSpheresHitBact(NC_STACK_ypabact *target) 
                 targetRadius = targetSphere.robo_coll_radius;
             }
 
-            float radiusSum = missileSphere.robo_coll_radius + targetRadius;
+            float radiusSum = missileSphere.robo_coll_radius + hitPadding + targetRadius;
             float distanceSq = ypamissile_SegmentSegmentDistanceSq(start, end, targetCenter, targetCenter);
             if ( distanceSq <= radiusSum * radiusSum )
                 return true;
@@ -985,29 +994,49 @@ bool NC_STACK_ypamissile::AutoCollisionSpheresHitWorld(vec3d *impactPos, vec3d *
     if ( !_autoCollisionSpheres || _collNodes.roboColls.empty() || !_world )
         return false;
 
+    // During the first instants after launch, keep vanilla's centre-line world
+    // trace as the authority.  A full visual hull can already overlap the
+    // ground at a low tank muzzle even though the projectile's flight line is
+    // clear, which caused immediate blue impact bursts beside the shooter.
+    if ( _mislClusterAge < 120 )
+        return false;
+
     vec3d motion = _position - _old_pos;
     float distance = motion.length();
     if ( distance <= 0.001 )
         return false;
 
     vec3d direction = motion / distance;
-    float minRadius = std::numeric_limits<float>::max();
+    mat3x3 rotT = _rotation.Transpose();
+    float leadingExtent = -std::numeric_limits<float>::max();
+    float minProbeRadius = std::numeric_limits<float>::max();
+
     for (const World::TRoboColl &sphere : _collNodes.roboColls)
     {
-        if ( sphere.robo_coll_radius > 0.01 )
-            minRadius = std::min(minRadius, sphere.robo_coll_radius);
+        if ( sphere.robo_coll_radius <= 0.01f )
+            continue;
+
+        vec3d offset = rotT.Transform(sphere.coll_pos);
+        leadingExtent = std::max(leadingExtent,
+                                 (float)offset.dot(direction) + sphere.robo_coll_radius);
+
+        // World collision uses a compact core, not the complete visual hull.
+        // Unit/weapon collisions still use the full generated spheres.  This
+        // preserves reliable hits on targets while preventing fins, tails or
+        // the underside of a low-flying missile from grazing terrain early.
+        float probeRadius = std::max(2.0f, std::min(12.0f, sphere.robo_coll_radius * 0.35f));
+        minProbeRadius = std::min(minProbeRadius, probeRadius);
     }
 
-    if ( minRadius == std::numeric_limits<float>::max() )
+    if ( minProbeRadius == std::numeric_limits<float>::max() )
         return false;
 
-    int samples = (int)ceil(distance / std::max(3.0f, minRadius * 0.45f));
+    int samples = (int)ceil(distance / std::max(3.0f, minProbeRadius * 0.75f));
     if ( samples < 1 )
         samples = 1;
     if ( samples > 24 )
         samples = 24;
 
-    mat3x3 rotT = _rotation.Transpose();
     for (int sample = 1; sample <= samples; sample++)
     {
         vec3d samplePos = _old_pos + motion * ((float)sample / (float)samples);
@@ -1016,22 +1045,41 @@ bool NC_STACK_ypamissile::AutoCollisionSpheresHitWorld(vec3d *impactPos, vec3d *
             if ( sphere.robo_coll_radius <= 0.01 )
                 continue;
 
+            vec3d offset = rotT.Transform(sphere.coll_pos);
+            float sphereLeadingExtent = (float)offset.dot(direction) + sphere.robo_coll_radius;
+            float leadingBand = std::max(8.0f, sphere.robo_coll_radius * 0.6f);
+            if ( sphereLeadingExtent < leadingExtent - leadingBand )
+                continue;
+
+            float probeRadius = std::max(2.0f, std::min(12.0f, sphere.robo_coll_radius * 0.35f));
+
             yw_137col collisions[32];
             ypaworld_arg137 arg137;
-            arg137.pos = samplePos + rotT.Transform(sphere.coll_pos);
+            arg137.pos = samplePos + offset;
             arg137.pos2 = direction;
-            arg137.radius = sphere.robo_coll_radius;
+            arg137.radius = probeRadius;
             arg137.collisions = collisions;
             arg137.coll_max = 32;
             arg137.field_30 = 0;
 
             _world->ypaworld_func137(&arg137);
-            if ( arg137.coll_count > 0 )
+            for (int collisionIndex = 0; collisionIndex < arg137.coll_count; collisionIndex++)
             {
+                const vec3d &normal = collisions[collisionIndex].pos2;
+
+                // Floor, slope and roof contacts caused only by the compound
+                // hull are deliberately ignored here. The original centre-line
+                // ray below remains authoritative for those surfaces, so a
+                // missile still detonates when its actual flight path enters
+                // the terrain. This removes premature ground grazing without
+                // allowing the projectile to pass through walls or buildings.
+                if ( fabs(normal.y) > normal.XZ().length() * 0.75f )
+                    continue;
+
                 if ( impactPos )
-                    *impactPos = collisions[0].pos1;
+                    *impactPos = collisions[collisionIndex].pos1;
                 if ( impactNormal )
-                    *impactNormal = collisions[0].pos2;
+                    *impactNormal = normal;
                 return true;
             }
         }
@@ -1367,18 +1415,22 @@ void NC_STACK_ypamissile::ApplyDirectHitToBact(NC_STACK_ypabact *bct)
     bct->_status_flg &= ~BACT_STFLAG_LAND;
     RememberDirectHitUnit(bct);
 
-    bool wasAlive = ypamissile_IsAliveForPushAtDeath(bct);
+    bool wasAlive = ypamissile_IsAliveForDeathPush(bct);
     vec3d pushDir(0.0, 0.0, 0.0);
     float pushStrength = 0.0f;
     bool hasDirectPush = ApplyDirectPushToBact(bct, &pushDir, &pushStrength, false);
 
     int appliedDamage = ApplyDamageToBact(bct, _energy);
-    bool diedNow = IsNewDeath1ForPushAtDeath(bct, wasAlive);
+    if ( hasDirectPush )
+    {
+        bool diedNow = wasAlive &&
+                       !(bct->_status_flg & BACT_STFLAG_DEATH2) &&
+                       (bct->_status_flg & BACT_STFLAG_DEATH1);
+        if ( diedNow )
+            pushStrength *= ypamissile_GetPushAtDeathMultiplier();
 
-    if ( diedNow )
-        ApplyPushAtDeath(bct, pushDir);
-    else if ( hasDirectPush )
         bct->AddAoePush(pushDir, pushStrength);
+    }
 
     TrySpawnChainProjectile(bct, appliedDamage);
 }
@@ -1424,13 +1476,13 @@ bool NC_STACK_ypamissile::ApplyDirectPushToBact(NC_STACK_ypabact *bct, vec3d *ap
     if ( _mislEmitter && _mislEmitter->getBACT_inputting() )
         allowFriendly = true;
 
-    // Reuse the same safety filter as aoe_unit_push: no missiles, no Robo/Host
-    // Station push, no final death wrecks, no shielded robo guns/friendly fire
-    // unless the normal player/viewer path allows it.
+    // Reuse the same safety filter as aoe_unit_push: no missiles or final death
+    // wrecks, and no shielded robo guns/friendly fire unless the normal
+    // player/viewer path allows it. Host Stations remain valid push targets.
     if ( GetAreaPushSkipReason(bct, allowFriendly) )
         return false;
 
-    // Direct push uses the same robust direction as push_at_death: prefer the
+    // Direct push prefers the
     // launcher->target line, then projectile travel, then fall back to the old
     // impact-point radial direction. This avoids tiny collision-radius offsets
     // sending the unit in the wrong direction.
@@ -1453,71 +1505,6 @@ bool NC_STACK_ypamissile::ApplyDirectPushToBact(NC_STACK_ypabact *bct, vec3d *ap
         *appliedStrength = pushStrength;
 
     return true;
-}
-
-bool NC_STACK_ypamissile::IsNewDeath1ForPushAtDeath(NC_STACK_ypabact *bct, bool wasAlive) const
-{
-    return wasAlive &&
-           bct &&
-           bct->_bact_type != BACT_TYPES_MISSLE &&
-           bct->_bact_type != BACT_TYPES_GUN &&
-           !(bct->_status_flg & BACT_STFLAG_DEATH2) &&
-           (bct->_status_flg & BACT_STFLAG_DEATH1);
-}
-
-void NC_STACK_ypamissile::ApplyPushAtDeath(NC_STACK_ypabact *bct, const vec3d &fallbackDir)
-{
-    if ( _mislPushAtDeath <= 0 || !bct )
-        return;
-
-    if ( bct->_bact_type == BACT_TYPES_MISSLE || bct->_bact_type == BACT_TYPES_GUN )
-        return;
-
-    if ( bct->_status_flg & BACT_STFLAG_DEATH2 )
-        return;
-
-    if ( !(bct->_status_flg & BACT_STFLAG_DEATH1) )
-        return;
-
-    vec3d deathPushDir;
-    if ( !ypamissile_GetDirectPushDir(this, bct, fallbackDir, &deathPushDir) )
-        return;
-
-    float pushStrength = (float)_mislPushAtDeath * ypamissile_GetTargetPushMultiplier(_world, bct);
-    if ( pushStrength > 0.0f )
-        bct->AddAoePush(deathPushDir, pushStrength);
-}
-
-void NC_STACK_ypamissile::ApplyAoePushAtDeath(NC_STACK_ypabact *bct, const vec3d &pushDir, float distance)
-{
-    if ( _mislAoeUnitPushAtDeath <= 0 || !bct )
-        return;
-
-    if ( bct->_bact_type == BACT_TYPES_MISSLE || bct->_bact_type == BACT_TYPES_GUN )
-        return;
-
-    if ( bct->_status_flg & BACT_STFLAG_DEATH2 )
-        return;
-
-    if ( !(bct->_status_flg & BACT_STFLAG_DEATH1) )
-        return;
-
-    vec3d deathPushDir = pushDir;
-    if ( !ypamissile_NormalizeXZ(&deathPushDir) )
-        return;
-
-    float pushStrength = (float)_mislAoeUnitPushAtDeath;
-    if ( _mislAoeFalloff )
-    {
-        float t = 1.0f - distance / _mislAoeUnitRadius;
-        if ( t < 0.0f ) t = 0.0f;
-        pushStrength *= t;
-    }
-
-    pushStrength *= ypamissile_GetTargetPushMultiplier(_world, bct);
-
-    if ( pushStrength > 0.0f )
-        bct->AddAoePush(deathPushDir, pushStrength);
 }
 
 const char *NC_STACK_ypamissile::GetAreaDamageSkipReason(NC_STACK_ypabact *bct, bool allowFriendly) const
@@ -1576,11 +1563,10 @@ const char *NC_STACK_ypamissile::GetAreaDamageSkipReason(NC_STACK_ypabact *bct, 
     return NULL;
 }
 
-// Push eligibility filter for aoe_unit_push.
-// More permissive than GetAreaDamageSkipReason on purpose:
-// units that just got killed by this same explosion (direct hit or strong AoE)
-// MUST still be thrown, so we do NOT skip BACT_STATUS_DEAD / BACT_STFLAG_DEATH1 here.
-// Only the final death-FX wreck (DEATH2) is left undisturbed, matching legacy Impact().
+// Push eligibility filter for normal direct/AoE push. It intentionally includes
+// tanks and Host Stations; only static guns, missiles and final DEATH2 wrecks
+// are excluded. A lethal impact still receives its ordinary configured push,
+// without any separate push-at-death path.
 const char *NC_STACK_ypamissile::GetAreaPushSkipReason(NC_STACK_ypabact *bct, bool allowFriendly) const
 {
     if ( !bct || bct == this || bct == _mislEmitter )
@@ -1588,11 +1574,6 @@ const char *NC_STACK_ypamissile::GetAreaPushSkipReason(NC_STACK_ypabact *bct, bo
 
     if ( bct->_bact_type == BACT_TYPES_MISSLE )
         return "missile";
-
-    // Robo / Host Station stay vanilla-immune unless their prototype explicitly
-    // opts into modern push with push_resistance.
-    if ( bct->_bact_type == BACT_TYPES_ROBO && !ypamissile_TargetHasPushResistance(_world, bct) )
-        return "robo";
 
     // OpenUA custom: all flak/turret actors use model = gun / BACT_TYPES_GUN.
     // They are static defenses and should never be knocked away by weapon push.
@@ -1685,7 +1666,7 @@ bool NC_STACK_ypamissile::CanCollideWithWeapon(NC_STACK_ypamissile *other) const
             if ( sphere.robo_coll_radius <= 0.01 )
                 continue;
             selfOffset = selfRotT.Transform(sphere.coll_pos);
-            selfRadius = sphere.robo_coll_radius;
+            selfRadius = sphere.robo_coll_radius + getBACT_collPadding();
         }
 
         for (int j = 0; j < otherCount; j++)
@@ -1698,7 +1679,7 @@ bool NC_STACK_ypamissile::CanCollideWithWeapon(NC_STACK_ypamissile *other) const
                 if ( sphere.robo_coll_radius <= 0.01 )
                     continue;
                 otherOffset = otherRotT.Transform(sphere.coll_pos);
-                otherRadius = sphere.robo_coll_radius;
+                otherRadius = sphere.robo_coll_radius + other->getBACT_collPadding();
             }
 
             float radiusSum = selfRadius + otherRadius;
@@ -1929,9 +1910,8 @@ void NC_STACK_ypamissile::ApplyAreaDamage()
 {
     bool doAoeDamage = (_mislAoeUnitEnergy > 0);
     bool doAoePush   = (_mislAoeUnitPush > 0);
-    bool doAoePushAtDeath = (_mislAoeUnitPushAtDeath > 0);
 
-    if ( _mislAoeUnitRadius <= 0.0 || (!doAoeDamage && !doAoePush && !doAoePushAtDeath) || !_world )
+    if ( _mislAoeUnitRadius <= 0.0 || (!doAoeDamage && !doAoePush) || !_world )
         return;
 
     bool allowFriendly = getBACT_viewer();
@@ -1960,12 +1940,8 @@ void NC_STACK_ypamissile::ApplyAreaDamage()
 
             for ( NC_STACK_ypabact *bct : cell.unitsList.safe_iter() )
             {
-                // Damage and push use SEPARATE eligibility filters.
-                // Damage keeps the strict filter (no re-hitting dead/dying units).
-                // Push uses a permissive filter so units killed by THIS explosion
-                // (direct hit or strong AoE) are still thrown (Bug #2/#3/#4 fix).
                 const char *dmgSkip  = GetAreaDamageSkipReason(bct, allowFriendly);
-                const char *pushSkip = (doAoePush || doAoePushAtDeath) ? GetAreaPushSkipReason(bct, allowFriendly) : "push_disabled";
+                const char *pushSkip = doAoePush ? GetAreaPushSkipReason(bct, allowFriendly) : "push_disabled";
 
                 if ( dmgSkip && pushSkip )
                     continue;
@@ -1984,57 +1960,31 @@ void NC_STACK_ypamissile::ApplyAreaDamage()
 
                 damagedUnits.push_back(bct);
 
-                // Uniform knockback for every unit class.
-                // We hand the unit a residual knockback (AddAoePush) that its own
-                // per-frame UpdateAoePush() then plays out smoothly over time. This
-                // avoids both the instant "teleport" of a direct position move and the
-                // class-dependent chaos of touching _fly_dir (some classes never
-                // integrate velocity while idle). Result: tanks, flyers and UFOs all
-                // get the SAME smooth push, independent of mass and ground/air state.
-                bool wasAlive = false;
                 bool hasAoePush = false;
+                bool wasAlive = false;
                 vec3d appliedPushDir(0.0, 0.0, 0.0);
                 float appliedPushStrength = 0.0f;
-                float appliedPushDistance = distance;
 
-                if ( (doAoePush || doAoePushAtDeath) && !pushSkip && !(_mislDirectPush > 0 && IsDirectHitUnit(bct)) )
+                if ( doAoePush && !pushSkip && !(_mislDirectPush > 0 && IsDirectHitUnit(bct)) )
                 {
-                    wasAlive = ypamissile_IsAliveForPushAtDeath(bct);
+                    wasAlive = ypamissile_IsAliveForDeathPush(bct);
 
-                    // Radial 3D direction away from the blast, with a safe fallback
-                    // when the unit sits exactly at the blast center.
-                    vec3d pushDir;
                     if ( distance > 1.0f )
-                        pushDir = delta / distance;
+                        appliedPushDir = delta / distance;
                     else
-                        pushDir = vec3d(1.0f, 0.0f, 0.0f);
+                        appliedPushDir = vec3d(1.0f, 0.0f, 0.0f);
 
-                    appliedPushDir = pushDir;
-                    appliedPushDistance = distance;
-
-                    if ( doAoePush )
+                    appliedPushStrength = (float)_mislAoeUnitPush;
+                    if ( _mislAoeFalloff )
                     {
-                        // Knockback distance (in world units) = aoe_unit_push, optionally
-                        // reduced by linear falloff when aoe_falloff = 1.
-                        float pushStrength = (float)_mislAoeUnitPush;
-                        if ( _mislAoeFalloff )
-                        {
-                            float t = 1.0f - distance / _mislAoeUnitRadius;
-                            if ( t < 0.0f ) t = 0.0f;
-                            pushStrength *= t;
-                        }
-
-                        pushStrength *= ypamissile_GetTargetPushMultiplier(_world, bct);
-
-                        if ( pushStrength > 0.0f )
-                        {
-                            hasAoePush = true;
-                            appliedPushStrength = pushStrength;
-                        }
+                        float t = 1.0f - distance / _mislAoeUnitRadius;
+                        if ( t < 0.0f ) t = 0.0f;
+                        appliedPushStrength *= t;
                     }
-                }
 
-                bool diedNow = false;
+                    appliedPushStrength *= ypamissile_GetTargetPushMultiplier(_world, bct);
+                    hasAoePush = appliedPushStrength > 0.0f;
+                }
 
                 // AoE damage skips direct-hit units (they already received direct damage)
                 // and anything the strict filter rejected (dead/dying/friendly/...).
@@ -2042,16 +1992,19 @@ void NC_STACK_ypamissile::ApplyAreaDamage()
                 {
                     int areaEnergy = ypamissile_ScaleAoeEnergy(_mislAoeUnitEnergy, ypamissile_AoeFalloffFactor(distance, _mislAoeUnitRadius, _mislAoeFalloff != 0));
                     if ( areaEnergy > 0 )
-                    {
                         ApplyDamageToBact(bct, areaEnergy);
-                        diedNow = IsNewDeath1ForPushAtDeath(bct, wasAlive);
-                    }
                 }
 
-                if ( diedNow )
-                    ApplyAoePushAtDeath(bct, appliedPushDir, appliedPushDistance);
-                else if ( hasAoePush )
+                if ( hasAoePush )
+                {
+                    bool diedNow = wasAlive &&
+                                   !(bct->_status_flg & BACT_STFLAG_DEATH2) &&
+                                   (bct->_status_flg & BACT_STFLAG_DEATH1);
+                    if ( diedNow )
+                        appliedPushStrength *= ypamissile_GetPushAtDeathMultiplier();
+
                     bct->AddAoePush(appliedPushDir, appliedPushStrength);
+                }
             }
         }
     }
@@ -2471,7 +2424,7 @@ void NC_STACK_ypamissile::AI_layer3(update_msg *arg)
 
                 return;
             }
-            
+
             vec3d compoundImpactPos;
             vec3d compoundImpactNormal;
             bool compoundWorldHit = AutoCollisionSpheresHitWorld(&compoundImpactPos, &compoundImpactNormal);
@@ -2781,9 +2734,7 @@ void NC_STACK_ypamissile::Renew()
     _mislDelayTime = 0;
     _mislAoeFalloff = 0;
     _mislAoeUnitPush = 0;
-    _mislAoeUnitPushAtDeath = 0;
     _mislDirectPush = 0;
-    _mislPushAtDeath = 0;
     _mislArmorPenetrationRemaining = 0;
     _mislArmorPenetratedGids.clear();
     _mislClusterAge = 0;
@@ -2918,12 +2869,11 @@ void NC_STACK_ypamissile::Impact()
         arg83.force *= v7;
         arg83.mass *= v7;
     }
-    
+
     /* FIXME:
        Needs to check all near sectors too if effective radius affect it*/
 
-    bool modernPushWeapon = _mislDirectPush > 0 || _mislAoeUnitPush > 0 ||
-                            _mislPushAtDeath > 0 || _mislAoeUnitPushAtDeath > 0;
+    bool modernPushWeapon = _mislDirectPush > 0 || _mislAoeUnitPush > 0;
     bool hasLegacyImpulseTarget = false;
 
     for( NC_STACK_ypabact* &bct : _pSector->unitsList )
@@ -2932,25 +2882,19 @@ void NC_STACK_ypamissile::Impact()
         {
             int v10 = 1;
 
-            if ( _world->_isNetGame )
-            {
-                if ( _owner != bct->_owner )
-                    v10 = 0;
-            }
+            if ( _world->_isNetGame && _owner != bct->_owner )
+                v10 = 0;
 
             if ( v10 )
             {
                 if ( bct->_status == BACT_STATUS_DEAD ||
                      (bct->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2)) )
-                {
                     continue;
-                }
 
                 if ( modernPushWeapon && ypamissile_TargetHasPushResistance(_world, bct) )
                     continue;
 
                 hasLegacyImpulseTarget = true;
-
                 bct->ApplyImpulse(&arg83);
             }
             else if ( !(modernPushWeapon && ypamissile_TargetHasPushResistance(_world, bct)) )
@@ -3088,7 +3032,7 @@ void NC_STACK_ypamissile::AlignMissileByNormal(const vec3d &normal)
 }
 
 
-NC_STACK_ypamissile::NC_STACK_ypamissile() 
+NC_STACK_ypamissile::NC_STACK_ypamissile()
 {
     _mislType = 0;
     _mislEmitter = NULL;
@@ -3103,10 +3047,6 @@ NC_STACK_ypamissile::NC_STACK_ypamissile()
     _mislEnergyRobo = 0.;
     _mislAoeFalloff = 0;
     _mislClusterGeneration = 0;
-    _mislRadiusHeli = 0.;
-    _mislRadiusTank = 0.;
-    _mislRadiusFlyer = 0.;
-    _mislRadiusRobo = 0.;
     _mortarImpactOnSurface = false;
 }
 
@@ -3191,45 +3131,15 @@ void NC_STACK_ypamissile::SetAoeUnitPush(int push)
     _mislAoeUnitPush = push;
 }
 
-void NC_STACK_ypamissile::SetAoeUnitPushAtDeath(int push)
-{
-    _mislAoeUnitPushAtDeath = std::max(push, 0);
-}
-
 void NC_STACK_ypamissile::SetDirectPush(int push)
 {
     _mislDirectPush = push;
-}
-
-void NC_STACK_ypamissile::SetPushAtDeath(int push)
-{
-    _mislPushAtDeath = std::max(push, 0);
 }
 
 void NC_STACK_ypamissile::SetArmorPenetrationTargets(int targets)
 {
     _mislArmorPenetrationRemaining = std::max(targets, 0);
     _mislArmorPenetratedGids.clear();
-}
-
-void NC_STACK_ypamissile::SetRadiusHeli(float rad)
-{
-    _mislRadiusHeli = rad;
-}
-
-void NC_STACK_ypamissile::SetRadiusTank(float rad)
-{
-    _mislRadiusTank = rad;
-}
-
-void NC_STACK_ypamissile::SetRadiusFlyer(float rad)
-{
-    _mislRadiusFlyer = rad;
-}
-
-void NC_STACK_ypamissile::SetRadiusRobo(float rad)
-{
-    _mislRadiusRobo = rad;
 }
 
 void NC_STACK_ypamissile::SetStartHeight(float posy)
@@ -3296,27 +3206,16 @@ int NC_STACK_ypamissile::GetPowerRobo()
     return _mislEnergyRobo * 1000.0;
 }
 
-float NC_STACK_ypamissile::GetRadiusHeli()
-{
-    return _mislRadiusHeli;
-}
-
-float NC_STACK_ypamissile::GetRadiusTank()
-{
-    return _mislRadiusTank;
-}
-
-float NC_STACK_ypamissile::GetRadiusFlyer()
-{
-    return _mislRadiusFlyer;
-}
-
-float NC_STACK_ypamissile::GetRadiusRobo()
-{
-    return _mislRadiusRobo;
-}
-
 float NC_STACK_ypamissile::GetStartHeight()
 {
     return _mislStartHeight;
+}
+
+float NC_STACK_ypamissile::getBACT_collPadding() const
+{
+    if ( !_autoCollisionSpheres || !_world || (size_t)_vehicleID >= _world->GetWeaponsProtos().size() )
+        return 0.0f;
+
+    const World::TWeapProto &proto = _world->GetWeaponsProtos().at(_vehicleID);
+    return proto.radius_defined && proto.radius > 0.0f ? proto.radius : 0.0f;
 }

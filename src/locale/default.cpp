@@ -1,16 +1,16 @@
 #include "default.h"
 #include "common/common.h"
 
-namespace Locale { 
-    
+namespace Locale {
+
 // 600
 std::string DefaultStrings::YouPlay = "YOU PLAY";
 
 // 651
 std::string DefaultStrings::WaitingForPlayers = "WAITING FOR PLAYERS: ";
-    
+
 std::array<std::string, CMN_MAX> DefaultStrings::Commons = Common::ArrayInit<std::string, CMN_MAX>(
-{   
+{
     {CMN_YES, "YES"},
     {CMN_NO, "NO"},
     {CMN_OK, "OK"},
@@ -52,7 +52,7 @@ std::array<std::string, WINNAME_MAX> DefaultStrings::WinNames = Common::ArrayIni
     {WINNAME_LOG, "MESSAGE LOG"},
     {WINNAME_EXIT, "GAME PAUSED"}
 });
-    
+
 std::array<std::string, TITLE_MAX> DefaultStrings::Titles = Common::ArrayInit<std::string, TITLE_MAX>(
 {
     {TITLE_GAME, "GAME"},
@@ -143,7 +143,7 @@ std::array<std::string, DLG_MAX> DefaultStrings::Dialogs = Common::ArrayInit<std
     {DLG_S_SKY       , "HEAVEN"},
     {DLG_S_SWMOUSE   , "SW MOUSEPOINTER"},
     {DLG_S_SEL3D     , "SELECT 3D DEVICE"},
-            
+
     {DLG_P_LOAD      , "LOAD"},
     {DLG_P_SAVE      , "SAVE"},
     {DLG_P_DELETE    , "DELETE"},
@@ -153,7 +153,7 @@ std::array<std::string, DLG_MAX> DefaultStrings::Dialogs = Common::ArrayInit<std
     {DLG_P_TXT2      , "2"},
     {DLG_P_TXT3      , "3"},
     {DLG_P_TXT4      , "4"},
-            
+
     {DLG_L_TITLE     , "SELECT NEW LANGUAGE"},
     {DLG_L_TXT2      , "2"},
     {DLG_L_TXT3      , "3"},
@@ -161,7 +161,7 @@ std::array<std::string, DLG_MAX> DefaultStrings::Dialogs = Common::ArrayInit<std
 });
 
 std::array<std::string, NETDLG_MAX> DefaultStrings::NetDlgs = Common::ArrayInit<std::string, NETDLG_MAX>(
-{  
+{
     {NETDLG_NEXT, "NEXT"},
     {NETDLG_BACK, "BACK"},
     {NETDLG_NEW, "NEW"},
@@ -194,7 +194,7 @@ std::array<std::string, NETDLG_MAX> DefaultStrings::NetDlgs = Common::ArrayInit<
 
 
 std::array<std::string, INPUTS_MAX> DefaultStrings::Inputs = Common::ArrayInit<std::string, INPUTS_MAX>(
-{  
+{
     {INPUTS_DRIVEDIR, "DRIVE DIR"},
     {INPUTS_DRIVESPD, "DRIVE SPEED"},
     {INPUTS_FLYHGHT, "FLY HEIGHT"},
@@ -467,7 +467,7 @@ std::array<std::string, TIP_MAX> DefaultStrings::Tooltips = Common::ArrayInit<st
 
 
 std::array<std::string, KEYNAME_MAX> DefaultStrings::Keynames = Common::ArrayInit<std::string, KEYNAME_MAX>(
-{  
+{
     {KEYNAME_NOP, "*"},
     {KEYNAME_ESC, "ESC"},
     {KEYNAME_SPACE, "SPACE"},

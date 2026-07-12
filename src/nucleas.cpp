@@ -172,7 +172,7 @@ NC_STACK_nucleus *NC_STACK_nucleus::LoadObjectFromIFF(IFFile *mfile)
         if ( chunk.Is(TAG_CLID) )
         {
             std::string classname = mfile->readStr(256);
-            
+
             if ( classname.empty() )
                 return NULL;
 

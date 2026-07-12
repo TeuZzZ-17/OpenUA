@@ -13,7 +13,7 @@ public:
 
     NC_STACK_sample() {};
     virtual ~NC_STACK_sample() {};
-    
+
     virtual const std::string ClassName() const {
         return __ClassName;
     };

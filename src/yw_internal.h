@@ -268,7 +268,7 @@ public:
     Common::Point middlePanStartMouse;
     float middlePanStartX = 0.0;
     float middlePanStartZ = 0.0;
-    
+
     CmdStream t1_cmdbuf_1;
     CmdStream t1_cmdbuf_2;
     CmdStream t1_cmdbuf_3;

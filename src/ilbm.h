@@ -38,7 +38,7 @@ public:
 
     NC_STACK_ilbm() {};
     virtual ~NC_STACK_ilbm() {};
-    
+
     virtual const std::string ClassName() const {
         return __ClassName;
     };

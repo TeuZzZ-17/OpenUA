@@ -14,8 +14,8 @@ class Glext
 {
 public:
     static bool init();
-    
-    
+
+
 public:
     static PFNGLGENFRAMEBUFFERSPROC GLGenFramebuffers;
     static PFNGLBINDFRAMEBUFFERPROC GLBindFramebuffer;
@@ -45,23 +45,23 @@ public:
     static PFNGLUNIFORM3IPROC GLUniform3i;
     static PFNGLUNIFORM4FPROC GLUniform4f;
     static PFNGLUNIFORM4IPROC GLUniform4i;
-    
+
     static PFNGLUNIFORMMATRIX2FVPROC GLUniformMatrix2fv;
     static PFNGLUNIFORMMATRIX3FVPROC GLUniformMatrix3fv;
     static PFNGLUNIFORMMATRIX4FVPROC GLUniformMatrix4fv;
-    
+
     static PFNGLGETATTRIBLOCATIONPROC GLGetAttribLocation;
     static PFNGLVERTEXATTRIBPOINTERPROC GLVertexAttribPointer;
     static PFNGLDISABLEVERTEXATTRIBARRAYPROC GLDisableVertexAttribArray;
     static PFNGLENABLEVERTEXATTRIBARRAYPROC GLEnableVertexAttribArray;
-    
+
     static PFNGLBINDVERTEXARRAYPROC GLBindVertexArray;
     static PFNGLDELETEVERTEXARRAYSPROC GLDeleteVertexArrays;
     static PFNGLGENVERTEXARRAYSPROC GLGenVertexArrays;
 
     static PFNGLGETSHADERIVPROC GLGetShaderiv;
     static PFNGLGETSHADERINFOLOGPROC GLGetShaderInfoLog;
-    
+
     static PFNGLBINDBUFFERPROC GLBindBuffer;
     static PFNGLDELETEBUFFERSPROC GLDeleteBuffers;
     static PFNGLGENBUFFERSPROC GLGenBuffers;
@@ -74,7 +74,7 @@ public:
     static PFNGLUNMAPBUFFERPROC GLUnmapBuffer;
     static PFNGLGETBUFFERPARAMETERIVPROC GLGetBufferParameteriv;
     static PFNGLGETBUFFERPOINTERVPROC GLGetBufferPointerv;
-    
+
     static PFNGLGETUNIFORMBLOCKINDEXPROC GLGetUniformBlockIndex;
     static PFNGLUNIFORMBLOCKBINDINGPROC GLUniformBlockBinding;
     static PFNGLBINDBUFFERBASEPROC GLBindBufferBase;
@@ -82,5 +82,5 @@ public:
     // OpenUA custom: needed by the fullscreen visual filter (multi-texture unit for the LUT)
     static PFNGLACTIVETEXTUREPROC GLActiveTexture;
 };
-    
+
 }

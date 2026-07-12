@@ -4,13 +4,13 @@
 
 namespace System
 {
-    
+
 LuaScript::LuaScript()
 {
     _lua = luaL_newstate();
-    
+
     luaL_openlibs(_lua);
-    
+
     Register();
 }
 
@@ -21,18 +21,18 @@ LuaScript::~LuaScript()
 
 void LuaScript::Register()
 {
-    static luaL_Reg Funcs[] = 
+    static luaL_Reg Funcs[] =
     { {"RunScript", ExportRunScript}
     , {NULL, NULL} };
-    
+
     luaL_newlib(_lua, Funcs);
     lua_setglobal(_lua, "System");
 }
-    
+
 bool LuaScript::LoadFile(const std::string &fname)
 {
     RunScript(_lua, fname);
-    
+
     return true;
 }
 
@@ -42,9 +42,9 @@ void LuaScript::CallFunc(const std::string &name)
     if (t != LUA_TFUNCTION)
     {
         lua_pop(_lua, 1);
-        return;    
+        return;
     }
-    
+
     if ( lua_pcall(_lua, 0, 0, 0) != 0 )
         printf("Err CallFunc %s\n", name.c_str());
 }
@@ -52,24 +52,24 @@ void LuaScript::CallFunc(const std::string &name)
 void LuaScript::RunScript(lua_State *l, const std::string &fname)
 {
     int top = lua_gettop(l);
-    
-    
+
+
     std::string tmp = uaDataFirstResolvedReadPath(fmt::sprintf("res/%s", fname));
     if ( luaL_loadfile(l, tmp.c_str()) != LUA_OK )
     {
         printf("Err on loading script %s\n %s\n", fname.c_str(), lua_tostring(l, -1));
         return;
     }
-    
+
     if ( lua_pcall(l, 0, LUA_MULTRET, 0) != 0 )
         printf("Err on run script %s\n %s\n", fname.c_str(), lua_tostring(l, -1));
-    
+
     lua_settop(l, -(lua_gettop(l) - top) - 1);
 }
 
 int LuaScript::ExportRunScript(lua_State *l)
 {
-    RunScript(l, lua_tostring(l, 1));    
+    RunScript(l, lua_tostring(l, 1));
     return 0;
 }
 
@@ -89,17 +89,17 @@ void LuaScript::RunBuffer(const std::string &buffer)
 void LuaScript::RunBuffer(lua_State *l, const std::string &buffer)
 {
     int top = lua_gettop(l);
-    
+
     if ( luaL_loadbuffer(l, buffer.c_str(), buffer.size(), NULL) != LUA_OK )
     {
         printf("Err on loading script %s\n %s\n", buffer.c_str(), lua_tostring(l, -1));
         return;
     }
-    
+
     if ( lua_pcall(l, 0, LUA_MULTRET, 0) != 0 )
         printf("Err on run script %s\n %s\n", buffer.c_str(), lua_tostring(l, -1));
-    
+
     lua_settop(l, -(lua_gettop(l) - top) - 1);
 }
-    
+
 }

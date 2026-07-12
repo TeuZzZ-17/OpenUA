@@ -5,7 +5,7 @@
 #include <string>
 #include "strid.h"
 
-namespace Locale { 
+namespace Locale {
 
 class DefaultStrings
 {

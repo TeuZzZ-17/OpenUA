@@ -459,7 +459,7 @@ CTsmpl::CTsmpl(waldev *dev, size_t bufsz)
         buf.ID = 0;
         alCheck(alGenBuffers(1, &buf.ID));
         buf.Samples.resize(bufsz + bufsz % 2);
-        
+
         buf.Size = 0;
         buf.Used = false;
     }
@@ -487,7 +487,7 @@ CTsmpl::~CTsmpl()
 
     for( AlBuffer &bf : _buffers )
         alCheck(alDeleteBuffers(1, &bf.ID));
-    
+
 
     alCheck(alDeleteSources(1, &_source));
 
@@ -514,9 +514,9 @@ void CTsmpl::update()
                             _TS = bf.TS;
                     }
                 }
-                
+
                 if (_endStreamed) // If data was streamed at all
-                {                   
+                {
                     if (_eosfunc)
                         _eosfunc(this);
 
@@ -525,7 +525,7 @@ void CTsmpl::update()
                     _status = SMPL_STATUS_STOPPED;
                 }
                 else // If some data avaliable but for some reason buffers are already played -> continue
-                {                   
+                {
                     _clearQueue();
 
                     for ( AlBuffer &bf : _buffers )
@@ -552,10 +552,10 @@ void CTsmpl::update()
                         if ( bf.ID == bufid )
                         {
                             _playedBytes += bf.Size;
-                            
+
                             if (bf.TS > _TS)
                                 _TS = bf.TS;
-                            
+
                             _fill_n_queue(&bf);
                         }
                     }
@@ -572,7 +572,7 @@ void CTsmpl::_clearQueue()
 {
     ALint queued;
     alCheck(alGetSourcei(_source, AL_BUFFERS_QUEUED, &queued));
-    
+
     for (ALint i = 0; i < queued; ++i)
     {
         ALuint buffer;
@@ -689,7 +689,7 @@ uint32_t CTsmpl::GetPlayedTime() const
 {
     ALint bytes = 0;
     alCheck(alGetSourcei(_source, AL_BYTE_OFFSET, &bytes));
-    
+
     return BytesToMsec( _playedBytes + bytes ) ;
 }
 
@@ -706,13 +706,13 @@ bool CTsmpl::_fill_n_queue(AlBuffer *buf)
     {
         buf->Used = false;
         buf->TS = -1;
-        
+
         return false;
     }
 
     size_t totalRead = 0;
     bool zeroread = false;
-    
+
     int32_t ts = -1;
 
     while ( totalRead < _BufSZ )
@@ -754,10 +754,10 @@ bool CTsmpl::_fill_n_queue(AlBuffer *buf)
     {
         alCheck(alBufferData(buf->ID, _format, buf->Samples.data(), totalRead, _freq));
         buf->Used = true;
-        
+
         _queuedBytes += totalRead;
         buf->Size = totalRead;
-        
+
         buf->TS = ts;
 
         alCheck(alSourceQueueBuffers(_source, 1, &buf->ID));
@@ -780,7 +780,7 @@ void CTsmpl::_stop()
     _clearQueue();
 
     _endStreamed = false;
-    
+
     _queuedBytes = 0;
     _playedBytes = 0;
     _TS = 0;
@@ -809,7 +809,7 @@ void CTsmpl::_reset()
 
     _cVolume = 1.0;
     _mVolume = 1.0;
-    
+
     _queuedBytes = 0;
     _playedBytes = 0;
 }
@@ -867,7 +867,7 @@ void CTsmpl::play()
 
         _playedBytes = 0;
         _queuedBytes = 0;
-        
+
         for ( AlBuffer &bf : _buffers )
         {
             if ( !bf.Used )
@@ -920,16 +920,16 @@ void WALStream::Feed(void *data, size_t sz, int32_t ts)
     {
         _status = SMPL_STATUS_PLAYING;
         _endStreamed = false;
-        
+
         _queue.emplace();
         _queue.back().TS = ts;
         _queue.back().Samples.assign((uint8_t *)data, (uint8_t *)data + sz );
-        
+
         _dataLeft += sz;
 
         SDL_UnlockMutex(_mutex);
     }
-    
+
 }
 
 size_t WALStream::_read(void *buf, size_t bufsz, int32_t *endTs)
@@ -940,25 +940,25 @@ size_t WALStream::_read(void *buf, size_t bufsz, int32_t *endTs)
         _dataLeft = 0;
         return 0;
     }
-    
+
     if (_bufPos >= _queue.front().Samples.size())
     {
         _bufPos = 0;
         _queue.pop();
     }
-    
+
     int32_t ts = _queue.front().TS;
     if (ts >= 0)
         ts += BytesToMsec(_bufPos);
-    
+
     size_t readed = 0;
     while( readed < bufsz && !_queue.empty() )
     {
         TSSamples &bf = _queue.front();
-        
+
         size_t toRead = Common::MIN(bufsz - readed, bf.Samples.size() - _bufPos);
         ::memcpy((uint8_t *)buf + readed, (uint8_t *)bf.Samples.data() + _bufPos, toRead );
-        
+
         readed += toRead;
         _bufPos += toRead;
         _dataLeft -= toRead;
@@ -966,27 +966,27 @@ size_t WALStream::_read(void *buf, size_t bufsz, int32_t *endTs)
         ts = bf.TS;
         if (ts >= 0)
             ts += BytesToMsec(_bufPos);
-        
+
         if (_bufPos >= bf.Samples.size())
         {
             _bufPos = 0;
             _queue.pop();
         }
     }
-    
+
     if (_queue.empty())
         _dataLeft = 0;
-    
+
     if (endTs)
         *endTs = ts;
-    
+
     return readed;
 }
 
 void WALStream::_stop()
 {
     CTsmpl::_stop();
-    
+
     while(!_queue.empty())
         _queue.pop();
     _bufPos = 0;

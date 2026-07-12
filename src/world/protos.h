@@ -74,7 +74,7 @@ struct DestFX
         FX_CREATE,   // "create"
         FX_BEAM      // "beam"
     };
-    
+
     uint8_t Type = FX_NONE;
     int ModelID  = 0; // Model id. >= 0
     vec3d Pos;
@@ -115,26 +115,27 @@ struct TRoboColl
     float robo_coll_radius = 0.0;
     vec3d coll_pos;
     vec3d field_10;
+    bool debug_visible = true;
 };
 
 struct rbcolls
 {
     int field_0 = 0;
     std::vector<TRoboColl> roboColls;
-    
+
     rbcolls() {};
-    
+
     rbcolls(const rbcolls &b)
     {
         operator =(b);
     }
-    
+
     rbcolls(rbcolls &&b)
     {
         field_0 = b.field_0;
         roboColls = std::move(b.roboColls);
     }
-    
+
     rbcolls &operator=(const rbcolls &b)
     {
         field_0 = b.field_0;
@@ -142,7 +143,7 @@ struct rbcolls
         return *this;
     }
 };
-    
+
 struct TVhclSound
 {
     struct TSndSample
@@ -158,23 +159,23 @@ struct TVhclSound
                 Sample = NULL;
             }
         }
-        
+
         ~TSndSample()
         {
             ClearLoaded();
         }
     };
-    
+
     TSndSample MainSample;
     std::vector<TSndSample> MainSampleVariants;
-    
+
     std::vector<TSndSample> ExtSamples;
     int16_t volume = 0;
     int16_t pitch = 0;
     TSndFXParam sndPrm;
     TSndFxPosParam sndPrm_shk;
     std::vector<TSampleParams> extS;
-    
+
     void SetMainSampleVariant(size_t variant, const std::string &name);
     void LoadSamples();
     void ClearSounds();
@@ -335,28 +336,28 @@ struct TVhclProto
         SND_BEAMOUT = 10,
         SND_BUILD   = 11,
         SND_AIREXPLODE = 12,
-        
+
         SND_MAX     = 13
     };
-    
+
     inline static bool IsLoopingSnd(int i)
     {
         switch (i)
         {
             default:
                 return false;
-            
-            case SND_NORMAL:    
+
+            case SND_NORMAL:
             case SND_FIRE:
             case SND_WAIT:
             case SND_GENESIS:
             case SND_GODOWN:
             case SND_COCKPIT:
-                return true;                      
+                return true;
         }
         return false;
     }
-    
+
     int32_t Index = -1;
     int model_id = 0;
     uint8_t disable_enable_bitmask = 0;
@@ -378,7 +379,6 @@ struct TVhclProto
     float mgun_angle = 0.0;
     bool mgun_power_set = false;
     bool mgun_angle_set = false;
-    float mgun_ai_range = 1000.0;
     float mgun_ai_fire_alignment = 0.85;
     bool mgun_damage_sectors = false;
     float weapon_spread_x = 0.0;
@@ -478,6 +478,7 @@ struct TVhclProto
     float height = 0.0;
     float radius = 0.0;
     bool radius_defined = false;             // OpenUA: true only when radius is explicitly authored
+    bool auto_collision = false;             // OpenUA: force VP compound collision while retaining radius metadata
     float overeof = 0.0;
     float vwr_radius = 0.0;
     float vwr_overeof = 0.0;
@@ -515,7 +516,7 @@ struct TVhclProto
     NC_STACK_skeleton *wpn_wireframe_1 = NULL;
     NC_STACK_skeleton *wpn_wireframe_2 = NULL;
     IDVList initParams;
-    
+
     bool hidden = false;
     int8_t unhideRadar = 0;
 
@@ -550,7 +551,7 @@ struct TWeapProto
         SND_NORMAL = 0,
         SND_LAUNCH = 1,
         SND_HIT    = 2,
-        
+
         SND_MAX    = 3
     };
 
@@ -649,12 +650,10 @@ struct TWeapProto
     int aoe_sector_energy = 0;
     int aoe_falloff = 0;
     int aoe_unit_push = 0;
-    int aoe_unit_push_at_death = 0; // OpenUA custom: AoE corpse push when this weapon explosion causes DEATH1
     // OpenUA custom: direct-hit single-target knockback. Same movement model as aoe_unit_push,
     // but only for the primary/direct-hit unit. If both push and aoe_unit_push are set,
     // the direct-hit unit receives only push; nearby units receive aoe_unit_push.
     int push = 0;
-    int push_at_death = 0; // OpenUA custom: corpse push when this weapon causes DEATH1
     int armor_penetration_targets = 0; // OpenUA custom: direct-hit unit penetrations before final impact
     float recoil = 0.0; // OpenUA custom: shooter-side knockback multiplier, 0..10
 //    int field_87C = 0;
@@ -689,7 +688,7 @@ struct TWeapProto
     float energy_flyer = 0.0;
     float energy_robo = 0.0;
     // Legacy/deprecated: parsed for old SCR compatibility, ignored for gameplay.
-    // Unit collision always uses radius.
+    // Projectile collision uses generic radius or automatic compound spheres.
     float radius_heli = 0.0;
     float radius_tank = 0.0;
     float radius_flyer = 0.0;
@@ -699,10 +698,11 @@ struct TWeapProto
     float airconst = 0.0;
     float maxrot = 0.0;
     float heightStd = 0;
-    // Explicit radius keeps legacy direct projectile collision. When omitted on
-    // a physical projectile, OpenUA may derive compound spheres from its VP.
+    // Explicit radius keeps legacy direct projectile collision unless
+    // auto_collision selects VP spheres and reuses radius as hit padding.
     float radius = 0.0;
     bool radius_defined = false;
+    bool auto_collision = false;
     rbcolls coll; // cached automatic projectile collision spheres
     float aoe_unit_radius = 0.0;
     float aoe_building_radius = 0.0;
@@ -749,7 +749,7 @@ struct TBuildingProto
         vec3d Pos;
         vec3d Dir;
     };
-    
+
     int32_t Index = -1;
     uint8_t SecType = 0;
     uint8_t EnableMask = 0;
@@ -786,12 +786,12 @@ struct TRoboProto
 
     TRoboProto()
     {}
-    
+
     TRoboProto(const TRoboProto &b)
     {
         operator =(b);
     }
-    
+
     TRoboProto(TRoboProto &&b)
     {
         viewer = b.viewer;
@@ -805,7 +805,7 @@ struct TRoboProto
         dock = b.dock;
         coll = b.coll;
     }
-    
+
     TRoboProto &operator=(const TRoboProto &b)
     {
         viewer = b.viewer;

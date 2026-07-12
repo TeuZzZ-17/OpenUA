@@ -129,7 +129,7 @@ int SFXEngine::init()
         }
 
         musPlayer = digDriver->createMusicPlayer();
-        
+
         AudioStream = digDriver->CreateStream();
     }
     else
@@ -176,7 +176,7 @@ void SFXEngine::startSound(TSndCarrier *smpls, size_t id)
 {
     if (id >= smpls->Sounds.size())
         return;
-    
+
     TSoundSource *result = &smpls->Sounds.at(id);
 
     if ( !result->SampleVariants.empty() )
@@ -208,7 +208,7 @@ void SFXEngine::sub_424000(TSndCarrier *smpls, size_t id)
 {
     if (id >= smpls->Sounds.size())
         return;
-    
+
     smpls->Sounds[id].SetShkEnable(false);
     smpls->Sounds[id].SetPFxEnable(false);
     smpls->Sounds[id].SetEnabled(false);
@@ -432,7 +432,7 @@ int SFXEngine::sub_423B3C(TSoundSource *smpl, int a2, int *a3)
             break;
 
         a2 -= v10;
-        
+
         i++;
     }
 
@@ -968,11 +968,11 @@ void SFXEngine::sb_0x424c74__sub3()
 
         if ( !v3 )
             break;
-        
+
         float magpwr = v3->PFxMag * GFX::Engine.GetColorEffectPower(v3->PPFx->slot);
 
         pwr -= magpwr;
-        
+
         fxes.emplace_back(v3->PPFx->slot, magpwr);
     }
 

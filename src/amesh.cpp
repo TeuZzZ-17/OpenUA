@@ -89,9 +89,9 @@ size_t NC_STACK_amesh::LoadingFromIFF(IFFile **file)
             if ( obj_ok )
             {
                 polyCnt = chunk.TAG_SIZE / 6;
-                
+
                 atts.resize(polyCnt);
-                
+
                 for (int i = 0; i < polyCnt; i++)
                 {
                     ATTS &att = atts.at(i);
@@ -214,21 +214,21 @@ void NC_STACK_amesh::GenMesh(std::list<GFX::TMesh> *meshList, NC_STACK_skeleton 
 
     else if (renderFlags == (AREA_POL_FLAG_LINEARMAPPED | AREA_POL_FLAG_NOSHADE | AREA_POL_FLAG_FLATTRACY) )
         renderFlags = GFX::RFLAGS_TEXTURED | GFX::RFLAGS_LUMTRACY;
-    
+
     if (flags & ADE_FLAG_DPTHFADE)
         renderFlags |= GFX::RFLAGS_FOG;
-    
+
     UAskeleton::Data *dat = skelet->GetSkelet();
-    
+
     float alpha = 1.0;
-        
+
     if (renderFlags & GFX::RFLAGS_LUMTRACY)
         alpha = GFX::Engine.GetAlpha();
-    
+
     for (int i = 0; i < polyCnt; i++)
     {
         ATTS &att = atts.at(i);
-        
+
         float clr = 1.0;
         if (renderFlags & GFX::RFLAGS_SHADED)
         {
@@ -238,16 +238,16 @@ void NC_STACK_amesh::GenMesh(std::list<GFX::TMesh> *meshList, NC_STACK_skeleton 
             if (clr > 1.0)
                 clr = 1.0;
         }
-        
+
         if (!_texImg)
             clr = 0.0;
 
         GFX::TRenderParams mat = GFX::TRenderParams(renderFlags);
-        
+
         if (_texImg)
         {
             mat.TexSource = _texImg;
-            
+
             if ( _texImg->IsDynamic() )
                 mat.Flags |= GFX::RFLAGS_DYNAMIC_TEXTURE;
             else
@@ -255,7 +255,7 @@ void NC_STACK_amesh::GenMesh(std::list<GFX::TMesh> *meshList, NC_STACK_skeleton 
         }
 
         GFX::TMesh *msh = NC_STACK_base::FindMeshByRenderParams(meshList, mat);
-        
+
         if (!msh)
         {
             meshList->emplace_back();
@@ -263,8 +263,8 @@ void NC_STACK_amesh::GenMesh(std::list<GFX::TMesh> *meshList, NC_STACK_skeleton 
 
             msh->Mat = mat;
         }
-        
-        
+
+
         UAskeleton::Polygon &pol = dat->polygons[att.polyID];
 
         uint32_t fid = msh->Vertexes.size();
@@ -277,13 +277,13 @@ void NC_STACK_amesh::GenMesh(std::list<GFX::TMesh> *meshList, NC_STACK_skeleton 
                 msh->Vertexes.back().Pos = dat->POO[ pol.v[j] ];
                 msh->Vertexes.back().TexCoordId = j;
                 msh->Vertexes.back().Color = GFX::TGLColor(clr, clr, clr, alpha);
-                
+
                 msh->BoundBox.Add( dat->POO[ pol.v[j] ] );
-                
+
                 if (!texCoords.empty())
                     msh->Vertexes.back().TexCoord = texCoords.at(i).at(j);
             }
-            
+
             for(int j = 2; j < pol.num_vertices; ++j)
             {
                 msh->Indixes.push_back(fid + 0);

@@ -3,7 +3,7 @@
 
 namespace Common
 {
-    
+
 TEnv TEnv::Instance;
 
 void TEnv::AddGlobalIniKey(const std::string &str)
@@ -35,7 +35,7 @@ std::string TEnv::SetPrefix(const std::string &name, const std::string &value)
     }
 
     _kvPairs.push_front( {name, value} );
-    
+
     return std::string();
 }
 
@@ -69,5 +69,5 @@ std::string TEnv::ApplyPrefix(const std::string &src)
 
     return buf;
 }
-    
+
 }

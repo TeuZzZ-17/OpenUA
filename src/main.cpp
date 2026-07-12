@@ -84,7 +84,7 @@ int ProcessGameplayFrame()
 
         if ( dword_513638 || levelInfo.State == TLevelInfo::STATE_ABORTED )
         {
-            if ( !ypaworld->LoadSettings("settings.tmp", 
+            if ( !ypaworld->LoadSettings("settings.tmp",
                                          userdata.UserName,
                                          (World::SDF_BUDDY | World::SDF_PROTO | World::SDF_USER),
                                          false))
@@ -307,7 +307,7 @@ int ProcessMenuFrame()
     userdata.Input = &input_states;
 
     ypaworld->ProcessGameShell();
-    
+
     if ( userdata.envAction.action == EnvAction::ACTION_QUIT )
         return 0;
     else if ( userdata.envAction.action == EnvAction::ACTION_PLAY )
@@ -736,9 +736,9 @@ int WinMain__sub0__sub1()
 //    strcat(buildDate, __TIME__);
 
     ypaworld = Nucleus::CInit<NC_STACK_ypaworld>( { {NC_STACK_ypaworld::YW_ATT_BUILD_DATE, std::string(buildDate)} } );
-    
+
     Gui::UA::yw = ypaworld;
-    
+
     if ( !ypaworld )
     {
         ypa_log_out("Unable to init ypaworld.class\n");
@@ -793,18 +793,18 @@ int main(int argc, char *argv[])
 {
     for(int i = 0; i < argc; ++i)
         System::AddCmdLine( std::string(argv[i]) );
-    
+
     System::IniConf::Init();
     FSMgr::iDir::setBaseDir("");
-    
+
     System::IniConf::ReadFromNucleusIni();
     bool gfxVbo = System::IniConf::GfxVBO.Get<bool>();
-    
+
     System::Init(!gfxVbo);
-    
+
     GFX::Engine.Init();
     System::Movie.Init();
-    
+
     Gui::UA::Init();
 
     if ( !WinMain__sub0() )
@@ -820,39 +820,39 @@ int main(int argc, char *argv[])
     Gui::Root::Instance.SetHwCompose(true);
     ypaworld->LoadGuiFonts();
     ypaworld->CreateNewGuiElements();
-    
-    
+
+
     //Gui::Root::Instance.AddPortal( Common::Point(640, 480), Common::Rect(0, 0, 300, 300));
-    
+
     // New gui test windows
-    /*Gui::UAWindow *smpl = new Gui::UAWindow("Test1", Common::PointRect(100, 100, 200, 300), 
-        Gui::UAWindow::FLAG_WND_RESIZEABLE | 
-        Gui::UAWindow::FLAG_WND_VSCROLL | 
+    /*Gui::UAWindow *smpl = new Gui::UAWindow("Test1", Common::PointRect(100, 100, 200, 300),
+        Gui::UAWindow::FLAG_WND_RESIZEABLE |
+        Gui::UAWindow::FLAG_WND_VSCROLL |
         Gui::UAWindow::FLAG_WND_CLOSE );
     smpl->SetEnable(true);
     smpl->SetAlpha(190);
 
-    Gui::Root::Instance.AddWidget(smpl);   
-    
-    Gui::UAWindow *smpl2 = new Gui::UAWindow("Test2", Common::PointRect(0, 0, 50, 60), 
-        Gui::UAWindow::FLAG_WND_RESIZEABLE | 
-        Gui::UAWindow::FLAG_WND_VSCROLL | 
+    Gui::Root::Instance.AddWidget(smpl);
+
+    Gui::UAWindow *smpl2 = new Gui::UAWindow("Test2", Common::PointRect(0, 0, 50, 60),
+        Gui::UAWindow::FLAG_WND_RESIZEABLE |
+        Gui::UAWindow::FLAG_WND_VSCROLL |
         Gui::UAWindow::FLAG_WND_CLOSE |
-        Gui::UAWindow::FLAG_WND_HELP | 
+        Gui::UAWindow::FLAG_WND_HELP |
         Gui::UAWindow::FLAG_WND_MAXM |
         Gui::UAWindow::FLAG_WND_HSCROLL);
     smpl2->SetEnable(true);*/
     //smpl2->SetAlpha(190);
-    
+
     //scl->MoveTo(100, 100);
     //scl->ResizeWH(300, 360);
-    
-    //Gui::Root::Instance.AddWidgetPortal(0, smpl2);  
-    //Gui::Root::Instance.AddWidget(smpl2);  
+
+    //Gui::Root::Instance.AddWidgetPortal(0, smpl2);
+    //Gui::Root::Instance.AddWidget(smpl2);
     //smpl->AddChild(smpl2);
-    
-   
-    
+
+
+
 
 //    int fps = 0;
 //    uint32_t fpstick = SDL_GetTicks() + 1000;
@@ -904,12 +904,12 @@ int main(int argc, char *argv[])
 //        }
 
     }
-    
+
     ypaworld->DeleteNewGuiElements();
-    
+
     sub_4113E8();
     Gui::UA::Deinit();
-    
+
     System::Deinit();
 
     return 0;

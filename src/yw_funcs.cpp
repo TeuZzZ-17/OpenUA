@@ -185,7 +185,7 @@ TileMap * NC_STACK_ypaworld::yw_LoadFont(const std::string &fontname)
         Utils::StringSetEnd(&buf, "\n\r");
         Stok tkc(buf, " \t");
 
-        int chr = -1;          
+        int chr = -1;
 
         if ( buf[0] == ' ' )
             chr = (uint8_t)' ';
@@ -256,7 +256,7 @@ TileMap * NC_STACK_ypaworld::yw_LoadTileSet(const std::string &bitmap, Common::P
     for (int j = 0; j < cr.y; j++)
     {
         int x_pos = offset.x;
-        
+
         for (int i = 0; i < cr.x; i++ )
         {
             ResBitmap *bitm = tileset->img->GetBitmap();
@@ -355,29 +355,29 @@ int NC_STACK_ypaworld::load_fonts_and_icons()
     if ( !_guiTiles[44] )
         return 0;
     GFX::Engine.SetTileset(_guiTiles[44], 44);
-    
-    
-    
+
+
+
     _guiTiles[50] = yw_LoadTileSet("mapmisc.ilbm", Common::Point(4, 4), Common::Point(4, 0), Common::Point(9, 1), Common::Point(504, 64));
     if ( !_guiTiles[50] )
         return 0;
     GFX::Engine.SetTileset(_guiTiles[50], 50);
-    
+
     _guiTiles[51] = yw_LoadTileSet("mapmisc.ilbm", Common::Point(8, 8), Common::Point(8, 0), Common::Point(9, 1), Common::Point(432, 64));
     if ( !_guiTiles[51] )
         return 0;
     GFX::Engine.SetTileset(_guiTiles[51], 51);
-    
+
     _guiTiles[52] = yw_LoadTileSet("mapmisc.ilbm", Common::Point(16, 16), Common::Point(16, 0), Common::Point(9, 1), Common::Point(288, 64));
     if ( !_guiTiles[52] )
         return 0;
     GFX::Engine.SetTileset(_guiTiles[52], 52);
-    
+
     _guiTiles[53] = yw_LoadTileSet("mapmisc.ilbm", Common::Point(32, 32), Common::Point(32, 0), Common::Point(9, 1), Common::Point(0, 64));
     if ( !_guiTiles[53] )
         return 0;
     GFX::Engine.SetTileset(_guiTiles[53], 53);
-    
+
     _guiTiles[54] = yw_LoadTileSet("mapmisc.ilbm", Common::Point(64, 64), Common::Point(64, 0), Common::Point(9, 1), Common::Point(0, 0));
     if ( !_guiTiles[54] )
         return 0;
@@ -390,8 +390,8 @@ int NC_STACK_ypaworld::load_fonts_and_icons()
         t->map[9] = t->map[8];
         t->map[8] = t->map[0];
     }
-    
-    
+
+
 
     _guiTiles[59] = yw_LoadFont("mapvhcl3.font");
     if ( !_guiTiles[59] )
@@ -432,7 +432,7 @@ int NC_STACK_ypaworld::load_fonts_and_icons()
 
     _upScreenBorder = _guiTiles[30]->h; // ENERGIE height
     _downScreenBorder = _iconOrderH;
-    
+
     UpdateGuiSettings();
 
     return 1;
@@ -665,7 +665,7 @@ NC_STACK_base * sub_44AD8C(const std::string &fname)
             size_t pos = line.find_first_of(" ;#\n\r");
             if ( pos != std::string::npos )
                 line.erase(pos);
-            
+
             if (line.empty())
                 continue;
 
@@ -758,7 +758,7 @@ int yw_parse_lego(NC_STACK_ypaworld *yw, FSMgr::FileHandle *fil, NC_STACK_base *
     /* TODO:
      * Make base cache by names and search of set.sdf base by name, not by index
      */
-    
+
     int id = 0;
     for( NC_STACK_base *& bs : base->GetKidList() )
     {
@@ -768,13 +768,13 @@ int yw_parse_lego(NC_STACK_ypaworld *yw, FSMgr::FileHandle *fil, NC_STACK_base *
         bs->SetStatic(true);
         id++;
     }
-    
+
     id = 0;
     std::string line;
     while ( fil->ReadLine(&line) && !line.empty() && line[0] != '>' )
     {
         TLego &lego = yw->_legoArray[id];
-        
+
         if ( id >= 256 )
         {
             ypa_log_out("Too many legos!\n");
@@ -835,7 +835,7 @@ int yw_parse_lego(NC_STACK_ypaworld *yw, FSMgr::FileHandle *fil, NC_STACK_base *
                 lego.UseCollisionSkelet = yw->_colcompSkeleton;
                 break;
             }
-            
+
             lego.Explosions.clear();
 
             int fxindex = 0;
@@ -846,7 +846,7 @@ int yw_parse_lego(NC_STACK_ypaworld *yw, FSMgr::FileHandle *fil, NC_STACK_base *
 
                 lego.Explosions.emplace_back();
                 TLego::ExFX &fx = lego.Explosions.back();
-                
+
                 fx.Index = fxindex;
                 fx.ObjectID = std::stol(token, NULL, 0);
 
@@ -926,7 +926,7 @@ int yw_parse_sektor(NC_STACK_ypaworld *yw, FSMgr::FileHandle *fil)
     while ( fil->ReadLine(&line) && !line.empty() && line[0] != '>' )
     {
         std::string tmp = line;
-        
+
         size_t pos = tmp.find_first_of(";#\n\r");
         if ( pos != std::string::npos )
             tmp.erase(pos);
@@ -1064,14 +1064,14 @@ int yw_InitMouseStuff(NC_STACK_ypaworld *yw)
         "pointers/beam.ilbm",
         "pointers/build.ilbm"
     };
-    
+
     std::string oldRsrc = Common::Env.SetPrefix("rsrc", "data:mc2res");
 
     for (int i = 0; i < 11; i++)
     {
         if (yw->_mousePointers[i])
             yw->_mousePointers[i]->Delete();
-        
+
         yw->_mousePointers[i] = Utils::ProxyLoadImage({
             {NC_STACK_rsrc::RSRC_ATT_NAME, pointerFiles.at(i)},
             {NC_STACK_bitmap::BMD_ATT_CONVCOLOR, (int32_t)1}});
@@ -1143,9 +1143,9 @@ int NC_STACK_ypaworld::yw_LoadSet(int setID)
             Common::Env.SetPrefix("rsrc", oldRsrc);
             return 0;
         }
-        
+
         _setData->MakeVBO();
-        
+
         _setId = setID;
         ypa_log_out("yw_LoadSet(): loaded set object %d ok\n", setID);
     }
@@ -1205,7 +1205,7 @@ int NC_STACK_ypaworld::yw_LoadSet(int setID)
         }
 
         delete fil;
-        
+
         LoadOverrideModels();
     }
 
@@ -1312,18 +1312,18 @@ void NC_STACK_ypaworld::sub_4491A0(const std::string &movie_fname)
     if ( System::IniConf::GfxMoviePlayer.Get<bool>() )
     {
         GFX::Engine.EndFrame();
-        
+
         if ( _preferences & World::PREF_CDMUSICDISABLE )
                 SFXEngine::SFXe.StopMusicTrack(false); // Stop music without reset track ID
-        
+
         System::Movie.PlayMovie(buf, _GameShell->soundVolume);
-        
+
         if ( _preferences & World::PREF_CDMUSICDISABLE )
             SFXEngine::SFXe.PlayMusicTrack();
-        
+
         GFX::Engine.BeginFrame();
     }
-    
+
     Input::Engine.QueryInput(&input_states);
 
     input_states.KbdLastHit = Input::KC_NONE;
@@ -1355,7 +1355,7 @@ void NC_STACK_ypaworld::FreeLegos()
     {
         if (lego.CollisionSkelet)
             lego.CollisionSkelet->Delete();
-        
+
         lego = TLego();
     }
 }
@@ -1366,10 +1366,10 @@ void NC_STACK_ypaworld::FreeBriefDataSet()
     FreeLegos();
     FreeFillers();
     ClearOverrideModels();
-    
+
     for (TSubSectorDesc &ssec : _subSectorArray)
         ssec = TSubSectorDesc();
-    
+
     for (TSectorDesc &styp : _secTypeArray)
         styp = TSectorDesc();
 
@@ -1389,7 +1389,7 @@ void NC_STACK_ypaworld::FreeBriefing()
 
     _briefScreen.UnloadRes();
     _briefScreen.Stage = TBriefengScreen::STAGE_NONE;
-    
+
     GuiWinClose(&stru_5C91D0);
     stru_5C91D0.Free();
 }
@@ -1597,7 +1597,7 @@ void ypaworld_func158__sub4__sub1__sub0(NC_STACK_ypaworld *yw, TInputState *inpt
             SDL_LockSurface(a4->swTex);
             v7 = ((uint8_t *)a4->swTex->pixels)[a4->swTex->pitch * ypos + xpos];
             SDL_UnlockSurface(a4->swTex);
-            
+
             if ( v7 > 0 && v7 < 256 )
             {
                 int v15 = yw->_globalMapRegions.MapRegions[v7].Status;
@@ -1840,7 +1840,7 @@ bool NC_STACK_ypaworld::InitBriefing(int lvlid)
     _briefScreen.Clear();
 
     _briefScreen.SelectedObjID = -1;
-    
+
     _particles.Clear();
 
     SFXEngine::SFXe.StopMusicTrack();
@@ -2001,9 +2001,9 @@ bool NC_STACK_ypaworld::InitDebrief()
         "wireless/db_sec.sklt"
     };
     TBkgPicInfo *mapImg = NULL;
-    
+
     _briefScreen.Clear();
-    
+
     _particles.Clear();
 
     if ( _lvlPrimevalOwnMap.IsNull() || _lvlPrimevalTypeMap.IsNull() )
@@ -2025,7 +2025,7 @@ bool NC_STACK_ypaworld::InitDebrief()
     for (size_t i = 0; i < vGfxName.size(); i++)
         _briefScreen.VectorGfx[i] = Nucleus::CInit<NC_STACK_sklt>({{NC_STACK_rsrc::RSRC_ATT_NAME, vGfxName[i]}});
 
-    
+
     _briefScreen.OwnMap = _lvlPrimevalOwnMap;
     _briefScreen.TypMap = _lvlPrimevalTypeMap;
 
@@ -2066,7 +2066,7 @@ bool NC_STACK_ypaworld::InitDebrief()
     _briefScreen.Stage = TBriefengScreen::STAGE_LOADED;
 
     return true;
-    
+
 ON_ERR:
     FreeDebrief();
     return false;
@@ -2081,11 +2081,11 @@ void yw_calcPlayerScore(NC_STACK_ypaworld *yw)
 
         //yw_f726c_nod *hnode = (yw_f726c_nod *)yw->history->lst.head;
         auto reader = yw->_history.GetReader();
-        
+
         bool run = true;
         //int tlen = 0;
         //uint8_t *bf = hnode->bufStart;
-        
+
         World::History::Instance HistDecoders;
 
         while (run && !reader.Eof())
@@ -2094,7 +2094,7 @@ void yw_calcPlayerScore(NC_STACK_ypaworld *yw)
             if (decoder)
             {
                 World::History::FillDecoderBStrm(decoder, &reader);
-                
+
                 switch(decoder->type)
                 {
                 case World::History::TYPE_FRAME:
@@ -2345,15 +2345,15 @@ void ypaworld_func158__d3d_list_draw(NC_STACK_ypaworld *yw, UserData *usr)
     usr->d3d_listvw.ItemsPreLayout(yw, &usr->d3d_listvw.itemBlock, 0, "uvw");
 
     const std::vector<GFX::TGFXDeviceInfo> &devices = GFX::Engine.GetDevices();
-    
+
     usr->d3d_listvw.numEntries = devices.size();
     usr->d3d_listvw.shownEntries = MMIN(4, devices.size());
     int j = MMIN(usr->d3d_listvw.firstShownEntries + usr->d3d_listvw.shownEntries, usr->d3d_listvw.numEntries);
-    
+
     for (int i = usr->d3d_listvw.firstShownEntries; i < j; i++)
     {
         const GFX::TGFXDeviceInfo &dev = devices.at(i);
-        
+
         std::string name;
 
         if ( !StriCmp(dev.name, "software") )
@@ -2367,7 +2367,7 @@ void ypaworld_func158__d3d_list_draw(NC_STACK_ypaworld *yw, UserData *usr)
             sub_4C41DC(yw, &usr->d3d_listvw, &usr->d3d_listvw.itemBlock, name);
     }
 
-    
+
     usr->d3d_listvw.ItemsPostLayout(yw, &usr->d3d_listvw.itemBlock, 0, "xyz");
 
     FontUA::set_end(&usr->d3d_listvw.itemBlock);
@@ -2386,11 +2386,11 @@ void ypaworld_func158__network_list_draw(NC_STACK_ypaworld *yw, UserData *usr)
     const std::array<std::string, 2> connNames
     { "Host the game"
     , "Connect to game"};
-    
+
     bool slct = false;
 
     usr->network_listvw.itemBlock.clear();
-    
+
     usr->network_listvw.SetRect(yw, -2, -2);
 
     usr->network_listvw.ItemsPreLayout(yw, &usr->network_listvw.itemBlock, 0, "uvw");
@@ -2422,7 +2422,7 @@ void ypaworld_func158__network_list_draw(NC_STACK_ypaworld *yw, UserData *usr)
             {
                 str1 = connNames[i];
                 brk = false;
-                
+
                 if (usr->netSel == -1 && i == 0)
                 {
                     usr->netName = str1;
@@ -3070,13 +3070,13 @@ void sb_0x44ac24(NC_STACK_ypaworld *yw)
     yw->FreeLegos();
 
     yw->FreeFillers();
-    
+
     yw->ClearOverrideModels();
-    
+
 
     for (TSubSectorDesc &ssec : yw->_subSectorArray)
         ssec = TSubSectorDesc();
-    
+
     for (TSectorDesc &styp : yw->_secTypeArray)
         styp = TSectorDesc();
 
@@ -3124,7 +3124,7 @@ void UserData::clear()
         smpl = NULL;
 
     sub_bar_button = NULL;
-    
+
     titel_button = NULL;
     button_input_button = NULL;
 
@@ -3149,7 +3149,7 @@ void UserData::clear()
 
     conf3DGuid.clear();
     conf3DName.clear();
-    
+
     fxnumber = 0;
     confFxNumber = 0;
     GFXFlags = 0;
@@ -3225,9 +3225,9 @@ void UserData::clear()
 
     msgBuffers.clear();
     lastSender.clear();
-    
+
     mapDescriptions.clear();
-    
+
     noSent = false;
     sentAQ = false;
     netProblemOwner = 0;
@@ -3242,17 +3242,17 @@ void UserData::clear()
     netAllOkCountDown = 0;
     deadCheckTime = 0;
     sendScoreCountDown = 0;
-    
+
     netPlayers.fill(TNetPlayerData());
-    
+
     lobbyPlayers.fill(TNetPlayerLobbyData());
-    
+
     confirm_button = NULL;
     confirmMode = 0;
 
     for(std::string &str : InputConfigTitle)
         str.clear();
-    
+
     for(TInputConf &cfg : InputConfig)
         cfg = TInputConf();
 
@@ -3265,7 +3265,7 @@ void UserData::clear()
 //     audiotrack_adv missiontrack__adv;
 //     audiotrack_adv loadingtrack__adv;
 //     audiotrack_adv debriefingtrack__adv;
-    
+
     lastInputEvent = 0;
 
     netsend_count = 0;
@@ -3312,25 +3312,25 @@ void NC_STACK_ypaworld::LoadOverrideModels()
 
         if (line.empty())
             continue;
-        
+
         std::vector<std::string> tokens = Stok::Split(line, " \t");
-        
+
         if (tokens.size() < 3)
             continue;
-        
+
         std::string basName = fmt::sprintf("rsrc:objects/%s", tokens[2]);
 
         NC_STACK_base *model = Utils::ProxyLoadBase(basName);
-        
+
         if ( !model )
             continue;
-        
+
         model->SetVizLimit(_normalVizLimit);
         model->SetFadeLength(_normalFadeLength);
         model->MakeVBO();
-        
+
         uint32_t id = std::stoi(tokens[1]);
-        
+
         if (!StriCmp(tokens[0], "vhcl"))
         {
             if (id < _vhclModels.size())
@@ -3349,12 +3349,12 @@ void NC_STACK_ypaworld::LoadOverrideModels()
             {
                 int32_t i = id / (6 * 6);
                 id = id % (6 * 6);
-                
+
                 if (i == 0)
                     _fillersHorizontal(id / 6 , id % 6) = model;
                 else if (i == 1)
                     _fillersVertical(id / 6 , id % 6) = model;
-                
+
             }
         }
         else

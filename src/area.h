@@ -19,7 +19,7 @@ public:
     NC_STACK_area() {
     };
     virtual ~NC_STACK_area() {};
-    
+
     virtual const std::string ClassName() const {
         return __ClassName;
     };
@@ -108,9 +108,9 @@ public:
 
     int area_func5__sub0(IFFile *mfile);
     int area_func5__sub1(IFFile *mfile);
-    
+
     virtual void GenMesh(std::list<GFX::TMesh> *meshList, NC_STACK_skeleton * skelet) override;
-    
+
     virtual GFX::TRenderParams GetRenderParams( size_t polyID = 0 ) override;
 
 

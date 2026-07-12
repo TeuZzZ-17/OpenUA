@@ -32,7 +32,7 @@ public:
 
     virtual bool getCAR_kamikaze();
     virtual int getCAR_blast();
-    
+
     vec3d CarTip(float dtime, const vec3d &oldDir, vec3d rot);
     void DoKamikaze();
 

@@ -162,7 +162,7 @@ void NC_STACK_winp::sdlJoyReadMapping(SDL_Joystick* joystick)
                 {
                     std::string &tp = splt.at(1 + i * 2);
                     std::string &val = splt.at(1 + i * 2 + 1);
-                    
+
                     if(tolower(tp[0]) == 'a')
                     {
                         int axis = std::stoi( tp.substr(1) );
@@ -172,9 +172,9 @@ void NC_STACK_winp::sdlJoyReadMapping(SDL_Joystick* joystick)
                         {
                             if ( realaxis < 0 )
                                 _joyAxisMapInv[ axis ] = true;
-                            
+
                             realaxis = abs(realaxis);
-                            
+
                             _joyAxisMap[ axis ] = realaxis;
                             sdlInputLog("\tAxis map %c%d -> %d\n", (_joyAxisMapInv[ axis ] ? '-' : ' '), realaxis, axis);
                         }
@@ -211,7 +211,7 @@ void NC_STACK_winp::sdlJoyReadMapping(SDL_Joystick* joystick)
     }
 }
 
-    
+
 void NC_STACK_winp::KeyDown(int16_t vk)
 {
     if ( vk != Input::KC_NONE )
@@ -256,7 +256,7 @@ int NC_STACK_winp::InputWatch(void *, SDL_Event *event)
         {
             if (!c || _inputText.size() >= MAXCHARQUEUE)
                 break;
-            
+
             _inputText.push(c);
         }
     }
@@ -421,7 +421,7 @@ bool NC_STACK_winp::GetState()
     default:
         return Input::Engine.KeyMatrix.at(_bindedKey).down;
     }
-    
+
     return false;
 }
 
@@ -566,7 +566,7 @@ float NC_STACK_winp::GetSlider()
             v6 = 0;
         }
         break;
-        
+
         case Input::KC_JOYRUDDER:
         {
             int v12 = _sliderPos;
@@ -615,7 +615,7 @@ void NC_STACK_winp::QueryKeyboard(TInputState *arg)
     arg->HotKeyID = -1;
     arg->KbdLastDown = _kbdLastDown;
     arg->KbdLastHit = _kbdLastHit;
-    
+
     _kbdLastHit = Input::KC_NONE;
 
     arg->chr = 0;
@@ -632,7 +632,7 @@ bool NC_STACK_winp::BindKey(const std::string &keyName)
     int16_t id = Input::Engine.GetKeyIDByName(keyName);
     if (id == -1)
         return false;
-    
+
     _bindedKey = id;
     return Input::Engine.KeyMatrix.at(id).IsSlider;
 }
@@ -753,7 +753,7 @@ void NC_STACK_winp::QueryPointer(TClickBoxInf *arg)
     arg->move.ScreenPos = _mPos;
     arg->wheel = _mWheel;
     _mMove = _mMoveQuery;
-    
+
     _mMoveQuery = Common::Point();
     _mWheel = 0;
 
@@ -807,7 +807,7 @@ void NC_STACK_winp::QueryPointer(TClickBoxInf *arg)
 void NC_STACK_winp::InitFirst()
 {
     KBDMapping.clear();
-    
+
     KBDMapping[SDL_SCANCODE_ESCAPE]      = Input::KC_ESCAPE;
     KBDMapping[SDL_SCANCODE_SPACE]       = Input::KC_SPACE;
     KBDMapping[SDL_SCANCODE_UP]          = Input::KC_UP;
@@ -972,7 +972,7 @@ void NC_STACK_winp::InitFirst()
     _mRDcnt = 0;
     _mMUcnt = 0;
     _mMDcnt = 0;
-    
+
     _kbdLastDown = 0;
     _kbdLastHit = 0;
 

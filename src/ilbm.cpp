@@ -118,7 +118,7 @@ size_t NC_STACK_ilbm::SavingIntoIFF(IFFile **pmfile)
         if ( !opl2.empty() )
         {
             mfile->pushChunk(0, TAG_OTL2, opl2.size() * 2);
-            
+
             for(tUtV uv : opl2)
             {
                 mfile->writeU8(uv.tu * 256.0);
@@ -141,7 +141,7 @@ void ILBM_BODY_READ__sub0(BMHD_type *bmhd, const std::vector<int8_t> &ilbm_data,
 
     int pln_w = (bmhd->width + 7) / 8;
     pln_w += (pln_w & 1);
-    
+
     int inByte = 0;
 
     for (int y = 0; y < bmhd->height; y++)
@@ -237,11 +237,11 @@ rsrc * NC_STACK_ilbm::READ_ILBM(IDVList &stak, IFFile *mfil, int transp)
 
     BMHD_type bmhd;
     VBMP_type vbmp;
-    
+
     rsrc *res = NC_STACK_rsrc::rsrc_func64(stak);
     int convertColor = stak.Get<int32_t>(NC_STACK_bitmap::BMD_ATT_CONVCOLOR, 0);
     int alphaPalette = stak.Get<int32_t>(ATT_ALPHAPALETTE, 1);
-    
+
     if (!res)
         return NULL;
 
@@ -304,9 +304,9 @@ rsrc * NC_STACK_ilbm::READ_ILBM(IDVList &stak, IFFile *mfil, int transp)
             bitm = new ResBitmap;
             bitm->width = bmhd.width;
             bitm->height = bmhd.height;
-            
+
             res->data = bitm;
-            
+
             mfil->parse();
         }
         else if ( chunk.Is(TAG_HEAD) )
@@ -314,11 +314,11 @@ rsrc * NC_STACK_ilbm::READ_ILBM(IDVList &stak, IFFile *mfil, int transp)
             vbmp.width = mfil->readU16B();
             vbmp.height = mfil->readU16B();
             vbmp.flags = mfil->readU16B();
-            
+
             bitm = new ResBitmap;
             bitm->width = vbmp.width;
             bitm->height = vbmp.height;
-            
+
             res->data = bitm;
 
             mfil->parse();
@@ -329,7 +329,7 @@ rsrc * NC_STACK_ilbm::READ_ILBM(IDVList &stak, IFFile *mfil, int transp)
             {
                 if ( !bitm->palette )
                     bitm->palette = new UA_PALETTE;
-                
+
                 if ( bitm->palette )
                 {
                     for (int i = 0; i < 256; i++)
@@ -350,7 +350,7 @@ rsrc * NC_STACK_ilbm::READ_ILBM(IDVList &stak, IFFile *mfil, int transp)
             if ( bitm )
             {
                 bitm->swTex = SDL_CreateRGBSurface(0, bitm->width, bitm->height, 8, 0, 0, 0, 0);
-                
+
                 if ( ILBM__OR__VBMP )
                 {
                     success = ILBM_BODY_READ(mfil, &bmhd, bitm);
@@ -359,7 +359,7 @@ rsrc * NC_STACK_ilbm::READ_ILBM(IDVList &stak, IFFile *mfil, int transp)
                 {
                     SDL_LockSurface(bitm->swTex);
                     for(int y = 0; y < bitm->height; y++)
-                        mfil->read((uint8_t *)bitm->swTex->pixels + y * bitm->swTex->pitch, bitm->width);                   
+                        mfil->read((uint8_t *)bitm->swTex->pixels + y * bitm->swTex->pitch, bitm->width);
                     SDL_UnlockSurface(bitm->swTex);
                     success = true;
                 }
@@ -380,7 +380,7 @@ rsrc * NC_STACK_ilbm::READ_ILBM(IDVList &stak, IFFile *mfil, int transp)
             mfil->skipChunk();
         }
     }
-    
+
     if (bitm && bitm->swTex)
     {
         if (bitm->swTex->format->palette)
@@ -388,7 +388,7 @@ rsrc * NC_STACK_ilbm::READ_ILBM(IDVList &stak, IFFile *mfil, int transp)
             UA_PALETTE *pal = bitm->palette;
             if (!pal)
                 pal = GFX::Engine.GetPalette();
-            
+
             //if (alphaPalette && convertColor)
             if (alphaPalette)
             {
@@ -1115,11 +1115,11 @@ int VBMP__WRITE_TO_FILE(IFFile *mfile, ResBitmap *bitm)
     }
 
     mfile->pushChunk(0, TAG_BODY, pixelCount);
-    
+
     SDL_LockSurface(bitm->swTex);
     mfile->write(bitm->swTex->pixels, pixelCount);
     SDL_UnlockSurface(bitm->swTex);
-    
+
     mfile->popChunk();
 
     return mfile->popChunk() == IFFile::IFF_ERR_OK;
@@ -1143,7 +1143,7 @@ size_t NC_STACK_ilbm::rsrc_func66(rsrc_func66_arg *arg)
         return 0;
 
     SetTime(1, 1);
-    
+
     ResBitmap *bitm = GetBitmap();
 
     if ( !bitm || !bitm->swTex )

@@ -264,7 +264,7 @@ void NC_STACK_particle::_SetLifeStages(const std::vector<NC_STACK_ade *> &ades)
     }
 
     _lifeStagesAdes = ades;
-    
+
     UpdateLifeStages();
     MakeMeshCache();
 }
@@ -536,29 +536,29 @@ size_t NC_STACK_particle::Emit(area_arg_65 *arg, InstanceOpts * uopts)
 
     if (!uopts)
         return 1;
-    
+
     SpawnOpts *opts = dynamic_cast<SpawnOpts *>(uopts);
     if (!opts)
-        return 1;    
+        return 1;
 
     if (opts->TimeStamp < 0)
         opts->TimeStamp = arg->timeStamp;
-    
+
     opts->Age = arg->timeStamp - opts->TimeStamp;
-    
+
     int32_t maxTime = Common::MAX(_genLifeTime, _genEnd);
-    
+
     if (opts->Age >= maxTime)
     {
         opts->Age %= maxTime;
         opts->Time = 0;
     }
-    
+
     if (opts->Age >= _genEnd || opts->Age < _genStart)
         return 1;
-    
+
     opts->Time += arg->frameTime;
-    
+
     if (opts->Time >= 0)
     {
         if ( !arg->OwnerTForm ||
@@ -577,15 +577,15 @@ size_t NC_STACK_particle::Emit(area_arg_65 *arg, InstanceOpts * uopts)
         {
             vec3d v12 = v44 + RandVec();
             v12 *= (_startSpeed / v12.length());
-            
+
             vec3d pos = v45 + v12 * timeDelta;
-            
+
             ypaworld->ParticleSystem().AddParticle(this, pos, v12, opts->Time, arg->tint, arg->particleScale, arg->particleSpin);
-            
+
             timeDelta += delta;
             opts->Time -= _genPause;
         }
-    }   
+    }
 
     return 1;
 }
@@ -621,7 +621,7 @@ NC_STACK_ade * NC_STACK_particle::ExtractLifeStage(uint32_t id)
         ade = _lifeStagesAdes[id];
 
         _lifeStagesAdes.erase( _lifeStagesAdes.begin() + id );
-        
+
         UpdateLifeStages();
     }
 
@@ -715,7 +715,7 @@ void NC_STACK_particle::SetParticlesStages(const std::vector<NC_STACK_ade *> &ad
 
 void NC_STACK_particle::UpdateScaleDelta()
 {
-    
+
     _scaleDelta = (_scaleEnd - _scaleStart) / _lifeTime;
 }
 
@@ -789,12 +789,12 @@ void NC_STACK_particle::MakeMeshCache()
 {
     _meshCache.clear();
     _meshCache.resize( _lifeStagesAdes.size() );
-    
+
     for(uint32_t i = 0; i < _meshCache.size(); ++i)
     {
         NC_STACK_ade *ade = _lifeStagesAdes.at(i);
         GFX::TMesh &mesh = _meshCache.at(i);
-        
+
         mesh.Vertexes.resize(4);
         mesh.Vertexes[0].TexCoordId = 0;
         mesh.Vertexes[0].Pos = vec3f(-0.5,  0.5, 0.0);
@@ -804,9 +804,9 @@ void NC_STACK_particle::MakeMeshCache()
         mesh.Vertexes[2].Pos = vec3f( 0.5, -0.5, 0.0);
         mesh.Vertexes[3].TexCoordId = 3;
         mesh.Vertexes[3].Pos = vec3f( 0.5,  0.5, 0.0);
-        
+
         mesh.Indixes.assign( {0, 2, 1, 0, 3, 2} );
-        
+
         if ( !ade->IsParticle() )
         {
             mesh.Mat = ade->GetRenderParams(0);
@@ -814,7 +814,7 @@ void NC_STACK_particle::MakeMeshCache()
             {
                 for (GFX::TVertex &v : mesh.Vertexes)
                     v.Color = mesh.Mat.Color;
-                
+
                 if (mesh.Mat.TexSource->IsDynamic())
                 {
                     mesh.CoordsCache.resize(mesh.Mat.TexSource->GetFramesCount());
@@ -822,10 +822,10 @@ void NC_STACK_particle::MakeMeshCache()
                     {
                         GFX::TCoordsCache &cache = mesh.CoordsCache[k];
                         cache.Tex = mesh.Mat.TexSource->GetBitmap(k);
-                        
+
                         std::vector<tUtV> &coords = mesh.Mat.TexSource->GetOutline(k);
                         cache.Coords.resize( mesh.Vertexes.size() );
-                        
+
                         for(uint32_t j = 0; j < mesh.Vertexes.size(); ++j)
                             cache.Coords[j] = coords.at( mesh.Vertexes[j].TexCoordId );
                     }
@@ -842,7 +842,7 @@ void NC_STACK_particle::MakeMeshCache()
         {
             printf("Error! Particle ade in particle ade!\n");
         }
-        
+
         GFX::Engine.MeshMakeVBO(&mesh);
     }
 }

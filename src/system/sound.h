@@ -53,19 +53,19 @@ struct TSoundSource
         FLAG_LOOP     = (1 << 0),
         FLAG_ENABLED  = (1 << 1),
         FLAG_PLAY     = (1 << 2),
-        
+
         FLAG_PFX      = (1 << 3),
         FLAG_PFXEN    = (1 << 4),
         FLAG_PFXPL    = (1 << 5),
-        
+
         FLAG_SHK      = (1 << 6),
         FLAG_SHKEN    = (1 << 7),
         FLAG_SHKPL    = (1 << 8),
-        
+
         FLAG_FRAGM    = (1 << 9),
     };
-    
-    
+
+
     TSampleData *PSample = NULL;
     std::vector<TSampleData *> SampleVariants;
     TSndFXParam *PPFx = NULL;
@@ -84,59 +84,59 @@ struct TSoundSource
     int16_t ResultVol = 0;
     int16_t ResultPan = 0;
     int ResultRate = 0;
-    
+
     inline bool IsLoop()
     {
         return (Flags & FLAG_LOOP) != 0;
     }
-    
+
     inline bool IsEnabled()
     {
         return (Flags & FLAG_ENABLED) != 0;
     }
-    
+
     inline bool IsPlay()
     {
         return (Flags & FLAG_PLAY) != 0;
     }
-    
+
     inline bool IsPFx()
     {
         return (Flags & FLAG_PFX) != 0;
     }
-    
+
     inline bool IsPFxEnabled()
     {
         return (Flags & FLAG_PFXEN) != 0;
     }
-    
+
     inline bool IsPFxPlay()
     {
         return (Flags & FLAG_PFXPL) != 0;
     }
-    
+
     inline bool IsShk()
     {
         return (Flags & FLAG_SHK) != 0;
     }
-    
+
     inline bool IsShkEnabled()
     {
         return (Flags & FLAG_SHKEN) != 0;
     }
-    
+
     inline bool IsShkPlay()
     {
         return (Flags & FLAG_SHKPL) != 0;
     }
-    
+
     inline bool IsFragmented()
     {
         return (Flags & FLAG_FRAGM) != 0;
     }
-    
-    
-    
+
+
+
     inline void SetLoop(bool en)
     {
         if (en)
@@ -144,7 +144,7 @@ struct TSoundSource
         else
             Flags &= ~FLAG_LOOP;
     }
-    
+
     inline void SetEnabled(bool en)
     {
         if (en)
@@ -152,7 +152,7 @@ struct TSoundSource
         else
             Flags &= ~FLAG_ENABLED;
     }
-    
+
     inline void SetPlay(bool en)
     {
         if (en)
@@ -160,7 +160,7 @@ struct TSoundSource
         else
             Flags &= ~FLAG_PLAY;
     }
-    
+
     inline void SetPFx(bool en)
     {
         if (en)
@@ -168,7 +168,7 @@ struct TSoundSource
         else
             Flags &= ~FLAG_PFX;
     }
-    
+
     inline void SetPFxEnable(bool en)
     {
         if (en)
@@ -176,7 +176,7 @@ struct TSoundSource
         else
             Flags &= ~FLAG_PFXEN;
     }
-    
+
     inline void SetPFxPlay(bool en)
     {
         if (en)
@@ -184,7 +184,7 @@ struct TSoundSource
         else
             Flags &= ~FLAG_PFXPL;
     }
-    
+
     inline void SetShk(bool en)
     {
         if (en)
@@ -192,7 +192,7 @@ struct TSoundSource
         else
             Flags &= ~FLAG_SHK;
     }
-    
+
     inline void SetShkEnable(bool en)
     {
         if (en)
@@ -200,7 +200,7 @@ struct TSoundSource
         else
             Flags &= ~FLAG_SHKEN;
     }
-    
+
     inline void SetShkPlay(bool en)
     {
         if (en)
@@ -208,7 +208,7 @@ struct TSoundSource
         else
             Flags &= ~FLAG_SHKPL;
     }
-    
+
     inline void SetFragmented(bool en)
     {
         if (en)
@@ -216,7 +216,7 @@ struct TSoundSource
         else
             Flags &= ~FLAG_FRAGM;
     }
-    
+
     TSoundSource(TSndCarrier *parent)
     : PCarrier(parent)
     {}
@@ -227,18 +227,18 @@ struct TSndCarrier
     vec3d Position;
     vec3d Vector;
     std::vector<TSoundSource> Sounds;
-    
+
     void Clear()
     {
         Position = vec3d();
         Vector = vec3d();
         Sounds.clear();
     }
-    
+
     void Resize(size_t sz)
     {
         Clear();
-        
+
         for(size_t i = 0; i < sz; i++)
             Sounds.emplace_back(this);
     }
@@ -261,7 +261,7 @@ public:
     void StopCarrier(TSndCarrier *smpls);
     void StopSource(TSoundSource *snd);
     void StopPlayingSounds();
-    
+
     void ForceStopSource(TSndCarrier *smpls, size_t id)
     {
         if (id < smpls->Sounds.size())
@@ -344,7 +344,7 @@ public:
     int musMinDelay;
     int musMaxDelay;
     int musTrack;
-    
+
     WALStream *AudioStream;
 
 public:

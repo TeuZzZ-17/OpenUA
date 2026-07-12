@@ -105,7 +105,7 @@ int yw_MBLoadSet(NC_STACK_ypaworld *yw, int setID)
             Common::Env.SetPrefix("rsrc", oldRsrc);
             return 0;
         }
-        
+
         yw->_setData->MakeVBO();
 
         yw->_setId = setID;
@@ -166,7 +166,7 @@ int yw_MBLoadSet(NC_STACK_ypaworld *yw, int setID)
         }
 
         delete fil;
-        
+
         yw->LoadOverrideModels();
     }
 
@@ -215,7 +215,7 @@ void ypaworld_func158__sub4__sub1__sub4__sub6(NC_STACK_ypaworld *yw, TInputState
 void NC_STACK_ypaworld::BriefingSetObject(const TBriefObject &obj, bool doAdd)
 {
     _briefScreen.ViewingObjectStartTime = _briefScreen.CurrTime;
-    
+
     _briefScreen.ViewingObject = obj;
 
     if ( doAdd )
@@ -238,7 +238,7 @@ void ypaworld_func158__sub4__sub1__sub4__sub7(NC_STACK_ypaworld *yw, TInputState
         brf->ActiveElementID = 0;
         yw->BriefingSetObject( TBriefObject(TBriefObject::TYPE_VEHICLE, robo.VhclID, robo.Pos.x, robo.Pos.z,
                                            26, 128 + robo.Owner, 25,
-                                           yw->GetVehicleName(robo.VhclID)), 
+                                           yw->GetVehicleName(robo.VhclID)),
                                brf->AddObjectsFlag);
     }
 }
@@ -290,7 +290,7 @@ void yw_BriefUpdateKeySectors(NC_STACK_ypaworld *yw, TInputState *inpt, TBriefen
 
                         uint8_t v12 = yw->_lvlTypeMap(ks.CellId);
 
-                        yw->BriefingSetObject( TBriefObject( TBriefObject::TYPE_SECTOR, v12, ps.x, ps.y, 26, 146, 25, 
+                        yw->BriefingSetObject( TBriefObject( TBriefObject::TYPE_SECTOR, v12, ps.x, ps.y, 26, 146, 25,
                                                             Locale::Text::Brief(Locale::BRIEF_KEYSECT)),
                                                brf->AddObjectsFlag);
                     }
@@ -347,11 +347,11 @@ void ypaworld_func158__sub4__sub1__sub4__sub11(NC_STACK_ypaworld *yw, TInputStat
         }
 
         vec2d ps = World::SectorIDToCenterPos2( pGem->CellId );
-        
+
         int v13 = yw->_buildProtos[pGem->BuildingID].SecType;
 
-        yw->BriefingSetObject( TBriefObject( TBriefObject::TYPE_SECTOR, v13, ps.x, ps.y, 26, 144, 25, 
-                                            Locale::Text::Brief(Locale::BRIEF_TECH2) ),  
+        yw->BriefingSetObject( TBriefObject( TBriefObject::TYPE_SECTOR, v13, ps.x, ps.y, 26, 144, 25,
+                                            Locale::Text::Brief(Locale::BRIEF_TECH2) ),
                                brf->AddObjectsFlag);
     }
 }
@@ -403,8 +403,8 @@ void ypaworld_func158__sub4__sub1__sub4__sub13(NC_STACK_ypaworld *yw, TInputStat
             }
         }
 
-        yw->BriefingSetObject( TBriefObject( TBriefObject::TYPE_VEHICLE, robo->VhclID, robo->Pos.x, robo->Pos.z, 26, 128 + robo->Owner, 25, 
-                                            yw->GetVehicleName(robo->VhclID) ),  
+        yw->BriefingSetObject( TBriefObject( TBriefObject::TYPE_VEHICLE, robo->VhclID, robo->Pos.x, robo->Pos.z, 26, 128 + robo->Owner, 25,
+                                            yw->GetVehicleName(robo->VhclID) ),
                                brf->AddObjectsFlag);
     }
 }
@@ -458,8 +458,8 @@ void ypaworld_func158__sub4__sub1__sub4__sub15(NC_STACK_ypaworld *yw, TInputStat
         {
             std::string nm = fmt::sprintf("%d %s", squad->Count, yw->GetVehicleName(squad->VhclID));
 
-            yw->BriefingSetObject( TBriefObject( TBriefObject::TYPE_VEHICLE, squad->VhclID, squad->X, squad->Z, 26, 136 + squad->Owner, 36, 
-                                                nm ),  
+            yw->BriefingSetObject( TBriefObject( TBriefObject::TYPE_VEHICLE, squad->VhclID, squad->X, squad->Z, 26, 136 + squad->Owner, 36,
+                                                nm ),
                                    brf->AddObjectsFlag);
         }
     }
@@ -468,7 +468,7 @@ void ypaworld_func158__sub4__sub1__sub4__sub15(NC_STACK_ypaworld *yw, TInputStat
 void ypaworld_func158__sub4__sub1__sub4__sub16(NC_STACK_ypaworld *yw, TInputState *inpt, TBriefengScreen *brf)
 {
     brf->ViewingObject = TBriefObject();
-    
+
     brf->ActiveElementID = -1;
     brf->ElementsCount = 0;
     brf->Stage = TBriefengScreen::STAGE_BUDDY_RN;
@@ -516,8 +516,8 @@ void ypaworld_func158__sub4__sub1__sub4__sub17(NC_STACK_ypaworld *yw, TInputStat
         {
             std::string nm = fmt::sprintf("%d %s", squad->Count, yw->GetVehicleName(squad->VhclID));
 
-            yw->BriefingSetObject( TBriefObject( TBriefObject::TYPE_VEHICLE, squad->VhclID, squad->X, squad->Z, 26, 136 + squad->Owner, 25, 
-                                                nm ),  
+            yw->BriefingSetObject( TBriefObject( TBriefObject::TYPE_VEHICLE, squad->VhclID, squad->X, squad->Z, 26, 136 + squad->Owner, 25,
+                                                nm ),
                                    brf->AddObjectsFlag);
         }
     }
@@ -570,13 +570,13 @@ void ypaworld_func158__sub4__sub1__sub4__sub19(NC_STACK_ypaworld *yw, TInputStat
                 elmID--;
             }
         }
-        
+
         vec2d ps = World::SectorIDToCenterPos2( pGate->CellId );
 
         int v13 = yw->_buildProtos[ pGate->ClosedBldID ].SecType;
 
-        yw->BriefingSetObject( TBriefObject( TBriefObject::TYPE_SECTOR, v13, ps.x, ps.y, 26, 145, 25, 
-                                            Locale::Text::Brief(Locale::BRIEF_GATE2) ),  
+        yw->BriefingSetObject( TBriefObject( TBriefObject::TYPE_SECTOR, v13, ps.x, ps.y, 26, 145, 25,
+                                            Locale::Text::Brief(Locale::BRIEF_GATE2) ),
                                brf->AddObjectsFlag);
     }
 }
@@ -630,7 +630,7 @@ void sub_4ED434(NC_STACK_ypaworld *yw, TBriefengScreen *brf)
 		size_t pos = brf->BriefingText.find_first_of("\n\r");
         while( pos != std::string::npos )
         {
-        	pos = brf->BriefingText.find_first_of("\n\r", pos + 1);
+			pos = brf->BriefingText.find_first_of("\n\r", pos + 1);
             numLines++;
         }
 
@@ -1193,7 +1193,7 @@ void ypaworld_func158__sub4__sub1__sub6__sub2(NC_STACK_ypaworld *yw, TInputState
         brf->StatsGlobal[i] = yw->_playersStats[i];
 
     brf->StatsIngame.fill(World::TPlayerStatus());
-    
+
     brf->Upgrades.clear();
 }
 
@@ -1325,9 +1325,9 @@ void yw_DebriefAddTechUpgrade(NC_STACK_ypaworld *yw, TBriefengScreen *brf, World
         }
 
         //CHECKME if it needed to limit
-        /*if ( brf->tp1_count >= 7 ) 
+        /*if ( brf->tp1_count >= 7 )
             brf->tp1_count = 6;*/
-        
+
         brf->Upgrades.push_back(*arg);
     }
 }
@@ -1345,7 +1345,7 @@ void yw_DebriefRenderSectorsOwners(NC_STACK_ypaworld *yw, TBriefengScreen *brf)
     for (int yy = 0; yy < yw->_mapSize.y; yy++)
     {
         float v23 = brf->MapBlitEnd.left + v3 * 0.5;
-        
+
         uint8_t *ownmap = brf->OwnMap.Line(yy);
 
         for (int xx = 0; xx < yw->_mapSize.x; xx++)
@@ -1686,7 +1686,7 @@ void yw_DebriefMPlayScore(NC_STACK_ypaworld *yw, TBriefengScreen *brf, CmdStream
         v35[0].postfixChar = 0;
         v35[0].fontID = 15;
 
-        
+
 
         v35[1].txt = fmt::sprintf("%d", brf->StatsIngame[yw->_playerOwner].Score + brf->StatsGlobal[yw->_playerOwner].Score);
         v35[1].fontID = 15;
@@ -1818,7 +1818,7 @@ void yw_DebriefTechUpgradeLine(NC_STACK_ypaworld *yw, TBriefengScreen *brf, cons
                 lastVhcl = i;
                 break;
             }
-            
+
             i++;
         }
 
@@ -1980,7 +1980,7 @@ void yw_DebriefRunDebrief(NC_STACK_ypaworld *yw, TInputState *struc, TBriefengSc
 {
     CmdStream cmdbuf;
     cmdbuf.reserve(2048);
-    
+
     uint32_t dtime = brf->CurrTime - brf->StartTime;
 
     yw_DebriefRenderSectorsOwners(yw, brf);
@@ -1995,14 +1995,14 @@ void yw_DebriefRunDebrief(NC_STACK_ypaworld *yw, TInputState *struc, TBriefengSc
     GFX::Engine.ProcessDrawSeq(cmdbuf);
 
     int v26 = 0;
-    
-    
+
+
 
     if ( brf->Stage == TBriefengScreen::STAGE_PLAYER_RN )
     {
         bool readLoop = true;
         auto reader = yw->_history.GetReader();
-        
+
         World::History::Instance HistDecoders;
 
         while (readLoop && !reader.Eof())
@@ -2011,13 +2011,13 @@ void yw_DebriefRunDebrief(NC_STACK_ypaworld *yw, TInputState *struc, TBriefengSc
             if (decoder)
             {
                 World::History::FillDecoderBStrm(decoder, &reader);
-                
+
                 switch(decoder->type)
                 {
                 case World::History::TYPE_FRAME:
                 {
                     World::History::Frame *frm = static_cast<World::History::Frame *>(decoder);
-                    
+
                     lastFrameTimeStamp = frm->TimeStamp;
 
                     if ( lastFrameTimeStamp >= brf->LastFrameTimeStamp )

@@ -14,13 +14,13 @@ public:
     UAEmpty(Widget *parent);
     UAEmpty(Common::PointRect xyw);
     UAEmpty(Widget *parent, const Common::PointRect &xyw);
-    
+
     virtual void OnAttachDetach(bool attach);
     virtual void OnParentResize(Common::Point newSz);
-    
+
 protected:
     void Update();
-    
+
 protected:
     bool _filling = false;
 };

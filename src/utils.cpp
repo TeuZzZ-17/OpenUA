@@ -19,7 +19,7 @@ int read_yes_no_status(const std::string &file, int result)
             size_t en = line.find_first_of("; \n\r");
             if (en != std::string::npos)
                 line.erase(en);
-            
+
             result = StrGetBool(line);
         }
         delete fil;

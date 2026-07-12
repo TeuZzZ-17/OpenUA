@@ -36,7 +36,7 @@ struct StreamTex
     Common::Point Size;
     std::array<uint32_t, 2> Texs = Common::ArrayInit<uint32_t, 2>(0);
     int32_t nextTex = 0;
-    
+
     StreamTex();
     ~StreamTex();
     void Stream(Common::Point sz, int32_t fmt, int32_t type, const void *data);
@@ -48,19 +48,19 @@ struct Timer
     {
         CODE_ANY = 0,
     };
-    
+
     uint32_t ID;
     uint64_t  EndTime;
     uint32_t WidgetID;
     uint32_t Code;
-    
+
     Timer()
     : ID(0)
     , EndTime(0)
     , WidgetID(0)
     , Code(CODE_ANY)
     {}
-    
+
     Timer(uint32_t id, uint32_t time, uint32_t wid, uint32_t cod = CODE_ANY)
     : ID(id)
     , EndTime(time)
@@ -82,7 +82,7 @@ public:
     };
 public:
     uint32_t GetNextId();
-    
+
     void SetHwCompose(bool hw)
     {
         _hwRender = hw;
@@ -105,52 +105,52 @@ public:
     Common::Point GetScreenSize();
 
     Widget *FindByPos(const Common::Point &pos);
-    
+
     Widget *FindByMouse(const Common::Point &pos);
-    
+
     Widget *FindByID(uint32_t id, bool enabled = true);
-    
+
     uint32_t TimerAdd(uint32_t wID, uint32_t time, uint32_t code = Timer::CODE_ANY);
-    
+
     int32_t TimerGet(uint32_t id);
     bool TimerDelete(uint32_t id); // By timer ID
     int TimerDeleteByWidget(uint32_t wID, uint32_t code = Timer::CODE_ANY); // By widget ID
-    
+
     void TimersUpdate(uint32_t dtime);
-    
+
     void HwCompose();
-    
+
 protected:
     Root() {};
     ~Root();
-    
+
     Widget *_FindByPos(WidgetList &lst, const Common::Point& pos);
     Widget *_FindByMouse(WidgetList &lst, const Common::Point& pos);
     Widget *_FindByID(WidgetList &lst, uint32_t id, bool enabled = true);
     void DrawWidget(SDL_Surface *screen, Common::Rect space, Common::Point parentOffset, Widget *w, uint32_t alph = 255);
-        
+
     WidgetList& GetLayerList(int l);
-    
+
     bool CheckEnable(Widget *w);
     void ValidateWidgets();
-    
+
     void UpdateWidgetOnMice(Widget *w);
-    
+
     int32_t _TimerGet(std::list<Timer> &list, uint32_t id);
     bool _TimerDelete(std::list<Timer> &list, uint32_t id); // By timer ID
     int _TimerDeleteByWidget(std::list<Timer> &list, uint32_t wID, uint32_t code); // By widget ID
-    
+
     void ModAlpha(SDL_Surface *surf, Common::Rect space, uint8_t alpha);
-    
+
     void HwPrepareWidget(Widget *w);
     void HwRenderWidget(Widget *w);
-    
+
     SDL_Surface *CreateScreenFmtSurface(uint32_t w, uint32_t h);
 
 public:
     static Root Instance;
 protected:
-            
+
     uint32_t            _nextId = 1;
     WidgetList          _normal;
     WidgetList      _foreground;
@@ -162,14 +162,14 @@ protected:
     Common::Point      _dragPos;
     Common::Point      _micePos;
     int                _buttons = 0;
-    
+
     /** Timer things **/
     uint32_t       _nextTimerID = 1;
     uint64_t         _timeStamp = 0;
     std::list<Timer>    _timers;
     std::list<Timer> _timersNew;
     bool           _timersToNew = false;
-    
+
     bool              _hwRender = false;
 
     Common::Point      _screenSize;

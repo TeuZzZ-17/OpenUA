@@ -27,11 +27,11 @@ public:
     public:
         InstanceOpts(NC_STACK_ade *ade) : Ade(ade) {};
         virtual ~InstanceOpts() {};
-        
+
     public:
         NC_STACK_ade *Ade = NULL;
     };
-    
+
 public:
     virtual size_t Init(IDVList &stak);
     virtual size_t Deinit();
@@ -41,7 +41,7 @@ public:
 
     NC_STACK_ade() {};
     virtual ~NC_STACK_ade() {};
-    
+
     virtual const std::string ClassName() const {
         return __ClassName;
     };
@@ -72,12 +72,12 @@ public:
     virtual void setADE_depthFade(int);
     virtual void setADE_point(int);
     virtual void setADE_poly(int);
-    
+
     virtual InstanceOpts *GenRenderInstance();
     virtual bool IsParticle() const { return false; };
-    
+
     virtual void GenMesh(std::list<GFX::TMesh> *meshList, NC_STACK_skeleton * skelet) {};
-    
+
     virtual GFX::TRenderParams GetRenderParams( size_t polyID = 0 ) { return GFX::TRenderParams(); };
     virtual std::vector<tUtV> *GetOutline( size_t polyID = 0 ) { return NULL; };
 

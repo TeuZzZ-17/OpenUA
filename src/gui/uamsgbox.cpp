@@ -4,50 +4,50 @@
 
 
 namespace Gui
-{   
-UAMessageBox::UAMessageBox(uint8_t type): UAWindow("", Common::PointRect(), 0) 
+{
+UAMessageBox::UAMessageBox(uint8_t type): UAWindow("", Common::PointRect(), 0)
 {
     Init(type);
 }
 
-UAMessageBox::UAMessageBox(Widget *parent, uint8_t type): UAWindow(parent, "", Common::PointRect(), 0) 
+UAMessageBox::UAMessageBox(Widget *parent, uint8_t type): UAWindow(parent, "", Common::PointRect(), 0)
 {
-    Init(type);    
-} 
+    Init(type);
+}
 
 void UAMessageBox::Init(uint8_t type)
 {
     _flags |= FLAG_ENABLED;
-    
+
     std::string tmp = Locale::Text::Common(Locale::CMN_OK);
-    
+
     _okBtn = new UATextButton(this, tmp, Common::PointRect());
     _okBtn->SetBtnFlags(UABaseButton::FLAG_CENTER);
     _okBtn->SetColor(_UAButtonTextColor);
     _okBtn->Tag = 1;
-    
+
     tmp = Locale::Text::Common(Locale::CMN_CANCEL);
-    
+
     _cancelBtn = new UATextButton(this, tmp, Common::PointRect());
     _cancelBtn->SetBtnFlags(UABaseButton::FLAG_CENTER);
     _cancelBtn->SetColor(_UAButtonTextColor);
     _cancelBtn->Tag = 2;
-    
+
     _okBtn->_fOnPress = OnBtnPressSound;
     _cancelBtn->_fOnPress = OnBtnPressSound;
-    
+
     _okBtn->_fOnClick = OnBtnClick;
     _okBtn->_fOnClickData = this;
     _cancelBtn->_fOnClick = OnBtnClick;
     _cancelBtn->_fOnClickData = this;
-    
+
     switch (type)
     {
         case TYPE_INGAME:
         default:
             type = TYPE_INGAME;
             break;
-            
+
         case TYPE_INMENU:
             _TSET_U = TILESET_46DEFAULT;
             _TSET_M = TILESET_46DEFAULT;
@@ -55,9 +55,9 @@ void UAMessageBox::Init(uint8_t type)
             _GLYPH_MM = '{';
             break;
     }
-    
+
     _type = type;
-    
+
     Update();
 }
 
@@ -77,37 +77,37 @@ void UAMessageBox::Update()
             Common::Point spc = GetSpace();
             MoveTo(Common::Point(spc.x * 0.234375, spc.y * 0.385417));
             Resize(Common::Point(spc.x * 0.53125, spc.y * 0.21875));
-            
+
         }
         break;
-        
+
         case TYPE_INMENU:
         {
             Common::Point spc = GetSpace();
             _rect.MoveTo(spc.x * 0.234375, spc.y * 0.385417);
-            
+
             int hSize = spc.y * 0.21875;
             hSize -= (hSize % _UATiles[_TSET_D]->h) - 1;
-            
+
             _rect.SetSize(spc.x * 0.53125 + _UATiles[_TSET_M]->GetWidth('}'), hSize);
-            
+
             if (_inform)
             {
                 _okBtn->ResizeWH(spc.x * 0.125, 0);
                 _okBtn->MoveTo(ScreenCoordToClient(Common::Point(spc.x * 0.4375, spc.y * 0.53125)));
-                
+
                 _cancelBtn->SetEnable(false);
             }
             else
             {
                 _okBtn->ResizeWH(spc.x * 0.125, 0);
                 _okBtn->MoveTo(ScreenCoordToClient(Common::Point(spc.x * 0.25, spc.y * 0.53125)));
-                
+
                 _cancelBtn->SetEnable(true);
                 _cancelBtn->ResizeWH(spc.x * 0.125, 0);
                 _cancelBtn->MoveTo(ScreenCoordToClient(Common::Point(spc.x * 0.625, spc.y * 0.53125)));
             }
-            
+
             _txtRect1 = Common::PointRect(ScreenCoordToWidget(Common::Point(spc.x * 0.25, spc.y * 0.4375)), spc.x * 0.5, _UATiles[_TSET_U]->h);
             _txtRect2 = Common::PointRect(ScreenCoordToWidget(Common::Point(spc.x * 0.25, spc.y * 0.46875)), spc.x * 0.5, _UATiles[_TSET_U]->h);
         }
@@ -120,26 +120,26 @@ void UAMessageBox::Update()
 void UAMessageBox::OnAttachDetach(bool attach)
 {
     Update();
-    
+
     UAWindow::OnAttachDetach(attach);
 }
 
 void UAMessageBox::Draw(SDL_Surface *surface, const Common::Rect &dirt)
-{   
+{
     switch (_type)
     {
         default:
         case TYPE_INGAME:
             UAWindow::Draw(surface, dirt);
             break;
-        
+
         case TYPE_INMENU:
         {
             TileMap *tiles;
-    
+
             // Draw window box
             // Top
-            tiles   = _UATiles[_TSET_U];    
+            tiles   = _UATiles[_TSET_U];
 
             tiles->Draw(surface, Common::Point(0, 0), _GLYPH_LU );
 
@@ -188,13 +188,13 @@ void UAMessageBox::Draw(SDL_Surface *surface, const Common::Rect &dirt)
             src.h = 1;
 
             GFX::Engine.Draw(tiles->img->GetSwTex(), src, surface, Common::Point(out.right, out.top));
-            
+
             DrawText(surface, _txt1, TXTFLAG_CENTER, _UATextColor, _txtRect1);
             DrawText(surface, _txt2, TXTFLAG_CENTER, _UATextColor, _txtRect2);
         }
         break;
-        
-        
+
+
     }
 }
 
@@ -255,14 +255,14 @@ UABlockMsgBox::UABlockMsgBox(Widget *parent, const Common::PointRect &xyw, uint8
 void UABlockMsgBox::Init(uint8_t type)
 {
     _flags = Widget::FLAG_NODRAW;
-    
+
     _msgBox = new UAMessageBox(this, type);
     _msgBox->_flagsWindow |= UAWindow::FLAG_WND_UNMOVE;
     _msgBox->SetEnable(true);
-    
+
     _msgBox->_okBtn->_fOnClick = OnBtnClick;
     _msgBox->_okBtn->_fOnClickData = this;
-    
+
     _msgBox->_cancelBtn->_fOnClick = OnBtnClick;
     _msgBox->_cancelBtn->_fOnClickData = this;
 }

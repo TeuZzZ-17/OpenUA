@@ -57,7 +57,7 @@ struct Tmat3x3
         m21 = _m21;
         m22 = _m22;
     }
-    
+
     template <typename K = T>
     Tmat3x3(const Tmat3x3<K> &b)
     {
@@ -411,10 +411,10 @@ struct Tmat4x4
     {
         identity();
     }
-    
+
     Tmat4x4(Tmat4x4 &&) = default;
     Tmat4x4(const Tmat4x4 &) = default;
-    
+
     template <typename K = T>
     Tmat4x4(const Tmat4x4<K> &b)
     : m00(b.m00), m01(b.m01), m02(b.m02), m03(b.m03)
@@ -422,7 +422,7 @@ struct Tmat4x4
     , m20(b.m20), m21(b.m21), m22(b.m22), m23(b.m23)
     , m30(b.m30), m31(b.m31), m32(b.m32), m33(b.m33)
     {}
-    
+
     Tmat4x4( T _m00, T _m01, T _m02, T _m03,
              T _m10, T _m11, T _m12, T _m13,
              T _m20, T _m21, T _m22, T _m23,
@@ -475,7 +475,7 @@ struct Tmat4x4
         tmp.z = m20 * b.x + m21 * b.y + m22 * b.z + m23;
         return tmp;
     }
-    
+
     const Tmat4x4 Transpose() const
     {
         return Tmat4x4(m00, m10, m20, m30,
@@ -621,7 +621,7 @@ struct Tmat4x4
         tmp -= t;
         return tmp;
     }
-    
+
     Tmat4x4 &operator=(const Tmat4x4 &b) = default;
 
     template <typename K = T>
@@ -650,13 +650,13 @@ struct Tmat4x4
     {
         return Tvec3d<K>(m03, m13, m23);
     }
-    
+
     template <typename K = T>
     const T CalcW(const Tvec3d<K> &v) const
     {
         return v.x * m30 + v.y * m31 + v.z * m32 + m33;
     }
-    
+
     static Tmat4x4 Ortho (T left, T right, T bottom, T top, T nearval, T farval)
     {
         return Tmat4x4( 2.0 / (right-left), 0.0, 0.0, -(right+left) / (right-left),
@@ -664,7 +664,7 @@ struct Tmat4x4
                         0.0, 0.0, -2.0 / (farval-nearval), -(farval+nearval) / (farval-nearval),
                         0.0, 0.0, 0.0, 1.0);
     }
-    
+
     static Tmat4x4 UAFrustum (float fNear, float fFar)
     {
         return Tmat4x4( 1.0,  0.0, 0.0, 0.0,

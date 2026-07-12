@@ -22,12 +22,12 @@ struct IDVPair
     IDVPair(uint32_t _id, nonstd::any _val)
     : ID(_id), Skip(false), Value(_val)
     {}
-    
+
     template <typename T>
     T Get()
     {
         T t = T();
-        
+
         try
         {
             t = nonstd::any_cast<T>(Value);
@@ -46,23 +46,23 @@ class IDVList: public std::map<uint32_t, IDVPair>
 public:
     typedef std::pair<uint32_t, nonstd::any> TInitPair;
     typedef std::initializer_list< TInitPair > TInitList;
-    
+
     using std::map<uint32_t, IDVPair>::map;
-    
+
     IDVList()
     {}
-    
+
     IDVList(TInitList pairs)
     {
         for ( const TInitPair &p : pairs )
             (*this)[p.first] = IDVPair(p.first, p.second);
     }
-    
+
     void Add(uint32_t _id, nonstd::any _val)
     {
         (*this)[_id] = IDVPair(_id, _val);
     }
-    
+
     template <typename T>
     T Get(uint32_t _id, T _def)
     {
@@ -70,7 +70,7 @@ public:
 
         if (it == end())
             return _def;
-        
+
         return it->second.Get<T>();
     }
 };

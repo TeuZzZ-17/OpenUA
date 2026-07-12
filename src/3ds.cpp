@@ -60,7 +60,7 @@ bool NC_STACK_3ds::LoadFromFile(FSMgr::FileHandle *fil)
             break;
         }
     }
-    
+
     RecalcInternal();
     MakeCoordsCache();
 
@@ -72,11 +72,11 @@ NC_STACK_3ds *NC_STACK_3ds::Load3DS(const std::string &filename)
     FSMgr::FileHandle fil = uaOpenFile(filename, "rb");
     if (!fil.OK())
         return NULL;
-    
+
     NC_STACK_3ds *tmp = Nucleus::CInit<NC_STACK_3ds>();
     if(tmp->LoadFromFile(&fil))
         return tmp;
-    
+
     tmp->Delete();
     return NULL;
 }
@@ -92,7 +92,7 @@ size_t NC_STACK_3ds::readChunkEditor(FSMgr::FileHandle *fil, size_t sz)
         uint32_t tagsz = fil->readU32L() - 6;
 
         readed += 6;
-        
+
         if (tagsz > 100 * 1024 * 1024)
             break;
 
@@ -180,7 +180,7 @@ size_t NC_STACK_3ds::readChunkTrimesh(FSMgr::FileHandle *fil, size_t sz)
             printf("tex coords\n");
             uint16_t coNum = fil->readU16L();
             readed += 2;
-            
+
             texCoords.resize(coNum);
 
             for(tUtV &uv : texCoords)
@@ -215,7 +215,7 @@ size_t NC_STACK_3ds::readChunkVertex(FSMgr::FileHandle *fil, size_t sz)
         {NC_STACK_rsrc::RSRC_ATT_NAME, std::string("3ds_sklt")},
         {NC_STACK_rsrc::RSRC_ATT_TRYSHARED, (int32_t)2},
         {NC_STACK_skeleton::SKEL_ATT_POINTSCNT, (int32_t)numvertex}});
-        
+
     UAskeleton::Data *dat = _skeleton->GetSkelet();
 
     for (int i = 0; i < numvertex; i++)
@@ -488,7 +488,7 @@ size_t NC_STACK_3ds::readName(FSMgr::FileHandle *fil, std::string *dst, size_t m
         char c = fil->readS8();
         if (!c)
             break;
-        
+
         *dst += c;
     }
 
@@ -508,26 +508,26 @@ d3dsMaterial * NC_STACK_3ds::findMaterial(const std::string &matName)
 void NC_STACK_3ds::RecalcInternal(bool kids)
 {
     NC_STACK_base::RecalcInternal(kids);
-    
+
     if ( _skeleton )
     {
         UAskeleton::Data *skeldat = _skeleton->GetSkelet();
-        
+
         for(int32_t i = 0; i < faceNum; ++i)
         {
             GFX::TRenderParams mat;
             if (faceMaterial[i])
                 mat = GenRenderParams(faceMaterial[i]);
-            
+
             GFX::TMesh *msh = NC_STACK_base::FindMeshByRenderParams(&Meshes, mat);
-            
+
             if (!msh)
             {
                 Meshes.emplace_back();
                 msh = &Meshes.back();
                 msh->Mat = mat;
             }
-            
+
             UAskeleton::Polygon &pol = skeldat->polygons[ i ];
 
             uint32_t fid = msh->Vertexes.size();
@@ -542,7 +542,7 @@ void NC_STACK_3ds::RecalcInternal(bool kids)
                     msh->Vertexes.back().Color = mat.Color;
 
                     msh->BoundBox.Add( skeldat->POO[ pol.v[j] ] );
-                    
+
                     if (!texCoords.empty())
                         msh->Vertexes.back().TexCoord = texCoords.at(pol.v[j]);
                 }
@@ -561,23 +561,23 @@ void NC_STACK_3ds::RecalcInternal(bool kids)
 GFX::TRenderParams NC_STACK_3ds::GenRenderParams(d3dsMaterial *mat)
 {
     GFX::TRenderParams tmp;
-    
+
     if (!mat)
         return tmp;
-    
+
     tmp.Flags |= GFX::RFLAGS_SHADED;
-    
+
     if (mat->texture1_map.tex)
     {
         tmp.Flags |= GFX::RFLAGS_TEXTURED;
         tmp.TexSource = mat->texture1_map.tex;
-        
+
         if (mat->texture1_map.tex->IsDynamic())
             tmp.Flags |= GFX::RFLAGS_DYNAMIC_TEXTURE;
         else
             tmp.Tex = mat->texture1_map.tex->GetBitmap();
     }
-    
+
     tmp.Color = GFX::TGLColor(mat->diffuse[0], mat->diffuse[1], mat->diffuse[2], 1.0 - mat->transparency);
     return tmp;
 }

@@ -163,13 +163,13 @@ void NC_STACK_bitmap::PrepareTexture( bool force )
 {
     if (!bitm_intern)
         return;
-    
+
     if (bitm_intern->hwTex && !force)
         return;
-    
+
     if (bitm_intern->hwTex)
         GFX::Engine.FreeTexture(bitm_intern);
-        
+
     GFX::Engine.AllocTexture(bitm_intern);
 }
 

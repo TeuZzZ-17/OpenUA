@@ -13,7 +13,7 @@ public:
 
     NC_STACK_sklt() {};
     virtual ~NC_STACK_sklt() {};
-    
+
     virtual const std::string ClassName() const {
         return __ClassName;
     };

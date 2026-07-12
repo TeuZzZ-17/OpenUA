@@ -1666,7 +1666,7 @@ void sb_0x4f8f64__sub1(NC_STACK_ypaworld *yw)
             int hh = yw->_screenSize.y / 2;
 
             GFX::Engine.raster_func217( yw->GetColor(12) );
-            
+
             GFX::Engine.raster_func201( {dword_516510 - wh,
                                          dword_516514 - hh,
                                          dword_516518 - wh,
@@ -1820,7 +1820,7 @@ void sb_0x4f8f64__sub2(NC_STACK_ypaworld *yw, CmdStream *cur)
                         if ( ps.second.EffectivePower > 0 )
                         {
                             int v9 = 0;
-                            
+
                             vec2d tmp = World::SectorIDToCenterPos2(ps.second.CellId);
 
                             if ( ps.second.EffectivePower <= 32)
@@ -2626,7 +2626,7 @@ void sb_0x4f8f64(NC_STACK_ypaworld *yw)
         vii = yw->_mapSize.y - 1;
 
     robo_map.t1_cmdbuf_3.clear();
-    
+
     sb_0x4f8f64__sub2(yw, &robo_map.t1_cmdbuf_3);
 
     FontUA::select_tileset(&robo_map.t1_cmdbuf_3, setid);
@@ -2833,7 +2833,7 @@ void sub_4C0C00(NC_STACK_ypaworld *yw)
         v7 = 's'; //default fon
     else
         v7 = 'q'; //default fon (
-    
+
     robo_map.cmdCommands.clear();
 
     GuiBase::FormateTitle(yw, v20, v21, v22, Locale::Text::WinName(Locale::WINNAME_MAP), &robo_map.cmdCommands, v7, robo_map.flags);
@@ -3606,7 +3606,7 @@ int sb_0x451034__sub3(NC_STACK_ypaworld *yw)
     for (int i = 0; i < 11; i++)
         bzda.buttons[i] = ButtonBox();
 
-    bzda.cmdCommands.reserve(1088); 
+    bzda.cmdCommands.reserve(1088);
     bzda.field_1D8 = 0;
 
     sub_4C3A54(yw);
@@ -4231,9 +4231,9 @@ void gui_update_create_btn__sub0(NC_STACK_ypaworld *yw)
             const World::TBuildingProto &v10 = yw->_buildProtos[v9];
 
             int v18 = dround(yw->sub_4498F4() * v10.Energy / 100.0);
-            
+
             std::string v13 = yw->ResolveGameplayBuildingName(v10, yw->_isNetGame);
-                
+
             if ( v3 == gui_lstvw.selectedEntry )
                 v21 = 1;
 
@@ -5114,8 +5114,8 @@ NC_STACK_ypabact * NC_STACK_ypaworld::GetDefaultCmdr() const
         return _cmdrsRemap.at( _activeCmdrRemapIndex );
 
     if ( !_cmdrsRemap.empty() )
-        return _cmdrsRemap.front(); 
-    
+        return _cmdrsRemap.front();
+
     return _userRobo;
 }
 
@@ -5132,7 +5132,7 @@ NC_STACK_ypabact * NC_STACK_ypaworld::GetNextCmdrByCmdId(uint32_t cmdrId) const
             return _cmdrsRemap.front();
         }
     }
-    
+
     return GetDefaultCmdr();
 }
 
@@ -5140,7 +5140,7 @@ NC_STACK_ypabact * NC_STACK_ypaworld::GetNextSquad() const
 {
     if ( _userUnit == _userRobo || _playerInHSGun )
         return GetDefaultCmdr();
-    
+
     if ( _userUnit->_status == BACT_STATUS_DEAD )
     {
         for (NC_STACK_ypabact *comm : _cmdrsRemap)
@@ -5151,7 +5151,7 @@ NC_STACK_ypabact * NC_STACK_ypaworld::GetNextSquad() const
 
         return GetDefaultCmdr();
     }
-    
+
     if ( _userUnit->_bact_type == BACT_TYPES_GUN )
         return GetDefaultCmdr();
 
@@ -6341,7 +6341,7 @@ char ypaworld_func64__sub7__sub3__sub0__sub0__sub0(NC_STACK_ypabact *bact)
 void ypaworld_func64__sub7__sub3__sub0__sub0(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact, CmdStream *cur)
 {
     std::string pv;
-    
+
     int v46 = 0;
     NC_STACK_ypabact *v44 = NULL;
 
@@ -6376,7 +6376,7 @@ void ypaworld_func64__sub7__sub3__sub0__sub0(NC_STACK_ypaworld *yw, NC_STACK_ypa
             else if ( kid == yw->_lastMsgSender && ttt )
                 pv += '"'; //34
             else
-                pv += sub_4C7134(yw, kid); 
+                pv += sub_4C7134(yw, kid);
 
             if ( kid == v44 )
                 v46 = v41;
@@ -6515,7 +6515,7 @@ void ypaworld_func64__sub7__sub3__sub0__sub3(NC_STACK_ypaworld *yw, CmdStream *c
 void ypaworld_func64__sub7__sub3__sub0(NC_STACK_ypaworld *yw, TInputState *inpt)
 {
     TClickBoxInf *winpt = &inpt->ClickInf;
-    
+
     squadron_manager.itemBlock.clear();
 
     squadron_manager.ItemsPreLayout(yw, &squadron_manager.itemBlock, 0, "{ }");
@@ -7567,7 +7567,7 @@ void ypaworld_func64__sub7__sub0__sub0__sub0(NC_STACK_ypaworld *yw, CmdStream *c
 void ypaworld_func64__sub7__sub0__sub0(NC_STACK_ypaworld *yw)
 {
     info_log.itemBlock.clear();
-    
+
     info_log.ItemsPreLayout(yw, &info_log.itemBlock, 0, "{ }");
 
     for (int i = 0; i < info_log.shownEntries; i++ )
@@ -8282,7 +8282,7 @@ void NC_STACK_ypaworld::ypaworld_func64__sub7(TInputState *inpt)
                     _guiDragElement->cmdCommands[5] = (tmp >>  8) & 0xFF ; //HACKY UPDATE!
                     _guiDragElement->cmdCommands[6] = tmp & 0xFF ;
 
-                    tmp = v15 - (_screenSize.y / 2); 
+                    tmp = v15 - (_screenSize.y / 2);
                     _guiDragElement->cmdCommands[9] = (tmp >>  8) & 0xFF ; //HACKY UPDATE!
                     _guiDragElement->cmdCommands[10] = tmp & 0xFF ;
                 }
@@ -8328,7 +8328,7 @@ NC_STACK_ypabact * NC_STACK_ypaworld::GetLastMsgSender()
     for (NC_STACK_ypabact *comm : _cmdrsRemap)
     {
         NC_STACK_ypabact *found = NULL;
-        
+
         if ( info_log.field_255C == comm->_gid )
         {
             found = comm;
@@ -8337,9 +8337,9 @@ NC_STACK_ypabact * NC_STACK_ypaworld::GetLastMsgSender()
         {
             for (NC_STACK_ypabact *bact : comm->_kidList)
             {
-                if ( bact->_status != BACT_STATUS_DEAD && 
-                     bact->_status != BACT_STATUS_CREATE && 
-                     bact->_status != BACT_STATUS_BEAM && 
+                if ( bact->_status != BACT_STATUS_DEAD &&
+                     bact->_status != BACT_STATUS_CREATE &&
+                     bact->_status != BACT_STATUS_BEAM &&
                      !bact->ShouldHideFromStrategicUI() &&
                      bact->_gid == info_log.field_255C )
                 {
@@ -8353,7 +8353,7 @@ NC_STACK_ypabact * NC_STACK_ypaworld::GetLastMsgSender()
         {
             if ( (_timeStamp - info_log.field_2560) > 10000 )
                 return NULL;
-            
+
             return found;
         }
     }
@@ -8407,9 +8407,9 @@ void NC_STACK_ypaworld::sub_4C40AC()
                     selected = true;
                     break;
                 }
-            }     
+            }
         }
-        
+
         if (!selected)
         {
             if ( _activeCmdrID == 0 )
@@ -8431,7 +8431,7 @@ void NC_STACK_ypaworld::sub_4C40AC()
                         _activeCmdrRemapIndex = i;
                         break;
                     }
-                }                
+                }
             }
         }
     }
@@ -8439,7 +8439,7 @@ void NC_STACK_ypaworld::sub_4C40AC()
     {
         _activeCmdrRemapIndex = -1;
     }
-    
+
     _cmdrIdToSelect = -1;
 
     if ( _activeCmdrRemapIndex == -1 )
@@ -8848,12 +8848,12 @@ void NC_STACK_ypaworld::VoiceMessagePlayMsg(NC_STACK_ypabact *unit, int priority
             int v3 = 0;
             int v4 = 0;
             int num = 0;
-            
+
             TMsgVals() {};
-            
+
             TMsgVals(int p1, int t, int p2, int p3, int n)
             : v1(p1), type(t), v3(p2), v4(p3), num(n) {};
-            
+
         } msgvals;
 
         switch ( msgID )
@@ -9176,16 +9176,16 @@ void NC_STACK_ypaworld::VoiceMessagePlayMsg(NC_STACK_ypabact *unit, int priority
             msgvals = TMsgVals(3, 0, 2, 9, 1);
             priority += 12;
             break;
-        
+
         default:
             break;
         }
-        
+
         if ( msgvals.v1 )
         {
             if ( !unit )
                 unit = _userRobo;
-            
+
             int vo_type = msgvals.type;
 
             if ( msgvals.v1 == 1 )
@@ -9231,7 +9231,7 @@ void NC_STACK_ypaworld::VoiceMessagePlayMsg(NC_STACK_ypabact *unit, int priority
             }
 
             int v16 = 1;
-            
+
             if ( msgvals.num > 1 )
                 v16 = rand() % msgvals.num + 1;
 
@@ -9242,7 +9242,7 @@ void NC_STACK_ypaworld::VoiceMessagePlayMsg(NC_STACK_ypabact *unit, int priority
 
 void sb_0x4d7c08__sub0__sub0(NC_STACK_ypaworld *yw)
 {
-    
+
     CmdStream buf;
     buf.reserve(1024);
 
@@ -9252,7 +9252,7 @@ void sb_0x4d7c08__sub0__sub0(NC_STACK_ypaworld *yw)
         {
             uint32_t timeDelay;
             std::string str;
-            
+
             if ( yw->_netEvent.EventType == 1 )
             {
                 str = Locale::Text::Advanced(Locale::ADV_VICTORY);
@@ -9959,7 +9959,7 @@ int sb_0x4d7c08__sub0__sub0__sub0(NC_STACK_ypaworld *yw)
             }
             i++;
         }
-        
+
         if (notOk)
             return 0;
     }
@@ -10990,7 +10990,7 @@ void sb_0x4d7c08__sub0__sub4__sub2__sub0(NC_STACK_ypaworld *yw)
 
     CmdStream buf;
     buf.reserve(8192);
-    
+
     FontUA::select_tileset(&buf, 61);
 
     float v6 = yw->_screenSize.x / 2;
@@ -11196,7 +11196,7 @@ void sb_0x4d7c08__sub0__sub2__sub1(NC_STACK_ypaworld *yw, CmdStream *cur, const 
         for (int i = 0; i < nums; i++)
         {
             int clrid;
-            
+
             FontUA::ColumnItem a4a[2];
 
             switch ( v25[i].a )
@@ -11605,10 +11605,10 @@ int NC_STACK_ypaworld::UserActBuildCheck()
          (!_allowMultiBuildLevel && IsAnyBuildingProcess(_playerOwner)) )
         return 5; // TIP_BUILD_INPROC
 
-    if ( _cellOnMouse->PurposeType == cellArea::PT_TECHUPGRADE || 
-         _cellOnMouse->PurposeType == cellArea::PT_GATECLOSED || 
-         _cellOnMouse->PurposeType == cellArea::PT_GATEOPENED || 
-         _cellOnMouse->PurposeType == cellArea::PT_STOUDSON || 
+    if ( _cellOnMouse->PurposeType == cellArea::PT_TECHUPGRADE ||
+         _cellOnMouse->PurposeType == cellArea::PT_GATECLOSED ||
+         _cellOnMouse->PurposeType == cellArea::PT_GATEOPENED ||
+         _cellOnMouse->PurposeType == cellArea::PT_STOUDSON ||
          (_cellOnMouse->PurposeType == cellArea::PT_TECHDEACTIVE && _isNetGame) )
         return 1; // NO with no tip
 
@@ -12062,7 +12062,7 @@ int sub_4D3C80(NC_STACK_ypaworld *yw)
 
     if ( !a4 )
         return 0;
-    
+
     yw->_bactOnMouse = a4;
     return 1;
 }

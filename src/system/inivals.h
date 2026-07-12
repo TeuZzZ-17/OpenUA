@@ -3,18 +3,18 @@
 
 #include "../ini.h"
 
-namespace System 
+namespace System
 {
-    
+
 class IniConf
-{   
+{
 public:
 
 public:
     static void Init();
     static bool ReadFromNucleusIni();
     static bool ReadFromIni(const std::string &fname);
-    
+
     static Common::Ini::Key GfxDither;
     static Common::Ini::Key GfxFilter;
     static Common::Ini::Key GfxAntialias;
@@ -53,7 +53,7 @@ public:
     static Common::Ini::Key GfxSkyHeight;
     static Common::Ini::Key GfxSkyRender;
     static Common::Ini::Key GfxAdditionalModes;
-    
+
     static Common::Ini::Key GfxMode;
     static Common::Ini::Key GfxXRes;
     static Common::Ini::Key GfxYRes;
@@ -68,7 +68,7 @@ public:
     static Common::Ini::Key GfxVhsFilterStrength;
     static Common::Ini::Key GfxDisplay;
     static Common::Ini::Key GfxDisplay2;
-    
+
     static Common::Ini::Key GfxColorEffects;
     static Common::Ini::Key GfxColorEffPower1;
     static Common::Ini::Key GfxColorEffPower2;
@@ -86,7 +86,7 @@ public:
     static Common::Ini::Key GfxColorEffPower14;
     static Common::Ini::Key GfxColorEffPower15;
     static Common::Ini::Key GfxColorEffPower16;
-    
+
     static Common::Ini::Key InputDebug;
     static Common::Ini::Key InputTimer;
     static Common::Ini::Key InputWimp;
@@ -203,24 +203,24 @@ public:
     static Common::Ini::Key InputHotkey45;
     static Common::Ini::Key InputHotkey46;
     static Common::Ini::Key InputHotkey47;
-    
+
     static Common::Ini::Key AudioChannels;
     static Common::Ini::Key AudioVolume;
     static Common::Ini::Key AudioNumPalfx;
     static Common::Ini::Key AudioRevStereo;
-    
+
     static Common::Ini::Key TformBackplane;
     static Common::Ini::Key TformFrontplane;
     static Common::Ini::Key TformZoomx;
     static Common::Ini::Key TformZoomy;
-    
+
     static Common::Ini::Key NetGmode;
     static Common::Ini::Key NetVersionCheck;
-    
+
     static Common::Ini::Key GameDebug;
     static Common::Ini::Key GameNewDebug;
     static bool IsGameNewDebugEnabled();
-    
+
     static Common::Ini::Key GameNewAI;
     // OpenUA: frame-rate independent gameplay timing (game.fixed_tick, default no).
     // "no" keeps vanilla biased timing; "yes" uses the true measured frame delta.
@@ -234,8 +234,7 @@ public:
     static Common::Ini::Key GameRoboBuildingCollisionDamagePercent;
     static Common::Ini::Key GamePowerStationEnergyMultiplier;
     static Common::Ini::Key GameFallDamageMultiplier;
-    static Common::Ini::Key GameUnitCollisionPush;
-    static Common::Ini::Key GameUnitCollisionDamageMultiplier;
+    static Common::Ini::Key GamePushAtDeathMultiplier;
 
     // OpenUA: Black Sect "imperfect grey clone" runtime balance (owner/faction 5 only).
     // Pure runtime maluses applied to live actors; never mutate shared prototypes.
@@ -246,19 +245,19 @@ public:
     static Common::Ini::Key NetGameExclusiveGem;
     static Common::Ini::Key NetWaitStart;
     static Common::Ini::Key NetKickoff;
-    
+
     static Common::Ini::Key ParticlesLimit;
     static Common::Ini::Key MenuWindowed;
-    
+
     static Common::Ini::Key GameHideBlacksect;
-    
+
     static Common::Ini::Key GfxVBO;
 
     static Common::Ini::Key UiHideMenuHints; // OpenUA: ui.hide_menu_hints (default yes) — suppress passive menu hover/help hints
     static Common::Ini::Key UiMenuFont; // OpenUA: ui.menu_font (default Default) - menu/interface TTF face selector
 
 private:
-    static Common::Ini::PKeyList _varList;    
+    static Common::Ini::PKeyList _varList;
 };
 
 }

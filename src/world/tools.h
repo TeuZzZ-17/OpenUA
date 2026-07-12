@@ -11,7 +11,7 @@
 
 namespace World {
 
-inline Common::Point PositionToSectorID(const vec3d &pos) 
+inline Common::Point PositionToSectorID(const vec3d &pos)
 { return Common::Point(pos.x / CVSectorLength, -pos.z / CVSectorLength); };
 
 inline Common::Point PositionToSectorID(const vec2d &pos)

@@ -26,7 +26,7 @@ struct TLine
     T y1;
     T x2;
     T y2;
-    
+
     TLine() : x1(0), y1(0), x2(0), y2(0) {};
     TLine(T x, T y) : x1(0), y1(0), x2(x), y2(y) {};
     TLine(TPoint<T> p) : x1(0), y1(0), x2(p.x), y2(p.y) {};
@@ -34,34 +34,34 @@ struct TLine
     TLine(T x, T y, TPoint<T> p) : x1(x), y1(y), x2(p.x), y2(p.y) {};
     TLine(TPoint<T> p1, TPoint<T> p2) : x1(p1.x), y1(p1.y), x2(p2.x), y2(p2.y) {};
     TLine(T ax, T ay, T bx, T by) : x1(ax), y1(ay), x2(bx), y2(by) {};
-    
+
     double Length() const
     {
         T w = x2 - x1;
         T h = y2 - y1;
         return sqrt( w * w + h * h );
     }
-    
+
     T Width() const
     {
         return ABS(x2 - x1);
     }
-    
+
     T Height() const
     {
         return ABS(y2 - y1);
     }
-    
+
     TPoint<T> P1() const
     {
         return TPoint<T>(x1, y1);
     }
-    
+
     TPoint<T> P2() const
     {
         return TPoint<T>(x2, y2);
     }
-    
+
     int ClipFlags(T x, T y, const TRect<T> &clip) const
     {
         int flag = 0;
@@ -78,7 +78,7 @@ struct TLine
 
         return flag;
     }
-    
+
     /*
      * Clip line by rectangle.
      * Return true if line intersects with rect.
@@ -94,7 +94,7 @@ struct TLine
              * If flags for p1 and p2 intersects - it's mean
              * that line is not intersects with rect
              * and two points lay outside one side of clip rect.
-             ***/                
+             ***/
             if ( (flag2 & flag1) != 0 )
                 return false;
 

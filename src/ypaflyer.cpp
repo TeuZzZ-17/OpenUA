@@ -540,7 +540,7 @@ void NC_STACK_ypaflyer::AI_layer3(update_msg *arg)
             }
         }
 
-        ApplySeekAndExplodeRammingGuidance(false);
+        ApplySeekAndExplodeRammingGuidance();
 
         ypaflyer_func70__sub0(a2a);
 

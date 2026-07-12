@@ -51,7 +51,7 @@ size_t NC_STACK_base::Deinit()
     {
         NC_STACK_ade * ade = _ADES.front();
         _ADES.pop_front();
-        
+
         ade->AttachedTo = NULL; //Clear ade attached, because we do erase in this list
         ade->Delete();
     }
@@ -63,7 +63,7 @@ size_t NC_STACK_base::Deinit()
     {
         NC_STACK_base * kid = _KIDS.front();
         _KIDS.pop_front();
-        
+
         kid->_parent = NULL; //Clear kid parent field, because we do erase in this list
         kid->Delete();
     }
@@ -121,7 +121,7 @@ int NC_STACK_base::ReadIFFTagSTRC(IFFile *mfile)
         SetPosition(pos);
         SetScale(scale);
         SetEulerRotation(ax, ay, az);
-        
+
         SetParentFollow( (___svdFlags & FLAG_FOLLOWPARENT) != 0 );
 
         SetVizLimit( visLimit );
@@ -286,10 +286,10 @@ size_t NC_STACK_base::LoadingFromIFF(IFFile **file)
             mfile->skipChunk();
         }
     }
-    
+
     RecalcInternal();
     MakeCoordsCache();
-    
+
     return obj_ok;
 }
 
@@ -383,7 +383,7 @@ void NC_STACK_base::ChangeParentTo(NC_STACK_base *parent, TF::TForm3D *parentTFo
         _parent->_KIDS.remove(this);
 
     _parent = parent;
-    
+
     if ( _parent )
         _parent->_KIDS.push_back(this);
 
@@ -426,7 +426,7 @@ void NC_STACK_base::SetEulerRotation(int32_t x, int32_t y, int32_t z, int flag)
             _transform.ay = y;
         if ( flag & UF_Z )
             _transform.az = z;
-        
+
         _transform.MakeScaleRotationMatrix();
     }
 }
@@ -441,7 +441,7 @@ void NC_STACK_base::ChangeEulerRotation(int32_t x, int32_t y, int32_t z, int fla
             _transform.ay += y;
         if ( flag & UF_Z )
             _transform.az += z;
-        
+
         _transform.MakeScaleRotationMatrix();
     }
 }
@@ -457,7 +457,7 @@ void NC_STACK_base::SetScale(const vec3d &v, int flag)
             _transform.Scale.y = v.y;
         if ( flag & UF_Z )
             _transform.Scale.z = v.z;
-        
+
         _transform.MakeScaleRotationMatrix();
     }
 }
@@ -472,7 +472,7 @@ void NC_STACK_base::ChangeScale(const vec3d &v, int flag)
             _transform.Scale.y *= v.y;
         if ( flag & UF_Z )
             _transform.Scale.z *= v.z;
-        
+
         _transform.MakeScaleRotationMatrix();
     }
 }
@@ -496,8 +496,8 @@ size_t NC_STACK_base::Render(baseRender_msg *arg, Instance * inst, bool doCopy /
             skel132.tform *= (_transform.TForm - view->CalcPos);
         else
             skel132.tform *= mat4x4(_transform.CalcPos - view->CalcPos);
-        
-        
+
+
         _renderMsg.timeStamp = arg->globTime;
         _renderMsg.frameTime = arg->frameTime;
         _renderMsg.minZ = arg->minZ;
@@ -508,16 +508,16 @@ size_t NC_STACK_base::Render(baseRender_msg *arg, Instance * inst, bool doCopy /
         _renderMsg.tint = arg->particleTint;
         _renderMsg.particleScale = arg->particleScale;
         _renderMsg.particleSpin = arg->particleSpin;
-        
+
         if (!inst)
             isVisible = _skeleton->skeleton_func132(&skel132);
         else
             isVisible = 1;
-        
+
         float distance = skel132.tform.getTranslate().length();
-        
+
         for(GFX::TMesh &msh : Meshes)
-        {       
+        {
             arg->adeCount += msh.Indixes.size() / 3;
             GFX::TRenderNode& rend = GFX::Engine.AllocRenderNode();
             rend = GFX::TRenderNode( GFX::TRenderNode::TYPE_MESH );
@@ -531,26 +531,26 @@ size_t NC_STACK_base::Render(baseRender_msg *arg, Instance * inst, bool doCopy /
             {
                 msh.Mat.TexSource->SetTime(arg->globTime, arg->frameTime);
                 uint32_t frameid = msh.Mat.TexSource->GetCurrentFrameID();
-                
+
                 if (frameid < msh.CoordsCache.size())
                 {
                     rend.Tex = msh.CoordsCache.at(frameid).Tex;
-                    rend.coordsID = frameid;                    
+                    rend.coordsID = frameid;
                 }
             }
             else
                 rend.Tex = msh.Mat.Tex;
-            
+
             rend.Flags |= arg->flags;
-            
+
             if (doCopy)
             {
                 rend.LocalMesh = msh;
                 rend.Mesh = &rend.LocalMesh;
             }
             else
-                rend.Mesh = &msh;            
-            
+                rend.Mesh = &msh;
+
             rend.TForm = skel132.tform;
             rend.TimeStamp = arg->globTime;
             rend.FrameTime = arg->frameTime;
@@ -609,7 +609,7 @@ size_t NC_STACK_base::RenderImmediately(baseRender_msg *arg, Instance * inst)
             skel132.tform *= (_transform.TForm - view->CalcPos);
         else
             skel132.tform *= mat4x4(_transform.CalcPos - view->CalcPos);
-        
+
         _renderMsg.timeStamp = arg->globTime;
         _renderMsg.frameTime = arg->frameTime;
         _renderMsg.minZ = arg->minZ;
@@ -620,9 +620,9 @@ size_t NC_STACK_base::RenderImmediately(baseRender_msg *arg, Instance * inst)
         _renderMsg.tint = arg->particleTint;
         _renderMsg.particleScale = arg->particleScale;
         _renderMsg.particleSpin = arg->particleSpin;
-        
+
         float distance = skel132.tform.Transform( _transform.Pos ).length();
-        
+
         for(GFX::TMesh &msh : Meshes)
         {
             GFX::TRenderNode rend( GFX::TRenderNode::TYPE_MESH );
@@ -630,8 +630,8 @@ size_t NC_STACK_base::RenderImmediately(baseRender_msg *arg, Instance * inst)
             rend.Color = msh.Mat.Color;
             rend.ColorMul = arg->tint; // OpenUA custom: per-object VP tint multiplier
             rend.Flags = msh.Mat.Flags | arg->flags;
-            
-            rend.Mesh = &msh;            
+
+            rend.Mesh = &msh;
             rend.TForm = skel132.tform;
             rend.TimeStamp = arg->globTime;
             rend.FrameTime = arg->frameTime;
@@ -640,7 +640,7 @@ size_t NC_STACK_base::RenderImmediately(baseRender_msg *arg, Instance * inst)
 
             GFX::GFXEngine::Instance.RenderNode(&rend);
         }
-        
+
         if (inst)
         {
             for (NC_STACK_ade::InstanceOpts *ade : inst->Particles)
@@ -860,19 +860,19 @@ NC_STACK_base *NC_STACK_base::LoadBaseFromFile(const std::string &fname)
 NC_STACK_base::Instance *NC_STACK_base::GenRenderInstance()
 {
     Instance *tmp = new Instance(this);
-    
+
     tmp->Particles.reserve(_ADES.size());
     tmp->KidsOpts.reserve(_KIDS.size());
-    
+
     for(NC_STACK_base *bs : _KIDS)
         tmp->KidsOpts.emplace_back(bs->GenRenderInstance());
-    
+
     for(NC_STACK_ade *ade : _ADES)
     {
         if (ade->IsParticle())
             tmp->Particles.emplace_back(ade->GenRenderInstance());
     }
-        
+
     return tmp;
 }
 
@@ -885,7 +885,7 @@ void NC_STACK_base::CheckOpts(Instance **vpOpts, NC_STACK_base *bas)
             *vpOpts = bas->GenRenderInstance();
             return;
         }
-        
+
         if ((*vpOpts)->Bas != bas)
         {
             Common::DeleteAndNull(vpOpts);
@@ -906,7 +906,7 @@ void NC_STACK_base::RecalcInternal(bool kids)
             if (!ade->IsParticle())
                 ade->GenMesh(&Meshes, _skeleton);
         }
-        
+
         if (kids)
         {
             for(NC_STACK_base *bs : _KIDS)
@@ -919,7 +919,7 @@ void NC_STACK_base::ComputeStaticFog()
 {
     const float fend = _visLimit;
     const float fstrt = _renderMsg.fadeStart;
-    
+
     for (GFX::TMesh &m : Meshes)
     {
         if (m.Mat.Flags & GFX::RFLAGS_FOG)
@@ -934,7 +934,7 @@ void NC_STACK_base::ComputeStaticFog()
                 v.ComputedColor.a = v.Color.a;
                 v.ComputedColor.r = v.Color.r * f;
                 v.ComputedColor.g = v.Color.g * f;
-                v.ComputedColor.b = v.Color.b * f;        
+                v.ComputedColor.b = v.Color.b * f;
             }
         }
         else
@@ -950,7 +950,7 @@ NC_STACK_base::Instance::~Instance()
 {
     for(Instance *kd : KidsOpts)
         delete kd;
-    
+
     for(NC_STACK_ade::InstanceOpts *opt : Particles)
         delete opt;
 }
@@ -962,7 +962,7 @@ GFX::TMesh *NC_STACK_base::FindMeshByRenderParams(std::list<GFX::TMesh> *list, c
         if (m.Mat == p)
             return &m;
     }
-    
+
     return NULL;
 }
 
@@ -970,22 +970,22 @@ void NC_STACK_base::GenerateMeshCoordsCache(GFX::TMesh *mesh)
 {
     if (!mesh)
         return;
-    
+
     mesh->CoordsCache.clear();
- 
+
     if ( !(mesh->Mat.Flags & GFX::RFLAGS_DYNAMIC_TEXTURE) || !mesh->Mat.TexSource )
         return;
-    
+
     mesh->CoordsCache.resize( mesh->Mat.TexSource->GetFramesCount() );
-    
+
     for (uint32_t i = 0; i < mesh->CoordsCache.size(); ++i)
     {
         mesh->CoordsCache[i].Tex = mesh->Mat.TexSource->GetBitmap(i);
         std::vector<tUtV> &srcCoords = mesh->Mat.TexSource->GetOutline(i);
-        
+
         std::vector<tUtV> &cache = mesh->CoordsCache[i].Coords;
         cache.resize( mesh->Vertexes.size() );
-        
+
         for(uint32_t j = 0; j < cache.size(); ++j)
             cache[j] = srcCoords.at( mesh->Vertexes[j].TexCoordId );
     }
@@ -1009,7 +1009,7 @@ void NC_STACK_base::MakeCache(TObjectCache *cache)
     cache->Meshes = Meshes;
     cache->Transform = _transform;
     cache->Transform.Parent = NULL;
-    
+
     cache->fadeStart = _renderMsg.fadeStart;
     cache->fadeLength = _renderMsg.fadeLength;
 }
@@ -1019,7 +1019,7 @@ void NC_STACK_base::FreeVBO()
 {
     for (GFX::TMesh &m : Meshes)
         GFX::Engine.MeshFreeVBO(&m);
-    
+
     for (NC_STACK_base * &kid : _KIDS)
         kid->FreeVBO();
 }
@@ -1028,7 +1028,7 @@ void NC_STACK_base::MakeVBO()
 {
     for (GFX::TMesh &m : Meshes)
         GFX::Engine.MeshMakeVBO(&m);
-    
+
     for (NC_STACK_base * &kid : _KIDS)
         kid->MakeVBO();
 }
@@ -1042,13 +1042,13 @@ void TObjectCache::Render(baseRender_msg *arg)
 {
     if (Meshes.empty())
         return;
-    
+
     Transform.CalcGlobal();
-    
+
     TF::TForm3D *view = TF::Engine.GetViewPoint();
-    
+
     mat4x4 tf = view->CalcSclRot;
-    
+
     if ( !(Transform.flags & TF::TForm3D::FLAG_NO_WRLD_ROT) )
         tf *= (Transform.TForm - view->CalcPos);
     else
@@ -1059,7 +1059,7 @@ void TObjectCache::Render(baseRender_msg *arg)
     for(GFX::TMesh &msh : Meshes)
     {
         arg->adeCount += msh.Indixes.size() / 3;
-                
+
         GFX::TRenderNode& rend = GFX::Engine.AllocRenderNode();
         rend = GFX::TRenderNode( GFX::TRenderNode::TYPE_MESH );
 
@@ -1075,7 +1075,7 @@ void TObjectCache::Render(baseRender_msg *arg)
             if (frameid < msh.CoordsCache.size())
             {
                 rend.Tex = msh.CoordsCache.at(frameid).Tex;
-                rend.coordsID = frameid;                    
+                rend.coordsID = frameid;
             }
         }
         else

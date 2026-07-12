@@ -103,7 +103,7 @@ void NC_STACK_ypaworld::SendCRC(int lvlid)
     crc = fileCrc32("data:scripts/flaks.scr", crc);
     crc = fileCrc32("data:scripts/net_ypa.scr", crc);
     crc = fileCrc32("data:scripts/inetrobo.scr", crc);
-    
+
     crc = fileCrc32( fmt::sprintf("levels:multi/L%02d%02d.ldf", lvlid, lvlid) , crc);
 
     _GameShell->netCRC = crc;
@@ -599,10 +599,10 @@ void NC_STACK_ypaworld::yw_processVhclDataMsgs(uamessage_vhclData *msg, NC_STACK
 int yw_netGetUnitsCount(NC_STACK_ypabact *host)
 {
     int count = 1 + host->_kidList.size();
-    
+
     for ( NC_STACK_ypabact* &comm : host->_kidList )
         count += comm->_kidList.size();
-    
+
     return count;
 }
 
@@ -889,9 +889,9 @@ bool yw_netRecvUpdate(NC_STACK_ypaworld *yw, uamessage_update *msg, int owner)
                 lastBct = currHost;
 
                 hostList = &currHost->_kidList;
-                
+
                 hostLstIt = hostList->begin(); //CheckIT may be it must iterate to first robogun?
-                
+
                 if ( hostLstIt == hostList->end() )
                     hostList = NULL;
 
@@ -1099,7 +1099,7 @@ size_t yw_handleNormMsg(NC_STACK_ypaworld *yw, windp_recvMsg *msg, std::string *
             log_netlog("Warning, no or false owner (%d) specified for msg %d\n", owner, msgID);
         tv481 = 0;
     }
-    
+
     UserData::TNetPlayerLobbyData *plr = NULL;
 
     for(UserData::TNetPlayerLobbyData &pl : yw->_GameShell->lobbyPlayers)
@@ -1107,7 +1107,7 @@ size_t yw_handleNormMsg(NC_STACK_ypaworld *yw, windp_recvMsg *msg, std::string *
         if (StriCmp(pl.Name, msg->senderName) == 0)
         {
             plr = &pl;
-            
+
             if (pl.UpdateCountDown)
             {
                 pl.UpdateCountDown -= yw->_updateMessage.frameTime;
@@ -1578,14 +1578,14 @@ size_t yw_handleNormMsg(NC_STACK_ypaworld *yw, windp_recvMsg *msg, std::string *
         {
             NC_STACK_ypabact *nd = *it;
             it++;
-            
+
             if ( nd->_status == BACT_STATUS_DEAD )
             {
                 if ( fndBact->_parent )
                     fndBact->_parent->AddSubject(nd);
                 else
                     yw->ypaworld_func134(nd);
-                    
+
 
                 nd->_status_flg |= BACT_STFLAG_NOMSG;
             }
@@ -1647,7 +1647,7 @@ size_t yw_handleNormMsg(NC_STACK_ypaworld *yw, windp_recvMsg *msg, std::string *
             {
                 NC_STACK_ypamissile* miss = fndBact->_missiles_list.front();
                 fndBact->_missiles_list.pop_front();
-                
+
                 fndBact->_parent->_missiles_list.push_back(miss);
                 miss->SetLauncherBact(fndBact->_parent);
             }
@@ -1656,7 +1656,7 @@ size_t yw_handleNormMsg(NC_STACK_ypaworld *yw, windp_recvMsg *msg, std::string *
         {
             yw->NetReleaseMissiles(fndBact);
         }
-        
+
 
         fndBact->_status = BACT_STATUS_DEAD;
 
@@ -2124,7 +2124,7 @@ size_t yw_handleNormMsg(NC_STACK_ypaworld *yw, windp_recvMsg *msg, std::string *
             else
                 bhost->_killer = NULL;
         }
-        
+
         yw->HistoryAktKill(bhost);
 
         if ( hdMsg->killer && hdMsg->killerOwner == yw->_userRobo->_owner )
@@ -2258,7 +2258,7 @@ size_t yw_handleNormMsg(NC_STACK_ypaworld *yw, windp_recvMsg *msg, std::string *
 
         if ( bld )
             yw->_buildProtos[bld].EnableMask = 0;
-      
+
         uint16_t lastVhcl = 0;
         uint16_t lastBuild = 0;
 
@@ -2593,7 +2593,7 @@ size_t yw_handleNormMsg(NC_STACK_ypaworld *yw, windp_recvMsg *msg, std::string *
         int plCount = yw->_netDriver->GetPlayerCount();
 
         index = 0;
-        
+
         if ( minf.IsFraction(World::OWNER_RESIST) )
         {
             if ( plCount > 0 )
@@ -2689,10 +2689,10 @@ size_t yw_handleNormMsg(NC_STACK_ypaworld *yw, windp_recvMsg *msg, std::string *
             pl.DataChecksum = 0;
 
         TMapRegionInfo &minf = yw->_globalMapRegions.MapRegions[stlvlMsg->lvlID];
-        
+
         int plCount = yw->_netDriver->GetPlayerCount();
         int32_t index = 0;
-        
+
         if ( minf.IsFraction(World::OWNER_RESIST) )
         {
             if ( plCount )
@@ -2756,7 +2756,7 @@ size_t yw_handleNormMsg(NC_STACK_ypaworld *yw, windp_recvMsg *msg, std::string *
             {
                 yw->_GameShell->FreeFraction &= ~World::OWNER_TAER_BIT;
                 yw->_GameShell->lobbyPlayers[index].NetFraction = World::OWNER_TAER_BIT;
-                
+
                 if ( index == yw->_netDriver->GetMyIndex() )
                     yw->_GameShell->SelectedFraction = World::OWNER_TAER_BIT;
 
@@ -3247,7 +3247,7 @@ void yw_HandleNetMsg(NC_STACK_ypaworld *yw)
 
                     int plid = yw->_netDriver->GetPlayerCount();
 
-                    
+
                     usr->lobbyPlayers[plid - 1].Name = recvMsg.senderName;
                     usr->lobbyPlayers[plid - 1].Welcomed = true;
                 }
@@ -3632,7 +3632,7 @@ bool NC_STACK_ypaworld::yw_NetSetHostStations(const std::vector<MapRobo> &Robos)
 size_t NC_STACK_ypaworld::ypaworld_func179(yw_arg161 *arg)
 {
     bact_id = 0x10000;
-    
+
     _particles.Clear();
 
     TLevelDescription proto;
@@ -3662,7 +3662,7 @@ size_t NC_STACK_ypaworld::ypaworld_func179(yw_arg161 *arg)
                             InitGates();
                             InitSuperItems();
                             UpdatePowerEnergy();
-                            
+
                             PrepareAllFillers();
 
                             if ( sb_0x451034(this) )

@@ -11,7 +11,7 @@ public:
     NC_STACK_wav() {
     };
     virtual ~NC_STACK_wav() {};
-    
+
     virtual const std::string ClassName() const {
         return __ClassName;
     };

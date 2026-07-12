@@ -85,7 +85,7 @@ static int PlayerMobileMoveScaledPitch(TSoundSource &snd, int basePitch, float s
 }
 
 
-const std::array<Common::Point, 8> NearDxy 
+const std::array<Common::Point, 8> NearDxy
 {{
     {-1, -1}, {0, -1}, {1, -1}, {-1, 0},
     { 1,  0}, {-1, 1}, {0,  1}, { 1, 1}
@@ -465,7 +465,7 @@ void NC_STACK_yparobo::InitForce(NC_STACK_ypabact *unit)
 {
     if ( _roboDockTime > 0 )
         return;
-    
+
     if ( _roboDockEnerg <= 0 )
     {
         sub_4A9F24(unit);
@@ -487,7 +487,7 @@ void NC_STACK_yparobo::InitForce(NC_STACK_ypabact *unit)
 
     int unitCost = yparobo_GetUnitProductionCost(unit);
     int v23 = (arg81.enrg_sum * 0.05 + 1.0) * (float)unitCost;
-    
+
     if ( v6 > (signed int)v23 )
     {
         if ( yparobo_IsAiActiveVehicleCapReached(this, unit->_vehicleID) )
@@ -511,7 +511,7 @@ void NC_STACK_yparobo::InitForce(NC_STACK_ypabact *unit)
         sub_4A9F24(unit);
         return;
     }
-    
+
     newUnit->_status = BACT_STATUS_CREATE;
     newUnit->_owner = _owner;
     newUnit->_commandID = unit->_commandID;
@@ -734,7 +734,7 @@ void NC_STACK_yparobo::sb_0x4a7010__sub1__sub0(NC_STACK_ypabact *unit1, NC_STACK
 void NC_STACK_yparobo::sb_0x4a7010__sub1(NC_STACK_ypabact *unit, robo_t1 *rbt)
 {
     NC_STACK_ypabact *foundBact = NULL;
-    
+
     if (unit->_parent->_kidRef)
     {
         for(NC_STACK_ypabact* &nod : *unit->_parent->_kidRef.PList())
@@ -2013,7 +2013,7 @@ void NC_STACK_yparobo::doUserCommands(update_msg *arg)
                 {
                     arg134.field_4 = 16;
                 }
-                
+
                 placeMessage(&arg134);
             }
             else if ( v8->_primTtype == BACT_TGT_TYPE_UNIT )
@@ -2093,7 +2093,7 @@ void NC_STACK_yparobo::doUserCommands(update_msg *arg)
 
                 newbact->_host_station = this;
                 _roboEnergyLife -= arg->energy;
-                
+
                 _world->SetCmdrIdToSelect(newbact->_commandID); // Select it for add next units
 
                 _world->HistoryAktCreate(newbact);
@@ -2355,10 +2355,10 @@ void NC_STACK_yparobo::HandleUserCommands(update_msg *arg)
 {
     if ( _kidRef.IsListType(World::BLIST_CACHE) ) // Do not update units in dead list
         return;
-    
+
     if (_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2))
         return;
-    
+
     if ( _status != BACT_STATUS_NORMAL)
         return;
 
@@ -2371,7 +2371,7 @@ int NC_STACK_yparobo::FindBestBldRadar()
     int id = -1;
     int power = 0;
     int i = 0;
-    
+
     for (const World::TBuildingProto &proto : _world->GetBuildProtos())
     {
         if ( proto.EnableMask & (1 << _owner) )
@@ -2396,7 +2396,7 @@ int NC_STACK_yparobo::FindBestBldRadar()
                 }
             }
         }
-        
+
         i++;
     }
 
@@ -2885,7 +2885,7 @@ void NC_STACK_yparobo::buildSafe(update_msg *arg)
 void NC_STACK_yparobo::changePlace()
 {
     Common::Point pt(_roboBuildingCellID % _wrldSectors.x, _roboBuildingCellID / _wrldSectors.x);
-    
+
     if ( _world->IsGamePlaySector(pt) )
     {
         float v12 = _cellId.LengthTo<float>( pt );
@@ -3164,7 +3164,7 @@ NC_STACK_ypabact *NC_STACK_yparobo::AllocForce(robo_loct1 *arg)
                     }
                 }
             }
-            
+
             i++;
         }
     }
@@ -4129,7 +4129,7 @@ void NC_STACK_yparobo::checkCommander()
             InitForce(commander);
             continue;
         }
-        
+
         if ( commander->_bact_type == BACT_TYPES_GUN )
             continue;
 
@@ -4299,8 +4299,8 @@ void NC_STACK_yparobo::checkCommander()
                 for ( const TBactAttacker &ainf : commander->_attackersList )
                 {
                     if (_world->_userRobo->_owner == ainf.attacker->_owner)
-                    {                     
-                        NC_STACK_ypabact *realbact = ainf.attacker;                  
+                    {
+                        NC_STACK_ypabact *realbact = ainf.attacker;
                         if ( realbact->_bact_type == BACT_TYPES_MISSLE ) //If missile
                         {
                             NC_STACK_ypamissile *miss = dynamic_cast<NC_STACK_ypamissile *>(realbact);
@@ -4544,7 +4544,7 @@ int NC_STACK_yparobo::yparobo_func70__sub6__sub3(const Common::Point &sc)
 int32_t NC_STACK_yparobo::yparobo_func70__sub6__sub4(const Common::Point &sc)
 {
     cellArea &cell = _world->SectorAt(sc);
-    
+
     if ( cell.owner == _owner )
         return -1;
 
@@ -4752,7 +4752,7 @@ int NC_STACK_yparobo::yparobo_func70__sub6__sub5(int *a2, Common::Point *pCellId
     float v32 = -0.5;
 
     int v29 = 0;
-    
+
     if (_kidRef)
     {
         for(NC_STACK_ypabact* &node : *_kidRef.PList())
@@ -5146,7 +5146,7 @@ void NC_STACK_yparobo::AI_checkWorld(update_msg *arg)
                 _roboState |= ROBOSTATE_READYPOWER;
                 return;
             }
-            
+
             Common::Point pt(_roboPowerCellIndex % _wrldSectors.x, _roboPowerCellIndex / _wrldSectors.x);
 
             if ( _world->IsGamePlaySector(pt) )
@@ -5190,7 +5190,7 @@ void NC_STACK_yparobo::AI_checkWorld(update_msg *arg)
                 _roboState |= ROBOSTATE_READYRADAR;
                 return;
             }
-            
+
             Common::Point pt(_roboRadarCellIndex % _wrldSectors.x, _roboRadarCellIndex / _wrldSectors.x);
 
             if ( _world->IsGamePlaySector(pt) )
@@ -5242,7 +5242,7 @@ void NC_STACK_yparobo::AI_checkWorld(update_msg *arg)
                 _roboState |= ROBOSTATE_READYSAFE;
                 return;
             }
-            
+
             Common::Point pt(_roboSafetyCellIndex % _wrldSectors.x, _roboSafetyCellIndex / _wrldSectors.x);
 
             if ( _world->IsGamePlaySector(pt) )
@@ -5554,6 +5554,17 @@ void NC_STACK_yparobo::Move(move_msg *arg)
 
 void NC_STACK_yparobo::Die()
 {
+    // DeleteLevel already destroys every hierarchy node. Calling the normal
+    // Host death cascade from NC_STACK_ypabact::Deinit() walked squad lists
+    // while child cleanup was mutating them, leaving a stale subnode pointer
+    // (WER crash RVA 0x232c16). Gameplay deaths still use the full path below.
+    if ( _deinitInProgress )
+    {
+        _status = BACT_STATUS_DEAD;
+        _status_flg |= BACT_STFLAG_DEATH1;
+        return;
+    }
+
     int a4 = getBACT_yourLastSeconds();
 
     uamessage_hostDie hdMsg;
@@ -6019,7 +6030,7 @@ void NC_STACK_yparobo::Renew()
     _roboDockTime = 0;
 
     _roboGuns.clear();
-    
+
     _roboAttackers.fill( robo_t1() );
 
     _commandID = dword_5B1128;
@@ -6332,7 +6343,7 @@ bool NC_STACK_yparobo::MakeSquad(const std::vector<int> &VhclIDS, vec3d pos, boo
     arg146.pos.y = pos.y;
     arg146.pos.x = 100.0 * (curid % col - col / 2.0) + pos.x;
     arg146.pos.z = 100.0 * (curid / col) + pos.z;
-    
+
     arg146.vehicle_id = VhclIDS[0];
 
     NC_STACK_ypabact *squad_commander = _world->ypaworld_func146(&arg146); //Create first bact
@@ -6508,7 +6519,7 @@ int NC_STACK_yparobo::placeMessage(robo_arg134 *arg)
     v8.Priority = arg->field_14;
     v8.unit = arg->unit;
     v8.MsgID = arg->field_4;
-    
+
     switch ( arg->field_4 )
     {
     case 2:
@@ -6562,7 +6573,7 @@ int NC_STACK_yparobo::placeMessage(robo_arg134 *arg)
     default:
         break;
     }
-    
+
     _world->ypaworld_func159(&v8);
 
     return 1;
@@ -6602,7 +6613,7 @@ void NC_STACK_yparobo::ypabact_func65__sub0()
 
                 if ( _world->_GameShell )
                     uaDeleteFile( fmt::sprintf("save:%s/%d.rst", _world->_GameShell->UserName, _world->_levelInfo.LevelID) );
-                
+
                 _status_flg |= BACT_STFLAG_CLEAN;
 
                 Die();
@@ -6690,7 +6701,7 @@ void NC_STACK_yparobo::setROBO_proto(World::TRoboProto *proto)
     }
 
     _roboGuns = proto->guns;
-    
+
     for (World::TRoboGun &gun : _roboGuns)
     {
         ypaworld_arg146 gun_req;

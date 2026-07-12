@@ -134,10 +134,10 @@ public:
     virtual size_t Remove(int butID);
     virtual size_t Enable(button_66arg *arg);
     virtual size_t Disable(button_66arg *arg);
-    
+
     virtual void ShowScreen(); // Part of 68th method
     virtual void HideScreen(); // Part of 68th method
-    
+
     virtual ResCode ProcessWidgetsEvents(TInputState *arg);
     virtual size_t Draw();
     bool SetText(int butID, const std::string &field_4, const std::string &field_8);

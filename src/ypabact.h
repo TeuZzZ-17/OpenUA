@@ -38,23 +38,23 @@ struct extra_vproto
     mat3x3 rotate;
     int flags = 0;
     NC_STACK_base::Instance *vp = NULL;
-    
+
     ~extra_vproto()
     {
         if (vp)
             delete vp;
     }
-    
+
     void SetVP(NC_STACK_base::Instance *newVP)
     {
         Common::DeleteAndNull(&vp);
         vp = newVP;
     }
-    
+
     void SetVP(NC_STACK_base *bas)
     {
         Common::DeleteAndNull(&vp);
-        
+
         if (bas)
             vp = bas->GenRenderInstance();
         else
@@ -214,7 +214,7 @@ struct setState_msg
     int newStatus;
     int setFlags;
     int unsetFlags;
-    
+
     setState_msg()
     {
         newStatus = 0;
@@ -402,7 +402,7 @@ struct TBactAttacker
     {
         if (type != b.type)
             return false;
-        
+
         if (attacker != b.attacker)
             return false;
         return true;
@@ -454,7 +454,7 @@ public:
     float GetMortarBarrageRadius(); // OpenUA custom: bombardment zone radius of this unit's mortar (0 if none)
     float GetMortarReadinessRatio(); // OpenUA custom: 0..1 cooldown readiness for UI bars
     void UpdateSeekAndExplode(update_msg *arg);
-    bool ApplySeekAndExplodeRammingGuidance(bool clearAvoidanceFlags);
+    bool ApplySeekAndExplodeRammingGuidance();
     // OpenUA custom: continuous laser beam ("model = laser"). UpdateLaser drives the
     // static tick damage, beam state and loop sound each frame; the firing paths only
     // register a per-frame request via RequestLaserFire().
@@ -466,11 +466,10 @@ public:
     void StopVerticalLaser();
     void UpdateDamageFX(update_msg *arg);
     void UpdateDecorationFX(update_msg *arg);
-    void AddAoePush(const vec3d &dir, float distance); // queue aoe_unit_push knockback
+    void AddAoePush(const vec3d &dir, float distance); // queue smooth weapon knockback
     void ApplyWeaponRecoil(const vec3d &dir, float recoil);
-    bool ApplyUnitCollisionEffects(NC_STACK_ypabact *target, const vec3d &dirToTarget, float impactSpeed);
+    void UpdateAoePush(update_msg *arg);
     void UpdateWeaponRecoilPush(update_msg *arg);      // integrate/decay weapon recoil push or visual offset
-    void UpdateAoePush(update_msg *arg);               // integrate/decay it per frame
     void ApplyWeaponDebuff(World::TWeaponDebuffConfig &debuff, NC_STACK_ypabact *source);
     void UpdateActiveDebuff(update_msg *arg);
     void ClearActiveDebuff();
@@ -519,7 +518,7 @@ public:
     virtual void ypabact_func123(update_msg *arg);
     virtual size_t PathFinder(bact_arg124 *arg);
     virtual size_t SetPath(bact_arg124 *arg);
-    
+
     virtual bool IsHidden() const;
     virtual bool IsHiddenFor(uint8_t owner) const;
     bool ShouldHideFromStrategicUI() const;
@@ -548,7 +547,7 @@ public:
 
     NC_STACK_ypabact();
     virtual ~NC_STACK_ypabact();
-    
+
     virtual const std::string ClassName() const {
         return __ClassName;
     };
@@ -593,28 +592,28 @@ public:
     { return _world; }
 
     int GetCurrentWeaponId();
-    
+
     virtual TF::TForm3D *getBACT_pTransform()
     { return &_tForm; }
-    
-    virtual bool getBACT_viewer() const 
+
+    virtual bool getBACT_viewer() const
     { return (_oflags & BACT_OFLAG_VIEWER) != 0; }
-    
-    virtual bool getBACT_inputting() const 
+
+    virtual bool getBACT_inputting() const
     { return (_oflags & BACT_OFLAG_USERINPT) != 0; }
 
-    virtual bool getBACT_exactCollisions() const 
+    virtual bool getBACT_exactCollisions() const
     { return (_oflags & BACT_OFLAG_EXACTCOLL) != 0; }
-    
-    virtual bool getBACT_bactCollisions() const 
+
+    virtual bool getBACT_bactCollisions() const
     { return (_oflags & BACT_OFLAG_BACTCOLL) != 0; }
-    
-    virtual bool getBACT_landingOnWait() const 
+
+    virtual bool getBACT_landingOnWait() const
     { return (_oflags & BACT_OFLAG_LANDONWAIT) != 0; }
-    
-    virtual int getBACT_yourLastSeconds() const 
+
+    virtual int getBACT_yourLastSeconds() const
     { return _yls_time; }
-    
+
     virtual NC_STACK_base *GetVP()
     {
         if (_current_vp)
@@ -622,32 +621,40 @@ public:
 
         return NULL;
     }
-    
+
     virtual int getBACT_aggression() const
     { return _aggr; }
-    
+
     virtual World::rbcolls *getBACT_collNodes()
     { return _collNodes.roboColls.empty() ? NULL : &_collNodes; } // OpenUA: universal compound spheres
+
+    virtual float getBACT_collPadding() const
+    { return 0.0f; }
+
+    float GetCollisionBroadRadius();
 
     bool UsesAutoCollisionSpheres() const
     { return _autoCollisionSpheres; }
 
     void GetClosestCollisionBodySphere(const vec3d &target, vec3d *center, float *radius) const;
+    bool GetUnitCollisionContact(NC_STACK_ypabact *other, vec3d *selfCenter,
+                                 vec3d *otherCenter, float *penetration);
+    bool ResolveGenesisCompoundOverlap(int frameTime);
 
     virtual bool getBACT_extraViewer() const
-    { return (_oflags & BACT_OFLAG_EXTRAVIEW) != 0; }    
-    
+    { return (_oflags & BACT_OFLAG_EXTRAVIEW) != 0; }
+
     virtual bool getBACT_alwaysRender() const
     { return (_oflags & BACT_OFLAG_ALWAYSREND) != 0; }
-    
-    
+
+
     void ChangeEscapeFlag(bool escape);
-    
+
     virtual bool IsGroundUnit() const { return false; };
-    
+
     bool IsNeedsWaypoints() const;
     bool IsAnyKidWithoutSecondUnitTarget() const;
-    
+
     void sub_4843BC(NC_STACK_ypabact *bact2, int a3);
     void sub_493480(NC_STACK_ypabact *bact2, int mode);
     void StartDestFX(const World::DestFX &fx);
@@ -671,13 +678,13 @@ public:
 
     void DeleteAttacker(NC_STACK_ypabact *bact, int tgtType);
     void AddAttacker(NC_STACK_ypabact *bact, int tgtType);
-    
+
     void CopyTargetOf(NC_STACK_ypabact *commander);
-    
+
     bool IsParentMyRobo() const;
-    
+
     void CopyWaypointsStuff(NC_STACK_ypabact *bact);
-    
+
     World::RefBactList &GetKidList() { return _kidList; }
 
     // static methods for return correspond for reflist  kid ref node
@@ -685,29 +692,29 @@ public:
     {
         return bact->_cellRef;
     }
-    
+
     static World::RefBactList::Node& GetKidRefNode(NC_STACK_ypabact *&bact)
     {
         return bact->_kidRef;
     }
- 
+
 protected:
     void SetKidsPath(int beginWp);
 
     //Data
 public:
     static constexpr const char * __ClassName = "ypabact.class";
-public:    
-    
-    World::RefBactList::Node _cellRef; 
-    
+public:
+
+    World::RefBactList::Node _cellRef;
+
     Common::Point _cellId;
     cellArea *_pSector = NULL;
-    
+
     vec2d _wrldSize;
-    
+
     Common::Point _wrldSectors;
- 
+
     int _bact_type;
     uint32_t _gid = 0; // global bact id
     uint8_t _vehicleID; // vehicle id, from scr files
@@ -786,9 +793,6 @@ public:
     int _weaponRecoilAiRecoveryEndTime = 0; // OpenUA: short AI tank forward-thrust pause after fake recoil
     int _weaponRecoilPlayerRecoveryEndTime = 0; // OpenUA: short player tank forward-input damping after fake recoil
     vec3d _weaponRecoilPushVel = vec3d(0.0, 0.0, 0.0);
-
-    // OpenUA aoe_unit_push: residual knockback velocity, integrated and decayed
-    // every frame by UpdateAoePush() so shockwaves shove units smoothly.
     vec3d _aoePushVel = vec3d(0.0, 0.0, 0.0);
 
     vec3d _position; //Current pos
@@ -855,6 +859,7 @@ public:
 
     TF::TForm3D _tForm;
     int _clock;           // local time
+    bool _deinitInProgress = false; // guards virtual death cascades during level teardown
     int _AI_time1;
     int _AI_time2;
 //    int field_921;
@@ -894,7 +899,6 @@ public:
     float _mgun_angle;
     bool _mgun_power_set;
     bool _mgun_angle_set;
-    float _mgun_ai_range;
     float _mgun_ai_fire_alignment;
     bool _mgun_damage_sectors;
     float _mgun_sector_damage_accum;
@@ -1063,8 +1067,8 @@ public:
     NC_STACK_ypaworld *_yw;
     NC_STACK_base::Instance *_current_vp = NULL;
     std::list<TBactAttacker> _attackersList;
-    int _yls_time;  
-    
+    int _yls_time;
+
     bool _hidden = false;
     int8_t _unhideRadar = 0;
 

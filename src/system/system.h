@@ -16,7 +16,7 @@
 
 #include "common/common.h"
 
-namespace System 
+namespace System
 {
     struct ResRatio
     {
@@ -30,25 +30,25 @@ namespace System
         bool operator==(const ResRatio &b) const;
         bool operator!=(const ResRatio &b) const;
         void Set(int32_t w, int32_t h);
-        
+
         operator Common::Point() const;
     };
-    
+
     void Init(bool oldGL = false);
     void Deinit();
-    
+
     // Events update cycle
     bool ProcessEvents();
-    
+
     // Draw content of backbuffer
     void Flip();
-    
+
     void SetVideoMode(const Common::Point &sz, uint32_t full, SDL_DisplayMode *mode);
     void RestoreWindow();
-    
-    
+
+
     void SetReleativeMouse(bool mode);
-    
+
     TTF_Font *LoadFont(const std::string &fontname, int height);
     void RescanFonts();
     std::vector<std::string> GetScannedFontNames();
@@ -58,16 +58,16 @@ namespace System
     std::string GetConfiguredMenuFontName();
     std::string ResolveMenuFontDescr(const std::string &defaultDescr);
     std::string ResolveMenuFontDescr(const std::string &defaultDescr, const std::string &menuFont);
-    
+
     void PostQuitMessage();
-    
+
     void EventsAddHandler(SDL_EventFilter func, bool first = true);
     void EventsDeleteHandler(SDL_EventFilter func);
-    
+
     // Return drawable area sizes
     ResRatio GetRResolution();
     Common::Point GetResolution();
-    
+
     std::vector<std::string>& GetCmdLineArray();
     void AddCmdLine(const std::string &);
     int32_t FindCmdLineArg(const std::string &);

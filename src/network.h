@@ -15,7 +15,7 @@ public:
 
     };
     virtual ~NC_STACK_network() {};
-    
+
     virtual const std::string ClassName() const {
         return __ClassName;
     };

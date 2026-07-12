@@ -8,7 +8,7 @@ UAScroll::UAScroll(bool vertical)
 , _vertical(vertical)
 {
     _flags |= FLAG_ENABLED;
-    
+
     _rect.SetSize(16, 16);
 
     Check();
@@ -20,7 +20,7 @@ UAScroll::UAScroll(Widget *parent, bool vertical)
 , _vertical(vertical)
 {
     _flags |= FLAG_ENABLED;
-    
+
     _rect.SetSize(16, 16);
 
     Check();
@@ -42,7 +42,7 @@ void UAScroll::Draw(SDL_Surface *surface, const Common::Rect &dirt)
         {
             Common::Rect dUp = _areaMinus;
             borders->Draw(surface, dUp, 'C');
-            dUp.top += borders->h;   
+            dUp.top += borders->h;
 
             if (!dUp.IsEmpty())
                 commonGfx->Fill(surface, dUp, 'B');
@@ -82,17 +82,17 @@ void UAScroll::Draw(SDL_Surface *surface, const Common::Rect &dirt)
     else
     {
         TileMap *gfx  = _UATiles[TILESET_MAPHORZ];
-        
+
         if ( !_areaMinus.IsEmpty() )
         {
             Common::Rect dLeft = _areaMinus;
             gfx->Draw(surface, dLeft.Pos(), 'A');
-            
+
             dLeft.left += gfx->GetWidth('A');
             if (!dLeft.IsEmpty())
                 gfx->Fill(surface, dLeft, 'B');
         }
-        
+
         if ( !_areaBtn.IsEmpty() )
         {
             Common::Rect btn = _areaBtn;
@@ -109,7 +109,7 @@ void UAScroll::Draw(SDL_Surface *surface, const Common::Rect &dirt)
 
             gfx->Draw(surface, btn.Pos(), 'F');
         }
-        
+
         if ( !_areaPlus.IsEmpty() )
         {
             Common::Rect dRght = _areaPlus;
@@ -125,11 +125,11 @@ void UAScroll::Draw(SDL_Surface *surface, const Common::Rect &dirt)
         }
     }
 }
-    
+
 void UAScroll::MouseDown(Common::Point pos, Common::Point scrPos, int button)
 {
     _lastPos = pos;
-    
+
     if (button == MICE_LEFT)
     {
         _downedArea = GetArea(pos);
@@ -138,7 +138,7 @@ void UAScroll::MouseDown(Common::Point pos, Common::Point scrPos, int button)
         if (_downedArea == AREA_BTN)
         {
             _btnOff = pos - _areaBtn.Pos();
-            
+
             _svdPxPos = _vertical ? _areaBtn.top : _areaBtn.left;
             _curPxPos = _svdPxPos;
         }
@@ -158,7 +158,7 @@ void UAScroll::MouseDown(Common::Point pos, Common::Point scrPos, int button)
 void UAScroll::MouseUp(Common::Point pos, Common::Point scrPos, int button)
 {
     _lastPos = pos;
-    
+
     if (button == MICE_LEFT)
     {
         if (_downedArea == AREA_BTN)
@@ -175,7 +175,7 @@ void UAScroll::MouseUp(Common::Point pos, Common::Point scrPos, int button)
             Root::Instance.TimerDeleteByWidget(_id);
 
         _downedArea = AREA_NONE;
-    
+
         Check();
         UpdateAreas();
     }
@@ -184,7 +184,7 @@ void UAScroll::MouseUp(Common::Point pos, Common::Point scrPos, int button)
 void UAScroll::MouseMove(Common::Point pos, Common::Point scrPos, int button)
 {
     _lastPos = pos;
-    
+
     if (button & MICE_LEFT)
     {
         auto oldArea = _mouseArea;
@@ -220,12 +220,12 @@ void UAScroll::MouseMove(Common::Point pos, Common::Point scrPos, int button)
 void UAScroll::Resize(Common::Point sz)
 {
     int oldPx = _vertical ? GetHeight() : GetWidth();
-    
+
     Widget::Resize(sz);
-    
+
     Check();
     UpdateAreas();
-    
+
     if (_downedArea == AREA_BTN)
         _svdPxPos = _svdPxPos * (_vertical ? GetHeight() : GetWidth()) / oldPx;
 }
@@ -238,7 +238,7 @@ void UAScroll::TimerEvent(uint32_t code, uint32_t timerID)
             StepMinus();
         else if (_downedArea == AREA_PLUS)
             StepPlus();
-        
+
         Root::Instance.TimerAdd(_id, TIME_NEXT);
     }
 }
@@ -246,7 +246,7 @@ void UAScroll::TimerEvent(uint32_t code, uint32_t timerID)
 void UAScroll::StepMinus()
 {
     _scrlPos--;
-    
+
     Check();
     UpdateAreas();
 }
@@ -271,13 +271,13 @@ void UAScroll::Check()
         if (_rect.Height() > _UATiles[TILESET_MAPHORZ]->h)
             _rect.SetHeight(_UATiles[TILESET_MAPHORZ]->h);
     }
-    
+
     if (_scrlPageSz < 1)
         _scrlPageSz = 1;
-    
+
     if (_scrlPos > _scrlCount - _scrlPageSz)
         _scrlPos = _scrlCount - _scrlPageSz;
-            
+
     if (_scrlPos < 0)
         _scrlPos = 0;
 }
@@ -286,7 +286,7 @@ void UAScroll::UpdateAreas()
 {
     int pxLen;
     int pxW;
-    
+
     if (_vertical)
     {
         pxLen = _rect.Height();
@@ -353,7 +353,7 @@ void UAScroll::SetScrollPos(int p)
 {
     _downedArea = AREA_NONE;
     _scrlPos = p;
-    
+
     Check();
     UpdateAreas();
 }
@@ -361,7 +361,7 @@ void UAScroll::SetScrollPos(int p)
 void UAScroll::SetScrollCount(int c)
 {
     _scrlCount = c;
-    
+
     Check();
     UpdateAreas();
 }
@@ -369,7 +369,7 @@ void UAScroll::SetScrollCount(int c)
 void UAScroll::SetScrollPageSize(int ps)
 {
     _scrlPageSz = ps;
-    
+
     Check();
     UpdateAreas();
 }

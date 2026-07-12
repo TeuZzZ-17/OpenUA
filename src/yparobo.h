@@ -92,7 +92,7 @@ public:
 
     NC_STACK_yparobo();
     virtual ~NC_STACK_yparobo() {};
-    
+
     virtual const std::string ClassName() const {
         return __ClassName;
     };
@@ -193,7 +193,7 @@ public:
 
     virtual World::rbcolls *getBACT_collNodes()
     { return &_roboColls; }
-    
+
     virtual int getROBO_epConquer();
     virtual int getROBO_epDefense();
     virtual int getROBO_epRadar();
@@ -219,17 +219,17 @@ public:
     virtual int getROBO_loadFlags();
     virtual int getROBO_lossFlags();
     virtual int getROBO_absReload();
-    
+
     void ypabact_func65__sub0();
-    
+
     bool IsPlayerRobo() const;
     bool IsPlayerRoboAIBehavior() const;
     bool IsPlayerRoboAIBehaviorMoveActive() const;
     bool GetPlayerRoboAIBehaviorMoveTarget(vec3d *target) const;
-    
+
 public:
     void HandleUserCommands(update_msg *arg);
-    
+
 protected:
 
     void checkCommander();
@@ -282,7 +282,7 @@ protected:
     void checkDanger();
     size_t checkCollisions(float a2);
     void ChangeSectorEnergyFromRoboCollision(yw_arg129 *arg);
-    
+
     bool yparobo_func70__sub2__sub1();
     void yparobo_func70__sub2__sub0();
     int yparobo_func70__sub6__sub0(const Common::Point &sc);
@@ -301,25 +301,25 @@ protected:
     int yparobo_func70__sub6__sub11();
     int sub_4F4E48(const Common::Point &cellId);
     float sub_4F4C6C(NC_STACK_ypabact *bctnd);
-    
+
     int yparobo_func134__sub1(robo_arg134 *arg);
-    
+
     void sub_4A4538(NC_STACK_ypabact *bact);
     void sub_4A448C(NC_STACK_ypabact *bact);
-    
+
     int sb_0x4a45cc__sub0(NC_STACK_ypabact *bact);
     void sb_0x4a7010__sub1__sub0(NC_STACK_ypabact *unit1, NC_STACK_ypabact *unit2);
     void sb_0x4a7010__sub1(NC_STACK_ypabact *unit, robo_t1 *rbt);
     int sub_4A5A08(NC_STACK_ypabact *bact, float a2, float a3);
     int sub_4A58C0(NC_STACK_ypabact *bact, NC_STACK_ypabact *bact2);
-    
+
     void sub_4A1270(const vec3d &vaxis, float angle);
     void sub_4A1014(float angle);
     void sub_4A10E8(float angle);
-    
+
     cellArea * yparobo_func0__sub0();
     void sub_4F4FF4(int a2, setTarget_msg *parg67);
-    
+
     void yparobo_func71__sub0(update_msg *arg);
     int FindBestBldPowerStation();
     int FindBestBldDefenceCenter();
@@ -331,7 +331,7 @@ public:
     //Data
     static constexpr const char * __ClassName = "yparobo.class";
 
-    
+
     float _roboFlotage;
     World::rbcolls _roboColls;
     float _roboYPos;
@@ -405,37 +405,37 @@ public:
     int _roboPositionCellIndex;  //For AI
     int _roboPositionTime;
     int _roboPositionDelay; //??
-    
+
     int _roboExploreValue;
     cellArea *_roboExploreCell;  //For AI
     int _roboExploreCellID;  //For AI
     int _roboExploreCellIndex;  //For AI
     int _roboExploreTime;
     int _roboExploreDelay; //??
-    
+
     int _roboDangerValue;
     cellArea *_roboDangerCell;  //For AI
     int _roboDangerCellID;  //For AI
     uint32_t _roboDangerCommandID;  //For AI
     int _roboDangerTime;
     int _roboDangerDelay; //??
-    
+
     int _roboVehicleCellID;  //For AI
     cellArea *_roboVehicleCell;  //For AI
     int _roboVehicleDuty;  //For AI
     uint32_t _roboVehicleCommandID;  //For AI
-    
-    
+
+
     int _roboBuildingCellID;  //For AI
     cellArea *_roboBuildingCell;  //For AI
     int _roboBuildingDuty;  //For AI
-    
+
     int _roboTestEnemyTime;
-    
+
     std::vector<World::TRoboGun> _roboGuns;
 
     int _roboEnergyLife; //??
-    
+
     int _roboEnergyMove; //??
 
     uint8_t _roboFillMode;
@@ -456,10 +456,10 @@ public:
     uint8_t _playerRoboResourceTrendLossFlags;
 
     int _roboEnergyReloadPS; // Reload per second
-    
+
     int _roboBuildSpare;
     int _roboVehicleSpare;
-    
+
     int _roboBeamTimePre;
     vec3d _roboBeamPos;
     int _roboBeamFXTime;
@@ -484,7 +484,7 @@ public:
     float _playerRoboAIBehaviorLastDistance;
     int _playerRoboAIBehaviorCockpitPitchBase;
     bool _playerRoboAIBehaviorCockpitPitchBaseValid;
-    
+
     std::array<robo_t1, 16> _roboAttackers;
     int _roboAttackersTime;
     int _roboAttackersClearTime; //FIX IT

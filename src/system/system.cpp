@@ -17,20 +17,20 @@ namespace System
 {
 static std::vector<std::string> CommandLine;
 
-    
+
 struct FontNode
 {
     std::string Path;
     std::string Name;
     std::string Style;
-    
+
     FontNode() {};
     FontNode(const std::string &p, const std::string &n, const std::string &s)
     : Path(p)
     , Name(n)
     , Style(s)
     {};
-    
+
     FontNode(const FontNode &&fnt)
     {
         Path = std::move(fnt.Path);
@@ -102,8 +102,8 @@ static TFontLookup FontsLookup[]
     {"ＭＳ Ｐゴシック", "MS PGothic", "Textar"},
     {"MS PGothic", "Textar", ""}
 };
-    
-    
+
+
 static SDL_Window *window = NULL;
 static SDL_GLContext cont = NULL;
 static ResRatio winRes(640, 480);
@@ -399,7 +399,7 @@ void Init(bool oldGL)
         printf("Couldn't initialize SDL: %s", SDL_GetError());
         return;
     }
-    
+
     if (oldGL)
     {
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
@@ -477,14 +477,14 @@ bool ProcessEvents()
 
         }
         break;
-        
+
         case SDL_QUIT:
             return true;
 
         default:
             break;
         }
-        
+
         for(SDL_EventFilter &e : EventHandlers)
         {
             if ( (e)(NULL, &event) == 0 )
@@ -529,9 +529,9 @@ void SetVideoMode(const Common::Point &sz, uint32_t full, SDL_DisplayMode *mode)
                 {
                     SDL_RestoreWindow(window);
                     SDL_Delay(250);
-                    
+
                     SDL_SetWindowSize(window, sz.x, sz.y);
-                    
+
                     SDL_MaximizeWindow(window);
                     SDL_Delay(250);
                 }
@@ -539,7 +539,7 @@ void SetVideoMode(const Common::Point &sz, uint32_t full, SDL_DisplayMode *mode)
                     SDL_SetWindowSize(window, sz.x, sz.y);
             }
         }
-        
+
         int w, h;
         SDL_GL_GetDrawableSize(window, &w, &h);
         winRes = ResRatio(w, h);

@@ -10,13 +10,13 @@ class NC_STACK_particle;
 class NC_STACK_particle: public NC_STACK_ade
 {
 public:
-    
+
     class SpawnOpts : public InstanceOpts
     {
     public:
         SpawnOpts(NC_STACK_ade *ade) : InstanceOpts(ade) {};
         virtual ~SpawnOpts() {};
-        
+
         int32_t Time = 0;
         int32_t TimeStamp = -1;
         int32_t Age = 0;
@@ -27,7 +27,7 @@ public:
         vec3d start;
         vec3d end;
     };
-    
+
     virtual size_t Init(IDVList &stak);
     virtual size_t Deinit();
     virtual size_t LoadingFromIFF(IFFile **file);
@@ -40,14 +40,14 @@ public:
 
     NC_STACK_particle()
     {};
-    
+
     virtual ~NC_STACK_particle() {};
-    
+
     virtual const std::string ClassName() const {
         return __ClassName;
     };
-    
-    
+
+
 
     enum PRTCL_ATT
     {
@@ -94,7 +94,7 @@ public:
     virtual std::vector<NC_STACK_ade *> &GetParticlesStages();
 
     int ReadIFFAtts(IFFile *mfile);
-    
+
     virtual InstanceOpts *GenRenderInstance() override;
     virtual bool IsParticle() const override { return true; };
 
@@ -103,17 +103,17 @@ private:
     void UpdateLifeStages();
     void UpdateAccelMagnify();
     void _SetLifeStages(const std::vector<NC_STACK_ade *> &);
-    
+
     void MakeMeshCache();
 
 public:
     static float Rand();
     static vec3d RandVec();
-    
+
 private:
     static std::array<float, 1024> _randomTable;
     static uint32_t _randomIndex;
-    
+
     //Data
 public:
     static constexpr const char * __ClassName = "particle.class";
@@ -142,7 +142,7 @@ public:
     int32_t _genLifeTime = 1000; // Generator cycle time until next
     int32_t _genStart = 0;
     int32_t _genEnd = 1000;
-    
+
 };
 
 #endif // PARTICLE_H_INCLUDED

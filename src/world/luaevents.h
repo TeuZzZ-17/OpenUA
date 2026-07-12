@@ -9,7 +9,7 @@ class NC_STACK_ypabact;
 
 namespace World
 {
-    
+
 class LuaEvents: public System::LuaScript
 {
 public:
@@ -17,19 +17,19 @@ public:
     {
         RefBactList &Lst;
         RefBactList::iterator It;
-        
+
         UnitIter(RefBactList &lst);
         bool IsEnd() const;
         NC_STACK_ypabact *GetUnit() const;
     };
-    
+
 public:
     LuaEvents(NC_STACK_ypaworld *wrld);
     virtual ~LuaEvents();
-    
+
     void CallInit(int32_t ts);
     void CallUpdate(int32_t ts, int32_t delta);
-    
+
     std::string GetSaveString();
 
 protected:
@@ -39,7 +39,7 @@ protected:
 
 protected:
     static int Lua_WrldShowMessageID(lua_State *l);
-    static int Lua_WrldStartIterateUnits(lua_State *l);    
+    static int Lua_WrldStartIterateUnits(lua_State *l);
     static int Lua_WrldGetUnits(lua_State *l);
     static int Lua_WrldGetUserRobo(lua_State *l);
     static int Lua_WrldGetUserUnit(lua_State *l);
@@ -59,15 +59,15 @@ protected:
     static int Lua_BactGetType(lua_State *l);
     static int Lua_BactGetUnits(lua_State *l);
     static int Lua_BactGetPSector(lua_State *l);
-    
+
     static int Lua_IterUnitsNext(lua_State *l);
     static int Lua_IterUnitsFree(lua_State *l);
     static int Lua_IterUnitsGet(lua_State *l);
-    
+
 protected:
     NC_STACK_ypaworld *_wrld = NULL;
 };
-    
+
 }
 
 #endif

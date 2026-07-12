@@ -13,7 +13,7 @@ public:
 
     NC_STACK_itimer() {};
     virtual ~NC_STACK_itimer() {};
-    
+
     virtual const std::string ClassName() const {
         return __ClassName;
     };

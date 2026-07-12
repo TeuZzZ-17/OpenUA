@@ -14,7 +14,7 @@ struct BAnmFrame
 };
 
 struct BAnmFrameCache : BAnmFrame
-{   
+{
     std::vector<tUtV> *pTexCoords = NULL;
     NC_STACK_bitmap *pBitmap = NULL;
 };
@@ -26,7 +26,7 @@ struct ResBmpAnm
     std::vector<NC_STACK_bitmap *> Bitmaps;
     std::string ClassName;
     std::vector<BAnmFrameCache> FrameData;
-    
+
     ~ResBmpAnm()
     {
         for (NC_STACK_bitmap *bitm : Bitmaps)
@@ -52,7 +52,7 @@ public:
 
     NC_STACK_bmpanim() {};
     virtual ~NC_STACK_bmpanim() {};
-    
+
     virtual const std::string ClassName() const {
         return __ClassName;
     };
@@ -78,26 +78,26 @@ public:
     virtual int getBMD_width();
     virtual int getBMD_height();
     virtual int getBANM_animtype();
-    
+
     virtual bool IsDynamic() const override { return true; };
     virtual uint32_t GetFramesCount() const override;
     virtual uint32_t GetCurrentFrameID() const override;
-    
+
     virtual void PrepareTexture( bool force = false );
-    
-    
-    
+
+
+
     static ResBmpAnm *LoadFromFile(const std::string &name, IFFile *iff);
-    
+
     static bool ReadClassName(FSMgr::iFileHandle *fil, ResBmpAnm *arg);
     static bool ReadBitmapNames(FSMgr::iFileHandle *fil, ResBmpAnm *arg);
     static bool ReadTexCoords(FSMgr::iFileHandle *fil, ResBmpAnm *arg);
     static bool ReadFrameData(FSMgr::iFileHandle *fil, ResBmpAnm *arg);
-    
+
     static ResBmpAnm * ConstructBAnm(const std::string &className, std::vector<std::string> *a2, std::vector< std::vector<tUtV> >*a3, int a4, BAnmFrame *a5);
-    
+
     static bool WriteToFile(ResBmpAnm *banm, const std::string &name, IFFile *iff);
-    
+
     static bool WriteClassName(FSMgr::iFileHandle *fil, ResBmpAnm *arg);
     static bool WriteBitmapNames(FSMgr::iFileHandle *fil, ResBmpAnm *arg);
     static bool WriteTexCoords(FSMgr::iFileHandle *fil, ResBmpAnm *arg);

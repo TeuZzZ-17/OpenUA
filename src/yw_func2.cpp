@@ -227,7 +227,7 @@ void sb_0x4eb94c__sub0(NC_STACK_ypaworld *yw, bool clockwise, int a3, vec3d *pos
     //brf_obj *brobj = &yw->brief.brf_objs + obj_id; // Only one object
 
     NC_STACK_base *model_base = yw->_vhclModels.at( yw->_vhclProtos[ yw->_briefScreen.ViewingObject.ID ].vp_normal );
-    
+
     model_base->SetVizLimit(16000);
     model_base->SetFadeLength(100);
 
@@ -248,9 +248,9 @@ void sb_0x4eb94c__sub0(NC_STACK_ypaworld *yw, bool clockwise, int a3, vec3d *pos
 
     model_base->SetEulerRotation( a3 + 10, yw->_briefScreen.ViewingObjectAngle, 0);
     //printf("Try DRAW %d\n", (int)model_base);
-    
+
     NC_STACK_base::CheckOpts(&yw->_briefScreen.ViewingObject.VP, model_base);
-    
+
     model_base->Render(arg, yw->_briefScreen.ViewingObject.VP); //Draw vehicle
 }
 
@@ -304,11 +304,11 @@ void sb_0x4eb94c__sub1(NC_STACK_ypaworld *yw, bool clockwise, int rot, vec3d *po
 
             lego->SetEulerRotation(rot + 10, yw->_briefScreen.ViewingObjectAngle, 0);
             lego->SetPosition( *pos + v7->TForm().SclRot.Transform( inSectorPos ) );
-            
+
             NC_STACK_base::CheckOpts(&yw->_briefScreen.ViewingObject.VP, lego);
-            
+
             lego->Render(arg, yw->_briefScreen.ViewingObject.VP);
-            
+
             v30++;
         }
         v22++;
@@ -396,7 +396,7 @@ void ypaworld_func158__DrawVehicle(NC_STACK_ypaworld *yw, TBriefengScreen *brf, 
         if ( v7 > 50 )
             sb_0x4eb94c(yw, brf, struc, v7 - 50);
     }
-    
+
     GFX::Engine.Rasterize();
 
     GFX::Engine.EndScene();
@@ -409,7 +409,7 @@ void yw_draw_input_list(NC_STACK_ypaworld *yw, UserData *usr)
 {
     usr->input_listview.SetRect(yw, -2, -2);
     GFX::Engine.GetTileset(0);
-    
+
     usr->input_listview.itemBlock.clear();
 
     usr->input_listview.ItemsPreLayout(yw, &usr->input_listview.itemBlock, 0, "uvw");
@@ -631,7 +631,7 @@ void NC_STACK_ypaworld::LoadKeyNames()
     Input::Engine.KeyTitle[Input::KC_EXTRA16]    = Locale::Text::KeyName(Locale::KEYNAME_EXTRA_16);
     Input::Engine.KeyTitle[Input::KC_EXTRA17]    = Locale::Text::KeyName(Locale::KEYNAME_EXTRA_17);
     Input::Engine.KeyTitle[Input::KC_EXTRA18]    = Locale::Text::KeyName(Locale::KEYNAME_EXTRA_18);
-    
+
     Input::Engine.KeyTitle[Input::KC_MMB]        = Locale::Text::KeyName(Locale::KEYNAME_MIDDLE_MOUSE);
 
     Input::Engine.KeyTitle[Input::KC_JOYB0]      = Locale::Text::KeyName(Locale::KEYNAME_JOYB0);
@@ -822,7 +822,7 @@ void NC_STACK_ypaworld::PlayIntroMovie()
     if ( !_movies[World::MOVIE_INTRO].empty() )
     {
         std::string buf = correctSeparatorAndExt( Common::Env.ApplyPrefix(_movies[World::MOVIE_INTRO]) );
-        
+
         if ( System::IniConf::GfxMoviePlayer.Get<bool>() )
         {
             GFX::Engine.EndFrame();
@@ -842,7 +842,7 @@ void NC_STACK_ypaworld::PlayIntroMovie()
 void ypaworld_func156__sub1(UserData *usr)
 {
     usr->mapDescriptions.clear();
-    
+
     for (size_t i = 0; i < usr->p_YW->_globalMapRegions.MapRegions.size(); i++)
     {
         if (usr->p_YW->_globalMapRegions.MapRegions[i].Status == TMapRegionInfo::STATUS_NETWORK)
@@ -972,7 +972,7 @@ void sb_0x47f810(NC_STACK_ypaworld *yw)
 {
     yw->_roboProtos.clear();
     yw->_buildProtos.clear();
-    
+
     yw->_weaponProtos.clear();
 
     yw->_vhclProtos.clear();
@@ -1052,7 +1052,7 @@ void UserData::sb_0x46cdf8()
     p_YW->_levelInfo.Buddies.clear();
 
     sb_0x47f810(p_YW);
-    
+
     Common::DeleteAndNull(&p_YW->_script);
 
     if ( p_YW->ProtosInit() )
@@ -1883,7 +1883,7 @@ void sub_4D9550(NC_STACK_ypaworld *yw, int arg)
 
     if ( !uaFileExist(std::string("rsrc:") + wavName) )
         wavName = fmt::sprintf("sounds/speech/language/9%d.wav", arg);
-    
+
     NC_STACK_sample *&pSmpl = usr->samples1.at(World::SOUND_ID_CHAT);
 
     if ( pSmpl )
@@ -1901,7 +1901,7 @@ void sub_4D9550(NC_STACK_ypaworld *yw, int arg)
         pSnd.Volume = 500;
         pSnd.Pitch = 0;
         pSnd.PSample = pSmpl->GetSampleData();
-        
+
         SFXEngine::SFXe.startSound(&usr->samples1_info, World::SOUND_ID_CHAT);
     }
 
@@ -1925,7 +1925,7 @@ void sub_4D0C24(NC_STACK_ypaworld *yw, const std::string &a1, const std::string 
         usr->msgBuffers.pop_front();
 
     usr->msgBuffers.push_back( a2 );
-   
+
     if ( usr->netSelMode == UserData::NETSCREEN_INSESSION )
     {
         int v22 = usr->msgBuffers.size() - 6;
@@ -1993,12 +1993,12 @@ void sub_4EDCD8(NC_STACK_ypaworld *yw)
 void UserData::ShowMenuMsgBox(int code, const std::string &txt1, const std::string &txt2, bool okOnly)
 {
     _menuMsgBoxCode = code;
-    
+
     Gui::UAMessageBox *bx = _menuMsgBox->GetMsgBox();
     bx->SetInform(okOnly);
     bx->Result = 0;
     bx->SetTexts(txt1, txt2);
-    
+
     _menuMsgBox->ToFront();
     _menuMsgBox->SetEnable(true);
 }
@@ -2169,7 +2169,7 @@ void UserData::sub_46A3C0()
     confMaxFps = NormalizeFrameRateLimit(System::IniConf::GfxMaxFps.Get<int32_t>());
 
     int gfxId = GFX::GFXEngine::Instance.GetGfxModeIndex(p_YW->_gfxMode);
-    
+
     if (gfxId < 0)
         gfxId = 0;
 
@@ -2277,7 +2277,7 @@ void  UserData::UpdateSelected3DDevFromList()
     std::string guid;
 
     const std::vector<GFX::TGFXDeviceInfo> &devices = GFX::Engine.GetDevices();
-    
+
     if ((size_t)d3d_listvw.selectedEntry < devices.size())
     {
         const GFX::TGFXDeviceInfo &dev = devices.at(d3d_listvw.selectedEntry);
@@ -4132,7 +4132,7 @@ void UserData::GameShellUiHandleInput()
         Input->KbdLastDown = Input::KC_NONE;
         Input->chr = 0;
         Input->HotKeyID = -1;
-    }    
+    }
 
     if ( EnvMode == ENVMODE_TITLE && Input->HotKeyID == 43 )
         p_YW->_helpURL = Locale::Text::Help(Locale::HELP_MAIN);
@@ -4806,7 +4806,7 @@ void UserData::GameShellUiHandleInput()
         if ( video_listvw.listFlags & GuiList::GLIST_FLAG_SEL_DONE )
         {
             _settingsChangeOptions |= 1;
-            
+
             if (!remoteMode)
                 sub_46C5F0();
         }
@@ -4829,7 +4829,7 @@ void UserData::GameShellUiHandleInput()
         if ( d3d_listvw.listFlags & GuiList::GLIST_FLAG_SEL_DONE )
         {
             _settingsChangeOptions |= 0x1000;
-            
+
             if (!remoteMode)
                 UpdateSelected3DDevFromList();
         }
@@ -4846,7 +4846,7 @@ void UserData::GameShellUiHandleInput()
     }
 
     NC_STACK_button::Slider *v67 = video_button->GetSliderData(1159);
-    
+
     video_button->SetText(1158, fmt::sprintf("%d", v67->value));
     confFxNumber = v67->value;
 
@@ -5000,9 +5000,9 @@ void UserData::GameShellUiHandleInput()
             {
                 userNameDir = Locale::Text::Dialogs(Locale::DLG_P_UNNAMED);
             }
-            
+
             userNameDirCursor = userNameDir.size();
-                        
+
             disk_button->SetText(1100, userNameDir + 'h');
         }
         else if ( r.code == 1161 )
@@ -5012,7 +5012,7 @@ void UserData::GameShellUiHandleInput()
             {
                 userNameDir = Locale::Text::Dialogs(Locale::DLG_P_UNNAMED);
             }
-            
+
             userNameDirCursor = userNameDir.size();
 
             disk_button->SetText(1100, userNameDir + 'h');
@@ -5037,7 +5037,7 @@ void UserData::GameShellUiHandleInput()
             }
 
             userNameDir = fmt::sprintf("%s%d", tmp, maxN + 1);
-            
+
             userNameDirCursor = userNameDir.size();
 
             disk_button->SetText(1100, userNameDir + 'h');
@@ -5190,7 +5190,7 @@ void UserData::GameShellUiHandleInput()
 
         std::string tmp = userNameDir;
         tmp.insert(userNameDirCursor, 1, '_');
-        
+
         disk_button->SetText(1100, tmp);
     }
     else
@@ -5633,9 +5633,9 @@ void UserData::GameShellUiHandleInput()
                 uamessage_ready rdyMsg;
 
                 rdyStart = true;
-                
+
                 int myIndex = p_YW->_netDriver->GetMyIndex();
-                
+
                 if (myIndex >= 0)
                     lobbyPlayers[myIndex].Ready = true;
 
@@ -5652,9 +5652,9 @@ void UserData::GameShellUiHandleInput()
                 uamessage_ready rdyMsg;
 
                 rdyStart = false;
-                
+
                 int myIndex = p_YW->_netDriver->GetMyIndex();
-                
+
                 if (myIndex >= 0)
                     lobbyPlayers[myIndex].Ready = false;
 
@@ -5776,7 +5776,7 @@ void UserData::GameShellUiHandleInput()
         {
             if ( nInputMode )
             {
-                
+
                 uint32_t v233;
 
                 if ( netSelMode == NETSCREEN_ENTER_NAME )
@@ -5792,7 +5792,7 @@ void UserData::GameShellUiHandleInput()
                         {
                             netName.insert(netNameCurPos, 1, Input->chr);
                             netNameCurPos++;
-                        }                           
+                        }
                     }
                 }
 
@@ -5800,7 +5800,7 @@ void UserData::GameShellUiHandleInput()
                 {
                     if (netNameCurPos > 0 && (int)netName.size() >= netNameCurPos)
                     {
-                        netName.erase(netNameCurPos - 1, 1);                        
+                        netName.erase(netNameCurPos - 1, 1);
                         netNameCurPos--;
                     }
                 }
@@ -5873,7 +5873,7 @@ void UserData::GameShellUiHandleInput()
                         }
                     }
                     break;
-                
+
                 case NETSCREEN_ENTER_IP:
                     {
                         if ( !netName.empty() )
@@ -5945,7 +5945,7 @@ void UserData::GameShellUiHandleInput()
                     break;
                 }
             }
-            
+
             if ( netSelMode == NETSCREEN_ENTER_IP && Input->KbdLastHit == Input::KC_V && Input::Engine.GetKeyState(Input::KC_CTRL) )
             {
                 char * clpbrd = SDL_GetClipboardText();
@@ -6122,7 +6122,7 @@ void UserData::GameShellUiHandleInput()
         std::string tmp = netName;
         if (tmp.size() >= (size_t)netNameCurPos)
             tmp.insert(netNameCurPos, 1, '_');
-        
+
         network_button->SetText(UIWidgets::NETWORK_MENU_WIDGET_IDS::TXTBOX, tmp);
     }
 
@@ -6235,7 +6235,7 @@ void UserData::GameShellUiHandleInput()
             network_button->SetText(1226, " ");
 
         if ( isHost )
-        {  // Change map 
+        {  // Change map
             v410.butID = 1205;
             //network_button->show(&v410);
         }
@@ -6303,7 +6303,7 @@ void UserData::GameShellUiHandleInput()
             case World::OWNER_TAER_BIT:
                 v408.butID = 1209;
                 break;
-                
+
             default:
                 break;
             }
@@ -6319,7 +6319,7 @@ void UserData::GameShellUiHandleInput()
             netGameCanStart = true;
             isWelcmd = true;
 
-            // First of all if fraction not allowed - fill 
+            // First of all if fraction not allowed - fill
             if ( !p_YW->_globalMapRegions.MapRegions[netLevelID].IsFraction(World::OWNER_RESIST) )
                 FractionErrorMask |= World::OWNER_RESIST_BIT;
 
@@ -6389,7 +6389,7 @@ void UserData::GameShellUiHandleInput()
                     }
 
                 }
-                
+
                 FractionErrorMask |= fraction;
             }
         }
@@ -6513,7 +6513,7 @@ void UserData::GameShellUiHandleInput()
             network_button->SetText(btID, name);
 
             std::string v339("     "); // 5 spaces
-            
+
             if ( v304 )
             {
                 int v305;

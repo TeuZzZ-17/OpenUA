@@ -107,7 +107,7 @@ void drawSplashScreenWithTOD(NC_STACK_ypaworld *yw, NC_STACK_bitmap *splashScree
 void NC_STACK_ypaworld::PowerStationErase(cellArea *cell)
 {
     if (!cell) return;
-    
+
     auto it = _powerStations.find(cell->Id);
     if (it == _powerStations.end())
     {
@@ -118,15 +118,15 @@ void NC_STACK_ypaworld::PowerStationErase(cellArea *cell)
             cell->PurposeIndex = 0;
             cell->PurposeType = cellArea::PT_NONE;
         }
-        
+
         return;
     }
-    
+
     _powerStations.erase(it);
-    
+
     cell->PurposeIndex = 0;
     cell->PurposeType = cellArea::PT_NONE;
-    
+
     _lvlBuildingsMap(cell->CellId) = 0;
 }
 
@@ -226,7 +226,7 @@ int NC_STACK_ypaworld::LevelCommonLoader(TLevelDescription *mapp, int levelID, i
     _levelInfo.SuperItems.clear();
 
     _techUpgrades.clear();
-    
+
     _netEvent = TNetGameEvent();
     _countUnitsPerOwner.fill(0);
 
@@ -235,9 +235,9 @@ int NC_STACK_ypaworld::LevelCommonLoader(TLevelDescription *mapp, int levelID, i
     _dbgTotalFlakCountMax = 0;
     _dbgTotalWeaponCountMax = 0;
     _dbgTotalRoboCountMax = 0;
-    
+
     _playerOwner = 0;
-    
+
     /* Set hidden fractions to default world's*/
     _hiddenFractions = _worldHiddenFractions;
 
@@ -273,7 +273,7 @@ int NC_STACK_ypaworld::LevelCommonLoader(TLevelDescription *mapp, int levelID, i
     int tod = loadTOD(this, "tod.def");
 
     int next_tod = tod + 1;
-    
+
     if ( next_tod + 2490 > 2512 )
         next_tod = 0;
 
@@ -304,9 +304,9 @@ int NC_STACK_ypaworld::LevelCommonLoader(TLevelDescription *mapp, int levelID, i
     Common::Env.SetPrefix("rsrc", "data:");
 
     if ( sub_4DA41C(mapp, _globalMapRegions.MapRegions[_levelInfo.LevelID].MapDirectory) && mapp->IsOk() )
-    {       
+    {
         Common::DeleteAndNull(&_script);
-        
+
         if (mapp->EventLoopID >= 1 && mapp->EventLoopID <= 3)
         {
             _script = new World::LuaEvents(this);
@@ -345,7 +345,7 @@ bool NC_STACK_ypaworld::LoadTypeMap(const std::string &mapName)
 {
     if ( _lvlTypeMap.IsNull() )
         _lvlTypeMap = World::LoadMapDataFromImage(mapName);
-    
+
     if ( _lvlTypeMap.IsNull() )
         return false;
 
@@ -357,7 +357,7 @@ bool NC_STACK_ypaworld::LoadTypeMap(const std::string &mapName)
         for (int x = 0; x < _mapSize.x; x++)
         {
             cellArea &cell = _cells(x, y);
-            
+
             TSectorDesc *sectp = &_secTypeArray[ _lvlTypeMap( cell.CellId ) ];
 
             cell.type_id = _lvlTypeMap( cell.CellId );
@@ -374,7 +374,7 @@ bool NC_STACK_ypaworld::LoadTypeMap(const std::string &mapName)
                     for (int bldX = 0; bldX < 3; bldX++)
                         cell.buildings_health.At(bldX, bldY) = sectp->SubSectors.At(bldX, bldY)->StartHealth;
             }
-            
+
             id++;
         }
     }
@@ -387,7 +387,7 @@ bool NC_STACK_ypaworld::LoadOwnerMap(const std::string &mapName)
 
     if ( _lvlOwnMap.IsNull() )
         _lvlOwnMap = World::LoadMapDataFromImage(mapName);
-    
+
     if ( _lvlOwnMap.IsNull() )
         return false;
 
@@ -424,7 +424,7 @@ bool NC_STACK_ypaworld::LoadHightMap(const std::string &mapName)
 {
     if ( _lvlHeightMap.IsNull() )
         _lvlHeightMap = World::LoadMapDataFromImage(mapName);
-    
+
     if ( _lvlHeightMap.IsNull() )
         return false;
 
@@ -467,7 +467,7 @@ bool NC_STACK_ypaworld::yw_createRobos(const std::vector<MapRobo> &Robos)
         _levelInfo.OwnerMask = 0;
         int firstOwner = Robos.empty() ? 0 : Robos[0].Owner;
         _levelInfo.UserMask = (firstOwner >= 0 && firstOwner < (int)World::CVFractionsCount) ? (1 << firstOwner) : 0;
-        
+
         bool first = true;
 
         for ( const MapRobo &roboInf : Robos)
@@ -557,7 +557,7 @@ bool NC_STACK_ypaworld::yw_createRobos(const std::vector<MapRobo> &Robos)
                     robo->setBACT_inputting(true);
                 }
             }
-            
+
             first = false;
         }
     }
@@ -568,7 +568,7 @@ bool NC_STACK_ypaworld::LoadBlgMap(const std::string &mapName)
 {
     if ( _lvlBuildingsMap.IsNull() )
         _lvlBuildingsMap = World::LoadMapDataFromImage(mapName);
-    
+
     if ( _lvlBuildingsMap.IsNull() )
         return false;
 
@@ -585,7 +585,7 @@ bool NC_STACK_ypaworld::LoadBlgMap(const std::string &mapName)
         {
             int blg = _lvlBuildingsMap(x, y);
             cellArea &cell = _cells(x, y);
-            
+
             if (blg && cell.owner)
             {
                 ypaworld_arg148 arg148;
@@ -659,7 +659,7 @@ void NC_STACK_ypaworld::yw_InitSquads(const std::vector<MapSquad> &squads)
                 // Create squad by robo method
                 robo->MakeSquad( std::vector<int>(squad.Count, squad.VhclID), squadPos, squad.Useable); // yparobo_func133
             }
-            
+
             i++;
         }
     }
@@ -1197,7 +1197,7 @@ void NC_STACK_ypaworld::InitBuddies()
     if ( !_levelInfo.Buddies.empty() )
     {
         int squad_sn = 0;
-        
+
         std::vector<TMapBuddy> buds = _levelInfo.Buddies;
         while ( 1 )
         {
@@ -1218,7 +1218,7 @@ void NC_STACK_ypaworld::InitBuddies()
             if ( wrkID == -1 )
                 break;
 
-            vec3d squadPos =    _userRobo->_position +  
+            vec3d squadPos =    _userRobo->_position +
                                 vec3d(  sin(squad_sn * 1.745) * 500.0,
                                         0.0,
                                         cos(squad_sn * 1.745) * 500.0 );
@@ -1310,7 +1310,7 @@ void NC_STACK_ypaworld::InitSuperItems()
     for ( size_t i = 0; i < _levelInfo.SuperItems.size(); i++ )
     {
         TMapSuperItem &sitem = _levelInfo.SuperItems[i];
-        
+
         sitem.PCell = &_cells(sitem.CellId);
 
         ypaworld_arg148 arg148;
@@ -1529,18 +1529,18 @@ void NC_STACK_ypaworld::CellCheckHealth(cellArea *cell, int newOwner, NC_STACK_y
 TSectorCollision NC_STACK_ypaworld::sub_44DBF8(int _dx, int _dz, int _dxx, int _dzz, int flags)
 {
     int v8 = flags;
-    
+
     TSectorCollision tmp;
     tmp.sklt = NULL;
     tmp.Flags = 0;
     tmp.CollisionType = 0;
-    
-    
+
+
 
     if ( _dxx > 0 && _dxx < 4 * _mapSize.x - 1 && _dzz > 0  &&  _dzz < 4 * _mapSize.y - 1)
     {
         tmp.Cell = Common::Point(_dxx / 4, _dzz / 4);
-        
+
         cellArea &cell = _cells(tmp.Cell);
 
         if ( _dxx % 4 && _dzz % 4 )
@@ -1638,7 +1638,7 @@ TSectorCollision NC_STACK_ypaworld::sub_44DBF8(int _dx, int _dz, int _dxx, int _
             tmp.CollisionType = 0;
         }
     }
-    
+
     return tmp;
 }
 
@@ -1787,7 +1787,7 @@ void NC_STACK_ypaworld::sub_44E07C(TSectorCollision &arg)
 int sub_44D36C(const vec3d &v, int id, NC_STACK_skeleton *skeleton)
 {
     UAskeleton::Data *sklt = skeleton->GetSkelet();
-    
+
     int v7 = 0;
 
     const UAskeleton::Polygon &tr = sklt->polygons[id];
@@ -2034,7 +2034,7 @@ NC_STACK_ypabact *NC_STACK_ypaworld::yw_createUnit( int model_id)
 
     if ( !bacto )
     {
-        bacto = Nucleus::CTFInit<NC_STACK_ypabact>(unit_classes_names[model_id], 
+        bacto = Nucleus::CTFInit<NC_STACK_ypabact>(unit_classes_names[model_id],
             {{NC_STACK_ypabact::BACT_ATT_WORLD, this}} );
 
         if ( !bacto )
@@ -2130,9 +2130,9 @@ void NC_STACK_ypaworld::RenderSector(TRenderingSector *sct, baseRender_msg *bs77
 
                     bld->SetScale(scel, NC_STACK_base::UF_Y); //Scale only Y
                     bld->SetPosition(pos);
-                    
+
                     NC_STACK_base::CheckOpts( &pcell->BldVPOpts.At(xx, zz), bld );
-                    
+
                     bld->Render(bs77, pcell->BldVPOpts.At(xx, zz));
 
                     bld->SetStatic(true);
@@ -2142,9 +2142,9 @@ void NC_STACK_ypaworld::RenderSector(TRenderingSector *sct, baseRender_msg *bs77
                     NC_STACK_base *bld = _legoArray[ GetLegoBld(pcell, xx, zz) ].Base;
 
                     bld->SetPosition(pos);
-                    
+
                     NC_STACK_base::CheckOpts( &pcell->BldVPOpts.At(xx, zz), bld );
-                    
+
                     bld->Render(bs77, pcell->BldVPOpts.At(xx, zz));
                 }
             }
@@ -2185,7 +2185,7 @@ bool NC_STACK_ypaworld::IsVisibleMapPos(vec2d pos)
     if ( !IsGamePlaySector( pt ) || !_viewerBact )
         return false;
 
-    Common::Point dist = _viewerBact->_cellId.AbsDistance( pt ); 
+    Common::Point dist = _viewerBact->_cellId.AbsDistance( pt );
     if ( dist.x + dist.y <= (_renderSectors - 1) / 2 )
         return true;
 
@@ -2196,7 +2196,7 @@ void NC_STACK_ypaworld::RenderSuperWave(vec2d pos, vec2d fromPos, baseRender_msg
 {
     if ( !_stoudsonWaveVehicleId )
         return;
-    
+
     if ( pos.x > 0.0 && pos.y < 0.0 && pos.x < _mapLength.x && -_mapLength.y < pos.y )
     {
         if ( IsVisibleMapPos(pos) )
@@ -2283,9 +2283,9 @@ void NC_STACK_ypaworld::PrepareFiller(cellArea *sct, cellArea *sct2, float v9h, 
 {
     int x = _secTypeArray[ sct->type_id ].SurfaceType;
     int y = _secTypeArray[ sct2->type_id ].SurfaceType;
-    
-    if (!force && (out->Id1 == x && out->Id2 == y && 
-        out->Heights[0] == sct->height && out->Heights[1] == sct2->height && 
+
+    if (!force && (out->Id1 == x && out->Id2 == y &&
+        out->Heights[0] == sct->height && out->Heights[1] == sct2->height &&
         out->Heights[2] == v8h && out->Heights[3] == v9h))
         return;
 
@@ -2294,9 +2294,9 @@ void NC_STACK_ypaworld::PrepareFiller(cellArea *sct, cellArea *sct2, float v9h, 
         bs = _fillersVertical(x, y);
     else
         bs = _fillersHorizontal(x, y);
-    
+
     UAskeleton::Data *skel = bs->GetSkeleton()->GetSkelet();
-    
+
     vec2d pos = World::SectorIDToCenterPos2( sct2->CellId );
 
     bs->SetPosition( vec3d::X0Z( pos ), NC_STACK_base::UF_XZ );
@@ -2309,16 +2309,16 @@ void NC_STACK_ypaworld::PrepareFiller(cellArea *sct, cellArea *sct2, float v9h, 
 
     skel->POO[8].y = v8h;
     skel->POO[9].y = v9h;
-    
+
     bs->RecalcInternal(true);
     bs->MakeCoordsCache();
-    
+
     out->FreeVBO();
-    
+
     bs->MakeCache(out);
-    
+
     out->MakeVBO();
-    
+
     out->Id1 = x;
     out->Id2 = y;
     out->Heights[0] = sct->height;
@@ -2335,30 +2335,30 @@ void NC_STACK_ypaworld::PrepareAllFillers()
         {
             cellArea *sct = &_cells(i, j);
             cellArea *sct2 = &_cells(i, j + 1);
-            
+
             float h;
             if (i == _mapSize.x - 1)
                 h = sct2->averg_height;
             else
                 h = _cells(i + 1, j + 1).averg_height;
-            
+
             PrepareFiller(sct, sct2, sct2->averg_height, h, false, &_cellsHFCache(i, j), true);
         }
     }
-    
+
     for (int i = 0; i < _mapSize.x - 2; i++)
     {
         for (int j = 0; j < _mapSize.y - 1; j++)
         {
             cellArea *sct = &_cells(i, j);
             cellArea *sct2 = &_cells(i + 1, j);
-            
+
             float h;
             if (i == _mapSize.x - 1)
                 h = sct2->averg_height;
             else
                 h = _cells(i + 1, j + 1).averg_height;
-            
+
             PrepareFiller(sct, sct2, sct2->averg_height, h, true, &_cellsVFCache(i, j), true);
         }
     }
@@ -2378,7 +2378,7 @@ void NC_STACK_ypaworld::RenderFillers(baseRender_msg *arg)
         {
             TRenderingSector &sct = rendering_sectors[j][i];
             TRenderingSector &sct2 = rendering_sectors[j + 1][i];
-            
+
             if (sct.dword4 == 1 && sct2.dword4 == 1 && (sct.dword8 == 1 || sct2.dword8 == 1))
             {
                 float h;
@@ -2386,7 +2386,7 @@ void NC_STACK_ypaworld::RenderFillers(baseRender_msg *arg)
                     h = rendering_sectors[j + 1][i + 1].p_cell->averg_height;
                 else
                     h = sct2.p_cell->averg_height;
-                    
+
                 TCellFillerCh &filler = _cellsVFCache( sct2.p_cell->CellId.x - 1, sct2.p_cell->CellId.y );
                 PrepareFiller(sct.p_cell, sct2.p_cell, sct2.p_cell->averg_height, h, true, &filler);
                 filler.Render(arg);
@@ -2400,7 +2400,7 @@ void NC_STACK_ypaworld::RenderFillers(baseRender_msg *arg)
         {
             TRenderingSector &sct = rendering_sectors[j][i];
             TRenderingSector &sct2 = rendering_sectors[j][i + 1];
-            
+
             if (sct.dword4 == 1 && sct2.dword4 == 1 && (sct.dword8 == 1 || sct2.dword8 == 1))
             {
                 float h;
@@ -2408,7 +2408,7 @@ void NC_STACK_ypaworld::RenderFillers(baseRender_msg *arg)
                     h = rendering_sectors[j + 1][i + 1].p_cell->averg_height;
                 else
                     h = sct2.p_cell->averg_height;
-                    
+
                 TCellFillerCh &filler = _cellsHFCache( sct2.p_cell->CellId.x, sct2.p_cell->CellId.y - 1 );
                 PrepareFiller(sct.p_cell, sct2.p_cell, sct2.p_cell->averg_height, h, false, &filler);
                 filler.Render(arg);
@@ -3323,7 +3323,7 @@ void NC_STACK_ypaworld::RenderGame(base_64arg *bs64, int a2)
         {
             TRenderingSector *sct = &rendering_sectors[v29 + j][v29 - v28];
 
-            RenderAdditionalBeeBox( _viewerBact->_cellId + Common::Point(j, -v28), 
+            RenderAdditionalBeeBox( _viewerBact->_cellId + Common::Point(j, -v28),
                                     sct, &rndrs);
 
             if ( sct->dword4 )
@@ -3337,7 +3337,7 @@ void NC_STACK_ypaworld::RenderGame(base_64arg *bs64, int a2)
             {
                 TRenderingSector *sct = &rendering_sectors[v29 + j][v29 + v28];
 
-                RenderAdditionalBeeBox( _viewerBact->_cellId + Common::Point(j, v28), 
+                RenderAdditionalBeeBox( _viewerBact->_cellId + Common::Point(j, v28),
                                         sct, &rndrs);
 
                 if ( sct->dword4 )
@@ -3346,7 +3346,7 @@ void NC_STACK_ypaworld::RenderGame(base_64arg *bs64, int a2)
         }
     }
 
-    
+
     RenderSuperItems(&rndrs);
 
     RenderFillers(&rndrs);
@@ -3372,7 +3372,7 @@ void NC_STACK_ypaworld::RenderGame(base_64arg *bs64, int a2)
     ParticleSystem().UpdateRender(&rrg, bs64->DTime);
 
     GFX::Engine.BeginScene();
-    
+
     if ( _skyRender )
         yw_renderSky(&rndrs);
 
@@ -3407,17 +3407,17 @@ void NC_STACK_ypaworld::ResetAccumMap()
 void NC_STACK_ypaworld::SetupPowerStationInfo(cellArea *cell, int power, int buildingId)
 {
     if (!cell) return;
-    
+
     TPowerStationInfo &ps = _powerStations[cell->Id];
 
     ps.CellId = cell->CellId;
     ps.Power = power;
     ps.EffectivePower = power;
     ps.pCell = cell;
-    
+
     cell->PurposeType = cellArea::PT_POWERSTATION;
     cell->PurposeIndex = buildingId;
-    
+
     ResetAccumMap();
 }
 
@@ -3453,7 +3453,7 @@ void NC_STACK_ypaworld::sb_0x456384(const Common::Point &cellId, int ownerid2, i
         if ( sectp->SectorType == 1 )
         {
             cell.buildings_health.fill(0);
-            
+
             v49 = 1;
         }
         else
@@ -3518,7 +3518,7 @@ void NC_STACK_ypaworld::sb_0x456384(const Common::Point &cellId, int ownerid2, i
                 for ( size_t i = 0; i < bld->Guns.size(); i++)
                 {
                     World::TBuildingProto::TGun &GunProto = bld->Guns[i];
-                    
+
                     if ( !GunProto.VhclID )
                         break;
 
@@ -3589,9 +3589,9 @@ void NC_STACK_ypaworld::sb_0x456384(const Common::Point &cellId, int ownerid2, i
 void NC_STACK_ypaworld::DestroyAllGunsInSector(cellArea *cell)
 {
     /*
-     * Destroy all GUN units in sector     
+     * Destroy all GUN units in sector
      */
-    
+
     // Safe iterator, because it will call ModifyEnergy->Die for units
     for ( NC_STACK_ypabact* itUnit : cell->unitsList.safe_iter() )
     {
@@ -3643,23 +3643,23 @@ bool NC_STACK_ypaworld::BuildingConstructBegin(cellArea *cell, uint8_t buildID, 
 {
     if (!cell)
         return false;
-    
+
     if (cell->IsBorder())
         return false;
-    
+
     auto it = _inBuildProcess.find(cell->Id);
     if (it != _inBuildProcess.end())
         return false;
-    
+
     TConstructInfo &bldProc = _inBuildProcess[cell->Id];
     bldProc.CellID = cell->CellId;
     bldProc.Time = 0;
     bldProc.EndTime = cTime;
     bldProc.BuildID = buildID;
     bldProc.Owner = owner;
-    
+
     cell->PurposeType = cellArea::PT_CONSTRUCTING;
-    
+
     for (NC_STACK_ypabact * &unit : _unitsList)
     {
         if ( unit->_bact_type == BACT_TYPES_ROBO && owner == unit->_owner )
@@ -3668,7 +3668,7 @@ bool NC_STACK_ypaworld::BuildingConstructBegin(cellArea *cell, uint8_t buildID, 
             break;
         }
     }
-    
+
     return true;
 }
 
@@ -3800,19 +3800,19 @@ void NC_STACK_ypaworld::BuildingConstructUpdate(int dtime)
                     arg159.Priority = 65;
 
                     switch( _buildProtos[ bldProc.BuildID ].ModelID )
-                    { 
+                    {
                         case 1:
                         arg159.MsgID = 36;
                         break;
-                        
+
                         case 2:
                         arg159.MsgID = 38;
                         break;
-                    
+
                         case 3:
                         arg159.MsgID = 37;
                         break;
-                        
+
                         default:
                         arg159.MsgID = 0;
                         break;
@@ -4120,7 +4120,7 @@ void NC_STACK_ypaworld::DoSectorsEnergyRecalc()
     if ( !_powerStations.empty() ) // If we have powerstations
     {
         auto itPs = _powerStations.lower_bound(_nextPSForUpdate);
-        
+
         if (itPs == _powerStations.end()) // If we reach end of power stations list, apply power to sectors
         {
             AddMobileVehiclePowerToAccumMap();
@@ -4994,7 +4994,7 @@ void NC_STACK_ypaworld::NetReleaseMissiles(NC_STACK_ypabact *bact)
     {
         NC_STACK_ypamissile *misl = bact->_missiles_list.front();
         bact->_missiles_list.pop_front();
-        
+
         if ( misl->_primTtype == BACT_TGT_TYPE_UNIT )
         {
             misl->_primT.pbact->DeleteAttacker(misl, 0);
@@ -5238,7 +5238,7 @@ void sb_0x447720(NC_STACK_ypaworld *yw, TInputState *inpt)
         }
 
         GFX::Engine.SaveScreenshot( fmt::sprintf("env:snaps/s%d_%04d", yw->_screenShotSeqId, yw->_screenShotSeqFrame) );
-        
+
         yw->_screenShotSeqFrame++;
     }
     else if ( inpt->KbdLastHit == Input::KC_NUMDIV && (inpt->ClickInf.flag & 0x100 || yw->_easyCheatKeys) )
@@ -5398,8 +5398,8 @@ void NC_STACK_ypaworld::recorder_world_to_frame(TGameRecorder *rcrd)
 
         for (int j = 0; j < 16; j++)
         {
-            if (bact->_soundcarrier.Sounds[j].IsEnabled() || 
-                bact->_soundcarrier.Sounds[j].IsPFxEnabled() || 
+            if (bact->_soundcarrier.Sounds[j].IsEnabled() ||
+                bact->_soundcarrier.Sounds[j].IsPFxEnabled() ||
                 bact->_soundcarrier.Sounds[j].IsShkEnabled())
                 ssnd.active |= 1 << j;
         }
@@ -5904,7 +5904,7 @@ void NC_STACK_ypaworld::recorder_updateObjectList(TGameRecorder *rcrd, float a5,
         if ( it != _userUnit->_kidList.end() )
         {
             NC_STACK_ypabact *bact = *it;
-            
+
             if ( oinf->bact_id > bact->_gid )
             {
                 it++;
@@ -5918,7 +5918,7 @@ void NC_STACK_ypaworld::recorder_updateObjectList(TGameRecorder *rcrd, float a5,
                 if ( v10 )
                 {
                     recorder_updateObject(v10, oinf, &ssnd, 1.0, fperiod);
-                    
+
                     v10->_kidRef = _userUnit->_kidList.insert(it, v10);
 
                     i++;
@@ -5997,7 +5997,7 @@ int NC_STACK_ypaworld::recorder_go_to_frame(TGameRecorder *rcrd, int wanted_fram
             else
             {
                 rcrd->mfile.skipChunk();
-            }            
+            }
         }
     }
     return 0;
@@ -6103,7 +6103,7 @@ void NC_STACK_ypaworld::CameraPrepareRender(TGameRecorder *rcrd, NC_STACK_ypabac
 
     if ( inpt->ClickInf.flag & TClickBoxInf::FLAG_RM_DOWN )
     {
-        
+
         if ( _mouseGrabbed )
             _mouseGrabbed = false;
         else if ( inpt->ClickInf.selected_btn != &robo_map  &&  inpt->ClickInf.selected_btn != &squadron_manager )
@@ -6135,7 +6135,7 @@ void NC_STACK_ypaworld::CameraPrepareRender(TGameRecorder *rcrd, NC_STACK_ypabac
                 bact->_rotation = rcrd->rotation_matrix * unit->_rotation;
                 break;
             }
-        } 
+        }
     }
     else if ( rcrd->field_80 == 20 )
     {
@@ -6328,7 +6328,7 @@ void NC_STACK_ypaworld::debug_info_draw(TInputState *inpt)
 
             sub_445654(this, &dbg_txt, buf_sprintf, "prof rend: %d", _profileVals[PFID_RENDERTIME]);
             FontUA::next_line(&dbg_txt);
-            
+
             sub_445654(this, &dbg_txt, buf_sprintf, "prof 2d rend: %d", _profileVals[PFID_NEWGUITIME]);
             FontUA::next_line(&dbg_txt);
 
@@ -7026,9 +7026,12 @@ void NC_STACK_ypaworld::debug_draw_coll_spheres()
 
         bool isSelfControlled = (unit == _userUnit || unit == _viewerBact || unit->getBACT_inputting());
         vec3d pos = unit->_position;
+        World::rbcolls *colls = unit->getBACT_collNodes();
+        bool compoundReplacesDebugRadius = unit->UsesAutoCollisionSpheres() ||
+                                           (unit->_bact_type == BACT_TYPES_ROBO && colls);
 
         // Red broad/fallback radius. Skip only the self radius to avoid cockpit cross lines.
-        if (!isSelfControlled && !unit->UsesAutoCollisionSpheres())
+        if (!isSelfControlled && !compoundReplacesDebugRadius)
         {
             float R = unit->_radius;
             if (R > 0.01f)
@@ -7046,39 +7049,27 @@ void NC_STACK_ypaworld::debug_draw_coll_spheres()
             }
         }
 
-        // Green compound collision spheres.
-        World::rbcolls *colls = unit->getBACT_collNodes();
+        // Compound collision spheres: green for vehicles, blue for weapons.
+        // Generated coll slot/radius/offset labels are intentionally omitted;
+        // only the manually meaningful vanilla radius keeps a numeric label.
         if (colls)
         {
             mat3x3 rotT = unit->_rotation.Transpose();
-            int slot = 0;
-            bool isRobo = unit->_bact_type == BACT_TYPES_ROBO;
+            bool isWeapon = unit->_bact_type == BACT_TYPES_MISSLE;
+            uint8_t sphereR = 60;
+            uint8_t sphereG = isWeapon ? 130 : 220;
+            uint8_t sphereB = isWeapon ? 235 : 60;
+            float hitPadding = unit->getBACT_collPadding();
             for (const World::TRoboColl &cs : colls->roboColls)
             {
-                if (cs.robo_coll_radius < 0.01f)
-                {
-                    slot++;
+                if (!cs.debug_visible || cs.robo_coll_radius < 0.01f)
                     continue;
-                }
 
                 vec3d sphWorld = pos + rotT.Transform(cs.coll_pos);
-                drawRing(sphWorld, cs.robo_coll_radius, 0, 60, 220, 60);
-                drawRing(sphWorld, cs.robo_coll_radius, 1, 60, 220, 60);
-                drawRing(sphWorld, cs.robo_coll_radius, 2, 60, 220, 60);
-
-                if (dist <= LABEL_MAX_DIST)
-                {
-                    char buf[160];
-                    snprintf(buf, sizeof(buf), "%s[%d] r=%.0f x=%.0f y=%.0f z=%.0f",
-                             isRobo ? "robo_coll" : "coll",
-                             slot,
-                             cs.robo_coll_radius,
-                             cs.coll_pos.x,
-                             cs.coll_pos.y,
-                             cs.coll_pos.z);
-                    drawLabel(sphWorld + vec3d::OY(cs.robo_coll_radius + 15.0f), buf, 60, 220, 60);
-                }
-                slot++;
+                float debugRadius = cs.robo_coll_radius + hitPadding;
+                drawRing(sphWorld, debugRadius, 0, sphereR, sphereG, sphereB);
+                drawRing(sphWorld, debugRadius, 1, sphereR, sphereG, sphereB);
+                drawRing(sphWorld, debugRadius, 2, sphereR, sphereG, sphereB);
             }
         }
 

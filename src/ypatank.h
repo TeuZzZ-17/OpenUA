@@ -12,14 +12,14 @@ public:
         FLAG_TANK_TIP     = (1 << 0),
         FLAG_TANK_ROTWAIT = (1 << 1)
     };
-    
+
     enum ALIGN
     {
         ALIGN_NONE = 0,
         ALIGN_DONE = 1,
         ALIGN_NORMAL = 2,
     };
-    
+
     enum
     {
         COLL_WALL_L = (1 << 0),
@@ -47,12 +47,12 @@ public:
 
     NC_STACK_ypatank();
     virtual ~NC_STACK_ypatank() {};
-    
+
     virtual const std::string ClassName() const {
         return __ClassName;
     };
-    
-    
+
+
     virtual bool IsGroundUnit() const { return true; };
 
     enum TANK_ATT
@@ -67,7 +67,6 @@ public:
 
     vec3d TankTip(vec3d v);
     void ypatank_func87__sub0(NC_STACK_ypabact *bact2);
-    bool AutoCollisionSpheresHitWorld(const vec3d &from, const vec3d &to, vec3d *hitNormal = NULL);
 
     //Data
 public:

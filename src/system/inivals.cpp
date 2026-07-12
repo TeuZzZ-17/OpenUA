@@ -2,7 +2,7 @@
 #include "inivals.h"
 #include "utils.h"
 
-namespace System 
+namespace System
 {
 Common::Ini::PKeyList IniConf::_varList;
 
@@ -245,11 +245,9 @@ Common::Ini::Key IniConf::GameRoboBuildingCollisionDamagePercent("game.robo_buil
 // OpenUA custom: multiplier for the vanilla power-station sector energy effect.
 // game.powerstation_energy_multiplier = 1.0 keeps vanilla; 3.0 triples recharge/drain.
 Common::Ini::Key IniConf::GamePowerStationEnergyMultiplier("game.powerstation_energy_multiplier", Common::Ini::KT_WORD, std::string("1.0"));
-// OpenUA custom: crash/collision tuning. Defaults preserve vanilla/OpenUA behavior:
-// fall/world crash damage stays unchanged, unit collision push/damage stay disabled.
+// OpenUA custom: fall damage and lethal weapon-push tuning.
 Common::Ini::Key IniConf::GameFallDamageMultiplier("game.fall_damage_mult", Common::Ini::KT_WORD, std::string("1.0"));
-Common::Ini::Key IniConf::GameUnitCollisionPush("game.unit_collision_push", Common::Ini::KT_WORD, std::string("0"));
-Common::Ini::Key IniConf::GameUnitCollisionDamageMultiplier("game.unit_collision_damage_mult", Common::Ini::KT_WORD, std::string("0.0"));
+Common::Ini::Key IniConf::GamePushAtDeathMultiplier("game.push_at_death_mult", Common::Ini::KT_WORD, std::string("1.0"));
 
 // OpenUA custom: Black Sect "imperfect grey clone" runtime balance (owner/faction 5).
 // When enabled, live Black Sect actors get a small malus (default 5%) to effective
@@ -467,8 +465,7 @@ void IniConf::Init()
         , &GameRoboBuildingCollisionDamagePercent
         , &GamePowerStationEnergyMultiplier
         , &GameFallDamageMultiplier
-        , &GameUnitCollisionPush
-        , &GameUnitCollisionDamageMultiplier
+        , &GamePushAtDeathMultiplier
         , &GameBlackSectCloneBalance
         , &GameBlackSectCloneMalusPercent
         , &GameBlackSectCloneTint
@@ -494,11 +491,11 @@ void IniConf::Init()
         , &GfxColorEffPower14
         , &GfxColorEffPower15
         , &GfxColorEffPower16
-        
+
         , &ParticlesLimit
-                  
+
         , &MenuWindowed
-                  
+
         , &GfxAdditionalModes
         , &GfxVBO
         , &GfxVhsFilter
@@ -511,7 +508,7 @@ void IniConf::Init()
         , &UiMenuFont
     };
 }
-    
+
 bool IniConf::ReadFromNucleusIni()
 {
     return Common::Ini::ParseIniFile(uaDataFirstNucleusIniPath(), &_varList);

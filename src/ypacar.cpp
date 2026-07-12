@@ -14,12 +14,12 @@
 #include "log.h"
 
 
-NC_STACK_ypacar::NC_STACK_ypacar() 
+NC_STACK_ypacar::NC_STACK_ypacar()
 {
     _carKamikaze = false;
     _carBlast = 0;
 }
-    
+
 size_t NC_STACK_ypacar::Init(IDVList &stak)
 {
     if ( !NC_STACK_ypatank::Init(stak) )
@@ -254,7 +254,7 @@ void NC_STACK_ypacar::DoKamikaze()
             _rotation.m02 = sqrt( 1.0 );
             _rotation.m00 = 0.0;
         }
-        
+
     }
     else
     {
@@ -644,19 +644,19 @@ vec3d NC_STACK_ypacar::CarTip(float dtime, const vec3d &oldDir, vec3d rot)
 
         rot = mat3x3::AxisAngle(_rotation.AxisX(), v8).Transform(rot);
     }
-    
+
     if (dtime != 0.0)
     {
         float tmpsq = tmp.length();
-        float v76 = 0.0;        
-        
+        float v76 = 0.0;
+
         if (isnormal(tmpsq)) // Not NULL, NAN, INF
             v76 = tmp.dot( varg ) / tmpsq;
 
         tmpsq = varg.length();
         if (isnormal(tmpsq)) // Not NULL, NAN, INF
             v76 /= tmpsq;
-    
+
         float v77 = clp_acos(v76) * (fabs(_fly_dir_length) * 0.002 / dtime);
 
         if ( v77 > 0.001 )
@@ -667,7 +667,7 @@ vec3d NC_STACK_ypacar::CarTip(float dtime, const vec3d &oldDir, vec3d rot)
             rot = mat3x3::AxisAngle(_rotation.AxisZ(), v77).Transform(rot);
         }
     }
-    
+
     return rot;
 }
 

@@ -54,9 +54,9 @@ uint16_t FontUA::get_u16(const CmdStream &stream, int32_t *pos)
     uint16_t tmp = (stream.at((*pos) + 1)  ) & 0xFF;
 
     tmp |= (stream.at(*pos) <<  8) & 0xFF00;
-    
+
     (*pos) += 2;
-    
+
     return tmp;
 }
 
@@ -65,7 +65,7 @@ int16_t FontUA::get_s16(const CmdStream &stream, int32_t *pos)
     int16_t tmp = (stream.at((*pos) + 1)  ) & 0xFF;
 
     tmp |= (stream.at(*pos) <<  8) & 0xFF00;
-    
+
     (*pos) += 2;
 
     return tmp;
@@ -74,7 +74,7 @@ int16_t FontUA::get_s16(const CmdStream &stream, int32_t *pos)
 uint8_t FontUA::get_u8(const CmdStream &stream, int32_t *pos)
 {
     uint8_t tmp = stream.at(*pos) & 0xFF;
-    
+
     (*pos)++;
 
     return tmp;
@@ -357,7 +357,7 @@ void FontUA::FormateAlignedClippedString(NC_STACK_ypaworld *yw, CmdStream *cmdbu
     int v26 = 0;
 
     int txtWidth = 0;
-    
+
     txtWidth += tset->GetWidth(arg->txt);
 
     int freeWidth = arg->width - txtWidth;
@@ -452,7 +452,7 @@ void FontUA::FormateAlignedClippedString(NC_STACK_ypaworld *yw, CmdStream *cmdbu
                 chr = 0;
                 break;
             }
-            
+
             chr = arg->txt[cI];
             cI++;
 

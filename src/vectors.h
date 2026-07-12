@@ -19,7 +19,7 @@ struct Tvec2d
     T x = 0.0;
     T y = 0.0;
 
-    Tvec2d() = default;    
+    Tvec2d() = default;
     Tvec2d( const Tvec2d<T> &b) = default;
 
     Tvec2d(T _x, T _y)
@@ -38,7 +38,7 @@ struct Tvec2d
     {
         return sqrt( x * x + y * y);
     }
-    
+
     T square() const
     {
         return x * x + y * y;
@@ -216,9 +216,9 @@ struct Tvec3d
     T y = 0.0;
     T z = 0.0;
 
-    Tvec3d() = default;    
+    Tvec3d() = default;
     Tvec3d(const Tvec3d<T> &b) = default;
-    
+
     template <typename K>
     Tvec3d(const Tvec3d<K> &b)
     {
@@ -245,7 +245,7 @@ struct Tvec3d
     {
         return sqrt( x * x + y * y + z * z );
     }
-    
+
     T square() const
     {
         return x * x + y * y + z * z;
@@ -279,14 +279,14 @@ struct Tvec3d
 
     // xyz = another xyz
     Tvec3d &operator=(const Tvec3d &b) = default;
-    
+
     template <typename K>
     Tvec3d &operator=(const Tvec3d<K> &b)
     {
         x = b.x;
         y = b.y;
         z = b.z;
-        
+
         return *this;
     }
 
@@ -440,7 +440,7 @@ struct Tvec3d
     {
         return Tvec3d(in.x, 0.0, in.y);
     }
-    
+
     static const Tvec3d X0Z(const Tvec3d<T> &in)
     {
         return Tvec3d(in.x, 0.0, in.z);
@@ -460,7 +460,7 @@ struct Tvec3d
     {
         return Tvec3d(0.0, 0.0, _z);
     }
-    
+
     static const Tvec3d Normalise(const Tvec3d &b)
     {
         Tvec3d tmp = b;

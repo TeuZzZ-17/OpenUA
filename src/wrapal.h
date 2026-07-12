@@ -25,7 +25,7 @@ class waldev;
 class CTsmpl
 {
     friend class waldev;
-    
+
 protected:
     struct AlBuffer
     {
@@ -60,11 +60,11 @@ public:
         SMPL_STATUS_PLAYING = 1,
         SMPL_STATUS_PAUSED  = 2
     };
-    
+
     int GetQueueSize();
     bool IsFreeBuffer();
     size_t BuffersCapacity() const;
-    
+
     uint32_t BuffersTime() const;
     uint32_t GetStreamedTime() const;
     uint32_t GetPlayedTime() const;
@@ -80,7 +80,7 @@ protected:
 
     void _clearQueue();
     bool _fill_n_queue( AlBuffer *buf );
-    
+
     uint32_t BytesToMsec(uint32_t bytes) const;
 
     const waldev *_device;
@@ -99,12 +99,12 @@ protected:
 
     ALfloat _cVolume;
     ALfloat _mVolume;
-    
+
     uint64_t _queuedBytes = 0;
     uint64_t _playedBytes = 0;
-    
+
     int32_t _TS = 0;
-    
+
     const size_t _BufSZ;
 
     void (*_eosfunc)(void *);
@@ -157,7 +157,7 @@ protected:
 class WALStream: public CTsmpl
 {
     friend waldev;
-    
+
 private:
     struct TSSamples
     {
@@ -168,7 +168,7 @@ private:
 public:
     void SetFormat(ALenum fmt, uint32_t freq);
     void Feed(void *data, size_t sz, int32_t ts = -1);
-    
+
     int BuffersCount();
     size_t DataLeft();
 
@@ -179,7 +179,7 @@ protected:
     virtual size_t _read(void *buf, size_t bufsz, int32_t *endTs);
     virtual void _rewind() {};
     virtual void _stop() override;
-    
+
     std::queue< TSSamples >_queue;
     size_t _bufPos = 0;
     size_t _dataLeft = 0;
@@ -199,7 +199,7 @@ public:
     void deleteSample(CTsmpl *smpl);
 
     void master_volume(int vol);
-    
+
     WALStream *CreateStream();
 
 private:

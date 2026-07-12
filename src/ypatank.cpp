@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <string.h>
 #include <math.h>
+#include <algorithm>
 #include <limits>
 #include <string>
 #include "yw.h"
@@ -40,48 +41,19 @@ static bool ypatank_IsPlayerRecoilRecoveryActive(const NC_STACK_ypatank *tank)
 
 static const float YPATANK_PLAYER_RECOIL_FORWARD_SCALE = 0.20f;
 
-
-static float ypatank_ReadNonNegativeFloatIni(Common::Ini::Key &key, float dflt)
-{
-    std::string value = key.Get<std::string>();
-    if ( value.empty() || value.find(',') != std::string::npos )
-        return dflt;
-
-    try
-    {
-        size_t pos = 0;
-        float parsed = std::stof(value, &pos);
-        if ( value.find_first_not_of(" \t\r\n", pos) != std::string::npos || parsed < 0.0f )
-            return dflt;
-
-        return parsed;
-    }
-    catch (...)
-    {
-        return dflt;
-    }
-}
-
-static bool ypatank_IsCustomFallDamageConfigActive()
-{
-    return fabs(ypatank_ReadNonNegativeFloatIni(System::IniConf::GameFallDamageMultiplier, 1.0f) - 1.0f) > 0.0001f;
-}
-
-static bool ypatank_IsCustomUnitCollisionConfigActive()
-{
-    return ypatank_ReadNonNegativeFloatIni(System::IniConf::GameUnitCollisionPush, 0.0f) > 0.0f ||
-           ypatank_ReadNonNegativeFloatIni(System::IniConf::GameUnitCollisionDamageMultiplier, 0.0f) > 0.0f;
-}
-
 static bool ypatank_ShouldPlayCrashlandSound(const NC_STACK_ypatank *tank, float speed, float minSpeed)
 {
-    if ( fabs(speed) <= minSpeed )
+    // The crash-land sample belongs to the vehicle prototype, not to the
+    // optional modern fall-damage multiplier. AI tanks therefore make the
+    // same hard-landing sound as a player-controlled tank whenever the impact
+    // is strong enough. Pure viewer/spectator actors remain excluded.
+    if ( !tank || fabs(speed) <= minSpeed )
         return false;
 
     if ( tank->getBACT_inputting() )
         return true;
 
-    return !(tank->_oflags & BACT_OFLAG_VIEWER) && ypatank_IsCustomFallDamageConfigActive();
+    return !(tank->_oflags & BACT_OFLAG_VIEWER);
 }
 
 static void ypatank_StartSoundOnce(NC_STACK_ypatank *tank, int soundId)
@@ -207,7 +179,7 @@ void NC_STACK_ypatank::AI_layer3(update_msg *arg)
     if ( v220 > 0.0 )
         _target_dir = _target_vec / v220;
 
-    bool seekAndExplodeRamming = ApplySeekAndExplodeRammingGuidance(false);
+    bool seekAndExplodeRamming = ApplySeekAndExplodeRammingGuidance();
     if ( seekAndExplodeRamming )
         v220 = _target_vec.length();
 
@@ -255,7 +227,7 @@ void NC_STACK_ypatank::AI_layer3(update_msg *arg)
         {
             float tmpsq = _rotation.AxisZ().XZ().length();
             float v206 = 0.0;
-            
+
             if (isnormal(tmpsq))  // Not NULL, NAN, INF
                 v206 = _target_dir.XZ().dot( _rotation.AxisZ().XZ() ) / tmpsq;
 
@@ -279,8 +251,8 @@ void NC_STACK_ypatank::AI_layer3(update_msg *arg)
                     break;
                 }
 
-                if ( (_tankCollisionFlag & (COLL_HILL_L | COLL_HILL_R)) && 
-                     _tankCollisionAngle == 0.0 && 
+                if ( (_tankCollisionFlag & (COLL_HILL_L | COLL_HILL_R)) &&
+                     _tankCollisionAngle == 0.0 &&
                      _tankCollisionWay == 0.0 )
                 {
                     ypaworld_arg136 arg136;
@@ -562,10 +534,10 @@ void NC_STACK_ypatank::AI_layer3(update_msg *arg)
                             {
                                 float dotLen = 0.0;
                                 tmpLn = az2d.length();
-                                
+
                                 if (isnormal(tmpLn))  // Not NULL, NAN, INF
                                     dotLen = arg136_1.vect.XZ().dot( az2d ) / tmpLn / 150.0;
-                                
+
                                 _tankCollisionAngle = clp_acos(dotLen);
                                 wallLeft = true;
                             }
@@ -573,24 +545,24 @@ void NC_STACK_ypatank::AI_layer3(update_msg *arg)
                             {
                                 float dotLen = 0.0;
                                 tmpLn = az2d.length();
-                                
+
                                 if (isnormal(tmpLn))  // Not NULL, NAN, INF
                                     dotLen = az2d.dot( arg136_3.vect.XZ() ) / tmpLn / 150.0;
-                                
+
                                 _tankCollisionAngle = clp_acos(dotLen);
                                 wallLeft = false;
                             }
                         }
                         else
                         {
-                            float dotLen = 0.0; 
+                            float dotLen = 0.0;
                             tmpLn = az2d.length();
-                            
+
                             if (isnormal(tmpLn))  // Not NULL, NAN, INF
                                 dotLen = az2d.dot( _tankCollisionVector.XZ() ) / tmpLn;
-                            
+
                             tmpLn = _tankCollisionVector.XZ().length();
-                            
+
                             if (isnormal(tmpLn))  // Not NULL, NAN, INF
                                 dotLen = dotLen / tmpLn;
                             else
@@ -691,7 +663,7 @@ void NC_STACK_ypatank::AI_layer3(update_msg *arg)
 
                     float ln = axsZ.length();
                     float dotLen = 0.0;
-                    
+
                     if (isnormal(ln))  // Not NULL, NAN, INF
                         dotLen = axsZ.dot( _tankCollisionVector.XZ() ) / ln;
                     else
@@ -1266,13 +1238,6 @@ void NC_STACK_ypatank::Move(move_msg *arg)
 
     CorrectPositionInLevelBox(NULL);
 
-    if ( (_status_flg & BACT_STFLAG_LAND) && AutoCollisionSpheresHitWorld(_old_pos, _position) )
-    {
-        _position = _old_pos;
-        _fly_dir_length = 0.0;
-        _thraction = 0.0;
-    }
-
     _soundcarrier.Sounds[0].Pitch = _pitch;
     _soundcarrier.Sounds[0].Volume = _volume;
 
@@ -1291,70 +1256,6 @@ void NC_STACK_ypatank::Move(move_msg *arg)
 
     if ( _soundcarrier.Sounds[0].PSample )
         _soundcarrier.Sounds[0].Pitch += (float)(_soundcarrier.Sounds[0].PSample->SampleRate + _soundcarrier.Sounds[0].Pitch) * v49;
-}
-
-bool NC_STACK_ypatank::AutoCollisionSpheresHitWorld(const vec3d &from, const vec3d &to, vec3d *hitNormal)
-{
-    if ( !_autoCollisionSpheres || _collNodes.roboColls.empty() || !_world )
-        return false;
-
-    vec3d motion = to - from;
-    float distance = motion.length();
-    if ( distance <= 0.001 )
-        return false;
-
-    vec3d direction = motion / distance;
-    float minRadius = std::numeric_limits<float>::max();
-    for (const World::TRoboColl &sphere : _collNodes.roboColls)
-    {
-        if ( sphere.robo_coll_radius > 0.01 )
-            minRadius = std::min(minRadius, sphere.robo_coll_radius);
-    }
-
-    if ( minRadius == std::numeric_limits<float>::max() )
-        return false;
-
-    float sampleStep = std::max(4.0f, minRadius * 0.45f);
-    int samples = (int)ceil(distance / sampleStep);
-    if ( samples < 1 )
-        samples = 1;
-    if ( samples > 8 )
-        samples = 8;
-
-    mat3x3 rotT = _rotation.Transpose();
-    for (int sample = 1; sample <= samples; sample++)
-    {
-        vec3d samplePos = from + motion * ((float)sample / (float)samples);
-
-        for (const World::TRoboColl &sphere : _collNodes.roboColls)
-        {
-            if ( sphere.robo_coll_radius <= 0.01 )
-                continue;
-
-            yw_137col collisions[32];
-            ypaworld_arg137 arg137;
-            arg137.pos = samplePos + rotT.Transform(sphere.coll_pos);
-            arg137.pos2 = direction;
-            arg137.radius = sphere.robo_coll_radius;
-            arg137.collisions = collisions;
-            arg137.coll_max = 32;
-            arg137.field_30 = 0;
-
-            _world->ypaworld_func137(&arg137);
-
-            for (int i = 0; i < arg137.coll_count; i++)
-            {
-                if ( fabs(collisions[i].pos2.y) < 0.6 )
-                {
-                    if ( hitNormal )
-                        *hitNormal = collisions[i].pos2;
-                    return true;
-                }
-            }
-        }
-    }
-
-    return false;
 }
 
 size_t NC_STACK_ypatank::SetPosition(bact_arg80 *arg)
@@ -1520,6 +1421,73 @@ size_t NC_STACK_ypatank::CollisionWithBact(int arg)
                     && v12 != this )
             {
 
+                // Tank-vs-tank keeps the vanilla response below; only the old
+                // radius overlap is replaced by the closest compound pair.
+                if ( !v114 && v12->_bact_type == BACT_TYPES_TANK )
+                {
+                    vec3d selfCenter;
+                    vec3d targetCenter;
+
+                    if ( GetUnitCollisionContact(v12, &selfCenter, &targetCenter, NULL) )
+                    {
+                        vec3d v93 = targetCenter - selfCenter;
+                        float v126 = v93.length();
+                        float v118 = v93.dot(_rotation.AxisZ());
+
+                        if ( v126 > 0.01f )
+                            v118 /= v126;
+
+                        if ( fabs(_fly_dir_length) >= 0.1f )
+                        {
+                            if ( _fly_dir_length < 0.0f )
+                                v118 = -v118;
+                        }
+                        else if ( _thraction < 0.0f )
+                        {
+                            v118 = -v118;
+                        }
+
+                        vec3d frameMotion = _position - _old_pos;
+                        vec3d contactDirection = v93;
+                        frameMotion.y = 0.0f;
+                        contactDirection.y = 0.0f;
+                        bool enteringCompoundContact =
+                            frameMotion.normalise() > 0.001f &&
+                            contactDirection.normalise() > 0.001f &&
+                            frameMotion.dot(contactDirection) > 0.0f;
+
+                        // Keep the vanilla forward cone, but do not ignore a
+                        // real compound overlap that this frame is entering at
+                        // a corner. The response below remains entirely vanilla.
+                        if ( v126 < 300.0f && (v118 >= v104 || enteringCompoundContact) )
+                        {
+                            if ( !v117 || v126 < v109 )
+                            {
+                                v109 = v126;
+                                v117 = v12;
+                                v121 = clp_acos(v118);
+                                v103 = v93.XZ().cross(_rotation.AxisZ().XZ()) > 0.0f;
+                                v106 = 1;
+                                v108 = _rotation.AxisZ().dot(v12->_rotation.AxisZ()) < 0.0f ||
+                                       v12->_status == BACT_STATUS_IDLE;
+                                v105 = v12->_waitCol_time <= 0;
+                            }
+
+                            if ( a4 && v113 < 10 )
+                            {
+                                v80[v113] = v12;
+                                if ( v126 <= 0.0001f )
+                                    v78[v113] = v93;
+                                else
+                                    v78[v113] = v93 / v126;
+                                v113++;
+                            }
+                        }
+                    }
+
+                    continue;
+                }
+
                 World::rbcolls *v96 = v12->getBACT_collNodes();
 
                 int v110;
@@ -1659,15 +1627,11 @@ size_t NC_STACK_ypatank::CollisionWithBact(int arg)
             }
         }
 
-
         if ( !v117 )
         {
             _status_flg &= ~BACT_STFLAG_BCRASH;
             return 0;
         }
-
-        if ( v106 && !(_status_flg & BACT_STFLAG_BCRASH) )
-            ApplyUnitCollisionEffects(v117, v117->_position - _position, _fly_dir_length);
 
         if ( a4 )
         {
@@ -1681,7 +1645,6 @@ size_t NC_STACK_ypatank::CollisionWithBact(int arg)
                     {
                         float v40 = _mass * 8.0 * fabs(_fly_dir_length);
                         float v41 = _thraction * v124 * 100.0;
-
                         float v127 = v124 * ((v40 + v41) / v80[i]->_mass);
 
                         if ( v127 > 0.05 )
@@ -1692,18 +1655,13 @@ size_t NC_STACK_ypatank::CollisionWithBact(int arg)
                             arg136.stPos = v80[i]->_position;
                             arg136.vect = v85 - v80[i]->_position;
                             arg136.flags = 0;
-
                             _world->ypaworld_func136(&arg136);
 
                             if ( !arg136.isect )
                             {
-
                                 v80[i]->_old_pos = v80[i]->_position;
-
                                 v80[i]->_position = v85;
-
                                 v80[i]->_status_flg &= ~BACT_STFLAG_LAND;
-
                                 v80[i]->CorrectPositionInLevelBox(NULL);
                             }
                         }
@@ -1787,12 +1745,7 @@ size_t NC_STACK_ypatank::CollisionWithBact(int arg)
                 _status_flg &= ~BACT_STFLAG_MOVE;
 
                 if ( !(_status_flg & BACT_STFLAG_BCRASH) )
-                {
-                    if ( ypatank_IsCustomUnitCollisionConfigActive() )
-                        ypatank_StartSoundOnce(this, 6);
-
                     _status_flg |= BACT_STFLAG_BCRASH;
-                }
 
                 if ( v108 || !v105 )
                 {
@@ -2115,7 +2068,7 @@ int NC_STACK_ypatank::AlignVehicleAI(float dtime, vec3d *pNormal)
 
     if ( !arg136.isect )
         return ALIGN_NONE;
-    
+
     vec3d normal = arg136.skel->polygons[ arg136.polyID ].Normal();
 
     if ( normal.y < 0.6 )

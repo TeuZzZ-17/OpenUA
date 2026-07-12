@@ -87,13 +87,13 @@ struct base_64arg
 };
 
 
-struct TObjectCache 
+struct TObjectCache
 {
     std::list<GFX::TMesh> Meshes;
     TF::TForm3D Transform;
     float fadeStart = 0.;
     float fadeLength = 0.;
-    
+
     void Render(baseRender_msg *arg);
 };
 
@@ -110,46 +110,46 @@ public:
         UF_XZ  = (UF_X | UF_Z),
         UF_YZ  = (UF_Y | UF_Z)
     };
-    
+
     class Instance
     {
     public:
         Instance(NC_STACK_base *bas) : Bas(bas) {};
-        virtual ~Instance();        
-        
+        virtual ~Instance();
+
     public:
         NC_STACK_base *Bas = NULL;
         std::vector<Instance *> KidsOpts;
         std::vector<NC_STACK_ade::InstanceOpts *> Particles;
     };
-    
+
 public:
     virtual size_t Init(IDVList &stak);
     virtual size_t Deinit();
-    
+
     virtual size_t LoadingFromIFF(IFFile **file);
     virtual size_t SavingIntoIFF(IFFile **file);
-    
+
     virtual void AddKid(NC_STACK_base *kid);
     virtual void ChangeParentTo(NC_STACK_base *parent, TF::TForm3D *tform);
-    
+
     virtual void SetPosition(const vec3d &v, int flag = UF_XYZ);
     virtual void ChangePosition(const vec3d &v, int flag = UF_XYZ);
     virtual void SetEulerRotation(int32_t x, int32_t y, int32_t z, int flag = UF_XYZ);
     virtual void ChangeEulerRotation(int32_t x, int32_t y, int32_t z, int flag = UF_XYZ);
     virtual void SetScale(const vec3d &v, int flag = UF_XYZ);
     virtual void ChangeScale(const vec3d &v, int flag = UF_XYZ);
-    
+
     virtual size_t Render(baseRender_msg *arg, Instance * inst = NULL, bool doCopy = false);
     virtual size_t RenderImmediately(baseRender_msg *arg, Instance * inst = NULL);
-    
+
     virtual void RecalcInternal(bool kids = false);
-    
-    TObjectCache *MakeCache(); 
+
+    TObjectCache *MakeCache();
     virtual void MakeCache(TObjectCache *);
 
     virtual ~NC_STACK_base();
-    
+
     virtual const std::string ClassName() const {
         return __ClassName;
     };
@@ -178,7 +178,7 @@ public:
     virtual int32_t GetVisLimit();
     virtual int32_t GetAmbientLight();
     virtual AdeList *GetAdeList();
-    
+
     TF::TForm3D &TForm();
     virtual BaseList &GetKidList();
 
@@ -186,22 +186,22 @@ public:
 
     virtual int32_t GetFadeLength();
     virtual bool IsStatic();
-    
+
     vec3d GetPos();
     vec3d GetScale();
     vec3d GetEulerAngles();
     vec3i GetIntEulerAngles();
-    
+
     virtual Instance *GenRenderInstance();
     static void CheckOpts(Instance **vpOpts, NC_STACK_base *bas);
-    
+
     static GFX::TMesh *FindMeshByRenderParams(std::list<GFX::TMesh> *list, const GFX::TRenderParams &p);
-    
+
     void ComputeStaticFog();
-    
+
     static void GenerateMeshCoordsCache(GFX::TMesh *mesh);
     void MakeCoordsCache();
-    
+
     void FreeVBO();
     void MakeVBO();
 
@@ -209,8 +209,8 @@ protected:
     int ReadIFFTagSTRC(IFFile *mfile);
     int ReadIFFTagADES(IFFile *mfile);
     int ReadIFFTagKIDS(IFFile *mfile);
-    
-    
+
+
 
 public:
     static NC_STACK_base *LoadBaseFromFile(const std::string &fname);
@@ -221,7 +221,7 @@ public:
     static constexpr const char * __ClassName = "base.class";
 
 public:
-    
+
     std::list<GFX::TMesh> Meshes;
 
     NC_STACK_skeleton *_skeleton = NULL;
@@ -233,7 +233,7 @@ public:
     int _visLimit = 0;
     area_arg_65 _renderMsg;
     NC_STACK_nucleus *_embed = NULL;
-    
+
     // Not used. Save it.
     vec3d ___svdMove;
     int16_t ___svdRx = 0;

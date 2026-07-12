@@ -16,10 +16,10 @@ public:
     int flags = 0;
     ClickBox iconBox;
     CmdStream iconString;
-    
+
     CmdStream cmdCommands;
     CmdIncludes cmdInclude;
-    
+
     void (*postDraw)(NC_STACK_ypaworld *) = NULL;
 
     enum FLAG

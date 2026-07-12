@@ -8,7 +8,7 @@ extern tehMap robo_map;
 
 namespace World
 {
-    
+
 LuaEvents:: UnitIter::UnitIter(RefBactList &lst)
 : Lst(lst)
 {
@@ -28,11 +28,11 @@ NC_STACK_ypabact *LuaEvents:: UnitIter::GetUnit() const
 }
 
 
-    
+
 LuaEvents::LuaEvents(NC_STACK_ypaworld *wrld)
 {
     _wrld = wrld;
-    
+
     RegisterWorld();
     RegisterBact();
     RegisterUnitIter();
@@ -48,11 +48,11 @@ void LuaEvents::CallInit(int32_t ts)
     if (t != LUA_TFUNCTION)
     {
         lua_pop(_lua, 1);
-        return;    
+        return;
     }
-    
+
     lua_pushinteger(_lua, ts);
-    
+
     if ( lua_pcall(_lua, 1, 0, 0) != 0 )
         printf("Err CallFunc init:\n %s\n", lua_tostring(_lua, -1));
 }
@@ -63,12 +63,12 @@ void LuaEvents::CallUpdate(int32_t ts, int32_t delta)
     if (t != LUA_TFUNCTION)
     {
         lua_pop(_lua, 1);
-        return;    
+        return;
     }
-    
+
     lua_pushinteger(_lua, ts);
     lua_pushinteger(_lua, delta);
-    
+
     if ( lua_pcall(_lua, 2, 0, 0) != 0 )
         printf("Err CallFunc update:\n %s\n", lua_tostring(_lua, -1));
 
@@ -77,25 +77,25 @@ void LuaEvents::CallUpdate(int32_t ts, int32_t delta)
 std::string LuaEvents::GetSaveString()
 {
     std::string buf;
-    
+
     int t = lua_getglobal(_lua, "makesave");
     if (t != LUA_TFUNCTION)
     {
         lua_pop(_lua, 1);
         return "";
     }
-        
+
     if ( lua_pcall(_lua, 0, 1, 0) != 0 )
         printf("Err CallFunc makesave:\n %s\n", lua_tostring(_lua, -1));
-    
+
     buf = lua_tostring(_lua, -1);
     lua_pop(_lua, 1);
-    return buf;    
+    return buf;
 }
 
 void LuaEvents::RegisterWorld()
 {
-    static luaL_Reg WorldFuncs[] = 
+    static luaL_Reg WorldFuncs[] =
     {
         {"ShowMessageID", Lua_WrldShowMessageID}
     ,   {"StartIterateUnits", Lua_WrldStartIterateUnits}
@@ -111,10 +111,10 @@ void LuaEvents::RegisterWorld()
     ,   {"ExitTutorialWindow", Lua_WrldExitTutorialWindow}
     ,   {"IsRoboMapOpen", Lua_WrldIsRoboMapOpen}
     ,   {NULL, NULL} };
-    
+
     luaL_newlib(_lua, WorldFuncs);
     lua_setglobal(_lua, "World");
-    
+
     lua_getglobal(_lua, "World");
     lua_pushlightuserdata(_lua, _wrld);
     lua_setfield(_lua, -2, "Handle");
@@ -123,7 +123,7 @@ void LuaEvents::RegisterWorld()
 
 void LuaEvents::RegisterBact()
 {
-    static luaL_Reg BactFuncs[] = 
+    static luaL_Reg BactFuncs[] =
     {
         {"GetStatus", Lua_BactGetStatus}
     ,   {"GetVehicleId", Lua_BactGetVehicleId}
@@ -133,78 +133,78 @@ void LuaEvents::RegisterBact()
     ,   {"GetKids", Lua_BactGetUnits}
     ,   {"GetPSector", Lua_BactGetPSector}
     ,   {NULL, NULL} };
-    
+
     luaL_newlib(_lua, BactFuncs);
     lua_setglobal(_lua, "Bact");
 
-    
+
     lua_getglobal(_lua, "Bact");
-    
+
     // Status
     lua_pushinteger(_lua, BACT_STATUS_NOPE);
     lua_setfield(_lua, -2, "STATUS_NOPE");
-    
+
     lua_pushinteger(_lua, BACT_STATUS_NORMAL);
     lua_setfield(_lua, -2, "STATUS_NORMAL");
-    
+
     lua_pushinteger(_lua, BACT_STATUS_DEAD);
     lua_setfield(_lua, -2, "STATUS_DEAD");
-    
+
     lua_pushinteger(_lua, BACT_STATUS_IDLE);
     lua_setfield(_lua, -2, "STATUS_IDLE");
-    
+
     lua_pushinteger(_lua, BACT_STATUS_CREATE);
     lua_setfield(_lua, -2, "STATUS_CREATE");
-    
+
     lua_pushinteger(_lua, BACT_STATUS_BEAM);
     lua_setfield(_lua, -2, "STATUS_BEAM");
-    
+
     // Type
     lua_pushinteger(_lua, BACT_TYPES_NOPE);
     lua_setfield(_lua, -2, "TYPE_NOPE");
-    
+
     lua_pushinteger(_lua, BACT_TYPES_BACT);
     lua_setfield(_lua, -2, "TYPE_BACT");
-    
+
     lua_pushinteger(_lua, BACT_TYPES_TANK);
     lua_setfield(_lua, -2, "TYPE_TANK");
-    
+
     lua_pushinteger(_lua, BACT_TYPES_ROBO);
     lua_setfield(_lua, -2, "TYPE_ROBO");
-    
+
     lua_pushinteger(_lua, BACT_TYPES_MISSLE);
     lua_setfield(_lua, -2, "TYPE_MISSLE");
-    
+
     lua_pushinteger(_lua, BACT_TYPES_ZEPP);
     lua_setfield(_lua, -2, "TYPE_ZEPP");
-    
+
     lua_pushinteger(_lua, BACT_TYPES_FLYER);
     lua_setfield(_lua, -2, "TYPE_FLYER");
-    
+
     lua_pushinteger(_lua, BACT_TYPES_UFO);
     lua_setfield(_lua, -2, "TYPE_UFO");
-    
+
     lua_pushinteger(_lua, BACT_TYPES_CAR);
     lua_setfield(_lua, -2, "TYPE_CAR");
-    
+
     lua_pushinteger(_lua, BACT_TYPES_GUN);
     lua_setfield(_lua, -2, "TYPE_GUN");
-    
+
     lua_pushinteger(_lua, BACT_TYPES_HOVER);
     lua_setfield(_lua, -2, "TYPE_HOVER");
-    
+
     lua_pop(_lua, 1);
 }
 
 void LuaEvents::RegisterUnitIter()
 {
-    static luaL_Reg IterUnits[] = 
+    static luaL_Reg IterUnits[] =
     {
         {"Next", Lua_IterUnitsNext}
     ,   {"Free", Lua_IterUnitsFree}
     ,   {"Get", Lua_IterUnitsGet}
     ,   {NULL, NULL} };
-    
+
     luaL_newlib(_lua, IterUnits);
     lua_setglobal(_lua, "IterUnits");
 }
@@ -213,12 +213,12 @@ int LuaEvents::Lua_WrldShowMessageID(lua_State *l)
 {
     NC_STACK_ypaworld *wrld = (NC_STACK_ypaworld *)lua_touserdata(l, 1);
     int32_t msgId = lua_tointeger(l, 2);
-    
+
     yw_arg159 arg159;
     arg159.Priority = 100;
     arg159.unit = NULL;
     arg159.MsgID = msgId;
-    
+
     wrld->ypaworld_func159(&arg159);
     return 0;
 }
@@ -226,9 +226,9 @@ int LuaEvents::Lua_WrldShowMessageID(lua_State *l)
 int LuaEvents::Lua_WrldStartIterateUnits(lua_State *l)
 {
     NC_STACK_ypaworld *wrld = (NC_STACK_ypaworld *)lua_touserdata(l, 1);
-    
+
     UnitIter *it = new UnitIter(wrld->_unitsList);
-    
+
     lua_pushlightuserdata(l, it);
     if (it->It != it->Lst.end())
         lua_pushlightuserdata(l, *it->It);
@@ -240,9 +240,9 @@ int LuaEvents::Lua_WrldStartIterateUnits(lua_State *l)
 int LuaEvents::Lua_BactStartIterateKids(lua_State* l)
 {
     NC_STACK_ypabact *bact = (NC_STACK_ypabact *)lua_touserdata(l, 1);
-    
+
     UnitIter *it = new UnitIter(bact->_kidList);
-    
+
     lua_pushlightuserdata(l, it);
     if (it->It != it->Lst.end())
         lua_pushlightuserdata(l, *it->It);
@@ -282,9 +282,9 @@ int LuaEvents::Lua_IterUnitsGet(lua_State *l)
 int LuaEvents::Lua_WrldGetUnits(lua_State *l)
 {
     NC_STACK_ypaworld *wrld = (NC_STACK_ypaworld *)lua_touserdata(l, 1);
-    
+
     lua_newtable(l);
-    
+
     int32_t i = 0;
     for (NC_STACK_ypabact *bact : wrld->_unitsList)
     {
@@ -328,9 +328,9 @@ int LuaEvents::Lua_BactGetType(lua_State *l)
 int LuaEvents::Lua_BactGetUnits(lua_State *l)
 {
     NC_STACK_ypabact *master = (NC_STACK_ypabact *)lua_touserdata(l, 1);
-    
+
     lua_newtable(l);
-    
+
     int32_t i = 0;
     for (NC_STACK_ypabact *bact : master->_kidList)
     {
@@ -346,7 +346,7 @@ int LuaEvents::Lua_BactGetUnits(lua_State *l)
 int LuaEvents::Lua_BactGetPSector(lua_State *l)
 {
     NC_STACK_ypabact *master = (NC_STACK_ypabact *)lua_touserdata(l, 1);
-    
+
     PushPointer(l, master->_pSector);
     return 1;
 }
@@ -386,7 +386,7 @@ int LuaEvents::Lua_WrldGetSector(lua_State *l)
     int32_t y = lua_tointeger(l, 3);
 
     cellArea *area = wrld->GetSector(x, y);
-    
+
     if (area)
         lua_pushlightuserdata(l, area);
     else
@@ -399,7 +399,7 @@ int LuaEvents::Lua_WrldGetSectorInfo(lua_State *l)
     cellArea *area = (cellArea *)lua_touserdata(l, 1);
 
     lua_newtable(l);
-    
+
     if (area)
     {
         lua_pushinteger(l, area->owner);
@@ -417,33 +417,33 @@ int LuaEvents::Lua_WrldGetSectorInfo(lua_State *l)
         lua_pushinteger(l, area->type_id);
         lua_setfield(l, -2, "type_id");
     }
-    
+
     return 1;
 }
 
 int LuaEvents::Lua_WrldGetPowerStations(lua_State *l)
 {
     NC_STACK_ypaworld *wrld = (NC_STACK_ypaworld *)lua_touserdata(l, 1);
-    
+
     lua_newtable(l);
-    
+
     int32_t i = 0;
     for(const auto it : wrld->_powerStations)
     {
         lua_pushinteger(l, i);
         lua_newtable(l);
-        
+
         PushPointer(l, it.second.pCell);
         lua_setfield(l, -2, "sector");
-        
+
         lua_pushinteger(l, it.second.Power);
         lua_setfield(l, -2, "power");
-        
+
         lua_pushinteger(l, it.second.EffectivePower);
         lua_setfield(l, -2, "effpwr");
-        
+
         lua_settable(l, -3);
-        
+
         i++;
     }
     return 1;
@@ -452,21 +452,21 @@ int LuaEvents::Lua_WrldGetPowerStations(lua_State *l)
 int LuaEvents::Lua_WrldGetGates(lua_State *l)
 {
     NC_STACK_ypaworld *wrld = (NC_STACK_ypaworld *)lua_touserdata(l, 1);
-    
+
     lua_newtable(l);
-    
+
     int32_t i = 0;
     for(const TMapGate &gate : wrld->_levelInfo.Gates)
     {
         lua_pushinteger(l, i);
         lua_newtable(l);
-        
+
         PushPointer(l, gate.PCell);
         lua_setfield(l, -2, "sector");
-        
+
         lua_pushinteger(l, gate.MbStatus);
         lua_setfield(l, -2, "mbstatus");
-        
+
         lua_newtable(l);
         int32_t j = 0;
         for(const TMapKeySector &sctr : gate.KeySectors)
@@ -474,13 +474,13 @@ int LuaEvents::Lua_WrldGetGates(lua_State *l)
             lua_pushinteger(l, j);
             PushPointer(l, sctr.PCell);
             lua_settable(l, -3);
-            
+
             j++;
         }
         lua_setfield(l, -2, "keysectors");
-        
+
         lua_settable(l, -3);
-        
+
         i++;
     }
 
@@ -490,13 +490,13 @@ int LuaEvents::Lua_WrldGetGates(lua_State *l)
 int LuaEvents::Lua_WrldExitTutorialWindow(lua_State *l)
 {
     NC_STACK_ypaworld *wrld = (NC_STACK_ypaworld *)lua_touserdata(l, 1);
-    
+
     if ( sub_4C885C() != 3 )
     {
         dword_5C8B78 = 8;
         wrld->sb_0x4c87fc( Locale::Text::Advanced(Locale::ADV_EXITRAINING) , &exit_menu);
     }
-    
+
     return 0;
 }
 

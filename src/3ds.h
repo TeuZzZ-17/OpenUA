@@ -93,9 +93,9 @@ public:
 
     bool LoadFromFile(const std::string &filename);
     bool LoadFromFile(FSMgr::FileHandle *file);
-    
+
     static NC_STACK_3ds *Load3DS(const std::string &filename);
-    
+
     virtual void RecalcInternal(bool kids = false) override;
 
 private:

@@ -36,13 +36,13 @@ void NC_STACK_windp::_clear()
         providers[i].clear();
 
     connType = 0;
-    
+
     _hasLobby = false;
     _myName = "";
-    
+
     _nextUsersGet = 0;
     _nextSessionsGet = 0;
-    
+
     _sesID = 0;
     _sesName = "";
 
@@ -133,16 +133,16 @@ bool NC_STACK_windp::Connect(const std::string &connString)
 {
     if (connType != 2)
         return false;
-    
+
     IPaddress server;
     if ( SDLNet_ResolveHost(&server, connString.c_str(), 61234) != 0)
         return false;
-    
+
     zcli->Start(_myName, server);
-    
+
     uint32_t deadTime = SDL_GetTicks() + CONF_CONN_WAIT;
     bool waitConn = true;
-    
+
     while (waitConn)
     {
         SDL_Delay(5);
@@ -152,7 +152,7 @@ bool NC_STACK_windp::Connect(const std::string &connString)
             zcli->Stop();
             return false;
         }
-        
+
         for(ZNDNet::Event *evt = zcli->Events_PopSystem(); evt != NULL; evt = zcli->Events_PopSystem())
         {
             switch( evt->type )
@@ -163,12 +163,12 @@ bool NC_STACK_windp::Connect(const std::string &connString)
                         _myName = dat->name;
                         _hasLobby = dat->value == 1 ? true : false;
                         _myID = dat->id;
-                        
+
                         if (_hasLobby)
                             waitConn = false;
                     }
                     break;
-                
+
                 case ZNDNet::EVENT_SESSION_JOIN:
                 {
                     ZNDNet::EventNameID *dat = (ZNDNet::EventNameID *)evt;
@@ -185,17 +185,17 @@ bool NC_STACK_windp::Connect(const std::string &connString)
                         return false;
                     }
                     break;
-                    
+
                 default:
                     break;
             }
             delete evt;
         }
     }
-    
+
     ReloadUsersList();
     ReloadSessionsList();
-    
+
     return true;
 }
 
@@ -203,7 +203,7 @@ bool NC_STACK_windp::IsConnected()
 {
     if (connType != 2)
         return false;
-    
+
     return zcli->GetStatus() == ZNDNet::NetUser::STATUS_CONNECTED;
 }
 
@@ -211,7 +211,7 @@ bool NC_STACK_windp::HasLobby()
 {
     if (!IsConnected())
         return false;
-    
+
     return _hasLobby;
 }
 
@@ -219,7 +219,7 @@ bool NC_STACK_windp::IsJoined()
 {
     if (connType != 2)
         return false;
-    
+
     return zcon->GetMySesID() != 0;
 }
 
@@ -228,10 +228,10 @@ bool NC_STACK_windp::Host(const std::string &gameName, int playerNum)
 {
     if (connType != 1)
         return false;
-    
+
     zhost->Start(_myName, 61234, gameName, playerNum);
     _myID = zhost->GetMyID();
-    
+
     ReloadUsersList();
     return true;
 }
@@ -328,7 +328,7 @@ bool NC_STACK_windp::GetPlayerData(uint32_t index, TDPPlayerData *out) const
     //get player data
     if (index >= _rawUsers.size())
         return 0;
-    
+
     const ZNDNet::UserInfo &usr = _rawUsers.at(index);
     out->name = usr.name;
     out->flags = usr.ID == _myID ? TDPPlayerData::NPD_ITSME : 0;
@@ -340,7 +340,7 @@ std::vector<TDPPlayerData> NC_STACK_windp::GetPlayersData() const
 {
     std::vector<TDPPlayerData> tmp;
     tmp.resize( _rawUsers.size() );
-    
+
     for(uint32_t i = 0; i < _rawUsers.size(); i++)
     {
         TDPPlayerData &p = tmp[i];
@@ -393,7 +393,7 @@ bool NC_STACK_windp::Broadcast(void *data, size_t dataSize, bool garantee)
 bool NC_STACK_windp::Send(void *data, size_t dataSize, const std::string &recvID, bool garantee)
 {
     FlushBroadcastBuffer();
-    
+
     return SendLowLevel(data, dataSize, recvID, garantee);
 }
 
@@ -401,7 +401,7 @@ size_t NC_STACK_windp::QueueBroadcast(void *data, size_t dataSize, bool garantee
 {
     if (!zcon)
         return 0;
-    
+
     if ( broadcastBuff_off + dataSize > broadcastBuff.size() )
         FlushBroadcastBuffer();
 
@@ -418,9 +418,9 @@ size_t NC_STACK_windp::BroadcastLowLevel(void *data, size_t dataSize, bool garan
 {
     if (!zcon)
         return 0;
-    
+
     zcon->BroadcastData(data, dataSize, (garantee ? ZNDNet::PKT_FLAG_GARANT : 0));
-    
+
     return dataSize;
 }
 
@@ -434,21 +434,21 @@ size_t NC_STACK_windp::SendLowLevel(void *data, size_t dataSize, const std::stri
         return 0;
 
     zcon->SendData(id, data, dataSize, (garantee ? ZNDNet::PKT_FLAG_GARANT : 0));
- 
+
     return dataSize;
 }
 
 bool NC_STACK_windp::Recv(windp_recvMsg *recv)
 {
-    ZNDNet::Event *evt = zcon->Events_Pop(); 
-    
+    ZNDNet::Event *evt = zcon->Events_Pop();
+
     if (!evt)
         return false;
-    
+
     recv->msgType = RECVMSG_NONE;
-    
+
     bool continueRecv = true;
-    
+
     switch( evt->type )
     {
         case ZNDNet::EVENT_SESSION_LIST:
@@ -457,7 +457,7 @@ bool NC_STACK_windp::Recv(windp_recvMsg *recv)
                 zcli->GetSessions(_rawSessions);
         }
         break;
-        
+
         case ZNDNet::EVENT_SESSION_JOIN:
         {
             ZNDNet::EventNameID *dat = (ZNDNet::EventNameID *)evt;
@@ -465,13 +465,13 @@ bool NC_STACK_windp::Recv(windp_recvMsg *recv)
             _sesName = dat->name;
         }
         break;
-        
+
         case ZNDNet::EVENT_USER_ADD:
         {
             ZNDNet::EventNameID *dat = (ZNDNet::EventNameID *)evt;
             zcon->GetUsers(_rawUsers);
             UpdateOwnPlayerIndex();
-            
+
             recv->msgType = RECVMSG_CREATEPLAYER;
             recv->senderName = dat->name;
         }
@@ -480,18 +480,18 @@ bool NC_STACK_windp::Recv(windp_recvMsg *recv)
         case ZNDNet::EVENT_USER_LEAVE:
         {
             ZNDNet::EventNameID *dat = (ZNDNet::EventNameID *)evt;
-            zcon->GetUsers(_rawUsers); 
+            zcon->GetUsers(_rawUsers);
             UpdateOwnPlayerIndex();
-            
+
             recv->msgType = RECVMSG_DESTROYPLAYER;
             recv->senderName = dat->name;
         }
         break;
-        
+
         case ZNDNet::EVENT_DATA:
         {
             ZNDNet::EventData *dat = (ZNDNet::EventData *)evt;
-            
+
             recv->msgType = RECVMSG_NORMAL;
             recv->_data.assign(dat->data, dat->data + dat->size);
             recv->data = recv->_data.data();
@@ -500,10 +500,10 @@ bool NC_STACK_windp::Recv(windp_recvMsg *recv)
             recv->cast = dat->cast;
         }
         break;
-        
+
         case ZNDNet::EVENT_USER_LIST:
         {
-            zcon->GetUsers(_rawUsers);   
+            zcon->GetUsers(_rawUsers);
             UpdateOwnPlayerIndex();
         }
         break;
@@ -520,7 +520,7 @@ bool NC_STACK_windp::Recv(windp_recvMsg *recv)
             break;
     }
     delete evt;
-    
+
     return continueRecv;
 }
 
@@ -529,7 +529,7 @@ size_t NC_STACK_windp::FlushBroadcastBuffer()
     // flush buffer
     if (broadcastBuff_off == 0)
         return 0;
-    
+
     size_t ret = BroadcastLowLevel(broadcastBuff.data(), broadcastBuff_off, true);
 
     if ( ret )
@@ -566,7 +566,7 @@ size_t NC_STACK_windp::Reset(IDVPair *stak)
         zhost->Stop();
         delete zhost;
     }
-    
+
     zcon = NULL;
     zcli = NULL;
     zhost = NULL;
@@ -649,7 +649,7 @@ void NC_STACK_windp::UpdateOwnPlayerIndex()
         if (_rawUsers[_myIndex].ID == _myID)
             return;
     }
-    
+
     _myIndex = -1;
 }
 
@@ -728,14 +728,14 @@ void UserData::AfterMapChoose()
 {
     if ( netSel < 0 )
         return;
-    
+
     switch ( p_YW->_netDriver->GetMode() )
     {
         case 1:
         {
             std::string bff = fmt::sprintf("%d%s%s%s%s", netLevelID, "|", p_YW->_netDriver->GetMyName(), "|", p_YW->_buildDate);
             p_YW->_netDriver->Host(bff, 4);
-            
+
             p_YW->_isNetGame = true;
             netSel = -1;
             netSelMode = NETSCREEN_INSESSION;
@@ -752,11 +752,11 @@ void UserData::AfterMapChoose()
             lobbyPlayers[0].Ready = true;
         }
         break;
-            
+
         case 2:
-            
+
             break;
-        
+
         default:
             break;
     }
@@ -1083,7 +1083,7 @@ void UserData::yw_JoinNetGame()
                 for(TDPPlayerData &p : p_YW->_netDriver->GetPlayersData())
                 {
                     lobbyPlayers[p.Index].Name = p.name;
-                    
+
                     if (p.IsItMe())
                     {
                         lobbyPlayers[p.Index].Name += "X";
@@ -1157,7 +1157,7 @@ void UserData::JoinLobbyLessGame()
         uint32_t waitForSession = SDL_GetTicks() + 1000;
         while (SDL_GetTicks() < waitForSession && !p_YW->_netDriver->IsJoined())
             SDL_Delay(10);
-        
+
         if (p_YW->_netDriver->IsJoined())
         {
             netName = "";
@@ -1189,7 +1189,7 @@ void UserData::JoinLobbyLessGame()
                     lobbyPlayers[p.Index].Name += "X";
                 }
             }
-                
+
             p_YW->_isNetGame = true;
             netSel = -1;
             netSelMode = NETSCREEN_INSESSION;
@@ -1204,7 +1204,7 @@ void UserData::JoinLobbyLessGame()
         }
     }
     return;
-    
+
     if ( p_YW->_netDriver->GetProvType() != 4 || modemAskSession )
     {
         windp_getNameMsg gName;
@@ -1242,7 +1242,7 @@ void UserData::JoinLobbyLessGame()
                 for(TDPPlayerData &p : p_YW->_netDriver->GetPlayersData())
                 {
                     lobbyPlayers[p.Index].Name = p.name;
-                    
+
                     if (p.IsItMe())
                     {
                         lobbyPlayers[p.Index].Name += "X";
@@ -1432,7 +1432,7 @@ void UserData::yw_NetPrintStartInfo()
             {
                 id = lobbyPlayers[i].NetFraction;
             }
-            
+
             std::string name = p_YW->_netDriver->GetPlayerName(i);
 
             switch ( id )

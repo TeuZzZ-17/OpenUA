@@ -10,7 +10,7 @@ public:
 
     NC_STACK_wintimer() {};
     virtual ~NC_STACK_wintimer() {};
-    
+
     virtual const std::string ClassName() const {
         return __ClassName;
     };

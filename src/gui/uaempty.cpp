@@ -2,11 +2,11 @@
 
 namespace Gui
 {
-    
+
 enum {
     UAEMPTY_FLAGS = Widget::FLAG_NODRAW | Widget::FLAG_ENABLED | Widget::FLAG_NOBRING,
 };
-    
+
 UAEmpty::UAEmpty()
 : Widget()
 {

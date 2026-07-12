@@ -90,7 +90,7 @@ void NC_STACK_ypaufo::AI_layer3(update_msg *arg)
     if ( v108 != 0.0 )
         _target_dir = _target_vec / v108;
 
-    if ( ApplySeekAndExplodeRammingGuidance(false) )
+    if ( ApplySeekAndExplodeRammingGuidance() )
         v108 = _target_vec.length();
 
     int v8 = !_secndTtype && v108 < World::CVSectorLength;
@@ -239,7 +239,7 @@ void NC_STACK_ypaufo::AI_layer3(update_msg *arg)
 
                         float tmpsq = axsz.length();
                         float v104 = 0.0;
-                        
+
                         if (isnormal(tmpsq))  // Not NULL, NAN, INF
                             v104 = axsz.dot( polv ) / tmpsq;
 
@@ -262,7 +262,7 @@ void NC_STACK_ypaufo::AI_layer3(update_msg *arg)
 
                         float tmpsq = axsz.length();
                         float v104 = 0.0;
-                        
+
                         if (isnormal(tmpsq))  // Not NULL, NAN, INF
                             v104 = tgt2d.dot( axsz ) / tmpsq;
 

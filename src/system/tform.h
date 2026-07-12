@@ -11,9 +11,9 @@
 
 namespace TF
 {
-    
-    
-    
+
+
+
 class TForm3D
 {
 public:
@@ -25,7 +25,7 @@ public:
         IntAngle &operator+=(int32_t angle);
         operator int32_t();
         explicit operator double();
-        
+
         int32_t ClampRawAngle(int32_t angle);
     };
 
@@ -62,9 +62,9 @@ protected:
     void scale_rot_6();
     void scale_rot_7();
 };
-    
-    
-    
+
+
+
 class TFEngine
 {
 public:
@@ -81,7 +81,7 @@ public:
     inline SinCos& Angle(int angle) {
         return SinCos_table.at(angle);
     };
-    
+
     inline TForm3D *GetViewPoint() {
         return viewPoint;
     };

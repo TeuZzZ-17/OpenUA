@@ -51,7 +51,7 @@ public:
     };
 
     virtual ~NC_STACK_rsrc() {};
-    
+
     virtual const std::string ClassName() const {
         return __ClassName;
     };
@@ -80,7 +80,7 @@ public:
 
     static RSRCList *getRsrc_sharedList();
     static RSRCList *getRsrc_privateList();
-    
+
     virtual bool IsSameRes(NC_STACK_rsrc *res)
     {
         return resource == res->resource;

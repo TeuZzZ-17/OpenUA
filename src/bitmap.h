@@ -7,7 +7,7 @@
 
 class NC_STACK_bitmap: public NC_STACK_rsrc
 {
-    
+
 public:
     virtual size_t Init(IDVList &stak);
     virtual size_t Deinit();
@@ -17,7 +17,7 @@ public:
 
     NC_STACK_bitmap() {};
     virtual ~NC_STACK_bitmap() {};
-    
+
     virtual const std::string ClassName() const {
         return __ClassName;
     };
@@ -35,7 +35,7 @@ public:
 
     //Set
     virtual void setBMD_palette(UA_PALETTE *);
-    
+
     //Get
     virtual ResBitmap  * GetBitmap(int frameid = -1);
     virtual std::vector<tUtV> &GetOutline(int frameid = -1);
@@ -43,14 +43,14 @@ public:
     virtual int getBMD_height();
     virtual int getBMD_hasPalette();
     virtual UA_PALETTE *getBMD_palette();
-    
+
     virtual SDL_Surface * GetSwTex();
-    
+
     virtual bool IsDynamic() const { return false; };
     virtual uint32_t GetFramesCount() const { return 1; };
     virtual uint32_t GetCurrentFrameID() const { return 0; };
 
-    
+
     virtual void PrepareTexture( bool force = false );
 
 public:

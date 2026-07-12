@@ -35,7 +35,7 @@ public:
         _gunDownTime = 0;
     };
     virtual ~NC_STACK_ypagun() {};
-    
+
     virtual const std::string ClassName() const {
         return __ClassName;
     };

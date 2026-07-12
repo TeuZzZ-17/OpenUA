@@ -47,12 +47,12 @@ size_t NC_STACK_sklt::LoadingFromIFF(IFFile **file)
 
     if ( !getted )
         return 0;
-    
+
     IDVList stak {
         {RSRC_ATT_NAME, std::string(name)},
         {RSRC_ATT_TRYSHARED, (int32_t)1} };
 
-    if ( !NC_STACK_skeleton::Init(stak) 
+    if ( !NC_STACK_skeleton::Init(stak)
         )
         return 0;
 
@@ -215,7 +215,7 @@ int skeleton_read_senX(NC_STACK_sklt *obj, IFFile *mfile, UAskeleton::Data *sklt
         return 0;
 
     sklt->SEN.resize(sen_count);
-    
+
     if ( version == 1 )
     {
         for (int i = 0; i < sen_count; i++)

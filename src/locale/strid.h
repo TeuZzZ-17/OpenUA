@@ -3,9 +3,9 @@
 
 
 namespace Locale {
-    
-enum LOCALE_BLOCK 
-{   
+
+enum LOCALE_BLOCK
+{
     LBL_COMMON      = 0,
     LBL_HUDTXT      = 30,
     LBL_WINNAMES    = 50,
@@ -29,7 +29,7 @@ enum LOCALE_BLOCK
     LBL_MISSIONSTXT = 2100,
     LBL_ADVANCED    = 2400,
     LBL_TODS        = 2490  // up to 2510
-};    
+};
 
 
 
@@ -59,7 +59,7 @@ enum CMN
     CMN_HELP        = 20,
     CMN_GAMENAME    = 21,
     CMN_QUITGAME    = 22,
-    
+
     CMN_MAX
 };
 
@@ -70,7 +70,7 @@ enum HUDSTR
     HUDSTR_OK   = 4,
     HUDSTR_EGY  = 5,
     HUDSTR_AMR  = 6,
-    
+
     HUDSTR_MAX
 };
 
@@ -80,7 +80,7 @@ enum WINNAME
     WINNAME_FINDER  = 1,
     WINNAME_LOG     = 2,
     WINNAME_EXIT    = 3,
-    
+
     WINNAME_MAX
 };
 
@@ -112,7 +112,7 @@ enum BRIEF
     BRIEF_TECH2     = 8,
     BRIEF_GATE2     = 9,
     BRIEF_PS        = 10,
-    
+
     BRIEF_MAX
 };
 
@@ -145,7 +145,7 @@ enum FEEDBACK
     FEEDBACK_WAVEDEACT  = 57,
     FEEDBACK_GATEFULL   = 58,
     FEEDBACK_GAMESAVED  = 59,
-    
+
     FEEDBACK_MAX
 };
 
@@ -159,7 +159,7 @@ enum DIALOGS
     DLG_I_TXT2      = 10,
     DLG_I_TXT3      = 11,
     DLG_I_TXT4      = 12,
-    
+
     DLG_S_FXVOL     = 21,
     DLG_S_INVERT    = 23,
     DLG_S_CDVOL     = 24,
@@ -179,7 +179,7 @@ enum DIALOGS
     DLG_S_SKY       = 45,
     DLG_S_SWMOUSE   = 50,
     DLG_S_SEL3D     = 52,
-    
+
     DLG_P_LOAD      = 60,
     DLG_P_SAVE      = 61,
     DLG_P_DELETE    = 62,
@@ -189,12 +189,12 @@ enum DIALOGS
     DLG_P_TXT2      = 68,
     DLG_P_TXT3      = 69,
     DLG_P_TXT4      = 70,
-    
+
     DLG_L_TITLE     = 95,
     DLG_L_TXT2      = 96,
     DLG_L_TXT3      = 97,
     DLG_L_TXT4      = 98,
-    
+
     DLG_MAX
 };
 
@@ -279,7 +279,7 @@ enum INPUTS
     INPUTS_TOLASTOCCUP  = 60,
     INPUTS_MAKECOMM     = 61,
     INPUTS_ANALYZER     = 62,
-    
+
     INPUTS_MAX
 };
 
@@ -290,14 +290,14 @@ enum GLOBMAP
     GLOBMAP_LOAD    = 2,
     GLOBMAP_START   = 3,
     GLOBMAP_GOBACK  = 4,
-    
-    GLOBMAP_MAX     
+
+    GLOBMAP_MAX
 };
 
 enum TIP
 {
     TIP_NONE        = 0,
-    
+
     TIP_GUI_GIVEORDERS      = 1,
     TIP_GUI_GOINTOGUNS      = 2,
     TIP_GUI_NEWSQUAD        = 3,
@@ -309,20 +309,20 @@ enum TIP
     TIP_GUI_FINDERWND       = 9,
     TIP_GUI_MSGWND          = 10,
     TIP_GUI_ENERGYWND       = 11,
-    
+
     TIP_GUI_AGGR_0          = 12,
     TIP_GUI_AGGR_1          = 13,
     TIP_GUI_AGGR_2          = 14,
     TIP_GUI_AGGR_3          = 15,
     TIP_GUI_AGGR_4          = 16,
-    
+
     TIP_GUI_GOTOHS          = 17,
     TIP_GUI_GOTOCMDR        = 18,
     TIP_GUI_NEXTUNIT        = 19,
     TIP_GUI_NEXTCMDR        = 20,
-    
+
     TIP_GUI_PAUSECANCEL     = 21,
-    
+
     TIP_MAP_DETAIL          = 22,
     TIP_MAP_OWNERS          = 23,
     TIP_MAP_EINFO           = 24,
@@ -332,31 +332,31 @@ enum TIP
     TIP_MAP_ZOOMOUT         = 28,
     TIP_MAP_ZOOMIN          = 29,
     TIP_MAP_SIZE            = 30,
-    
+
     TIP_FINDER_WAITORDER    = 31,
     TIP_FINDER_FIGHTING     = 32,
     TIP_FINDER_MOVE         = 33,
     TIP_FINDER_ESCAPE       = 34,
-    
+
     TIP_ENERGY_RELOAD       = 35,
     TIP_ENERGY_MAIN         = 36,
     TIP_ENERGY_CREATION     = 37,
     TIP_ENERGY_BUILDING     = 38,
     TIP_ENERGY_TELEPORT     = 39,
-    
+
     TIP_SEL_ANOTHERACT      = 40,
     TIP_SEL_DEFENSEGUN      = 41,
     TIP_SEL_VEHICLETYPE     = 42,
     TIP_SEL_BUILDTYPE       = 43,
-    
+
     TIP_HUD_SHOWHIDE        = 44,
     TIP_CTRLASTSNDR         = 45,
-    
+
     TIP_COUNTINSQUAD        = 46,
     TIP_ANALYZER            = 47,
     TIP_ONLINEHELP          = 48,
     TIP_GUI_RETURNSPECTATOR = 49,
-    
+
     TIP_DO_SELECT           = 64,
     TIP_DO_MOVE             = 65,
     TIP_DO_ATKSECTOR        = 66,
@@ -366,7 +366,7 @@ enum TIP
     TIP_DO_CONTROL          = 70,
     TIP_DO_BUILD            = 71,
     TIP_DO_TELEPORT         = 72,
-    
+
     TIP_MENU_EXITDEBRIEF    = 73,
     TIP_MENU_GOTOLOADSAVE   = 74,
     TIP_MENU_SEL3DDEV       = 75,
@@ -374,13 +374,13 @@ enum TIP
     TIP_MENU_ALTJOY         = 77,
     TIP_MENU_16BITTEX       = 78,
     TIP_MENU_DRAWPRIMITIVE  = 79,
-    
+
     TIP_MOUSECAPTURED       = 80,
-    
+
     TIP_UNITLIMIT           = 81,
-    
+
     TIP_MENU_WINDOWED       = 85,
-    
+
     TIP_ERR_NOTARGET        = 96,
     TIP_ERR_NOROOM          = 97,
     TIP_ERR_NOENERGY        = 98,
@@ -391,7 +391,7 @@ enum TIP
     TIP_ERR_UNITSINSECTOR   = 103,
     TIP_ERR_SECTORJAGGY     = 104,
     TIP_ERR_LOCUNKNOWN      = 105,
-    
+
     TIP_MENU_LVLSELECTMAP   = 106,
     TIP_MENU_GOTRAIN        = 107,
     TIP_MENU_LANGCHOOSE     = 108,
@@ -404,16 +404,16 @@ enum TIP
     TIP_MENU_SELTAER        = 115,
     TIP_MENU_READY          = 116,
     TIP_MENU_NOTREADY       = 117,
-    
+
     TIP_MENU_LOADUSER       = 118,
     TIP_MENU_SAVEUSER       = 119,
-    
+
     TIP_MENU_INPUTSCREEN    = 120,
     TIP_MENU_VIDEOSCREEN    = 121,
     TIP_MENU_SOUNDSCREEN    = 122,
     TIP_MENU_PROFILESCREEN  = 123,
     TIP_MENU_LANGSCREEN     = 124,
-    
+
     TIP_MENU_BRIEFCTRL      = 125,
     TIP_MENU_BRIEFSTOP      = 126,
     TIP_MENU_LOADLAST       = 127,
@@ -458,7 +458,7 @@ enum TIP
     TIP_MENU_165            = 165,
     TIP_MENU_166            = 166,
     TIP_MENU_167            = 167,
-    
+
     TIP_PROFILE_DEL         = 168,
     TIP_PFOFILE_NEW         = 169,
     TIP_PFOFILE_LOADTHIS    = 170,
@@ -470,7 +470,7 @@ enum TIP
     TIP_PROFILE_CANCELSAVE  = 176,
     TIP_PROFILE_CANCELDEL   = 177,
     TIP_PROFILE_CANCELNEW   = 178,
-    
+
     TIP_CONF_CLOSE          = 179,
     TIP_CONF_APPLY          = 180,
     TIP_CONF_RESOLUTION     = 181,
@@ -485,7 +485,7 @@ enum TIP
     TIP_CONF_FXVOLUME       = 190,
     TIP_CONF_MUSICVOLUME    = 191,
     TIP_CONF_EXPLODES       = 192,
-    
+
     TIP_INPUT_APPLY         = 193,
     TIP_INPUT_CANCEL        = 194,
     TIP_INPUT_RESET         = 195,
@@ -493,7 +493,7 @@ enum TIP
     TIP_INPUT_FFJOY         = 197,
     TIP_INPUT_REMOVEKEY     = 198,
     TIP_CONF_SPECTATORMODE  = 199,
-    
+
     TIP_MAX
 };
 
@@ -516,7 +516,7 @@ enum ADVICE
     ADVICE_CONQLAND     = 14,
     ADVICE_FORCESTOBEAM = 15,
     ADVICE_NOPROBLEM    = 16,
-    
+
     ADVICE_MAX
 };
 
@@ -536,12 +536,12 @@ enum HELPS
     HELP_FINDERWND  = 15,
     HELP_GAMEMENU   = 16,
     HELP_GAMEPLAY   = 17,
-    
+
     HELP_MAX
 };
 
 enum KEYNAME
-{   
+{
     KEYNAME_NOP = 0,
     KEYNAME_ESC = 1,
     KEYNAME_SPACE = 2,
@@ -649,9 +649,9 @@ enum KEYNAME
     KEYNAME_EXTRA_16 = 104,
     KEYNAME_EXTRA_17 = 105,
     KEYNAME_EXTRA_18 = 106,
-    
+
     KEYNAME_MIDDLE_MOUSE = 121,
-    
+
     KEYNAME_JOYB0 = 123,
     KEYNAME_JOYB1 = 124,
     KEYNAME_JOYB2 = 125,

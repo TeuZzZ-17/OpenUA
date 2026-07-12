@@ -22,7 +22,7 @@ struct Vertex: public vec3d
         CLIP_FAR = (1 << 5),
         CLIP_ANY = (CLIP_LEFT | CLIP_RIGHT | CLIP_BOTTOM | CLIP_TOP | CLIP_NEAR | CLIP_FAR)
     };
-    
+
     Vertex() {};
     Vertex(const vec3d& v) : vec3d(v) {};
     Vertex(const vec3d& v, uint8_t f) : vec3d(v), flags(f) {};
@@ -35,7 +35,7 @@ struct Vertex: public vec3d
 
         return *this;
     }
-    
+
 };
 
 struct Polygon
@@ -99,7 +99,7 @@ public:
 
     NC_STACK_skeleton() {};
     virtual ~NC_STACK_skeleton() {};
-    
+
     virtual const std::string ClassName() const {
         return __ClassName;
     };

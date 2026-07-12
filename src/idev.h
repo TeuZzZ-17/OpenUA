@@ -9,12 +9,12 @@ public:
     virtual bool GetState() {
         return false;
     };
-    virtual float GetSlider() { 
-        return 0.0; 
+    virtual float GetSlider() {
+        return 0.0;
     };
 
     virtual void ResetSlider() {};
-    
+
     virtual bool BindKey(const std::string &keyName) {return false;};
 
     NC_STACK_idev() {};

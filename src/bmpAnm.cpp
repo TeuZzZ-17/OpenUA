@@ -78,7 +78,7 @@ size_t NC_STACK_bmpanim::LoadingFromIFF(IFFile **file)
 
     if ( !version )
         return 0;
-    
+
     IDVList stak {
         {RSRC_ATT_NAME, anmName},
         {BANM_ATT_NAME, anmName},
@@ -133,16 +133,16 @@ bool NC_STACK_bmpanim::ReadClassName(FSMgr::iFileHandle *fil, ResBmpAnm *arg)
         return false;
 
     char *tmp = new char[sz]();
-    
+
     if ( fil->read(tmp, sz) != (size_t)sz )
     {
         delete[] tmp;
         return false;
     }
-    
+
     arg->ClassName.assign(tmp);
     delete[] tmp;
-    
+
     return true;
 }
 
@@ -154,23 +154,23 @@ bool NC_STACK_bmpanim::ReadBitmapNames(FSMgr::iFileHandle *fil, ResBmpAnm *arg)
         return false;
 
     char *tmp = new char[sz]();
-    
+
     if ( fil->read(tmp, sz) != (size_t)sz )
     {
         delete[] tmp;
         return false;
     }
-    
+
     std::string buf(tmp, sz);
     delete[] tmp;
-    
+
     arg->BitmapNames = Stok::Split(buf, std::string("\0", 1));
-    
+
     if (arg->BitmapNames.empty())
         return false;
-    
+
     arg->Bitmaps.resize( arg->BitmapNames.size() );
-    
+
     for (size_t i = 0; i < arg->BitmapNames.size(); ++i)
     {
         arg->Bitmaps[i] = Nucleus::CTFInit<NC_STACK_bitmap>(arg->ClassName, {
@@ -180,14 +180,14 @@ bool NC_STACK_bmpanim::ReadBitmapNames(FSMgr::iFileHandle *fil, ResBmpAnm *arg)
         if ( !arg->Bitmaps[i] )
             return false;
     }
-    
+
     return true;
 }
 
 bool NC_STACK_bmpanim::ReadTexCoords(FSMgr::iFileHandle *fil, ResBmpAnm *arg)
 {
     int16_t cnt = fil->readS16B();
-    
+
     if ( fil->readErr() )
         return false;
 
@@ -200,10 +200,10 @@ bool NC_STACK_bmpanim::ReadTexCoords(FSMgr::iFileHandle *fil, ResBmpAnm *arg)
         std::vector<tUtV> &coords = arg->TexCoords.back();
 
         uint16_t ttmp = fil->readS16B();
-        
+
         if ( fil->readErr() )
             return false;
-        
+
         coords.resize(ttmp);
         for (size_t j = 0; j < ttmp; j++)
         {
@@ -223,20 +223,20 @@ bool NC_STACK_bmpanim::ReadTexCoords(FSMgr::iFileHandle *fil, ResBmpAnm *arg)
 bool NC_STACK_bmpanim::ReadFrameData(FSMgr::iFileHandle *fil, ResBmpAnm *arg)
 {
     int16_t cnt = fil->readS16B();
-    
+
     if ( fil->readErr() )
         return false;
-    
+
     arg->FrameData.resize(cnt);
-    
+
     for (int16_t i = 0; i < cnt; ++i)
     {
         BAnmFrameCache &frm = arg->FrameData[i];
-        
+
         frm.FrameTime = fil->readS32B();
         frm.FrameID = fil->readS16B();
         frm.TexCoordsID = fil->readS16B();
-        
+
         frm.pTexCoords = &arg->TexCoords.at( frm.TexCoordsID );
         frm.pBitmap = arg->Bitmaps.at(frm.FrameID);
     }
@@ -258,7 +258,7 @@ static ResBmpAnm *bmpanim_read_stream(FSMgr::iFileHandle *pfile, IFFile *iff)
     if ( pdata )
     {
         bool ReadOK = false;
-        
+
         if ( NC_STACK_bmpanim::ReadClassName(pfile, pdata) )
         {
             if ( NC_STACK_bmpanim::ReadBitmapNames(pfile, pdata) )
@@ -270,14 +270,14 @@ static ResBmpAnm *bmpanim_read_stream(FSMgr::iFileHandle *pfile, IFFile *iff)
                 }
             }
         }
-        
+
         if ( !ReadOK )
         {
             delete pdata;
             pdata = NULL;
         }
     }
-    
+
     if (iff)
     {
         iff->parse();
@@ -354,7 +354,7 @@ ResBmpAnm * NC_STACK_bmpanim::ConstructBAnm(const std::string &className, std::v
 
     banm->ClassName = className;
     banm->BitmapNames = *a2;
-    
+
     banm->Bitmaps.resize( banm->BitmapNames.size() );
 
     for (size_t i = 0; i < banm->BitmapNames.size(); i++)
@@ -362,14 +362,14 @@ ResBmpAnm * NC_STACK_bmpanim::ConstructBAnm(const std::string &className, std::v
         banm->Bitmaps[i] = Nucleus::CTFInit<NC_STACK_bitmap>(className,
            {{NC_STACK_rsrc::RSRC_ATT_NAME, banm->BitmapNames[i]},
             {NC_STACK_rsrc::RSRC_ATT_DONTCOPY, (int32_t)1}} );
-            
+
         if ( !banm->Bitmaps[i] )
         {
             delete banm;
             return NULL;
         }
     }
-    
+
     banm->TexCoords = *a3;
 
     banm->FrameData.resize(num);
@@ -378,14 +378,14 @@ ResBmpAnm * NC_STACK_bmpanim::ConstructBAnm(const std::string &className, std::v
     {
         BAnmFrameCache &out = banm->FrameData.at(i);
         BAnmFrame &in = frames[i];
-                
+
         out.FrameTime = in.FrameTime;
         out.FrameID = in.FrameID;
         out.TexCoordsID = in.TexCoordsID;
-        
+
         out.pTexCoords = &banm->TexCoords[ out.TexCoordsID ];
         out.pBitmap = banm->Bitmaps[ out.FrameID ];
-        
+
     }
 
     return banm;
@@ -502,12 +502,12 @@ bool NC_STACK_bmpanim::WriteTexCoords(FSMgr::iFileHandle *fil, ResBmpAnm *t1)
 
     if ( !fil->writeS16B(num) )
         return false;
-    
+
     for(auto &n : t1->TexCoords)
     {
         if ( !fil->writeS16B(n.size()) )
             return false;
-        
+
         for (tUtV uv : n)
         {
             if ( !(fil->writeU8(uv.tu * 256.0)
@@ -515,7 +515,7 @@ bool NC_STACK_bmpanim::WriteTexCoords(FSMgr::iFileHandle *fil, ResBmpAnm *t1)
                 return false;
         }
     }
-    
+
     return true;
 }
 
@@ -540,7 +540,7 @@ bool NC_STACK_bmpanim::WriteToFile(ResBmpAnm *banm, const std::string &name, IFF
     FSMgr::iFileHandle *pfile = iff;
 
     if ( !iff )
-    {                
+    {
         iffOpened = IFFile::UAOpenIFFile( std::string("rsrc:rsrcpool/") + name, "wb" );
         if (!iffOpened.OK())
             return false;
@@ -548,14 +548,14 @@ bool NC_STACK_bmpanim::WriteToFile(ResBmpAnm *banm, const std::string &name, IFF
         pfile = &iffOpened;
         iff = &iffOpened;
     }
-    
+
     if (iff)
     {
         if ( (iff->pushChunk(TAG_VANM, TAG_FORM, -1) | iff->pushChunk(0, TAG_DATA, -1)) != IFFile::IFF_ERR_OK )
             return false;
     }
-    
-    
+
+
     bool wok = false;
 
     if ( WriteClassName(pfile, banm) )
@@ -569,13 +569,13 @@ bool NC_STACK_bmpanim::WriteToFile(ResBmpAnm *banm, const std::string &name, IFF
             }
         }
     }
-    
+
     if (iff)
     {
         iff->popChunk();
         iff->popChunk();
     }
-    
+
     return wok;
 }
 
@@ -610,7 +610,7 @@ void NC_STACK_bmpanim::SetTime(int32_t timeStamp, int32_t frameTime)
     if ( frameTime == -1 )
     {
         _curFrame += _frmAdd;
-        
+
         if (_curFrame >= (int32_t)_pData->FrameData.size())
         {
             if ( _animType )
@@ -639,7 +639,7 @@ void NC_STACK_bmpanim::SetTime(int32_t timeStamp, int32_t frameTime)
             BAnmFrameCache &frm = _pData->FrameData[_curFrame];
             if (_leftTime < frm.FrameTime)
                 break;
-            
+
             _leftTime -= frm.FrameTime;
 
             _curFrame += _frmAdd;
@@ -676,7 +676,7 @@ ResBitmap * NC_STACK_bmpanim::GetBitmap(int frameid)
 {
     if (frameid == -1)
         return _pData->FrameData[_curFrame].pBitmap->GetBitmap();
-    
+
     return _pData->FrameData.at(frameid).pBitmap->GetBitmap();
 }
 
@@ -684,7 +684,7 @@ std::vector<tUtV> &NC_STACK_bmpanim::GetOutline(int frameid /* = -1 */)
 {
     if (frameid == -1)
         return *(_pData->FrameData[_curFrame].pTexCoords);
-    
+
     return *(_pData->FrameData.at(frameid).pTexCoords);
 }
 
@@ -708,13 +708,13 @@ void NC_STACK_bmpanim::PrepareTexture( bool force )
 {
     if (!_pData)
         return;
-    
+
     for(NC_STACK_bitmap *bitm : _pData->Bitmaps)
         bitm->PrepareTexture(force);
 }
 
-uint32_t NC_STACK_bmpanim::GetFramesCount() const 
-{ 
+uint32_t NC_STACK_bmpanim::GetFramesCount() const
+{
     return _pData->FrameData.size();
 }
 

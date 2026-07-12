@@ -4,7 +4,7 @@
 #include <SDL2/SDL_haptic.h>
 
 namespace Input { namespace FF {
-    
+
 class FFEffect
 {
 public:

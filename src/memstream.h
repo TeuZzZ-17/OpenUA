@@ -58,158 +58,158 @@ protected:
     size_t        _endPos;
     bool          _finish;  // if block finished - endpos will be fixed
     size_t        _pos;
-    
+
 public:
     const size_t  _reservedSize; // blocksize
-    
+
 public:
-    MeBlock(size_t sz = 0x400) 
+    MeBlock(size_t sz = 0x400)
     : _reservedSize(sz)
     {
         _mem = new uint8_t[sz];
-        
+
         _finish = false;
         _pos = 0;
         _endPos = 0;
     }
-    
+
     ~MeBlock()
     {
         if (_mem)
             delete[] _mem;
     }
-    
+
     size_t GetUnusedSize()
     {
         return _reservedSize - _endPos;
     }
-    
+
     size_t GetSize()
     {
         return _endPos;
     }
-    
+
     void *Alloc(size_t sz)
     {
         if (_finish)
             return NULL;
-        
+
         if (_reservedSize - _endPos < sz)
             return NULL;
-        
+
         void *tmp = _mem + _endPos;
         _endPos += sz;
         return tmp;
     }
-    
+
     /***
      * Return number writed bytes
      ***/
     size_t Write(const void *data, size_t sz)
     {
         size_t e = _reservedSize;
-        
+
         if (_finish)
             e = _endPos;
-        
+
         if (_pos < 0 || _pos >= e)
             return 0;
-        
+
         size_t maxWrite = e - _pos;
-        
+
         if (maxWrite > sz)
             maxWrite = sz; //Can write all
-        
+
         memcpy(_mem + _pos, data, maxWrite);
-        
+
         _pos += maxWrite;
         if (!_finish && _endPos < _pos)
             _endPos = _pos;
-        
+
         return maxWrite;
     }
-    
+
     size_t Write(const ByteArray &data)
     {
         size_t e = _reservedSize;
-        
+
         if (_finish)
             e = _endPos;
-        
+
         if (_pos < 0 || _pos >= e)
             return 0;
-        
+
         size_t maxWrite = e - _pos;
-        
+
         if (maxWrite > data.size())
             maxWrite = data.size(); //Can write all
-        
+
         memcpy(_mem + _pos, data.data(), maxWrite);
-        
+
         _pos += maxWrite;
         if (!_finish && _endPos < _pos)
             _endPos = _pos;
-        
+
         return maxWrite;
     }
-    
+
     size_t Read(size_t pos, void *dst, size_t sz)
     {
         size_t e = _reservedSize;
-        
+
         if (_finish)
             e = _endPos;
-        
+
         if (pos < 0 || pos >= e)
             return 0;
-        
+
         size_t maxRead = e - pos;
-        
+
         if (maxRead > sz)
             maxRead = sz; //Can read all
-        
+
         memcpy(dst, _mem + pos, maxRead);
-        
+
         return maxRead;
     }
-    
+
     ByteArray Read(size_t pos, size_t sz)
     {
         size_t e = _reservedSize;
-        
+
         if (_finish)
             e = _endPos;
-        
+
         if (pos < 0 || pos >= e)
             return ByteArray();
-        
+
         size_t maxRead = e - pos;
-        
+
         if (maxRead > sz)
             maxRead = sz; //Can read all
-        
+
         return ByteArray(_mem + pos, _mem + pos + maxRead);
     }
-    
+
     bool SetWritePos(size_t pos)
-    {       
+    {
         if (pos < 0 || pos > _endPos)
             return false;
-        
+
         _pos = pos;
         return true;
     }
-    
+
     void Lock()
     {
         _finish = true;
     }
-    
+
     bool IsLocked()
     {
         return _finish;
     }
-    
+
     void Clean()
     {
         _finish = false;
@@ -232,17 +232,17 @@ friend class Reader;
         {
             return _o.Size();
         }
-        
+
         size_t Tell()
         {
             return _pos;
         }
-        
+
         bool SetPos(size_t pos)
         {
             if (pos < 0 || pos > _o.Size())
                 return false;
-            
+
             size_t off = 0;
             size_t i = 0;
             for(MeBlock *blk : _o._blocks)
@@ -254,27 +254,27 @@ friend class Reader;
                     _pos = pos;
                     return true;
                 }
-                
+
                 off += blk->GetSize();
                 i++;
-            }            
+            }
             return false;
-        }     
-        
+        }
+
         size_t Read(void *data, size_t sz)
         {
             if (_o._blocks.empty())
                 return 0;
-            
+
             size_t readed = 0;
             while(readed != sz && _idx < _o._blocks.size())
             {
                 MeBlock *blk = _o._blocks[_idx];
-                
+
                 size_t r = blk->Read(_blockPos, (uint8_t *)data + readed, sz - readed);
 
                 readed += r;
-                
+
                 _pos += r;
                 _blockPos += r;
 
@@ -287,27 +287,27 @@ friend class Reader;
 
             return readed;
         }
-        
+
         ByteArray Read(size_t sz)
         {
             ByteArray dat;
-            
+
             if (_o._blocks.empty())
                 return dat;
-            
+
             size_t readed = 0;
-            
+
             while(readed != sz && _idx < _o._blocks.size())
             {
                 MeBlock *blk = _o._blocks[_idx];
-                
+
                 ByteArray r = blk->Read(_blockPos, sz - readed);
-                
+
                 if(!r.empty())
-                    dat.insert(dat.end(), r.begin(), r.end());                    
+                    dat.insert(dat.end(), r.begin(), r.end());
 
                 readed += r.size();
-                
+
                 _pos += r.size();
                 _blockPos += r.size();
 
@@ -320,7 +320,7 @@ friend class Reader;
 
             return dat;
         }
-        
+
         bool ReadU8(uint8_t *v)
         {
             return Read(v, 1) == 1;
@@ -335,7 +335,7 @@ friend class Reader;
         {
             return Read(v, 4) == 4;
         }
-        
+
         uint8_t ReadU8()
         {
             uint8_t v = 0;
@@ -358,41 +358,41 @@ friend class Reader;
                 return v;
             return 0;
         }
-        
+
         bool Eof()
         {
             return _pos >= _o.Size();
         }
-        
+
     protected:
-        Reader(BlocksStream &o) 
+        Reader(BlocksStream &o)
         : _o(o)
         {
             _pos = 0;
             _idx = 0;
             _blockPos = 0;
         };
-        
+
     protected:
         BlocksStream & _o;
         size_t _pos;
         size_t _idx;
         size_t _blockPos;
     };
-    
+
 public:
     BlocksStream(size_t blkSize = 4096)
     : _blkSize(blkSize)
     {
         _size = 0;
     }
-    
+
     ~BlocksStream()
     {
         for (MeBlock *blk : _blocks)
             delete blk;
     }
-    
+
     size_t Write(const void *data, size_t sz)
     {
         size_t writen = 0;
@@ -404,14 +404,14 @@ public:
             else
             {
                 size_t w = _blocks.back()->Write((uint8_t *)data + writen, sz - writen);
-                
+
                 writen += w;
-                
+
                 if (w == 0)
                     err++;
                 else
                     err = 0;
-                                
+
                 if (writen != sz) // if no space in block
                 {
                     _blocks.back()->Lock();
@@ -422,47 +422,47 @@ public:
         _size += writen;
         return writen;
     }
-    
+
     size_t Write(const ByteArray &data)
     {
         return Write(data.data(), data.size());
     }
-    
+
     bool WriteU8(uint8_t v)
     {
         return Write(&v, 1) == 1;
     }
-    
+
     bool WriteUL16(uint16_t v)
     {
         return Write(&v, 2) == 2;
     }
-    
+
     bool WriteUL32(uint32_t v)
     {
         return Write(&v, 4) == 4;
     }
-    
+
     size_t Size()
     {
         return _size;
     }
-    
+
     void Clear()
     {
         for (MeBlock *blk : _blocks)
             delete blk;
-        
+
         _blocks.clear();
-        
+
         _size = 0;
     }
-    
+
     Reader GetReader()
     {
         return Reader(*this);
     }
-    
+
 protected:
     typedef std::deque<MeBlock *> _tBlockList;
 

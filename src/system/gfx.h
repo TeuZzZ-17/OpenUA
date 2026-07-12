@@ -24,7 +24,7 @@ class NC_STACK_bitmap;
 typedef std::array<SDL_Color, 256> UA_PALETTE;
 
 struct ResBitmap
-{    
+{
     int16_t width = 0;
     int16_t height = 0;
     UA_PALETTE *palette = NULL;
@@ -40,21 +40,21 @@ struct TileMap
     NC_STACK_bitmap *img = NULL;
     std::array<Common::PointRect, 256> map;
     int h = 0;
-    
-    TileMap();  
+
+    TileMap();
     ~TileMap();
-    
+
     void Draw(SDL_Surface *surface, const Common::Point &pos, uint8_t c);
     void Draw(SDL_Surface *surface, const Common::PointRect &posRect, uint8_t c);
     void Draw(SDL_Surface *surface, const Common::Rect &posRect, uint8_t c);
-    
+
     void Fill(SDL_Surface *surface, const Common::Rect &rect, uint8_t c);
     void Fill(SDL_Surface *surface, const Common::PointRect &rect, uint8_t c);
-    
+
     //Special fill use 1pix column
     void FillColumn(SDL_Surface *surface, const Common::Rect &rect, uint8_t c);
     void FillColumn(SDL_Surface *surface, const Common::PointRect &rect, uint8_t c);
-    
+
     int GetWidth(uint8_t c) const;
     int GetWidth(const std::string &str) const;
     Common::Point GetSize(uint8_t c) const;
@@ -70,7 +70,7 @@ struct tUtV
 {
     float tu = -1.0;
     float tv = -1.0;
-    
+
     tUtV() = default;
     tUtV(float u, float v): tu(u), tv(v) {};
 };
@@ -89,8 +89,8 @@ struct windd_arg256
 namespace GFX
 {
 
-#ifndef GFXSHORTINDEX    
-    
+#ifndef GFXSHORTINDEX
+
 typedef uint32_t IndexType;
 #define GLINDEXTYPE GL_UNSIGNED_INT
 
@@ -119,7 +119,7 @@ enum RFLAGS
     RFLAGS_COMPUTED_COLOR = (1 << 9),
     RFLAGS_DISABLE_ZWRITE = (1 << 10),
     RFLAGS_ALPHA_FOG =      (1 << 11),
-};    
+};
 
 struct __attribute__((packed)) TGLColor
 {
@@ -127,7 +127,7 @@ struct __attribute__((packed)) TGLColor
     float g = 1.0;
     float b = 1.0;
     float a = 1.0;
-    
+
     TGLColor() = default;
     TGLColor(float _r, float _g, float _b, float _a = 1.0)
         : r(_r), g(_g), b(_b), a(_a) {};
@@ -137,10 +137,10 @@ struct TBoundBox
 {
     vec3d Min;
     vec3d Max;
-    
+
     bool Inited = false;
-    
-    void Add(const vec3d &pt) 
+
+    void Add(const vec3d &pt)
     {
         if (Inited)
         {
@@ -158,8 +158,8 @@ struct TBoundBox
             Max = pt;
         }
     }
-    
-    void Add(const TBoundBox &box) 
+
+    void Add(const TBoundBox &box)
     {
         Add(box.Min);
         Add(box.Max);
@@ -170,26 +170,26 @@ struct TRenderParams
 {
     NC_STACK_bitmap *TexSource = NULL;
     ResBitmap *Tex = NULL;
-    
+
     uint32_t Flags = 0;
     TGLColor Color;
-    
+
     TRenderParams() = default;
     TRenderParams(const TRenderParams &) = default;
     TRenderParams(TRenderParams &&) = default;
-    
+
     TRenderParams(uint32_t flags)
         : Flags(flags){};
-    
+
     TRenderParams(NC_STACK_bitmap *tex, uint32_t flags)
         : TexSource(tex), Flags(flags){};
-        
+
     TRenderParams(ResBitmap *tex, uint32_t flags)
         : Tex(tex), Flags(flags){};
-    
+
     TRenderParams& operator=(const TRenderParams &) = default;
     TRenderParams& operator=(TRenderParams &&) = default;
-    
+
     bool operator==(const TRenderParams &b);
 };
 
@@ -197,7 +197,7 @@ struct TCoordsCache
 {
     ResBitmap *Tex = NULL;
     std::vector<tUtV> Coords;
-    
+
     // OpenGL
     int32_t BufferPos = 0;
 };
@@ -210,7 +210,7 @@ struct TVertex
     TGLColor Color;
     TGLColor ComputedColor;
     uint32_t TexCoordId = 0;
-    
+
     TVertex() = default;
     TVertex(const vec3f &p): Pos(p) {};
     TVertex(const vec3f &p, const tUtV &uv): Pos(p), TexCoord(uv) {};
@@ -223,26 +223,26 @@ public:
     TRenderParams Mat;
     std::vector<TVertex> Vertexes;
     std::vector<IndexType> Indixes;
-    
+
     std::vector<TCoordsCache> CoordsCache;
-    
+
     TBoundBox BoundBox;
-    
+
     TMesh() = default;
     ~TMesh();
     TMesh(const TMesh&);
     TMesh(TMesh&&) = default;
-    
+
     TMesh &operator=(const TMesh&);
     TMesh &operator=(TMesh&&) = default;
-    
+
     void RecalcBoundBox()
     {
         BoundBox = TBoundBox();
         for (const TVertex &v : Vertexes)
             BoundBox.Add(v.Pos);
     }
-    
+
     // OpenGL
     // Do not copy it!
     GLuint glDataBuf = 0;
@@ -257,16 +257,16 @@ struct TRenderNode
         TYPE_MESH,
         TYPE_PARTICLE
     };
-    
+
     uint8_t Type = TYPE_MESH;
-    
+
     TMesh *Mesh = NULL;
     TMesh LocalMesh;
-    
+
     int32_t coordsID = -1;
-    
+
     ResBitmap *Tex = NULL;
-    
+
     uint32_t Flags = 0;
     TGLColor Color;
     // OpenUA custom: per-node VP tint multiplier. Neutral (1,1,1,1) = no change.
@@ -275,28 +275,28 @@ struct TRenderNode
     mat4x4 TForm;
     int32_t TimeStamp = 0;
     int32_t FrameTime = 0;
-    
+
     float FogStart = 0.0;
     float FogLength = 0.0;
-    
+
     float Distance = 0.0;
-    
+
     float ParticleSize = 0.0;
-    
+
     TRenderNode() = default;
     TRenderNode(TRenderNode &&) = default;
     TRenderNode(const TRenderNode &) = default;
-    
+
     TRenderNode& operator=(const TRenderNode &) = default;
     TRenderNode& operator=(TRenderNode &&) = default;
-    
+
     TRenderNode(uint8_t tp): Type(tp) {};
-    
+
     static bool CompareSolid(TRenderNode *a, TRenderNode *b);
     static bool CompareTransparent(TRenderNode *a, TRenderNode *b);
     static bool CompareDistance(TRenderNode *a, TRenderNode *b);
 };
-    
+
 enum
 {
     DEFAULT_WIDTH = 640,
@@ -371,9 +371,9 @@ struct GfxStates
     float AFogStart = 3496.0;
     float AFogLength = 600.0;
     float AFogStrength = 1.0;
-    
+
     bool DepthTest = true;
-    
+
     uint32_t DataBuf = 0;
     uint32_t IndexBuf = 0;
     TShaderProg Prog;
@@ -399,7 +399,7 @@ struct ColorFx
 {
     int Id = 0;
     float Pwr = 1.0;
-    
+
     ColorFx() {};
     ColorFx(int id, float pwr) : Id(id), Pwr(pwr) {};
 };
@@ -430,7 +430,7 @@ struct TGFXDeviceInfo
     std::string name;
     std::string guid;
     bool isCurrent = false;
-    
+
     TGFXDeviceInfo(const std::string &__name, const std::string &__guid)
     : name(__name), guid(__guid) {}
 };
@@ -453,7 +453,7 @@ struct ScreenFont
 
     std::list<ScreenText *> entries;
 };
-    
+
 struct GfxMode
 {
     int w = 0;
@@ -462,33 +462,33 @@ struct GfxMode
     bool windowed = false;
     SDL_DisplayMode mode = {0};
     std::string name;
-    
+
     GfxMode() {};
     GfxMode(GfxMode &&g);
     GfxMode(const GfxMode &g);
     GfxMode(const Common::Point &sz);
 
-    GfxMode& operator=(const GfxMode &g);    
+    GfxMode& operator=(const GfxMode &g);
     operator bool() const;
-    
+
     bool operator==(const GfxMode &g) const;
     bool operator==(const Common::Point &g) const;
     bool operator!=(const GfxMode &g) const;
     bool operator!=(const Common::Point &g) const;
-        
+
     GfxMode WithWindowed(bool state) const
     {
         GfxMode t = *this;
         t.windowed = state;
         return t;
     }
-    
+
     operator Common::Point() const { return Common::Point(w, h); };
-    
+
     static bool SortCompare(const GfxMode &a, const GfxMode &b);
-    
+
     static std::string GenName(int w, int h);
-    
+
 };
 
 enum WDD_ATT
@@ -522,15 +522,15 @@ enum RASTER
     RASTER_ZEROTR  = (1 << 2),
     RASTER_LUMATR  = (1 << 3),
     RASTER_PARTICL = (1 << 4),
-    
+
     RASTER_ALL = (RASTER_SOLID | RASTER_SKY | RASTER_ZEROTR | RASTER_LUMATR | RASTER_PARTICL)
 };
-    
+
 class GFXEngine
 {
 public:
     static const std::array<vec3d, 17> _clrEff;
-    
+
     static int can_srcblend;
     static int can_destblend;
     static int can_stippling;
@@ -540,36 +540,36 @@ protected:
     static SDL_PixelFormat *_pixfmt;
     static GLint _glPixfmt, _glPixtype;
     static bool _staticInited;
-    
+
     static void StaticInit();
-    
+
 public:
     void Init();
     void Deinit();
-    
+
     void RecreateScreenSurface();
     void DrawScreenSurface();
-    
+
     uint32_t LoadShader(int32_t type, const std::string &fl);
     uint32_t CompileShader(int32_t type, const std::string &string);
-    
+
     void SetFBOBlending(int mode);
     void DrawFBO();
     void DrawVhsFilter();
     void DrawVhsEffect();
     void UpdateFBOSizes();
-    
-    
+
+
     SDL_Surface *Screen();
-    
+
 
     uint8_t *MakeScreenCopy(int *ow, int *oh);
     uint8_t *MakeDepthScreenCopy(int *ow, int *oh);
 
-    
+
     GfxMode windd_func0__sub0(const std::string &file);
     GfxMode sub_41F68C();
-    
+
     int  GetGfxModeIndex(const Common::Point &res);
 
     void SetResolution(const Common::Point &res, bool windowed);
@@ -597,39 +597,39 @@ public:
     bool IsVisualFilterActive() const { return _visualFilterActive; }
     float GetVisualFilterStrength() const { return _visualFilterStrength; }
     const std::string &GetVisualFilterName() const { return _visualFilterName; }
-    
-    
+
+
     static SDL_PixelFormat *GetPixelFormat() { return _pixfmt; };
     static uint32_t GetPixelFormatU32() { return _pixfmt->format; };
     static void GetGlPixTypeFmt(GLint *format, GLint *type);
     static GLint GetGlPixFormat() { return _glPixfmt; };
     static GLint GetGlPixType() { return _glPixtype; };
-    
-    
+
+
     static void DrawLine(SDL_Surface *surface, const Common::Line &line, uint8_t cr, uint8_t cg, uint8_t cb);
     static void BlitScaleMasked(SDL_Surface *src, Common::Rect sRect, SDL_Surface *mask, uint8_t index, SDL_Surface *dst, Common::Rect dRect);
     static void DrawFill(SDL_Surface *src, const Common::Rect &sRect, SDL_Surface *dst, const Common::Rect &dRect);
-    
+
     static void Draw(SDL_Surface *src, const Common::Rect &sRect, SDL_Surface *dst, Common::Point dPoint);
     static void Draw(SDL_Surface *src, const Common::Rect &sRect, SDL_Surface *dst, Common::PointRect dRect);
-    
+
     static SDL_Color Color(uint8_t r = 255, uint8_t g = 255, uint8_t b = 255, uint8_t a = 255);
     static bool ColorCmp(const SDL_Color &a, const SDL_Color &b);
-    
+
 protected:
-    template <typename T> 
+    template <typename T>
     static void DrawFillIntCKey(SDL_Surface *src, const Common::Rect &sRect, SDL_Surface *dst, const Common::Rect &dRect);
-    template <typename T> 
+    template <typename T>
     static void DrawFillIntACpy(SDL_Surface *src, const Common::Rect &sRect, SDL_Surface *dst, const Common::Rect &dRect);
     static void DrawFillIntCpy(SDL_Surface *src, const Common::Rect &sRect, SDL_Surface *dst, const Common::Rect &dRect);
-    
+
 private:
     GFXEngine();
     ~GFXEngine();
-    
+
     void AddGfxMode(const GfxMode &md);
     uint32_t CursPix(uint8_t *data, int ofs, int bpp);
-    
+
     static int EventsWatcher(void *, SDL_Event *event);
 
 public:
@@ -643,9 +643,9 @@ public:
     virtual void raster_func207(int id, TileMap *tiles);
     virtual TileMap *raster_func208(int id);
     virtual int raster_func208(TileMap *tiles);
-    
+
     virtual void ProcessDrawSeq(const CmdStream &cmdline, const CmdIncludes *arr = NULL);
-    
+
     virtual void raster_func210(const Common::FRect &arg);
     virtual void raster_func211(const Common::Rect &arg);
     virtual void BeginScene();
@@ -664,14 +664,14 @@ public:
     virtual void windd_func320(IDVPair *);
     virtual void windd_func321(IDVPair *);
     virtual void windd_func322(windd_dlgBox *dlgBox);
-    
+
     virtual const std::vector<TGFXDeviceInfo>& GetDevices();
     virtual void SetDeviceByGUID(const std::string &guid, bool writefile = true);
 
-    
+
     void MeshMakeVBO(TMesh *);
     void MeshFreeVBO(TMesh *);
-    
+
 
     virtual void setWDD_cursor(int arg);
     virtual void setWDD_disLowRes(int arg);
@@ -680,9 +680,9 @@ public:
 
     virtual int getWDD_16bitTex();
     virtual int getWDD_drawPrim();
-    
-    
-    
+
+
+
     virtual void SetPalette(UA_PALETTE &pal);
     virtual void SetPen(SDL_Color pen);
     virtual void setRSTR_BGpen(uint32_t pen) {};
@@ -695,17 +695,17 @@ public:
     virtual int16_t GetScreenW() const { return _resolution.x; }
     virtual int16_t GetScreenH() const { return _resolution.y; }
     virtual Common::Point GetScreenSize() const { return _resolution; };
-    
-    
-    
-    
+
+
+
+
     // windd methods
     size_t windd_func0(IDVList &stak);
 
     virtual void setW3D_texFilt(int arg);
 
     void draw2DandFlush();
-    
+
     void DrawVtxQuad(const std::array<GFX::TVertex, 4> &vtx);
 
     int LoadFontByDescr(const std::string &fontname);
@@ -718,43 +718,43 @@ public:
 
     virtual SDL_Surface *CreateSurfaceScreenFormat(int width, int height);
     virtual SDL_Surface *ConvertToScreenFormat(SDL_Surface *src);
-    
+
     static SDL_Surface *ConvertSDLSurface(SDL_Surface *src, const SDL_PixelFormat * fmt);
-        
+
     void fpsLimitter(int value);
-    
+
     float GetColorEffectPower(int id);
-    
+
     Common::Point ConvertPosTo2DStuff(const Common::Point &pos);
-    
+
     void RenderingMeshOld(TRenderNode *mesh);
     void RenderingMesh(TRenderNode *mesh);
     void RenderNode(TRenderNode *node);
     void Rasterize(uint32_t RasterEtapes = RASTER_ALL);
-    
+
     void QueueRenderMesh(TRenderNode *mesh);
     TRenderNode &AllocRenderNode() { return _renderNodesCache.GetNext(); };
-    
+
     float GetAlpha() const { return _alpha / 255.0; };
-    
+
     GfxStates& States() { return _states; };
     const GfxStates& GetLastStates() { return _lastStates; };
-    
-    const TShaderProg &GetStdShaderProg() { return _stdShaderProg; }; 
-    
+
+    const TShaderProg &GetStdShaderProg() { return _stdShaderProg; };
+
     void SetRenderStates(int arg);
-    
+
     void BindVBOParameters(TShaderProg &shader);
-    
+
     void CommitUBOParameters();
-    
+
     void SetProjectionMatrix(const mat4x4f &mat);
     void SetModelViewMatrix(const mat4x4f &mat);
-    
-    const mat4x4f &GetProjectionMatrix() const { return _frustum; }; 
-    float GetProjectionNear() const { return _frustumNear; }; 
-    float GetProjectionFar() const { return _frustumFar; }; 
-    
+
+    const mat4x4f &GetProjectionMatrix() const { return _frustum; };
+    float GetProjectionNear() const { return _frustumNear; };
+    float GetProjectionFar() const { return _frustumFar; };
+
 protected:
     void initPolyEngine();
 
@@ -762,41 +762,41 @@ protected:
     void AddScreenText(const std::string &string, int p1, int p2, int p3, int p4, int flag);
     void DrawTextEntry(const ScreenText *txt);
 
-    
+
     void win3d_func274__sub0(FSMgr::FileHandle *fil);
 
     static SDL_Cursor *wrapLoadCursor(const char *name);
 
     void _setFrustumClip(float near, float far);
-    
+
     void sub_420EDC(Common::Line line, uint8_t r, uint8_t g, uint8_t b);
     char * windd_func322__sub0(const char *box_title, const char *box_ok, const char *box_cancel, const char *box_startText, uint32_t timer_time, void (*timer_func)(int, int, int), void *timer_context, int replace, int maxLen);
-    
+
     void ApplyResolution();
 
     bool SetResVariables(Common::Point res);
     bool LoadVhsFilterShader();
     void FreeVhsFilterShader();
     bool EnsureVhsFilterTexture(const Common::Point &scrSz);
-    
+
 
 public:
     //Data
     //static constexpr const char * __ClassName = ;
-    
-    
+
+
 public:
     static GFXEngine Instance;
-    
+
 private:
     std::vector<GfxMode> graphicsModes;
     std::array<SDL_Cursor *, 11> cursors;
     int CurrentCursorID = -1;
     GfxMode GfxSelectedMode;
-    
+
     SDL_Surface *ScreenSurface = NULL;
     GLuint screenTex = 0;
-    
+
     static const std::string _stdPShaderText;
     static const std::string _stdVShaderText;
 
@@ -819,13 +819,13 @@ public:
     int _zbuf_when_tracy;
     int _colorkey;
 
-    
-    
+
+
     std::list<TRenderNode *> _renderSolidList;
     std::list<TRenderNode *> _renderSkyBoxList;
     std::list<TRenderNode *> _renderZeroTracyList;
     std::list<TRenderNode *> _renderLumaTracyList;
-    
+
     Common::CacheStorage<TRenderNode> _renderNodesCache;
 
     int _sceneBeginned;
@@ -835,10 +835,10 @@ public:
     float _corrW, _corrIW;
     float _corrH, _corrIH;
     bool _solidFont;
-    
+
     bool _glext = false;
     bool _vbo = false;
-    
+
     // Display class
     SDL_Color _field_4 = {0}; // Color?
     Common::Rect _clip;
@@ -848,9 +848,9 @@ public:
     int _field_550   = 0;
     float _field_554 = 0;
     float _field_558 = 0;
-    
+
     UA_PALETTE _palette;
-    
+
 protected:
     // Display class
     Common::Point _resolution;
@@ -859,13 +859,13 @@ protected:
     mat4x4f _frustum;
     float _frustumNear;
     float _frustumFar;
-    
+
     uint32_t _stdPsShader = 0;
     uint32_t _stdVsShader = 0;
     TShaderProg _stdShaderProg;
-    
+
     uint32_t _vboParams = 0;
-    
+
     static constexpr int32_t _vboMProjOff = 0;   // 4 * 4 * 4 = 64
     static constexpr int32_t _vboMViewOff = 64;  // 4 * 4 * 4 = 64
     static constexpr int32_t _vboFogOff   = 128; // vec4: enable, start, length, strength
@@ -898,27 +898,27 @@ protected:
         float   ColorMul[4] = {1.0, 1.0, 1.0, 1.0}; // std140 vec4 at offset 176
         float   FogColor[4] = {0.0, 0.0, 0.0, 1.0}; // std140 vec4 at offset 192
     } _vboStatesBlock;
-    
+
     bool _vboStatesChanged = true;
-    
+
     uint32_t _globalVao = 0;
-    
+
     GfxStates _states;
     GfxStates _lastStates;
-    
+
     uint32_t _stdQuadDataBuf = 0;
     uint32_t _stdQuadIndexBuf = 0;
 
     vec3d _normClr;
     vec3d _invClr;
-    
+
     int32_t _colorEffects = 0;
-    
+
     uint32_t _fbo = 0;
     uint32_t _fbod = 0;
     uint32_t _fboTex = 0;
     int32_t _fboBlend = 0;
-    
+
     uint32_t _psShader = 0;
     uint32_t _vsShader = 0;
     TColorEffectsProg _colorEffectsShaderProg;
@@ -948,7 +948,7 @@ protected:
 
     static std::vector<TGFXDeviceInfo> _devices;
 };
-    
+
 static constexpr GFXEngine &Engine = GFXEngine::Instance;
 
 
@@ -956,7 +956,7 @@ static constexpr GFXEngine &Engine = GFXEngine::Instance;
 
 
 
-    
+
 }
 
 #endif // ENGINE_GFX_H_INCLUDED

@@ -140,20 +140,20 @@ rsrc * NC_STACK_image::rsrc_func64(IDVList &stak)
         return NULL;
     }
 
-    ResBitmap *bitm = new ResBitmap;   
+    ResBitmap *bitm = new ResBitmap;
     if ( !bitm )
     {
         SDL_FreeSurface(loaded);
         rsrc_func65(res);
         return NULL;
     }
-    
+
     res->data = bitm;
-    
+
     bitm->width = loaded->w;
     bitm->height = loaded->h;
     bitm->swTex = loaded;
-    
+
     if (convertColor)
     {
         SDL_Surface *screenFmt = GFX::Engine.ConvertToScreenFormat(loaded);
@@ -162,7 +162,7 @@ rsrc * NC_STACK_image::rsrc_func64(IDVList &stak)
             SDL_FreeSurface(bitm->swTex);
             bitm->swTex = screenFmt;
         }
-    } 
+    }
     else if (loaded->format->palette)
     {
         if ( !bitm->palette )
@@ -182,10 +182,10 @@ bool NC_STACK_image::SavePng(ResBitmap *bitm, const std::string &fname)
 {
     if (!bitm)
         return false;
-    
+
     if (!bitm->swTex)
         return false;
-    
+
     FSMgr::FileHandle *fil = uaOpenFileAlloc(fname, "wb");
     if (!fil || !fil->OK())
         return false;

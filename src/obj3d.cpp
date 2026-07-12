@@ -31,7 +31,7 @@ bool NC_STACK_Obj3D::LoadFromFile(const std::string &filename)
 
     if (!fil.OK())
         return false;
-    
+
     fname = filename;
 
     return LoadFromFile(&fil);
@@ -43,23 +43,23 @@ bool NC_STACK_Obj3D::LoadFromFile(FSMgr::FileHandle *fil)
         return false;
 
     MakeCoordsCache();
-        
+
     _skeleton = Nucleus::CInit<NC_STACK_skeleton>( {
         {NC_STACK_rsrc::RSRC_ATT_NAME, std::string("Obj3D_sklt")},
         {NC_STACK_rsrc::RSRC_ATT_TRYSHARED, (int32_t)2},
-        {NC_STACK_skeleton::SKEL_ATT_POINTSCNT, (int32_t)_v.size()}});  
-    
+        {NC_STACK_skeleton::SKEL_ATT_POINTSCNT, (int32_t)_v.size()}});
+
     UAskeleton::Data *dat = _skeleton->GetSkelet();
 
     for (int32_t i = 0; i < (int32_t)_v.size(); ++i)
         dat->POO[i] = _v[i];
-    
+
     dat->polygons.resize(_f.size());
 
     for (int32_t i = 0; i < (int32_t)_f.size(); i++)
     {
         UAskeleton::Polygon &pol = dat->polygons[i];
-        
+
         for (int j = 0; j < GFX_MAX_VERTEX; ++j )
         {
             FaceVT &f = _f[i].at(j);
@@ -67,12 +67,12 @@ bool NC_STACK_Obj3D::LoadFromFile(FSMgr::FileHandle *fil)
             {
                 break;
             }
-            
+
             pol.v[j] = f.V - 1;
             pol.num_vertices = j + 1;
         }
     }
-    
+
     return true;
 }
 
@@ -81,12 +81,12 @@ NC_STACK_Obj3D *NC_STACK_Obj3D::LoadObj3D(const std::string &filename)
     FSMgr::FileHandle fil = uaOpenFile(filename, "r");
     if (!fil.OK())
         return NULL;
-    
+
     NC_STACK_Obj3D *tmp = Nucleus::CInit<NC_STACK_Obj3D>();
     tmp->fname = filename;
     if(tmp->LoadFromFile(&fil))
         return tmp;
-    
+
     tmp->Delete();
     return NULL;
 }
@@ -95,7 +95,7 @@ bool NC_STACK_Obj3D::ParseObj(FSMgr::FileHandle *fil)
 {
     if (!fil->OK())
         return false;
-    
+
     std::string line;
     while ( fil->ReadLine(&line) && !line.empty() )
     {
@@ -105,12 +105,12 @@ bool NC_STACK_Obj3D::ParseObj(FSMgr::FileHandle *fil)
 
         if (line.empty())
             continue;
-        
+
         std::vector<std::string> tokens = Stok::Split(line, " \t");
-        
+
         if (tokens.empty())
             continue;
-        
+
         if (!StriCmp(tokens[0], "v"))
         {
             _v.emplace_back( std::stof(tokens[1]), -std::stof(tokens[2]), std::stof(tokens[3]) );
@@ -119,7 +119,7 @@ bool NC_STACK_Obj3D::ParseObj(FSMgr::FileHandle *fil)
         {
             if (tokens.size() == 3)
                 _vt.emplace_back( std::stof(tokens[1]), std::stof(tokens[2]), 0.0 );
-            else 
+            else
                 _vt.emplace_back( std::stof(tokens[1]), std::stof(tokens[2]), std::stof(tokens[3]) );
         }
         else if (!StriCmp(tokens[0], "vn"))
@@ -128,14 +128,14 @@ bool NC_STACK_Obj3D::ParseObj(FSMgr::FileHandle *fil)
         }
         else if (!StriCmp(tokens[0], "f"))
         {
-            _f.emplace_back();            
+            _f.emplace_back();
             auto &f = _f.back();
-            
+
             int numvtx = tokens.size() - 1;
-            
+
             for (int32_t i = 1; i < (int32_t)tokens.size(); ++i )
                 f[i - 1] = ParseFaceVT(tokens[i]);
-            
+
             if (numvtx >= 3)
             {
                 GFX::TRenderParams prm;
@@ -151,9 +151,9 @@ bool NC_STACK_Obj3D::ParseObj(FSMgr::FileHandle *fil)
                     msh = &Meshes.back();
                     msh->Mat = prm;
                 }
-                
+
                 uint32_t fid = msh->Vertexes.size();
-                
+
                 for(int j = 0; j < numvtx; ++j)
                 {
                     FaceVT &ftx = f[j];
@@ -200,7 +200,7 @@ NC_STACK_Obj3D::FaceVT NC_STACK_Obj3D::ParseFaceVT(const std::string &l)
         else
             t[s] += c;
     }
-    
+
     int32_t v[3] {0, 0, 0};
 
     for(int i = 0; i < 3; ++i)
@@ -208,10 +208,10 @@ NC_STACK_Obj3D::FaceVT NC_STACK_Obj3D::ParseFaceVT(const std::string &l)
         if (!t[i].empty())
             v[i] = std::stoi(t[i]);
     }
-    
+
     return FaceVT( v[0], v[1], v[2] );
 }
-        
+
 
 bool NC_STACK_Obj3D::ParseMtl(const std::string &filename)
 {
@@ -220,7 +220,7 @@ bool NC_STACK_Obj3D::ParseMtl(const std::string &filename)
     {
         if (fl.size() > 2 && fl[0] == '.' && fl[1] == '/')
             fl = fl.substr(2);
-        
+
         if (!uaFileExist(fl))
         {
             size_t pos = fname.find_last_of("/\\:");
@@ -230,13 +230,13 @@ bool NC_STACK_Obj3D::ParseMtl(const std::string &filename)
                 fl = fname + fl;
         }
     }
-    
+
     FSMgr::FileHandle fil = uaOpenFile(fl, "r");
     if (!fil.OK())
         return false;
-    
+
     Mtl *current = NULL;
-    
+
     std::string line;
     while ( fil.ReadLine(&line) && !line.empty() )
     {
@@ -246,12 +246,12 @@ bool NC_STACK_Obj3D::ParseMtl(const std::string &filename)
 
         if (line.empty())
             continue;
-        
+
         std::vector<std::string> tokens = Stok::Split(line, " \t");
-        
+
         if (tokens.empty())
             continue;
-        
+
         if (!StriCmp(tokens[0], "newmtl"))
         {
             _mtls.emplace_back();
@@ -260,11 +260,11 @@ bool NC_STACK_Obj3D::ParseMtl(const std::string &filename)
         }
         else if (!StriCmp(tokens[0], "Ns"))
         {
-            
+
         }
         else if (!StriCmp(tokens[0], "Ka"))
         {
-            
+
         }
         else if (!StriCmp(tokens[0], "Kd"))
         {
@@ -308,19 +308,19 @@ bool NC_STACK_Obj3D::ParseMtl(const std::string &filename)
                 if (!uaFileExist(std::string("rsrc:") + txname))
                 {
                     txname = "objects/" + tokens[1];
-                    
+
                     if (!uaFileExist(std::string("rsrc:") + txname))
                         txname = "rsrcpool/" + tokens[1];
                 }
-                
+
                 current->diffuseMap = Utils::ProxyLoadImage( {
                     {NC_STACK_rsrc::RSRC_ATT_NAME, txname},
                     {NC_STACK_rsrc::RSRC_ATT_TRYSHARED, (int32_t)2},
                     {NC_STACK_bitmap::BMD_ATT_CONVCOLOR, (int32_t)1}} );
-                    
+
                 if (current->diffuseMap)
                     current->diffuseMap->PrepareTexture();
-                    
+
             }
         }
         else if (!StriCmp(tokens[0], "map_Ks"))
@@ -352,7 +352,7 @@ bool NC_STACK_Obj3D::ParseMtl(const std::string &filename)
 
         }
     }
-    
+
     return true;
 }
 
@@ -373,11 +373,11 @@ GFX::TRenderParams NC_STACK_Obj3D::Mtl::GenParams() const
 {
     GFX::TRenderParams tmp;
     tmp.Flags = GFX::RFLAGS_SHADED | GFX::RFLAGS_FOG;
-    
+
     if (diffuseMap)
     {
         tmp.Flags |= GFX::RFLAGS_TEXTURED;
-        
+
         if (diffuseMap->IsDynamic())
         {
             tmp.Flags |= GFX::RFLAGS_DYNAMIC_TEXTURE;
@@ -386,12 +386,12 @@ GFX::TRenderParams NC_STACK_Obj3D::Mtl::GenParams() const
         else
             tmp.Tex = diffuseMap->GetBitmap();
     }
-    
+
     tmp.Color = GFX::TGLColor(diffuse[0], diffuse[1], diffuse[2], d);
-    
+
     if (d < 1.0)
         tmp.Flags |= GFX::RFLAGS_LUMTRACY;
-    
+
     return tmp;
 }
 
@@ -400,20 +400,20 @@ bool NC_STACK_Obj3D::ExportObj(NC_STACK_base *base, const std::string &fname)
 {
     if (!base)
         return false;
-    
+
     if (base->Meshes.empty())
         return false;
-    
+
     FSMgr::FileHandle mtl = uaOpenFile(fname + ".mtl", "w");
-    
-    
+
+
     FSMgr::FileHandle obj = uaOpenFile(fname, "w");
-    
+
     obj.puts(std::string("mtllib ") + fname + ".mtl\n\n");
-    
+
     int vid = 1;
     int tvid = 1;
-    
+
     int matID = 0;
     for( GFX::TMesh &m : base->Meshes )
     {
@@ -426,7 +426,7 @@ Ke 0.000000 0.000000 0.000000\n\
 Ni 1.450000\n");
         mtl.printf("d %f\n", m.Mat.Color.a);
         mtl.puts("illum 2\n");
-        
+
         if (m.Mat.TexSource || m.Mat.Tex)
         {
             std::string texName = fmt::sprintf("Tex%d.png", matID);
@@ -434,23 +434,23 @@ Ni 1.450000\n");
                 NC_STACK_image::SavePng(m.Mat.Tex, texName);
             else
                 NC_STACK_image::SavePng(m.Mat.TexSource->GetBitmap(), texName);
-            
+
             mtl.printf("map_Kd %s\n\n", texName.c_str());
         }
         else
             mtl.puts("\n");
-        
+
         for(GFX::TVertex &v : m.Vertexes)
             obj.printf("v %f %f %f\n", v.Pos.x, -v.Pos.y, v.Pos.z);
-        
+
         if (m.Mat.Flags & GFX::RFLAGS_TEXTURED)
         {
             for(GFX::TVertex &v : m.Vertexes)
                 obj.printf("vt %f %f\n", v.TexCoord.tu, 1.0 - v.TexCoord.tv);
         }
-        
+
         obj.printf("usemtl Mat%d\n", matID);
-        
+
         for (uint32_t i = 0; i < m.Indixes.size(); i += 3)
         {
             if (m.Mat.Flags & GFX::RFLAGS_TEXTURED)
@@ -462,10 +462,10 @@ Ni 1.450000\n");
                         vid + m.Indixes[i + 2],
                         vid + m.Indixes[i + 1]);
         }
-        
-        vid += m.Vertexes.size();  
+
+        vid += m.Vertexes.size();
         if (m.Mat.Flags & GFX::RFLAGS_TEXTURED)
-            tvid += m.Vertexes.size();  
+            tvid += m.Vertexes.size();
         ++matID;
     }
     return true;

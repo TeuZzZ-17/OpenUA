@@ -50,9 +50,9 @@ void ParticleSystem::UpdateRender(area_arg_65 *rndrParams, int32_t delta)
 {
     //Prevent spawn new particles from particle render
     _disableAdd = true;
-    
+
     float fsec = (float)delta * 0.001;
-    
+
     for(auto it = _particles.begin(); it != _particles.end();)
     {
         Frak &f = *it;
@@ -82,12 +82,12 @@ void ParticleSystem::UpdateRender(area_arg_65 *rndrParams, int32_t delta)
         f.Pos += f.Vec * fsec + NC_STACK_particle::RandVec() * (f.pParticleGen->_noisePower * frameScale);
         float baseScale = f.pParticleGen->_scaleStart + f.pParticleGen->_scaleDelta * f.Age;
         vec3d scl(baseScale * f.Scale.x, baseScale * f.Scale.y, baseScale * f.Scale.z);
-        
+
         Render(&f, scl, rndrParams);
-        
+
         it++;
     }
-    
+
     _disableAdd = false;
 }
 
@@ -98,16 +98,16 @@ void ParticleSystem::Render(Frak *p, const vec3d &scale, area_arg_65 *rndrParams
 
     // Transformed position, but without of projection
     vec3d pos = view->CalcSclRot.Transform(p->Pos - view->CalcPos);
-    
+
     if (pos.z < GFX::Engine.GetProjectionNear() || pos.z > GFX::Engine.GetProjectionFar())
         return;
-    
+
     // Calculate projection position and W parameter for NDC
     const mat4x4f &Proj = GFX::Engine.GetProjectionMatrix();
-    
+
     vec3d projPos = Proj.Transform(pos);
     float w = Proj.CalcW(pos);
-    
+
     /* Radius of 2.0 side square = sqrt(1.0^2 + 1.0^2) = 1.414
      * And applied W
      */
@@ -115,8 +115,8 @@ void ParticleSystem::Render(Frak *p, const vec3d &scale, area_arg_65 *rndrParams
     float radius = maxScale * 1.42 / w;
 
     vec2f scrPos(projPos.x / w, projPos.y / w);
-    
-    // If transformed point length more than 
+
+    // If transformed point length more than
     if ( scrPos.length() > 1.42 + radius )
         return;
 
@@ -147,14 +147,14 @@ void ParticleSystem::Render(Frak *p, const vec3d &scale, area_arg_65 *rndrParams
                 if (frameid < mesh.CoordsCache.size())
                 {
                     rend.Tex = mesh.CoordsCache.at(frameid).Tex;
-                    rend.coordsID = frameid;                    
+                    rend.coordsID = frameid;
                 }
             }
             else
                 rend.Tex = mesh.Mat.Tex;
 
-            rend.Mesh = &mesh;        
-            
+            rend.Mesh = &mesh;
+
             mat4x4 particleForm(ParticleSystem_BuildSpinMatrix(p->Spin, p->Age) * mat3x3::Scale(scale));
             particleForm.m03 = pos.x;
             particleForm.m13 = pos.y;

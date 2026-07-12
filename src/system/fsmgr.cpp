@@ -122,7 +122,7 @@ void iDir::flush()
     {
         iNode *n = nodes.front();
         nodes.pop_front();
-        
+
         n->parent = NULL;
         delete n;
     }
@@ -449,7 +449,7 @@ iDir *iDir::MakeDir(const std::string &vname)
 {
     if (vname.empty() || vname.find_first_of("\\/") != std::string::npos)
         return NULL;
-    
+
     iNode *node = getNode(vname);
     if (node)
     {
@@ -457,9 +457,9 @@ iDir *iDir::MakeDir(const std::string &vname)
             return NULL;
         return (iDir *)node;
     }
-    
+
     std::string newPath = path + FSD + vname;
-    
+
     iDir *newDir = NULL;
 #if defined(WIN32) && !defined(__WINE__)
     if (CreateDirectory(newPath.c_str(), NULL))
@@ -529,17 +529,17 @@ DirIter iDir::readDir(const std::string &path)
 void iDir::Override(iDir *nod)
 {
     path = nod->path;
-            
-    for(std::list<iNode *>::iterator it = nod->nodes.begin(); 
-        it != nod->nodes.end(); 
+
+    for(std::list<iNode *>::iterator it = nod->nodes.begin();
+        it != nod->nodes.end();
         it = nodes.erase(it))
     {
         iNode *nev = *it;
         // Will be erased from list, so do silent detach
         nev->parent = NULL;
-        
+
         iNode *old = getNode((*it)->name);
-        
+
         if (old)
         {
             // Do mix by override
@@ -552,7 +552,7 @@ void iDir::Override(iDir *nod)
             else // Replace
             {
                 delete old;
-                
+
                 addNode(nev);
             }
         }
@@ -566,7 +566,7 @@ iNode *iDir::findNode(const std::string &path)
 {
     if (path.empty())
         return &directories;
-        
+
     std::string leaved;
     iNode *node = directories._parseNodePath(path, &leaved);
 
@@ -629,7 +629,7 @@ FileHandle *iDir::openFileAlloc(const std::string &path, const std::string &mode
 
         if ( leaved.find_first_of("\\/") != std::string::npos ) // With path
             return NULL;
-        
+
         if (node->getType() != NTYPE_DIR)
             return NULL;
 
@@ -693,7 +693,7 @@ FileHandle iDir::openFile(const std::string &path, const std::string &mode)
 
         if ( leaved.find_first_of("\\/") != std::string::npos ) // With path
             return FileHandle();
-        
+
         if (node->getType() != NTYPE_DIR)
             return FileHandle();
 
@@ -714,7 +714,7 @@ FileHandle iDir::openFile(const std::string &path, const std::string &mode)
         return FileHandle(node->path, mode);
     }
 
-    return FileHandle();    
+    return FileHandle();
 }
 
 
@@ -756,7 +756,7 @@ bool iDir::Detach(iNode *node)
             return true;
         }
     }
-    
+
     return false;
 }
 
@@ -825,7 +825,7 @@ DirIter::operator bool() const
 FileHandle::FileHandle(const std::string &diskPath, const std::string &mode)
 {
     hndl = __FPtr( fopen(diskPath.c_str(), mode.c_str()), &fclose );
-    
+
     if (mode.find("w") != std::string::npos)
         _writeMode = true;
 }
@@ -835,7 +835,7 @@ FileHandle::FileHandle(FileHandle *b, bool del)
     if (b)
     {
         *this = std::move(*b);
-        
+
         if (del)
             delete b;
     }

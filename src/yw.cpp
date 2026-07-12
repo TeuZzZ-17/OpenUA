@@ -134,7 +134,8 @@ static void yw_AddModelPoint(yw_ModelPointCloud *cloud, const vec3d &point)
     cloud->points.push_back(point);
 }
 
-static void yw_CollectVPModelPoints(NC_STACK_base *base, const mat3x3 &rot, const vec3d &pos, yw_ModelPointCloud *cloud)
+static void yw_CollectVPModelPoints(NC_STACK_base *base, const mat3x3 &rot, const vec3d &pos,
+                                    yw_ModelPointCloud *cloud)
 {
     if ( !base )
         return;
@@ -218,7 +219,8 @@ static void yw_CollectVPModelPoints(NC_STACK_base *base, const mat3x3 &rot, cons
     }
 }
 
-static void yw_CollectVPPointCloud(NC_STACK_base *vp, const vec3d &scale, const vec3d &orientation, yw_ModelPointCloud *cloud)
+static void yw_CollectVPPointCloud(NC_STACK_base *vp, const vec3d &scale, const vec3d &orientation,
+                                   yw_ModelPointCloud *cloud)
 {
     if ( !vp )
         return;
@@ -234,6 +236,27 @@ static void yw_CollectVPPointCloud(NC_STACK_base *vp, const vec3d &scale, const 
 
     for (const vec3d &p : raw.points)
         yw_AddModelPoint(cloud, vpTransform.Transform(p));
+}
+
+static void yw_MakePointCloudBilateralX(yw_ModelPointCloud *cloud)
+{
+    if ( !cloud || !cloud->valid || cloud->points.empty() )
+        return;
+
+    float symmetryAxisX = (cloud->min.x + cloud->max.x) * 0.5f;
+    size_t originalCount = cloud->points.size();
+    cloud->points.reserve(originalCount * 2);
+
+    for (size_t i = 0; i < originalCount; i++)
+    {
+        const vec3d &source = cloud->points[i];
+        if ( fabs(source.x - symmetryAxisX) <= 0.001f )
+            continue;
+
+        vec3d mirrored = source;
+        mirrored.x = symmetryAxisX - (source.x - symmetryAxisX);
+        yw_AddModelPoint(cloud, mirrored);
+    }
 }
 
 static float yw_ClampFloat(float v, float minv, float maxv)
@@ -277,14 +300,350 @@ static void yw_LimitAutoCollGrid(const vec3d &size, int *nx, int *ny, int *nz)
     }
 }
 
-static World::rbcolls yw_GenerateAutoCollSpheresFromVP(NC_STACK_base *vp, const vec3d &scale, const vec3d &orientation)
+static bool yw_HasApproxBilateralXSymmetry(const yw_ModelPointCloud &cloud)
+{
+    if ( !cloud.valid || cloud.points.size() < 12 )
+        return false;
+
+    const int binCount = 8;
+    int leftBins[binCount] = {0};
+    int rightBins[binCount] = {0};
+    float symmetryAxisX = (cloud.min.x + cloud.max.x) * 0.5f;
+    float halfWidth = (cloud.max.x - cloud.min.x) * 0.5f;
+    if ( halfWidth < 6.0f )
+        return false;
+
+    int leftTotal = 0;
+    int rightTotal = 0;
+    for (const vec3d &point : cloud.points)
+    {
+        float offset = point.x - symmetryAxisX;
+        if ( fabs(offset) < halfWidth * 0.02f )
+            continue;
+
+        int bin = (int)((fabs(offset) / halfWidth) * binCount);
+        if ( bin < 0 )
+            bin = 0;
+        else if ( bin >= binCount )
+            bin = binCount - 1;
+
+        if ( offset < 0.0f )
+        {
+            leftBins[bin]++;
+            leftTotal++;
+        }
+        else
+        {
+            rightBins[bin]++;
+            rightTotal++;
+        }
+    }
+
+    if ( leftTotal < 6 || rightTotal < 6 )
+        return false;
+
+    int matched = 0;
+    for (int i = 0; i < binCount; i++)
+        matched += std::min(leftBins[i], rightBins[i]) * 2;
+
+    int total = leftTotal + rightTotal;
+    return ((float)matched / (float)total) >= 0.68f;
+}
+
+static void yw_RepairAutoCollBilateralSymmetry(const yw_ModelPointCloud &cloud,
+                                                World::rbcolls *colls, size_t maxSpheres)
+{
+    if ( !colls || colls->roboColls.empty() || colls->roboColls.size() >= maxSpheres ||
+         !yw_HasApproxBilateralXSymmetry(cloud) )
+        return;
+
+    const float symmetryAxisX = (cloud.min.x + cloud.max.x) * 0.5f;
+    const size_t originalCount = colls->roboColls.size();
+
+    struct MirrorCandidate
+    {
+        World::TRoboColl sphere;
+        float lateralOffset;
+    };
+
+    std::vector<MirrorCandidate> candidates;
+    candidates.reserve(originalCount);
+
+    auto hasEquivalentSphere = [&](const World::TRoboColl &candidate)
+    {
+        for (const World::TRoboColl &existing : colls->roboColls)
+        {
+            float positionTolerance = std::max(4.0f,
+                std::min(existing.robo_coll_radius, candidate.robo_coll_radius) * 0.55f);
+            if ( (existing.coll_pos - candidate.coll_pos).length() <= positionTolerance )
+                return true;
+        }
+        return false;
+    };
+
+    for (size_t i = 0; i < originalCount; i++)
+    {
+        const World::TRoboColl &source = colls->roboColls[i];
+        if ( source.robo_coll_radius <= 3.0f )
+            continue;
+
+        float lateralOffset = fabs(source.coll_pos.x - symmetryAxisX);
+        if ( lateralOffset < std::max(6.0f, source.robo_coll_radius * 0.40f) )
+            continue;
+
+        World::TRoboColl mirror = source;
+        mirror.coll_pos.x = symmetryAxisX - (source.coll_pos.x - symmetryAxisX);
+        if ( hasEquivalentSphere(mirror) )
+            continue;
+
+        // Add a mirrored sphere only when sampled visible geometry actually
+        // exists there. This repairs one-sided grid/filter omissions on wings
+        // without inventing collision volume on genuinely asymmetric models.
+        int nearbyPoints = 0;
+        float nearestPoint = std::numeric_limits<float>::max();
+        float farthestPoint = 0.0f;
+        float searchRadius = source.robo_coll_radius * 1.35f;
+        for (const vec3d &point : cloud.points)
+        {
+            float distance = (point - mirror.coll_pos).length();
+            nearestPoint = std::min(nearestPoint, distance);
+            if ( distance <= searchRadius )
+            {
+                nearbyPoints++;
+                farthestPoint = std::max(farthestPoint, distance);
+            }
+        }
+
+        if ( nearbyPoints < 6 || farthestPoint < 3.0f ||
+             nearestPoint > std::max(4.0f, source.robo_coll_radius * 0.65f) )
+            continue;
+
+        // Never make the repaired side larger than the accepted source side.
+        // If the mirrored geometry is more compact, shrink the sphere to match.
+        mirror.robo_coll_radius = std::min(source.robo_coll_radius,
+                                           std::max(3.0f, farthestPoint * 0.82f));
+
+        MirrorCandidate candidate;
+        candidate.sphere = mirror;
+        candidate.lateralOffset = lateralOffset;
+        candidates.push_back(candidate);
+    }
+
+    std::sort(candidates.begin(), candidates.end(),
+              [](const MirrorCandidate &a, const MirrorCandidate &b)
+              {
+                  return a.lateralOffset > b.lateralOffset;
+              });
+
+    for (const MirrorCandidate &candidate : candidates)
+    {
+        if ( colls->roboColls.size() >= maxSpheres )
+            break;
+        if ( !hasEquivalentSphere(candidate.sphere) )
+            colls->roboColls.push_back(candidate.sphere);
+    }
+}
+
+static void yw_ForceAutoCollBilateralSymmetry(const yw_ModelPointCloud &cloud,
+                                               World::rbcolls *colls, size_t maxSpheres)
+{
+    if ( !colls || colls->roboColls.empty() || maxSpheres == 0 )
+        return;
+
+    struct BilateralGroup
+    {
+        World::TRoboColl first;
+        World::TRoboColl second;
+        bool paired = false;
+        float score = 0.0f;
+    };
+
+    const float symmetryAxisX = (cloud.min.x + cloud.max.x) * 0.5f;
+    const float centerTolerance = std::max(1.0f,
+        (float)(cloud.max.x - cloud.min.x) * 0.01f);
+    const std::vector<World::TRoboColl> source = colls->roboColls;
+    std::vector<bool> used(source.size(), false);
+    std::vector<BilateralGroup> groups;
+    groups.reserve(source.size());
+
+    for (size_t i = 0; i < source.size(); i++)
+    {
+        if ( used[i] )
+            continue;
+
+        used[i] = true;
+        const World::TRoboColl &sphere = source[i];
+        float offset = sphere.coll_pos.x - symmetryAxisX;
+
+        BilateralGroup group;
+        if ( fabs(offset) <= centerTolerance )
+        {
+            group.first = sphere;
+            group.first.coll_pos.x = symmetryAxisX;
+            group.score = sphere.robo_coll_radius;
+            groups.push_back(group);
+            continue;
+        }
+
+        World::TRoboColl expected = sphere;
+        expected.coll_pos.x = symmetryAxisX - offset;
+        size_t bestMatch = source.size();
+        float bestDistance = std::numeric_limits<float>::max();
+
+        for (size_t j = i + 1; j < source.size(); j++)
+        {
+            if ( used[j] || (source[j].coll_pos.x - symmetryAxisX) * offset >= 0.0f )
+                continue;
+
+            float distance = (source[j].coll_pos - expected.coll_pos).length();
+            float tolerance = std::max(4.0f,
+                std::min(source[j].robo_coll_radius, sphere.robo_coll_radius) * 0.75f);
+            if ( distance <= tolerance && distance < bestDistance )
+            {
+                bestDistance = distance;
+                bestMatch = j;
+            }
+        }
+
+        float lateralOffset = fabs(offset);
+        float centerY = sphere.coll_pos.y;
+        float centerZ = sphere.coll_pos.z;
+        float radius = sphere.robo_coll_radius;
+        if ( bestMatch < source.size() )
+        {
+            used[bestMatch] = true;
+            const World::TRoboColl &match = source[bestMatch];
+            lateralOffset = (lateralOffset + fabs(match.coll_pos.x - symmetryAxisX)) * 0.5f;
+            centerY = (centerY + match.coll_pos.y) * 0.5f;
+            centerZ = (centerZ + match.coll_pos.z) * 0.5f;
+            radius = std::max(radius, match.robo_coll_radius);
+        }
+
+        group.paired = true;
+        group.first.coll_pos = vec3d(symmetryAxisX - lateralOffset, centerY, centerZ);
+        group.first.robo_coll_radius = radius;
+        group.second = group.first;
+        group.second.coll_pos.x = symmetryAxisX + lateralOffset;
+        group.score = lateralOffset + radius;
+        groups.push_back(group);
+    }
+
+    std::sort(groups.begin(), groups.end(),
+              [](const BilateralGroup &a, const BilateralGroup &b)
+              {
+                  return a.score > b.score;
+              });
+
+    colls->roboColls.clear();
+    colls->roboColls.reserve(std::min(maxSpheres, source.size() * 2));
+    for (const BilateralGroup &group : groups)
+    {
+        size_t needed = group.paired ? 2 : 1;
+        if ( colls->roboColls.size() + needed > maxSpheres )
+            continue;
+
+        colls->roboColls.push_back(group.first);
+        if ( group.paired )
+            colls->roboColls.push_back(group.second);
+    }
+}
+
+static void yw_AddHiddenAutoCollBridges(World::rbcolls *colls)
+{
+    if ( !colls || colls->roboColls.size() < 2 )
+        return;
+
+    struct BridgeEdge
+    {
+        size_t first;
+        size_t second;
+        float distance;
+        float score;
+    };
+
+    const size_t sourceCount = colls->roboColls.size();
+    const size_t maxTotalSpheres = 48;
+    std::vector<BridgeEdge> edges;
+    std::vector<int> degree(sourceCount, 0);
+
+    for (size_t i = 0; i + 1 < sourceCount; i++)
+    {
+        const World::TRoboColl &a = colls->roboColls[i];
+        for (size_t j = i + 1; j < sourceCount; j++)
+        {
+            const World::TRoboColl &b = colls->roboColls[j];
+            float distance = (float)(b.coll_pos - a.coll_pos).length();
+            float minRadius = std::min(a.robo_coll_radius, b.robo_coll_radius);
+            float radiusSum = a.robo_coll_radius + b.robo_coll_radius;
+            float minBridgeRadius = std::max(3.0f, minRadius * 0.70f);
+
+            if ( minRadius <= 0.01f || distance <= minRadius * 0.45f ||
+                 distance > radiusSum * 1.6f || distance > minBridgeRadius * 7.5f )
+                continue;
+
+            BridgeEdge edge;
+            edge.first = i;
+            edge.second = j;
+            edge.distance = distance;
+            edge.score = distance / std::max(1.0f, radiusSum);
+            edges.push_back(edge);
+        }
+    }
+
+    std::sort(edges.begin(), edges.end(),
+              [](const BridgeEdge &a, const BridgeEdge &b)
+              {
+                  return a.score < b.score;
+              });
+
+    for (const BridgeEdge &edge : edges)
+    {
+        if ( colls->roboColls.size() >= maxTotalSpheres )
+            break;
+        if ( degree[edge.first] >= 3 || degree[edge.second] >= 3 )
+            continue;
+
+        const World::TRoboColl a = colls->roboColls[edge.first];
+        const World::TRoboColl b = colls->roboColls[edge.second];
+        float minBridgeRadius = std::max(3.0f,
+            std::min(a.robo_coll_radius, b.robo_coll_radius) * 0.70f);
+        int bridgeCount = std::max(1,
+            (int)ceil(edge.distance / (minBridgeRadius * 1.5f)) - 1);
+        bridgeCount = std::min(bridgeCount, 4);
+        bridgeCount = std::min(bridgeCount,
+            (int)(maxTotalSpheres - colls->roboColls.size()));
+
+        for (int bridgeIndex = 1; bridgeIndex <= bridgeCount; bridgeIndex++)
+        {
+            float t = (float)bridgeIndex / (float)(bridgeCount + 1);
+            World::TRoboColl bridge;
+            bridge.coll_pos = a.coll_pos + (b.coll_pos - a.coll_pos) * t;
+            bridge.robo_coll_radius = std::max(3.0f,
+                (a.robo_coll_radius +
+                 (b.robo_coll_radius - a.robo_coll_radius) * t) * 0.70f);
+            bridge.debug_visible = false;
+            colls->roboColls.push_back(bridge);
+        }
+
+        degree[edge.first]++;
+        degree[edge.second]++;
+    }
+}
+
+static World::rbcolls yw_GenerateAutoCollSpheresFromVP(NC_STACK_base *vp, const vec3d &scale,
+                                                       const vec3d &orientation, bool essentialHull = false,
+                                                       bool forceBilateral = false)
 {
     World::rbcolls out;
+    const int maxSpheres = 16;
 
     yw_ModelPointCloud cloud;
     yw_CollectVPPointCloud(vp, scale, orientation, &cloud);
     if ( !cloud.valid || cloud.points.size() < 3 )
         return out;
+
+    if ( forceBilateral )
+        yw_MakePointCloudBilateralX(&cloud);
 
     vec3d size = cloud.max - cloud.min;
     float shortHorizontal = std::min(size.x, size.z);
@@ -312,10 +671,16 @@ static World::rbcolls yw_GenerateAutoCollSpheresFromVP(NC_STACK_base *vp, const 
     }
 
     out.roboColls.reserve(cells.size());
+    float thinThreshold = yw_ClampFloat(targetSpan * 0.10f, 2.5f, 5.0f);
 
     for (const yw_ModelPointCloud &cell : cells)
     {
         if ( !cell.valid )
+            continue;
+
+        vec3d cellSize = cell.max - cell.min;
+        float minDimension = std::min(cellSize.x, std::min(cellSize.y, cellSize.z));
+        if ( essentialHull && minDimension < thinThreshold )
             continue;
 
         vec3d center = (cell.min + cell.max) * 0.5;
@@ -323,9 +688,13 @@ static World::rbcolls yw_GenerateAutoCollSpheresFromVP(NC_STACK_base *vp, const 
         for (const vec3d &p : cell.points)
             radius = std::max(radius, (float)(p - center).length());
 
-        radius += yw_ClampFloat(radius * 0.05f, 1.5f, 4.0f);
-        if ( radius < 4.0 )
-            radius = 4.0;
+        if ( essentialHull )
+            radius *= 0.82f;
+        else
+            radius += yw_ClampFloat(radius * 0.05f, 1.5f, 4.0f);
+
+        if ( radius < 3.0f )
+            radius = 3.0f;
 
         World::TRoboColl sphere;
         sphere.coll_pos = center;
@@ -333,15 +702,97 @@ static World::rbcolls yw_GenerateAutoCollSpheresFromVP(NC_STACK_base *vp, const 
         out.roboColls.push_back(sphere);
     }
 
+    if ( essentialHull && !out.roboColls.empty() )
+    {
+        if ( forceBilateral )
+        {
+            yw_ForceAutoCollBilateralSymmetry(cloud, &out, (size_t)maxSpheres);
+            yw_AddHiddenAutoCollBridges(&out);
+        }
+        else
+            yw_RepairAutoCollBilateralSymmetry(cloud, &out, (size_t)maxSpheres);
+    }
+
     if ( out.roboColls.empty() )
     {
         World::TRoboColl sphere;
         sphere.coll_pos = (cloud.min + cloud.max) * 0.5;
-        sphere.robo_coll_radius = std::max(4.0f, (float)((cloud.max - cloud.min).length() * 0.5));
+        if ( essentialHull )
+        {
+            float largestDimension = std::max(size.x, std::max(size.y, size.z));
+            sphere.robo_coll_radius = std::max(3.0f, largestDimension * 0.32f);
+        }
+        else
+        {
+            sphere.robo_coll_radius = std::max(4.0f, (float)size.length() * 0.5f);
+        }
         out.roboColls.push_back(sphere);
     }
 
     return out;
+}
+
+static World::TRoboColl yw_MergeCollisionSpheres(const World::TRoboColl &a, const World::TRoboColl &b)
+{
+    vec3d delta = b.coll_pos - a.coll_pos;
+    float distance = delta.length();
+
+    if ( a.robo_coll_radius >= distance + b.robo_coll_radius )
+        return a;
+    if ( b.robo_coll_radius >= distance + a.robo_coll_radius )
+        return b;
+
+    World::TRoboColl merged;
+    merged.robo_coll_radius = (distance + a.robo_coll_radius + b.robo_coll_radius) * 0.5f;
+    merged.coll_pos = a.coll_pos;
+    if ( distance > 0.001f )
+        merged.coll_pos += delta * ((merged.robo_coll_radius - a.robo_coll_radius) / distance);
+    return merged;
+}
+
+static void yw_SimplifyAutoWeaponCollSpheres(World::rbcolls *colls)
+{
+    if ( !colls )
+        return;
+
+    std::vector<World::TRoboColl> &spheres = colls->roboColls;
+    const size_t maxWeaponSpheres = 4;
+
+    while ( spheres.size() > 1 )
+    {
+        size_t bestA = 0;
+        size_t bestB = 0;
+        float bestCost = std::numeric_limits<float>::max();
+        bool foundRedundantPair = false;
+
+        for (size_t i = 0; i + 1 < spheres.size(); i++)
+        {
+            for (size_t j = i + 1; j < spheres.size(); j++)
+            {
+                float distance = (spheres[j].coll_pos - spheres[i].coll_pos).length();
+                float minRadius = std::min(spheres[i].robo_coll_radius, spheres[j].robo_coll_radius);
+                bool redundant = distance <= minRadius * 0.45f;
+                World::TRoboColl merged = yw_MergeCollisionSpheres(spheres[i], spheres[j]);
+                float growth = merged.robo_coll_radius -
+                               std::max(spheres[i].robo_coll_radius, spheres[j].robo_coll_radius);
+
+                if ( (redundant && !foundRedundantPair) ||
+                     (redundant == foundRedundantPair && growth < bestCost) )
+                {
+                    foundRedundantPair = redundant;
+                    bestCost = growth;
+                    bestA = i;
+                    bestB = j;
+                }
+            }
+        }
+
+        if ( !foundRedundantPair && spheres.size() <= maxWeaponSpheres )
+            break;
+
+        spheres[bestA] = yw_MergeCollisionSpheres(spheres[bestA], spheres[bestB]);
+        spheres.erase(spheres.begin() + bestB);
+    }
 }
 
 static std::string yw_TrimConfigValue(std::string s)
@@ -612,9 +1063,9 @@ bool NC_STACK_ypaworld::ProtosInit()
     _vhclProtos.resize(NUM_VHCL_PROTO);
     _weaponProtos.resize(NUM_WEAPON_PROTO);
     _buildProtos.resize(NUM_BUILD_PROTO);
-    
+
     _roboProtos.reserve(NUM_ROBO_PROTO);
-    _roboProtos.resize(1);    
+    _roboProtos.resize(1);
 
     if ( !LoadProtosScript(_initScriptFilePath) )
         return false;
@@ -723,7 +1174,7 @@ size_t NC_STACK_ypaworld::Init(IDVList &stak)
     _doEnergyRecalc = stak.Get<bool>(YW_ATT_DOENERGYRECALC, true);
 
     _buildDate = stak.Get<std::string>(YW_ATT_BUILD_DATE, "");
-    
+
     for (char &chr : _buildDate)
     {
         chr = toupper(chr);
@@ -750,7 +1201,7 @@ size_t NC_STACK_ypaworld::Init(IDVList &stak)
     }
 
     _cells.Clear();
-    
+
     if ( !yw_InitSceneRecorder(this) )
     {
         ypa_log_out("yw_main.c/OM_NEW: init scene recorder failed!\n");
@@ -760,9 +1211,9 @@ size_t NC_STACK_ypaworld::Init(IDVList &stak)
 
     _shellGfxMode = Common::Point( GFX::DEFAULT_WIDTH, GFX::DEFAULT_HEIGHT );
     _gfxMode = Common::Point( GFX::DEFAULT_WIDTH, GFX::DEFAULT_HEIGHT );
-    
-    
-            
+
+
+
     _shellDefaultRes = Common::Point(640, 480);
     _gameDefaultRes = Common::Point(640, 480);
 
@@ -781,7 +1232,7 @@ size_t NC_STACK_ypaworld::Init(IDVList &stak)
     }
 
     _doNotRender = false;
-    
+
     UpdateGuiSettings();
 
     return 1;
@@ -948,7 +1399,7 @@ size_t NC_STACK_ypaworld::Process(base_64arg *arg)
             HistoryEventAdd(World::History::Frame(_timeStamp));
 
         uint32_t v22 = profiler_begin();
-        
+
         if ( _isNetGame && !gameplayFrozen )
             yw_NetMsgHndlLoop(this);
 
@@ -1022,7 +1473,7 @@ size_t NC_STACK_ypaworld::Process(base_64arg *arg)
             _ownerOldCellUserUnit = _userUnit->_pSector->owner;
 
             uint32_t v37 = profiler_begin();
-            
+
             // Do user commands before any unit state can be changed
             if (_userRobo)
             {
@@ -1112,10 +1563,10 @@ size_t NC_STACK_ypaworld::Process(base_64arg *arg)
             }
 
             //ypaworld_func64__sub22(this); // scene events
-            
+
             if (_script && !gameplayFrozen)
                 _script->CallUpdate(_timeStamp, arg->DTime);
-                        
+
             if ( !gameplayFrozen )
                 VoiceMessageUpdate(); // update sound messages
 
@@ -1140,7 +1591,7 @@ size_t NC_STACK_ypaworld::Process(base_64arg *arg)
                     if ( _isNetGame )
                         yw_NetDrawStats(this);
                 }
-                
+
                 debug_info_draw(arg->field_8);
 
                 GFX::Engine.EndFrame();
@@ -1372,7 +1823,7 @@ void NC_STACK_ypaworld::yw_ActivateWunderstein(cellArea *cell, int gemid)
 void sub_44FD6C(NC_STACK_ypaworld *yw, const cellArea &cell, int bldX, int bldY)
 {
     Common::Point dist = yw->_viewerBact->_cellId.AbsDistance( cell.CellId );
-  
+
     if ( dist.x + dist.y <= (yw->_renderSectors - 1) / 2 )
     {
         const TLego &v10 = yw->_legoArray[  yw->GetLegoBld(&cell, bldX, bldY) ];
@@ -1385,7 +1836,7 @@ void sub_44FD6C(NC_STACK_ypaworld *yw, const cellArea &cell, int bldX, int bldY)
             ttt.x += (bldX - 1) * 300.0;
             ttt.z += (bldY - 1) * 300.0;
         }
-        
+
         for (const TLego::ExFX &fx : v10.Explosions)
         {
             if ( fx.Index >= yw->_fxLimit )
@@ -1548,7 +1999,7 @@ void NC_STACK_ypaworld::ypaworld_func129(yw_arg129 *arg)
                     if ( _isNetGame )
                         sub_47C29C(this, &cell, cell.PurposeIndex);
                     else
-                        yw_ActivateWunderstein(&cell, cell.PurposeIndex);                  
+                        yw_ActivateWunderstein(&cell, cell.PurposeIndex);
 
                     HistoryEventAdd( World::History::Upgrade(sec.x, sec.y, cell.owner, _techUpgrades[ _upgradeId ].Type, _upgradeVehicleId, _upgradeWeaponId, _upgradeBuildId) );
                 }
@@ -1574,7 +2025,7 @@ void NC_STACK_ypaworld::ypaworld_func129(yw_arg129 *arg)
 size_t NC_STACK_ypaworld::GetSectorInfo(yw_130arg *arg)
 {
     arg->CellId = World::PositionToSectorID( arg->pos_x, arg->pos_z );
-    
+
     if ( !IsSector( arg->CellId ) )
     {
         ypa_log_out("YWM_GETSECTORINFO %d %d max: %d %d\n", arg->CellId.x, arg->CellId.y, _mapSize.x, _mapSize.y);
@@ -1862,7 +2313,7 @@ size_t NC_STACK_ypaworld::ypaworld_func145(NC_STACK_ypabact *bact)
                 return 1;
         }
 
-        
+
         for ( NC_STACK_ypabact* &comm : station->_kidList ) // Squad comms
         {
             if ( comm->_status_flg & BACT_STFLAG_ISVIEW )
@@ -1926,12 +2377,12 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_viewer_radius = vhcl.vwr_radius;
 
         // OpenUA: universal compound collision spheres. Authored coll_* spheres
-        // win. If no coll_* and no explicit radius were written, generate a
-        // modern compound footprint from the visible VP; radius remains the
-        // vanilla/legacy fallback and broad-phase value.
+        // win. Missing radius selects automatic collision implicitly, while
+        // auto_collision selects it explicitly and retains radius as metadata.
         World::rbcolls spawnColl = vhcl.coll;
         bool useAutoCollisionSpheres = vhcl.model_id != BACT_TYPES_ROBO &&
-                                       !vhcl.coll_defined && !vhcl.radius_defined;
+                                       !vhcl.coll_defined &&
+                                       (vhcl.auto_collision || !vhcl.radius_defined);
         if ( useAutoCollisionSpheres && spawnColl.roboColls.empty() )
         {
             auto getModel = [this](int16_t id) -> NC_STACK_base *
@@ -1949,13 +2400,26 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
             if ( !autoCollVP )
                 autoCollVP = getModel(vhcl.vp_genesis);
 
-            spawnColl = yw_GenerateAutoCollSpheresFromVP(autoCollVP, vhcl.vp_scale, vhcl.vp_orientation);
+            spawnColl = yw_GenerateAutoCollSpheresFromVP(autoCollVP, vhcl.vp_scale,
+                                                         vhcl.vp_orientation, true, true);
 
             // Cache successful generation in the shared prototype. This keeps
             // repeated spawns cheap while preserving coll_defined=false, so the
             // data still knows these were automatic, not authored.
             if ( !spawnColl.roboColls.empty() )
                 vhcl.coll = spawnColl;
+        }
+
+        // Automatic collision must never fall back invisibly to the red legacy
+        // body. VPs without usable polygon geometry use one compound fallback
+        // sphere based on the compatibility radius.
+        if ( useAutoCollisionSpheres && spawnColl.roboColls.empty() &&
+             vhcl.radius > 0.01 )
+        {
+            World::TRoboColl fallback;
+            fallback.robo_coll_radius = vhcl.radius;
+            spawnColl.roboColls.push_back(fallback);
+            vhcl.coll = spawnColl;
         }
 
         bacto->_collNodes = spawnColl;
@@ -2010,7 +2474,6 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_mgun_angle = vhcl.mgun_angle;
         bacto->_mgun_power_set = vhcl.mgun_power_set;
         bacto->_mgun_angle_set = vhcl.mgun_angle_set;
-        bacto->_mgun_ai_range = vhcl.mgun_ai_range > 0.0 ? vhcl.mgun_ai_range : 1000.0;
         bacto->_mgun_ai_fire_alignment = vhcl.mgun_ai_fire_alignment;
         bacto->_mgun_damage_sectors = vhcl.mgun_damage_sectors;
         bacto->_mgun_sector_damage_accum = 0.0;
@@ -2145,7 +2608,7 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_scale_accel = vhcl.scale_fx_p2;
         bacto->_scale_duration = vhcl.scale_fx_p3;
         bacto->_scale_pos = 0;
-        
+
         bacto->_hidden = vhcl.hidden;
         bacto->_unhideRadar = vhcl.unhideRadar;
 
@@ -2319,10 +2782,10 @@ NC_STACK_ypamissile * NC_STACK_ypaworld::ypaworld_func147(ypaworld_arg146 *arg)
     wobj->_vp_trail_tint = wproto.vp_trail_tint;
     wobj->_vp_trail_spin_speed = wproto.vp_trail_spin;
 
-    // Physical projectiles without an authored radius use the same cached VP
-    // compound generation as vehicles. Beam weapons keep radius as hitscan
-    // thickness and never enter this path.
-    bool useAutoCollisionSpheres = !wproto.radius_defined &&
+    // Physical projectiles use the same cached VP compound generation as
+    // vehicles when radius is absent or auto_collision is explicit. Beam
+    // weapons keep radius as hitscan thickness and never enter this path.
+    bool useAutoCollisionSpheres = (wproto.auto_collision || !wproto.radius_defined) &&
                                    !wproto.IsLaser() && !wproto.IsVerticalLaser();
     World::rbcolls spawnColl = wproto.coll;
     if ( useAutoCollisionSpheres && spawnColl.roboColls.empty() )
@@ -2343,6 +2806,7 @@ NC_STACK_ypamissile * NC_STACK_ypaworld::ypaworld_func147(ypaworld_arg146 *arg)
             autoCollVP = getModel(wproto.vp_genesis);
 
         spawnColl = yw_GenerateAutoCollSpheresFromVP(autoCollVP, wproto.vp_scale, wproto.vp_orientation);
+        yw_SimplifyAutoWeaponCollSpheres(&spawnColl);
         if ( !spawnColl.roboColls.empty() )
             wproto.coll = spawnColl;
     }
@@ -2354,7 +2818,8 @@ NC_STACK_ypamissile * NC_STACK_ypaworld::ypaworld_func147(ypaworld_arg146 *arg)
         if ( sphere.robo_coll_radius <= 0.01 )
             continue;
 
-        float extent = sphere.coll_pos.length() + sphere.robo_coll_radius;
+        float hitPadding = wproto.radius_defined ? wproto.radius : 0.0f;
+        float extent = sphere.coll_pos.length() + sphere.robo_coll_radius + hitPadding;
         if ( extent > wobj->_radius )
             wobj->_radius = extent;
     }
@@ -2404,30 +2869,8 @@ NC_STACK_ypamissile * NC_STACK_ypaworld::ypaworld_func147(ypaworld_arg146 *arg)
                          wproto.aoe_sector_radius, wproto.aoe_sector_energy,
                          wproto.aoe_falloff);
     wobj->SetAoeUnitPush(wproto.aoe_unit_push);
-    wobj->SetAoeUnitPushAtDeath(wproto.aoe_unit_push_at_death);
     wobj->SetDirectPush(wproto.push);
-    wobj->SetPushAtDeath(wproto.push_at_death);
     wobj->SetArmorPenetrationTargets(wproto.armor_penetration_targets);
-
-    /* Original bug caused by mixing vararg and float values
-       that does not passed as 32-bit float value and
-       instead it was passed as 64-bit floats, so it's
-       break TAG-Val array alignment.*/
-    
-    if (_fixWeaponRadius)
-    {
-        wobj->SetRadiusHeli(wproto.radius_heli);
-        wobj->SetRadiusTank(wproto.radius_tank);
-        wobj->SetRadiusFlyer(wproto.radius_flyer);
-        wobj->SetRadiusRobo(wproto.radius_robo);
-    }
-    else
-    {
-        wobj->SetRadiusHeli(0.0);
-        wobj->SetRadiusTank(0.0);
-        wobj->SetRadiusFlyer(0.0);
-        wobj->SetRadiusRobo(0.0);
-    }
 
     wobj->_soundcarrier.Resize(wproto.sndFXes.size());
 
@@ -2516,18 +2959,18 @@ NC_STACK_ypamissile * NC_STACK_ypaworld::ypaworld_func147(ypaworld_arg146 *arg)
 
 size_t NC_STACK_ypaworld::ypaworld_func148(ypaworld_arg148 *arg)
 {
-    if (  !arg->field_C 
-       && !_allowMultiBuildLevel 
+    if (  !arg->field_C
+       && !_allowMultiBuildLevel
        && IsAnyBuildingProcess(arg->owner))
             return false;
-        
+
     cellArea &cell = _cells(arg->CellId);
 
     bool UserInSec = false;
 
     for ( NC_STACK_ypabact* &node : cell.unitsList )
     {
-        
+
         if ( _userUnit == node || node->_bact_type == BACT_TYPES_ROBO)
         {
             UserInSec = true;
@@ -2540,7 +2983,7 @@ size_t NC_STACK_ypaworld::ypaworld_func148(ypaworld_arg148 *arg)
 
     if (cell.IsBorder())
         return 0;
-    
+
     if ( cell.PurposeType == cellArea::PT_CONSTRUCTING )
         return 0;
     else if ( UserInSec  && !arg->field_C )
@@ -2557,7 +3000,7 @@ size_t NC_STACK_ypaworld::ypaworld_func148(ypaworld_arg148 *arg)
         sb_0x456384(arg->CellId, arg->owner, arg->blg_ID, arg->field_18 & 1);
     }
     else
-    {        
+    {
         DestroyAllGunsInSector(&cell);
 
         if ( !BuildingConstructBegin(&cell, arg->blg_ID, arg->owner, World::CVBuildConstructTime) )
@@ -3047,11 +3490,11 @@ bool NC_STACK_ypaworld::InitGameShell(UserData *usr)
 
     usr->IgnoreScoreSaving = true;
     usr->diskListActiveElement = 0;
-    usr->inpListActiveElement = 1;   
+    usr->inpListActiveElement = 1;
 
-    usr->samples1_info.Clear();    
+    usr->samples1_info.Clear();
     usr->samples1_info.Resize(World::SOUND_ID_MAX);
-    
+
 //    for (TSoundSource &snd : usr->samples1_info.Sounds)
 //    {
 //        snd.Volume = 127;
@@ -3063,10 +3506,10 @@ bool NC_STACK_ypaworld::InitGameShell(UserData *usr)
         ypa_log_out("Error: Unable to load from Shell.ini\n");
         return false;
     }
-    
+
     usr->_gfxMode = _gfxMode;
     usr->_gfxModeIndex = GFX::GFXEngine::Instance.GetGfxModeIndex(_gfxMode);
-    
+
     if (usr->_gfxModeIndex < 0)
         usr->_gfxModeIndex = 0;
 
@@ -3185,7 +3628,7 @@ void NC_STACK_ypaworld::DeinitGameShell()
             smpl = NULL;
         }
     }
-    
+
     SFXEngine::SFXe.StopCarrier(&_GameShell->samples1_info);
 }
 
@@ -3436,7 +3879,7 @@ void sb_0x4e75e8__sub0(NC_STACK_ypaworld *yw)
             else
                 minf.Rect = Common::FRect();
         }
-        
+
         SDL_UnlockSurface(bitm->swTex);
     }
 }
@@ -3612,7 +4055,7 @@ bool NC_STACK_ypaworld::CreateSubBarControls(){
     NC_STACK_button::button_64_arg btn_64arg;
     dword_5A50B6_h = _screenSize.x / 4 - 20;
 
-    _GameShell->sub_bar_button = Nucleus::CInit<NC_STACK_button>({ 
+    _GameShell->sub_bar_button = Nucleus::CInit<NC_STACK_button>({
         {NC_STACK_button::BTN_ATT_X, (int32_t)0},
         {NC_STACK_button::BTN_ATT_Y, (int32_t)(_screenSize.y - _fontH)},
         {NC_STACK_button::BTN_ATT_W, (int32_t)_screenSize.x},
@@ -3834,7 +4277,7 @@ bool NC_STACK_ypaworld::CreateInputControls()
 {
     int menuWidth = _screenSize.x * 0.7;
     int posLeftPaddingX = (_screenSize.x - menuWidth) / 2;
-    
+
     GuiList::tInit args;
     args.resizeable = false;
     args.numEntries = World::INPUT_BIND_MAX - 1;
@@ -4123,12 +4566,12 @@ bool NC_STACK_ypaworld::CreateVideoControls()
 {
     int menuWidth = _screenSize.x * 0.7;
     int posLeftPaddingX = (_screenSize.x - menuWidth) / 2;
-    
+
     int v261 = 0;
     int v3 = 0;
 
     const std::vector<GFX::TGFXDeviceInfo> &devices = GFX::Engine.GetDevices();
-    
+
     for ( const GFX::TGFXDeviceInfo &dev : devices )
     {
         if ( dev.isCurrent )
@@ -5306,7 +5749,7 @@ bool NC_STACK_ypaworld::CreateDiskControls()
 {
     int menuWidth = _screenSize.x * 0.7;
     int posLeftPaddingX = (_screenSize.x - menuWidth) / 2;
-    
+
     GuiList::tInit args;
     args = GuiList::tInit();
     args.resizeable = false;
@@ -5509,7 +5952,7 @@ bool NC_STACK_ypaworld::CreateDiskControls()
             }
         }
     }
-    
+
     if ( !v70 )
     {
         ypa_log_out("Unable to add button to disk-buttonobject\n");
@@ -5531,7 +5974,7 @@ bool NC_STACK_ypaworld::CreateLocaleControls()
 {
     int menuWidth = _screenSize.x * 0.7;
     int posLeftPaddingX = (_screenSize.x - menuWidth) / 2;
-    
+
     GuiList::tInit args;
     args = GuiList::tInit();
     args.resizeable = false;
@@ -6010,7 +6453,7 @@ bool NC_STACK_ypaworld::CreateDatabaseControls()
 bool NC_STACK_ypaworld::CreateNetworkControls()
 {
     int posLeftPaddingX = (_screenSize.x * 0.3) / 2;
-    
+
     GuiList::tInit args;
     args = GuiList::tInit();
     args.resizeable = false;
@@ -6531,7 +6974,7 @@ bool NC_STACK_ypaworld::OpenGameShell()
 
     GFX::Engine.SetCursor(v233.pointer_id, 0);
 
-    
+
 
     if ( _GameShell->GFXFlags & World::GFX_FLAG_SOFTMOUSE )
     {
@@ -6544,7 +6987,7 @@ bool NC_STACK_ypaworld::OpenGameShell()
 
     LoadKeyNames();
 
-    
+
     _GameShell->InputConfigTitle[World::INPUT_BIND_PAUSE]       = Locale::Text::Inputs(Locale::INPUTS_PAUSE);
     _GameShell->InputConfigTitle[World::INPUT_BIND_QUIT]        = Locale::Text::Inputs(Locale::INPUTS_QUIT);
     _GameShell->InputConfigTitle[World::INPUT_BIND_DRIVE_DIR]   = Locale::Text::Inputs(Locale::INPUTS_DRIVEDIR);
@@ -6592,7 +7035,7 @@ bool NC_STACK_ypaworld::OpenGameShell()
     _GameShell->InputConfigTitle[World::INPUT_BIND_ANALYZER]    = Locale::Text::Inputs(Locale::INPUTS_ANALYZER);
     _GameShell->InputConfigTitle[World::INPUT_BIND_COCKPIT_CAMERA] = "Toggle Cockpit Camera";
 
- 
+
 
     if ( _screenSize.x < 512 )
     {
@@ -6616,7 +7059,7 @@ bool NC_STACK_ypaworld::OpenGameShell()
         word_5A50BA = 500;
         word_5A50BE = 480;
     }
-    
+
     int menuWidth = _screenSize.x * 0.7;
     int menuHeight = _screenSize.y * 0.8;
 
@@ -6624,7 +7067,7 @@ bool NC_STACK_ypaworld::OpenGameShell()
     if ( _screenSize.x >= 512 )
         scaledFontHeight += (_screenSize.y - 384) / 2;
 
-    
+
 
     if ( _screenSize.x < 512 )
         bottomButtonsY = menuHeight - _fontH;
@@ -6643,13 +7086,13 @@ bool NC_STACK_ypaworld::OpenGameShell()
     printf("Creating CreateSubBarControls\n");
     if (!this->CreateSubBarControls()) return false;
     printf("Creating CreateConfirmControls\n");
-    if (!this->CreateConfirmControls()) return false;    
+    if (!this->CreateConfirmControls()) return false;
 
 
     dword_5A50B2_h = menuWidth - _fontVBScrollW;
 
-    
-    printf("Creating CreateInputControls\n");    
+
+    printf("Creating CreateInputControls\n");
     if (!this->CreateInputControls()) return false;
     printf("Creating CreateVideoControls\n");
     if (!this->CreateVideoControls()) return false;
@@ -6728,7 +7171,7 @@ bool NC_STACK_ypaworld::OpenGameShell()
 void NC_STACK_ypaworld::CloseGameShell()
 {
     if ( _GameShell->HasInited )
-    {       
+    {
         if ( _GameShell->confirm_button )
         {
             _GameShell->confirm_button->HideScreen();
@@ -6867,7 +7310,7 @@ void draw_tooltip(NC_STACK_ypaworld *yw)
     {
         int v15 = -(yw->_fontH + yw->_downScreenBorder + yw->_fontH / 4);
         std::string v2;
-        
+
         if ( yw->_toolTipHotKeyId != -1 )
         {
             int16_t keycode = Input::Engine.GetHotKey(yw->_toolTipHotKeyId);
@@ -6906,7 +7349,7 @@ void draw_tooltip(NC_STACK_ypaworld *yw)
 
         GFX::Engine.ProcessDrawSeq(buf);
     }
-    
+
     yw->_toolTipHotKeyId = -1;
     yw->_toolTipId = 0;
 }
@@ -6915,7 +7358,7 @@ void draw_tooltip(NC_STACK_ypaworld *yw)
 void sub_4476AC(NC_STACK_ypaworld *yw)
 {
     GFX::Engine.SaveScreenshot(fmt::sprintf("env:snaps/f_%04d", yw->_screenShotCount));
-    
+
     yw->_screenShotCount++;
 }
 
@@ -6970,11 +7413,11 @@ void NC_STACK_ypaworld::ProcessGameShell()
     SFXEngine::SFXe.UpdateSoundCarrier(&_GameShell->samples1_info);
 
     SFXEngine::SFXe.sb_0x424c74();
-    
+
 
     GFX::Engine.EndFrame();
 
-    
+
     if ( sub_449678(_GameShell->Input, Input::KC_NUMMUL) )
         sub_4476AC(this);
 
@@ -7133,7 +7576,7 @@ size_t NC_STACK_ypaworld::ypaworld_func161(yw_arg161 *arg)
 {
     int ok = 0;
     TLevelDescription mapp;
-    
+
     _particles.Clear();
 
     if ( LevelCommonLoader(&mapp, arg->lvlID, arg->field_4) )
@@ -7169,7 +7612,7 @@ size_t NC_STACK_ypaworld::ypaworld_func161(yw_arg161 *arg)
                                 UpdatePowerEnergy();
                                 TryActivateSpectatorMode();
                             }
-                            
+
                             PrepareAllFillers();
 
                             if ( sb_0x451034(this) )
@@ -7224,10 +7667,10 @@ size_t NC_STACK_ypaworld::ypaworld_func162(const std::string &fname)
         else
         {
             repl->mfile.skipChunk();
-        }        
+        }
     }
 
-    
+
     repl->mfile.close();
 
     yw_arg161 arg161;
@@ -7408,7 +7851,7 @@ void NC_STACK_ypaworld::ypaworld_func165(yw_arg165 *arg)
 size_t NC_STACK_ypaworld::ypaworld_func166(const std::string &langname)
 {
     Locale::Text::SetLangDefault();
-    
+
     Locale::Text::SetLocaleName(langname);
 
     if ( !Locale::Text::LngFileLoad( fmt::sprintf("locale:%s.lng", langname) ) )
@@ -7416,7 +7859,7 @@ size_t NC_STACK_ypaworld::ypaworld_func166(const std::string &langname)
         Locale::Text::SetLangDefault();
         return 0;
     }
-    
+
     std::string fontStr;
 
     if ( _screenSize.x >= 512 )
@@ -7635,7 +8078,7 @@ int NC_STACK_ypaworld::LoadingParseSaveFile(const std::string &filename)
         new World::Parsers::SaveMasksParser(this),
         new World::Parsers::SaveSuperBombParser(this),
     };
-    
+
     parsers.push_back( new World::Parsers::SaveLuaScriptParser(this) );
 
     return ScriptParser::ParseFile(filename, parsers, ScriptParser::FLAG_NO_SCOPE_SKIP);
@@ -7682,7 +8125,7 @@ size_t NC_STACK_ypaworld::LoadGame(const std::string &saveFile)
     }
 
     int lvlnum;
-    
+
     ScriptParser::HandlersList parsers
     {
         new World::Parsers::SaveLevelNumParser(this, &lvlnum),
@@ -7694,7 +8137,7 @@ size_t NC_STACK_ypaworld::LoadGame(const std::string &saveFile)
     _extraViewEnable = false;
 
     TLevelDescription mapp;
-    
+
     _particles.Clear();
 
     if ( LevelCommonLoader(&mapp, lvlnum, 0) )
@@ -7753,7 +8196,7 @@ size_t NC_STACK_ypaworld::LoadGame(const std::string &saveFile)
 
     InitGates();
     UpdatePowerEnergy();
-    
+
     PrepareAllFillers();
 
     if ( !sb_0x451034(this) )
@@ -7790,7 +8233,7 @@ size_t NC_STACK_ypaworld::SaveGame(const std::string &saveFile)
         write_modifers = 1;
         write_user = 1;
     }
-    
+
     // Force to write last frame timestamp into history
     if (_historyLastIsTimeStamp)
         _history.Write( _historyLastFrame.MakeByteArray() );
@@ -7863,11 +8306,11 @@ size_t NC_STACK_ypaworld::SaveGame(const std::string &saveFile)
             yw_write_masks(this, fil);
         }
     }
-    
+
     if (_script)
     {
         std::string buf = _script->GetSaveString();
-        
+
         if (!buf.empty())
         {
             fil->printf("\nbegin_luascript\n");
@@ -8016,7 +8459,7 @@ size_t NC_STACK_ypaworld::LoadSettings(const std::string &fileName, const std::s
         ypa_log_out("Error while loading information from %s\n", fileName.c_str());
         return 0;
     }
-    
+
     if (playIntro && !_GameShell->remoteMode)
     {
         SetGameShellVideoMode( _GameShell->IsWindowedFlag() );
@@ -8028,7 +8471,7 @@ size_t NC_STACK_ypaworld::LoadSettings(const std::string &fileName, const std::s
         ypa_log_out("Unable to open GameShell\n");
         return 0;
     }
-    
+
 
     if ( (sdfMask & World::SDF_SCORE) && (_GameShell->savedDataFlags & World::SDF_SCORE) )
     {
@@ -8105,7 +8548,7 @@ bool NC_STACK_ypaworld::ReloadInput(size_t id)
 size_t NC_STACK_ypaworld::SetGameShellVideoMode(bool windowed)
 {
     UserData *usr = _GameShell;
-    
+
     if (System::IniConf::MenuWindowed.Get<bool>())
         windowed = true;
 
@@ -8245,7 +8688,7 @@ void NC_STACK_ypaworld::ypaworld_func177(yw_arg177 *arg)
                     sub_47C29C(this, &v15, v15.PurposeIndex);
                 else
                     yw_ActivateWunderstein(&v15, v15.PurposeIndex);
-                
+
                 HistoryEventAdd( World::History::Upgrade(j, i, v15.owner, _techUpgrades[ _upgradeId ].Type, _upgradeVehicleId, _upgradeWeaponId, _upgradeBuildId) );
             }
 
@@ -8263,7 +8706,7 @@ void NC_STACK_ypaworld::ypaworld_func180(yw_arg180 *arg)
         if ( _preferences & (World::PREF_JOYDISABLE | World::PREF_FFDISABLE) )
             return;
     }
-    
+
     switch ( arg->effects_type )
     {
     case 0:
@@ -8315,9 +8758,9 @@ bool NC_STACK_ypaworld::NetBroadcastMessage(uamessage_base *data, size_t dataSiz
 {
     if (_GameShell->noSent)
         return false;
-    
+
     if ( _GameShell->netPlayerOwner != 0 && data->msgID != UAMSG_VHCLENERGY )
-        _GameShell->msgcount++; 
+        _GameShell->msgcount++;
 
     return _netDriver->Broadcast(data, dataSize, garantee);
 }
@@ -8377,20 +8820,20 @@ void NC_STACK_ypaworld::HistoryEventAdd(const World::History::Record &arg)
         _historyLastIsTimeStamp = true;
         _historyLastFrame = static_cast<const World::History::Frame&>(arg);
         break;
-                
+
     case World::History::TYPE_CONQ:
     case World::History::TYPE_VHCLKILL:
     case World::History::TYPE_VHCLCREATE:
     case World::History::TYPE_POWERST:
     case World::History::TYPE_UPGRADE:
-        
+
         if (_historyLastIsTimeStamp) // If
             _history.Write(_historyLastFrame.MakeByteArray());
-            
+
         _history.Write(arg.MakeByteArray());
-        
+
         _historyLastIsTimeStamp = false;
-        
+
         if (_GameShell && _GameShell->isHost )
             arg.AddScore(&_gameplayStats);
         break;
@@ -8399,7 +8842,7 @@ void NC_STACK_ypaworld::HistoryEventAdd(const World::History::Record &arg)
         break;
     }
 
-    
+
 }
 
 
@@ -8694,7 +9137,7 @@ void NC_STACK_ypaworld::UpdateGuiSettings()
     Gui::UA::_UATextColor = _iniColors[60];
     Gui::UA::_UAButtonTextColor = _iniColors[68];
 
-    
+
 
     /*for (uint8_t i = 0; i < ypaworld.tiles.size(); i++)
         Gui::UA::_UATiles[i] = ypaworld.tiles[i];*/
@@ -8708,7 +9151,7 @@ void NC_STACK_ypaworld::LoadGuiFonts()
     Gui::UA::_UATiles[Gui::UA::TILESET_46MAPC16] = yw_LoadFont("mapcur16.font"); //18
     Gui::UA::_UATiles[Gui::UA::TILESET_46MAPC32] = yw_LoadFont("mapcur32.font"); //19
     Gui::UA::_UATiles[Gui::UA::TILESET_46ENERGY] = yw_LoadFont("energy.font"); //30
-    
+
     Common::Env.SetPrefix("rsrc", "data:fonts");
     Gui::UA::_UATiles[Gui::UA::TILESET_DEFAULT]     = yw_LoadFont("default.font"); //0
     Gui::UA::_UATiles[Gui::UA::TILESET_MENUGRAY]    = yw_LoadFont("menugray.font"); //6
@@ -8718,7 +9161,7 @@ void NC_STACK_ypaworld::LoadGuiFonts()
     Gui::UA::_UATiles[Gui::UA::TILESET_MAPVERT]     = yw_LoadFont("mapvert.font"); //12
     Gui::UA::_UATiles[Gui::UA::TILESET_MAPVERT1]    = yw_LoadFont("mapvert1.font"); //13
 
-    Common::Env.SetPrefix("rsrc", old);    
+    Common::Env.SetPrefix("rsrc", old);
 }
 
 void NC_STACK_ypaworld::CreateNewGuiElements()
@@ -8745,10 +9188,10 @@ cellArea *NC_STACK_ypaworld::GetSector(int32_t x, int32_t y)
 {
     if (_cells.empty())
         return NULL;
-    
+
     if (x >= 0 && x < _mapSize.x
     &&  y >= 0 && y < _mapSize.y)
-        return &_cells(x, y); 
+        return &_cells(x, y);
     return NULL;
 }
 
@@ -8756,10 +9199,10 @@ cellArea *NC_STACK_ypaworld::GetSector(const Common::Point &sec)
 {
     if (_cells.empty())
         return NULL;
-    
+
     if (sec.x >= 0 && sec.x < _mapSize.x
     &&  sec.y >= 0 && sec.y < _mapSize.y)
-        return &_cells(sec.x, sec.y); 
+        return &_cells(sec.x, sec.y);
     return NULL;
 }
 
@@ -8767,7 +9210,7 @@ cellArea *NC_STACK_ypaworld::GetSector(size_t id)
 {
     if (_cells.empty())
         return NULL;
-    
+
     if (id >= 0 && id < _cells.size())
         return &_cells.At(id);
     return NULL;
@@ -8793,10 +9236,10 @@ void NC_STACK_ypaworld::SetMapSize(const Common::Point &sz)
     _mapSize = sz;
 
     _mapLength = vec2d( _mapSize.x * World::CVSectorLength, _mapSize.y * World::CVSectorLength );
-    
+
     _cells.Clear();
     _cells.Resize(sz);
-    
+
     int32_t id = 0;
     for (int y = 0; y < sz.y; y++)
     {
@@ -8805,20 +9248,20 @@ void NC_STACK_ypaworld::SetMapSize(const Common::Point &sz)
             cellArea &cell = _cells(x, y);
             cell.Id = id;
             cell.CellId = Common::Point(x, y);
-            
+
             if (x == 0 || y == 0 || x == sz.x - 1 || y == sz.y - 1)
                 cell.Flags |= cellArea::CF_BORDER;
-            
+
             id++;
         }
     }
-    
+
     _cellsVFCache.Clear();
     _cellsVFCache.Resize(sz.x, sz.y);
-    
+
     _cellsHFCache.Clear();
     _cellsHFCache.Resize(sz.x, sz.y);
-    
+
     _energyAccumMap.Clear();
     _energyAccumMap.Resize(sz);
 }

@@ -937,6 +937,6 @@ void GuiList::Free()
     scrollbar.clear();
     cmdInclude.clear();
     iconString.clear();
-    
+
     buttons.clear();
 }

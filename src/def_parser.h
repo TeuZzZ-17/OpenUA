@@ -83,7 +83,7 @@ public:
 public:
     /** Useable from handlers **/
     bool ReadLine(std::string *out);
-    
+
     long stol(const std::string& str, std::size_t* __idx = 0, int __base = 10);
     int stoi(const std::string& str, std::size_t* __idx = 0, int __base = 10);
     float stof(const std::string& str, std::size_t* __idx = 0);
@@ -93,7 +93,7 @@ private:
     Parser(const std::string &name) : _Name(name), _file(NULL), _line(0), _mode(MODE_NO) {};
     int ParseRoutine(const std::string &filename, HandlersList &callbacks, int flags);
     bool ParseNextLine(std::string *p1, std::string *p2);
-    
+
 public:
     const std::string _Name;
 private:

@@ -18,13 +18,13 @@ Widget::Widget(Widget *parent)
 Widget::~Widget()
 {
     Unparent();
-    
+
     if (_hwSurface)
         SDL_FreeSurface(_hwSurface);
-    
+
     if (_hwTex)
         delete _hwTex;
-    
+
     for ( auto x : _childs )
     {
         x->_parent = NULL;
@@ -36,7 +36,7 @@ void Widget::AddChild(Widget *child, bool top)
 {
     child->Unparent();
     child->_parent = this;
-    
+
     if (child->_modal)
     {
         top = true;
@@ -47,7 +47,7 @@ void Widget::AddChild(Widget *child, bool top)
         _childs.push_front(child);
     else
         _childs.push_back(child);
-    
+
     child->OnAttachDetach(true);
 }
 
@@ -56,7 +56,7 @@ void Widget::RemoveChild(Widget *child)
     _modals.remove(child);
     _childs.remove(child);
     child->_parent = NULL;
-    
+
     child->OnAttachDetach(false);
 }
 
@@ -97,10 +97,10 @@ bool Widget::IsLOn(int x, int y) const
 Common::Point Widget::ScreenCoordToClient(Common::Point pos) const
 {
     Common::Point p = pos - GetOnParentPos();
-    
+
     if (_flags & FLAG_CLIENT)
         p -= _client.Pos();
-    
+
     for (Widget *par = _parent; par; par = par->_parent)
         p -= par->GetOnParentPos();
     return p;
@@ -109,7 +109,7 @@ Common::Point Widget::ScreenCoordToClient(Common::Point pos) const
 Common::Point Widget::ScreenCoordToWidget(Common::Point pos) const
 {
     Common::Point p = pos - GetOnParentPos();
-    
+
     for (Widget *par = _parent; par; par = par->_parent)
         p -= par->GetOnParentPos();
     return p;
@@ -129,7 +129,7 @@ Common::Rect Widget::GetScreenVisibleRect() const
 {
     Common::Rect tmp = _rect;
     bool primer = (_flags & FLAG_PRIVATE) != 0;
-    
+
     for (Widget *par = _parent; par; par = par->_parent)
     {
         if ( !primer && (par->_flags & FLAG_CLIENT) )
@@ -137,13 +137,13 @@ Common::Rect Widget::GetScreenVisibleRect() const
             tmp.Translate(par->_client.Pos());
             tmp.ClipBy(par->_client);
         }
-        
+
         tmp.Translate(par->_rect.Pos());
         tmp.ClipBy(par->_rect);
-        
+
         if (tmp.IsEmpty())
             return Common::Rect();
-        
+
         primer = (par->_flags & FLAG_PRIVATE) != 0;
     }
     return tmp;
@@ -153,9 +153,9 @@ Common::Rect Widget::GetWidgetVisibleRect() const
 {
     Common::Rect tmp = _rect;
     bool primer = (_flags & FLAG_PRIVATE) != 0;
-    
+
     Common::Point offset = _rect.Pos();
-    
+
     for (Widget *par = _parent; par; par = par->_parent)
     {
         if ( !primer && (par->_flags & FLAG_CLIENT) )
@@ -164,14 +164,14 @@ Common::Rect Widget::GetWidgetVisibleRect() const
             tmp.Translate(par->_client.Pos());
             tmp.ClipBy(par->_client);
         }
-        
+
         offset += par->_rect.Pos();
         tmp.Translate(par->_rect.Pos());
         tmp.ClipBy(par->_rect);
-        
+
         if (tmp.IsEmpty())
             return Common::Rect();
-        
+
         primer = (par->_flags & FLAG_PRIVATE) != 0;
     }
     tmp.Translate(-offset);
@@ -185,7 +185,7 @@ Widget *Widget::FindChildLPos(const Common::Point &pos)
 
     Common::Point cliPos = pos;
     bool inCli = true;
-    
+
     if (_flags & FLAG_CLIENT)
     {
         if (!_client.IsEmpty() && _client.IsIn(pos))
@@ -199,7 +199,7 @@ Widget *Widget::FindChildLPos(const Common::Point &pos)
         if (w->IsEnabled())
         {
             if (w->_flags & FLAG_PRIVATE)
-            { 
+            {
                 if (w->_rect.IsIn(pos))
                     return w->FindChildLPos(pos - w->_rect.Pos());
             }
@@ -247,7 +247,7 @@ Widget *Widget::FindChildByMouseLPos(const Common::Point &pos)
                 {
                     Widget * fnd = NULL;
                     if (w->_flags & FLAG_PRIVATE)
-                    { 
+                    {
                         if (w->_rect.IsIn(pos))
                             fnd = w->FindChildByMouseLPos(pos - w->_rect.Pos());
                     }
@@ -256,7 +256,7 @@ Widget *Widget::FindChildByMouseLPos(const Common::Point &pos)
 
                     if (fnd)
                         return fnd;
-                    
+
                     return this;
                 }
             }
@@ -269,25 +269,25 @@ Widget *Widget::FindChildByMouseLPos(const Common::Point &pos)
                 if (w->IsEnabled())
                 {
                     Widget * fnd = NULL;
-                    
+
                     if (w->_flags & FLAG_PRIVATE)
-                    { 
+                    {
                         if (w->_rect.IsIn(pos))
                             fnd = w->FindChildByMouseLPos(pos - w->_rect.Pos());
                     }
                     else if ( inCli && w->_rect.IsIn(cliPos) )
                         fnd = w->FindChildByMouseLPos(cliPos - w->_rect.Pos());
-                    
+
                     if (fnd)
                         return fnd;
                 }
             }
         }
     }
-    
+
     if (_flags & FLAG_INP_SKIP)
         return NULL;
-    
+
     return this;
 }
 
@@ -295,10 +295,10 @@ Widget *Widget::FindByID(uint32_t id, bool enabled)
 {
     if (enabled && !IsEnabled())
         return NULL;
-    
+
     if (_id == id)
         return this;
-    
+
     for(auto w : _childs)
     {
         Widget *t = w->FindByID(id, enabled);
@@ -335,7 +335,7 @@ Common::Rect  Widget::GetSizeRect() const
 Common::Point Widget::GetScreenPos() const
 {
     Common::Point point = GetOnParentPos();
-    
+
     for (Widget *par = _parent; par; par = par->_parent)
         point += par->GetOnParentPos();
 
@@ -346,12 +346,12 @@ void Widget::SetEnable(bool enable)
 {
     bool top = IsRooted() && _parent == NULL;
     bool chg = enable != ((_flags & FLAG_ENABLED) != 0);
-    
+
     if (enable)
         _flags |= FLAG_ENABLED;
     else
         _flags &= ~FLAG_ENABLED;
-    
+
     if (_fOnHideShow && top && chg)
         _fOnHideShow(this, _fOnHideShowData, enable);
 }
@@ -402,15 +402,15 @@ void Widget::Resize(Common::Point sz)
 {
     if (sz.x < 0)
         sz.x = 0;
-    
+
     if (sz.y < 0)
         sz.y = 0;
-    
+
     _rect.SetSize( sz );
-    
+
     if (_fOnResize)
         _fOnResize(this, _fOnResizeData, sz);
-    
+
     for(Widget *w : _childs)
         w->OnParentResize(sz);
 }
@@ -436,14 +436,14 @@ void Widget::MouseMove(Common::Point pos, Common::Point scrPos, int buttons)
 void Widget::MouseEnter()
 {
     _mOver = true;
-    
+
     if (_fOnMouseEnter)
         _fOnMouseEnter(this, _fOnMouseEnterData);
 }
 void Widget::MouseLeave()
 {
     _mOver = false;
-    
+
     if (_fOnMouseLeave)
         _fOnMouseLeave(this, _fOnMouseLeaveData);
 }
@@ -464,7 +464,7 @@ Common::Point Widget::GetSpace() const
         return Root::Instance.GetScreenSize();
     else if (_parent)
         return _parent->GetSize();
-    return Common::Point();        
+    return Common::Point();
 }
 
 void Widget::OnAttachDetach(bool attach)

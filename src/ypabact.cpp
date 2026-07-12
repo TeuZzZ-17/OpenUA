@@ -24,6 +24,29 @@
 int ypabact_id = 1;
 extern int dword_5B1128;
 
+static bool ypabact_IsGenesisSeparationVehicle(const NC_STACK_ypabact *unit)
+{
+    if ( !unit )
+        return false;
+
+    // Apply the safe genesis-only separation to normal buildable vehicle
+    // classes. Guns and Host Stations are deliberately excluded, as are
+    // missiles and generic helper/dummy BACTs.
+    switch ( unit->_bact_type )
+    {
+    case BACT_TYPES_BACT: // model = heli
+    case BACT_TYPES_TANK:
+    case BACT_TYPES_ZEPP:
+    case BACT_TYPES_FLYER:
+    case BACT_TYPES_UFO:
+    case BACT_TYPES_CAR:
+    case BACT_TYPES_HOVER:
+        return true;
+    default:
+        return false;
+    }
+}
+
 static bool ypabact_IsSeekAndExplodeArmed(NC_STACK_ypabact *unit);
 static void ypabact_FireProximityDefenseAtDeath(NC_STACK_ypabact *unit);
 static void ypabact_ApplyDeathDamage(NC_STACK_ypabact *unit, bool megadethPhase);
@@ -79,12 +102,6 @@ static float ypabact_ReadFallDamageMultiplier()
 static bool ypabact_IsCustomFallDamageConfigActive()
 {
     return fabs(ypabact_ReadFallDamageMultiplier() - 1.0f) > 0.0001f;
-}
-
-static bool ypabact_IsCustomUnitCollisionConfigActive()
-{
-    return ypabact_ReadNonNegativeFloatIni(System::IniConf::GameUnitCollisionPush, 0.0f) > 0.0f ||
-           ypabact_ReadNonNegativeFloatIni(System::IniConf::GameUnitCollisionDamageMultiplier, 0.0f) > 0.0f;
 }
 
 static bool ypabact_ShouldPlayCustomAiCrashlandSound(const NC_STACK_ypabact *unit)
@@ -1444,7 +1461,7 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _commandID = 0;
     _host_station = NULL;
     _parent = NULL;
-    
+
     _soundFlags = 0;
     _volume = 0;
     _pitch = 0;
@@ -1572,7 +1589,6 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _mgun_angle = 0.0;
     _mgun_power_set = false;
     _mgun_angle_set = false;
-    _mgun_ai_range = 1000.0;
     _mgun_ai_fire_alignment = 0.85;
     _mgun_damage_sectors = false;
     _mgun_sector_damage_accum = 0.0;
@@ -1683,8 +1699,9 @@ NC_STACK_ypabact::NC_STACK_ypabact()
 
     _oflags = 0;
     _yls_time = 0;
-    
+
     _world = NULL;
+    _deinitInProgress = false;
 }
 
 NC_STACK_ypabact::~NC_STACK_ypabact()
@@ -1716,8 +1733,9 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _weaponRecoilAiRecoveryEndTime = 0;
     _weaponRecoilPlayerRecoveryEndTime = 0;
     _weaponRecoilPushVel = vec3d(0.0, 0.0, 0.0);
+    _deinitInProgress = false;
     _target_vec = vec3d(0.0, 0.0, 0.0);
-    
+
     //_kidRef.bact = this;
 
 
@@ -1985,6 +2003,7 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
 
 size_t NC_STACK_ypabact::Deinit()
 {
+    _deinitInProgress = true;
     SFXEngine::SFXe.StopCarrier(&_soundcarrier);
     SFXEngine::SFXe.StopCarrier(&_debuff_soundcarrier);
     SFXEngine::SFXe.StopCarrier(&_damaged_shake_carrier);
@@ -2013,7 +2032,7 @@ size_t NC_STACK_ypabact::Deinit()
     while (!_missiles_list.empty())
     {
         _missiles_list.front()->Delete();
-        _missiles_list.pop_front();        
+        _missiles_list.pop_front();
     }
 
     return NC_STACK_nucleus::Deinit();
@@ -2677,7 +2696,7 @@ void NC_STACK_ypabact::Update(update_msg *arg)
 {
     if ( _kidRef.IsListType(World::BLIST_CACHE) ) // Do not update units in dead list
         return;
-        
+
     static TF::TForm3D bact_cam;
     TF::Engine.SetViewPoint(&bact_cam);
 
@@ -2749,6 +2768,7 @@ void NC_STACK_ypabact::Update(update_msg *arg)
     UpdateCarrierSpawn(arg);
     UpdateProximityDefense(arg);
     UpdateMortar(arg);
+    ResolveGenesisCompoundOverlap(arg->frameTime);
     AI_layer1(arg);
     UpdateLaser(arg); // OpenUA custom: process this frame's laser fire request (must run after AI_layer1 firing)
     UpdateVerticalLaser(arg);
@@ -2791,7 +2811,7 @@ void NC_STACK_ypabact::Update(update_msg *arg)
 
     arg->units_count = 0;
 
-    /** 
+    /**
      * Because missiles can cause 'ModifyEnergy' and 'Die' methods of upper bact
      * in hierarchy Update->Update - it can remove all bacts from list in
      * iteration. So we just needs to get safe copy of list for modify without
@@ -3167,14 +3187,10 @@ void NC_STACK_ypabact::UpdateDecorationFX(update_msg *)
     ypabact_SpawnDecorationFXEvent(this);
 }
 
-// OpenUA aoe_unit_push knockback.
-// AddAoePush() is called once by the explosion. It converts the requested push
-// distance into a residual velocity so that, integrated and decayed over the
-// next ~AOE_PUSH_TAU seconds, the unit travels about `distance` world units.
-// Using a residual velocity on the unit (rather than moving _position instantly
-// or touching the class-specific _fly_dir physics) makes the knockback both
-// smooth (spread over several frames) and uniform across every vehicle class.
-static const float AOE_PUSH_TAU = 0.30f; // knockback time constant, seconds
+// Smooth, class-independent weapon push used before the physical-push rewrite.
+// The requested value is a world-space travel distance integrated over this
+// time constant, so tanks, aircraft and Host Stations use the same response.
+static const float AOE_PUSH_TAU = 0.30f;
 static const float AOE_PUSH_MAX_DT = 0.05f;
 static const float AOE_PUSH_MAX_STEP = 80.0f;
 static const float WEAPON_RECOIL_TAU = 0.14f;
@@ -3214,36 +3230,6 @@ static bool ypabact_NormalizeXZ(vec3d *dir)
 
     *dir /= dirLen;
     return true;
-}
-
-static bool ypabact_IsUnitCollisionEffectEligible(const NC_STACK_ypabact *unit)
-{
-    if ( !unit || unit->_status == BACT_STATUS_DEAD )
-        return false;
-
-    return unit->_bact_type != BACT_TYPES_GUN &&
-           unit->_bact_type != BACT_TYPES_ROBO &&
-           unit->_bact_type != BACT_TYPES_MISSLE;
-}
-
-static float ypabact_GetPushResistanceMultiplier(NC_STACK_ypabact *unit)
-{
-    if ( !unit || !unit->getBACT_pWorld() )
-        return 1.0f;
-
-    const std::vector<World::TVhclProto> &protos = unit->getBACT_pWorld()->GetVhclProtos();
-    uint8_t protoId = unit->_mimic_disguise_vehicleID ? unit->_mimic_disguise_vehicleID : unit->_vehicleID;
-
-    if ( protoId >= protos.size() )
-        return 1.0f;
-
-    float resistance = protos.at(protoId).push_resistance;
-    if ( resistance < 0.0f )
-        resistance = 0.0f;
-    else if ( resistance > 1.0f )
-        resistance = 1.0f;
-
-    return 1.0f - resistance;
 }
 
 static bool ypabact_SnapAoePushGroundUnit(NC_STACK_ypabact *unit)
@@ -3364,21 +3350,14 @@ static void ypabact_UpdateTankWeaponRecoilVisualOffset(NC_STACK_ypabact *unit, u
 
 void NC_STACK_ypabact::AddAoePush(const vec3d &dir, float distance)
 {
-    // OpenUA custom: flak/turret actors are static defenses. Keep every
-    // model = gun unit immune to the smooth residual knockback system too,
-    // even if a future caller bypasses the missile push filter.
     if ( _bact_type == BACT_TYPES_GUN )
         return;
 
-    if ( distance <= 0.0f )
+    if ( !isfinite(distance) || distance <= 0.0f )
         return;
 
     vec3d pushDir = dir;
 
-    // Air vehicles are extremely sensitive to vertical impulses: after firing or
-    // being hit by aoe_unit_push they can oscillate up/down and fail to land.
-    // Keep the modern push horizontal for airborne vehicles so push remains a
-    // shove, not an altitude-controller problem.
     if ( ypabact_ShouldFlattenAirKnockback(this) )
     {
         if ( !ypabact_NormalizeXZ(&pushDir) )
@@ -3435,57 +3414,6 @@ void NC_STACK_ypabact::ApplyWeaponRecoil(const vec3d &dir, float recoil)
     }
 
     _weaponRecoilPushVel += recoilDir * ((recoil * WEAPON_RECOIL_DISTANCE_PER_UNIT) / WEAPON_RECOIL_TAU);
-}
-
-bool NC_STACK_ypabact::ApplyUnitCollisionEffects(NC_STACK_ypabact *target, const vec3d &dirToTarget, float impactSpeed)
-{
-    if ( !ypabact_IsUnitCollisionEffectEligible(this) || !ypabact_IsUnitCollisionEffectEligible(target) )
-        return false;
-
-    float speed = fabs(impactSpeed);
-    if ( !isfinite(speed) || speed < 0.1f )
-        return false;
-
-    vec3d pushDir = dirToTarget;
-    if ( !ypabact_NormalizeXZ(&pushDir) )
-    {
-        float dirLen = pushDir.length();
-        if ( !isfinite(dirLen) || dirLen <= 0.001f )
-            return false;
-
-        pushDir /= dirLen;
-    }
-
-    bool applied = false;
-    float push = ypabact_ReadNonNegativeFloatIni(System::IniConf::GameUnitCollisionPush, 0.0f);
-    if ( push > 0.0f )
-    {
-        float distance = push * speed;
-        AddAoePush(pushDir * -1.0f, distance * ypabact_GetPushResistanceMultiplier(this));
-        target->AddAoePush(pushDir, distance * ypabact_GetPushResistanceMultiplier(target));
-        applied = true;
-    }
-
-    float damageMult = ypabact_ReadNonNegativeFloatIni(System::IniConf::GameUnitCollisionDamageMultiplier, 0.0f);
-    if ( damageMult > 0.0f )
-    {
-        applied = true;
-        int damage = (int)(speed * 10.0f * damageMult);
-        if ( damage > 0 )
-        {
-            bact_arg84 selfDamage;
-            selfDamage.unit = target;
-            selfDamage.energy = -damage;
-            ModifyEnergy(&selfDamage);
-
-            bact_arg84 targetDamage;
-            targetDamage.unit = this;
-            targetDamage.energy = -damage;
-            target->ModifyEnergy(&targetDamage);
-        }
-    }
-
-    return applied;
 }
 
 void NC_STACK_ypabact::UpdateAoePush(update_msg *arg)
@@ -3657,7 +3585,7 @@ void NC_STACK_ypabact::SetTarget(setTarget_msg *arg)
 {
     _assess_time = 0;
     yw_130arg arg130;
-    
+
     constexpr float CurSectrLength = World::CVSectorLength + 10.0;
 
     if ( _status_flg & BACT_STFLAG_DEATH1 && arg->tgt_type == BACT_TGT_TYPE_UNIT )
@@ -3893,10 +3821,10 @@ void NC_STACK_ypabact::AI_layer1(update_msg *arg)
     _soundcarrier.Sounds[0].Pitch = _pitch;
     _soundcarrier.Sounds[0].Volume = _volume;
 
-    if ( _clock - _AI_time1 < 250 || 
-         _primTtype == BACT_TGT_TYPE_DRCT || 
-         _bact_type == BACT_TYPES_GUN || 
-         _status == BACT_STATUS_DEAD || 
+    if ( _clock - _AI_time1 < 250 ||
+         _primTtype == BACT_TGT_TYPE_DRCT ||
+         _bact_type == BACT_TYPES_GUN ||
+         _status == BACT_STATUS_DEAD ||
          _status == BACT_STATUS_BEAM ||
          _status == BACT_STATUS_CREATE )
     {
@@ -3991,7 +3919,7 @@ void NC_STACK_ypabact::AI_layer1(update_msg *arg)
 
     if ( _oflags & BACT_OFLAG_USERINPT )
     {
-        if ( _primTtype == BACT_TGT_TYPE_UNIT && 
+        if ( _primTtype == BACT_TGT_TYPE_UNIT &&
              _primT.pbact )
         {
             if ( !_primT.pbact->_pSector->IsCanSee(_owner) )
@@ -4018,25 +3946,25 @@ void NC_STACK_ypabact::AI_layer1(update_msg *arg)
 void NC_STACK_ypabact::AI_layer2(update_msg *arg)
 {
     constexpr float CurSectrLength = 1.05 * World::CVSectorLength;
-    
-    if ( (_clock - _AI_time2) < 250 
-       || _owner == 0 
-       || _secndTtype == BACT_TGT_TYPE_DRCT 
-       || _status == BACT_STATUS_CREATE 
-       || _status == BACT_STATUS_DEAD 
+
+    if ( (_clock - _AI_time2) < 250
+       || _owner == 0
+       || _secndTtype == BACT_TGT_TYPE_DRCT
+       || _status == BACT_STATUS_CREATE
+       || _status == BACT_STATUS_DEAD
        || _status == BACT_STATUS_BEAM )
     {
         if ( _oflags & BACT_OFLAG_USERINPT )
             User_layer(arg);
         else
             AI_layer3(arg);
-        
+
         return;
     }
-    
+
     _AI_time2 = _clock;
 
-    if ( _status_flg & BACT_STFLAG_ESCAPE && 
+    if ( _status_flg & BACT_STFLAG_ESCAPE &&
          _target_vec.XZ().length() > 3600.0 )
     {
         setTarget_msg arg67;
@@ -4093,11 +4021,11 @@ void NC_STACK_ypabact::AI_layer2(update_msg *arg)
                 }
             }
 
-            if ( _status == BACT_STATUS_IDLE || 
-                 (  _aggr >= 50 && 
-                  !(_status_flg & BACT_STFLAG_ESCAPE) && 
-                     (_secndTtype == BACT_TGT_TYPE_NONE || 
-                      _secndTtype == BACT_TGT_TYPE_CELL || 
+            if ( _status == BACT_STATUS_IDLE ||
+                 (  _aggr >= 50 &&
+                  !(_status_flg & BACT_STFLAG_ESCAPE) &&
+                     (_secndTtype == BACT_TGT_TYPE_NONE ||
+                      _secndTtype == BACT_TGT_TYPE_CELL ||
                       _secndTtype == BACT_TGT_TYPE_FRMT) ) )
             {
                 if ( enemy )
@@ -4112,16 +4040,16 @@ void NC_STACK_ypabact::AI_layer2(update_msg *arg)
                     SetTarget(&arg67);
                 }
 
-                if ( (_clock - _search_time2) > 2000 && 
-                     _aggr == 75 && 
-                    !(_oflags & BACT_OFLAG_VIEWER) && 
+                if ( (_clock - _search_time2) > 2000 &&
+                     _aggr == 75 &&
+                    !(_oflags & BACT_OFLAG_VIEWER) &&
                      IsParentMyRobo() &&
-                     (_secndTtype == BACT_TGT_TYPE_FRMT || 
+                     (_secndTtype == BACT_TGT_TYPE_FRMT ||
                       _secndTtype == BACT_TGT_TYPE_NONE) )
                 {
-                    if (  _position.x > CurSectrLength && 
-                          _position.x < _wrldSize.x + -CurSectrLength && 
-                          _position.z < -CurSectrLength && 
+                    if (  _position.x > CurSectrLength &&
+                          _position.x < _wrldSize.x + -CurSectrLength &&
+                          _position.z < -CurSectrLength &&
                           _position.z > _wrldSize.y + CurSectrLength )
                     {
                         _search_time2 = _clock;
@@ -4169,7 +4097,7 @@ void NC_STACK_ypabact::AI_layer2(update_msg *arg)
     {
         if ( _secndTtype == BACT_TGT_TYPE_UNIT && _secndT.pbact )
         {
-            if ( !_secndT.pbact->_pSector->IsCanSee(_owner) || 
+            if ( !_secndT.pbact->_pSector->IsCanSee(_owner) ||
                   (_position.XZ() - _secndT.pbact->_position.XZ()).length() > 2160.0 )
             {
                 setTarget_msg arg67;
@@ -4179,7 +4107,7 @@ void NC_STACK_ypabact::AI_layer2(update_msg *arg)
             }
         }
     }
-    
+
     if ( _oflags & BACT_OFLAG_USERINPT )
         User_layer(arg);
     else
@@ -4274,14 +4202,14 @@ void AI_layer3__sub0(NC_STACK_ypabact *bact, int a2)
         vec2d flydir = bact->_fly_dir.XZ();
         vec2d axisZ = bact->_rotation.AxisZ().XZ();
 
-        float tmpsq = flydir.length();        
+        float tmpsq = flydir.length();
         float v18 = 0.0;
-        
+
         if ( isnormal(tmpsq) ) // Not NULL, NAN, INF
             v18 = flydir.dot(axisZ) / tmpsq;
 
         tmpsq = axisZ.length();
-        
+
         if ( isnormal(tmpsq) ) // Not NULL, NAN, INF
             v18 /= tmpsq;
         else
@@ -4564,7 +4492,7 @@ void NC_STACK_ypabact::AI_layer3(update_msg *arg)
             }
         }
 
-        ApplySeekAndExplodeRammingGuidance(false);
+        ApplySeekAndExplodeRammingGuidance();
 
         AI_layer3__sub1(this, arg);
 
@@ -5138,7 +5066,7 @@ void NC_STACK_ypabact::SetNewMaster(newMaster_msg *arg)
     _kidRef.Detach();
 
     _kidRef = arg->list->push_front(this);
-    
+
     _parent = arg->bact;
 }
 
@@ -5235,7 +5163,7 @@ void NC_STACK_ypabact::Move(move_msg *arg)
 void NC_STACK_ypabact::FightWithBact(bact_arg75 *arg)
 {
     constexpr float CurSectrLen = 1.1 * World::CVSectorLength;
-    
+
     arg->pos = arg->target.pbact->_position;
 
     vec3d v40 = arg->target.pbact->_position - _position;
@@ -5370,7 +5298,7 @@ void NC_STACK_ypabact::FightWithBact(bact_arg75 *arg)
             }
         }
         break;
-        
+
         case TA_MOVE:
         {
             if ( _status_flg & BACT_STFLAG_FIRE )
@@ -5384,13 +5312,13 @@ void NC_STACK_ypabact::FightWithBact(bact_arg75 *arg)
             }
         }
         break;
-        
+
         case TA_FIGHT:
         {
             bact_arg101 arg101;
             arg101.pos = arg->target.pbact->_position;
             arg101.unkn = 2;
-            arg101.radius = arg->target.pbact->_radius;
+            arg101.radius = arg->target.pbact->GetCollisionBroadRadius();
 
             if ( CheckFireAI(&arg101) )
             {
@@ -5399,18 +5327,11 @@ void NC_STACK_ypabact::FightWithBact(bact_arg75 *arg)
                 else
                     _status_flg |= BACT_STFLAG_FIGHT_P;
 
-                vec3d rotZ = _rotation.AxisZ();
-
                 bact_arg79 arg79;
-
-                arg79.direction.x = rotZ.x;
-
-                if ( _bact_type == BACT_TYPES_TANK )
-                    arg79.direction.y = v40.y;
-                else
-                    arg79.direction.y = rotZ.y - _gun_angle;
-
-                arg79.direction.z = rotZ.z;
+                // CheckFireAI already approved this target. Fire along the
+                // actual target vector; using only the vehicle nose caused a
+                // small angular error to become a guaranteed long-range miss.
+                arg79.direction = v40;
                 arg79.tgType = BACT_TGT_TYPE_UNIT;
                 arg79.target.pbact = arg->target.pbact;
                 arg79.tgt_pos = arg->pos;
@@ -5436,7 +5357,19 @@ void NC_STACK_ypabact::FightWithBact(bact_arg75 *arg)
                     _status_flg &= ~BACT_STFLAG_ATTACK;
             }
 
-            if ( v45 < _mgun_ai_range &&   HasMinigun() &&   v40.dot(_rotation.AxisZ()) > _mgun_ai_fire_alignment )
+            bool minigunHasLineOfSight = false;
+            if ( v45 < 1000.0f && HasMinigun() &&
+                 v40.dot(_rotation.AxisZ()) > _mgun_ai_fire_alignment )
+            {
+                ypaworld_arg136 sight;
+                sight.stPos = _position;
+                sight.vect = arg->target.pbact->_position - _position;
+                sight.flags = 0;
+                _world->ypaworld_func136(&sight);
+                minigunHasLineOfSight = !sight.isect;
+            }
+
+            if ( minigunHasLineOfSight )
             {
                 if ( isSecTarget )
                     _status_flg |= BACT_STFLAG_FIGHT_S;
@@ -5457,7 +5390,7 @@ void NC_STACK_ypabact::FightWithBact(bact_arg75 *arg)
 
                 arg105.field_C = arg->fperiod;
                 arg105.field_10 = _clock;
-                arg105.field_0 = _rotation.AxisZ();
+                arg105.field_0 = v40;
 
                 FireMinigun(&arg105);
             }
@@ -5472,7 +5405,7 @@ void NC_STACK_ypabact::FightWithBact(bact_arg75 *arg)
             }
         }
         break;
-        
+
         case TA_IGNORE:
         {
             _status_flg &= ~BACT_STFLAG_APPROACH;
@@ -5527,7 +5460,7 @@ void NC_STACK_ypabact::FightWithBact(bact_arg75 *arg)
             }
         }
         break;
-        
+
         default:
         break;
     }
@@ -5536,7 +5469,7 @@ void NC_STACK_ypabact::FightWithBact(bact_arg75 *arg)
 void NC_STACK_ypabact::FightWithSect(bact_arg75 *arg)
 {
     constexpr float CurSectrLen = 1.1 * World::CVSectorLength;
-    
+
     int v64 = 0;
     int v68 = 0;
 
@@ -5633,7 +5566,7 @@ void NC_STACK_ypabact::FightWithSect(bact_arg75 *arg)
 
         SetState(&arg78);
     }
-    
+
     switch(_atk_ret)
     {
         case TA_CANCEL:
@@ -5645,7 +5578,7 @@ void NC_STACK_ypabact::FightWithSect(bact_arg75 *arg)
                 if ( v65 )
                 {
                     robo_arg134 arg134;
-                    
+
                     Common::Point tmp = World::PositionToSectorID(_primTpos);
 
                     arg134.unit = this;
@@ -5674,7 +5607,7 @@ void NC_STACK_ypabact::FightWithSect(bact_arg75 *arg)
                 if ( v65 )
                 {
                     robo_arg134 arg134;
-                    
+
                     Common::Point tmp = World::PositionToSectorID(_sencdTpos);
 
                     arg134.unit = this;
@@ -5696,12 +5629,12 @@ void NC_STACK_ypabact::FightWithSect(bact_arg75 *arg)
             }
         }
         break;
-        
+
         case TA_MOVE:
         {
         }
         break;
-        
+
         case TA_FIGHT:
         {
             if ( v68 )
@@ -5711,7 +5644,7 @@ void NC_STACK_ypabact::FightWithSect(bact_arg75 *arg)
                     if ( !(_status_flg & BACT_STFLAG_FIGHT_P) && v65 && _secndT.pcell != _primT.pcell )
                     {
                         robo_arg134 arg134;
-                        
+
                         Common::Point tmp = World::PositionToSectorID(_primTpos);
 
                         arg134.field_4 = 3;
@@ -5739,7 +5672,7 @@ void NC_STACK_ypabact::FightWithSect(bact_arg75 *arg)
                     if ( v65 && !(_status_flg & BACT_STFLAG_FIGHT_S) )
                     {
                         robo_arg134 arg134;
-                        
+
                         Common::Point tmp = World::PositionToSectorID(_sencdTpos);
 
                         arg134.field_4 = 3;
@@ -5803,10 +5736,19 @@ void NC_STACK_ypabact::FightWithSect(bact_arg75 *arg)
                 _status_flg &= ~BACT_STFLAG_ATTACK;
             }
 
-            vec3d mgunDir = arg->pos - _position;
-            float mgunDistance = mgunDir.normalise();
+            // Optional sector/building minigun attack.  The script switch is
+            // intentionally the opt-in gate: vanilla data remains unchanged,
+            // while mgun_damage_sectors = 1 both authorises the AI shot and the
+            // actual ChangeSectorEnergy path inside FireMinigun().
+            vec3d minigunDir = arg->pos - _position;
+            float minigunDistance = minigunDir.normalise();
+            bool fireSectorMinigun = _mgun_damage_sectors &&
+                                     HasMinigun() &&
+                                     minigunDistance > 0.01f &&
+                                     minigunDistance <= 1000.0f &&
+                                     minigunDir.dot(_rotation.AxisZ()) > _mgun_ai_fire_alignment;
 
-            if ( mgunDistance < _mgun_ai_range && HasMinigun() && mgunDir.dot(_rotation.AxisZ()) > _mgun_ai_fire_alignment )
+            if ( fireSectorMinigun )
             {
                 if ( v64 )
                     _status_flg |= BACT_STFLAG_FIGHT_S;
@@ -5819,21 +5761,18 @@ void NC_STACK_ypabact::FightWithSect(bact_arg75 *arg)
                     arg78.unsetFlags = 0;
                     arg78.newStatus = BACT_STATUS_NOPE;
                     arg78.setFlags = BACT_STFLAG_FIRE;
-
                     SetState(&arg78);
                 }
 
                 bact_arg105 arg105;
-
                 arg105.field_C = arg->fperiod;
                 arg105.field_10 = _clock;
-                arg105.field_0 = _rotation.AxisZ();
-
+                arg105.field_0 = minigunDir;
                 FireMinigun(&arg105);
             }
         }
         break;
-        
+
         case TA_IGNORE:
         {
             _status_flg &= ~BACT_STFLAG_APPROACH;
@@ -5845,7 +5784,7 @@ void NC_STACK_ypabact::FightWithSect(bact_arg75 *arg)
                 if ( v65 && _secndT.pcell != _primT.pcell )
                 {
                     robo_arg134 arg134;
-                    
+
                     Common::Point tmp = World::PositionToSectorID(_sencdTpos);
 
                     arg134.field_4 = 2;
@@ -5888,7 +5827,7 @@ void NC_STACK_ypabact::FightWithSect(bact_arg75 *arg)
             }
         }
         break;
-        
+
         default:
             break;
     }
@@ -5960,7 +5899,7 @@ void NC_STACK_ypabact::Die()
                 if ( _parent )
                     _parent->AddSubject(kid);
                 else
-                    _world->ypaworld_func134(kid);                  
+                    _world->ypaworld_func134(kid);
 
                 kid->_status_flg |= BACT_STFLAG_NOMSG;
             }
@@ -6018,7 +5957,7 @@ void NC_STACK_ypabact::Die()
             {
                 NC_STACK_ypabact *kidX = *kidXit;
                 kidXit++;
-                
+
                 for ( World::RefBactList::iterator kidYit = kidX->_kidList.begin(); kidYit != kidX->_kidList.end(); )
                 {
                     NC_STACK_ypabact *kidY = *kidYit;
@@ -6130,7 +6069,7 @@ void NC_STACK_ypabact::Die()
             _world->ypaworld_func144(miss);
         }
     }
-    
+
 
     if ( _secndTtype == BACT_TGT_TYPE_UNIT )
         _secndT.pbact->DeleteAttacker(this, 1);
@@ -6285,8 +6224,13 @@ static bool ypabact_IsSeekAndExplodeArmed(NC_STACK_ypabact *unit)
     if ( unit->_seek_and_explode_weapon <= 0 )
         return true;
 
-    World::TWeapProto &wproto = unit->getBACT_pWorld()->GetWeaponsProtos().at(unit->_seek_and_explode_weapon);
-    return (wproto._weaponFlags & 1) != 0;
+    const std::vector<World::TWeapProto> &weapons =
+        unit->getBACT_pWorld()->GetWeaponsProtos();
+    const int weaponId = unit->_seek_and_explode_weapon;
+    if ( weaponId < 0 || (size_t)weaponId >= weapons.size() )
+        return false;
+
+    return (weapons[weaponId]._weaponFlags & 1) != 0;
 }
 
 static bool ypabact_IsValidSeekAndExplodeTarget(NC_STACK_ypabact *unit, NC_STACK_ypabact *target)
@@ -6416,23 +6360,37 @@ static NC_STACK_ypabact *ypabact_FindSeekAndExplodeContactTarget(NC_STACK_ypabac
 
 static NC_STACK_ypabact *ypabact_GetSeekAndExplodeRammingTarget(NC_STACK_ypabact *unit)
 {
-    if ( !ypabact_IsSeekAndExplodeArmed(unit) )
+    if ( !ypabact_IsSeekAndExplodeArmed(unit) ||
+         unit->_atk_ret != NC_STACK_ypabact::TA_FIGHT ||
+         !(unit->_status_flg & BACT_STFLAG_ATTACK) )
         return NULL;
 
-    if ( unit->_secndTtype == BACT_TGT_TYPE_UNIT )
+    // AI_layer3 always gives the secondary target precedence, including when
+    // it is a cell. Mirror that choice here so seek-and-explode guidance can
+    // never chase a lower-priority unit while the AI is executing another
+    // order.
+    if ( unit->_secndTtype != BACT_TGT_TYPE_NONE )
     {
-        if ( ypabact_IsValidSeekAndExplodeTarget(unit, unit->_secndT.pbact) )
+        if ( unit->_secndTtype != BACT_TGT_TYPE_UNIT )
+            return NULL;
+
+        if ( ypabact_IsValidSeekAndExplodeTarget(unit, unit->_secndT.pbact) &&
+             unit->_secndT.pbact->_pSector &&
+             unit->_secndT.pbact->_pSector->IsCanSee(unit->_owner) )
             return unit->_secndT.pbact;
 
         setTarget_msg arg67;
         arg67.tgt_type = BACT_TGT_TYPE_NONE;
         arg67.priority = 1;
         unit->SetTarget(&arg67);
+        return NULL;
     }
 
     if ( unit->_primTtype == BACT_TGT_TYPE_UNIT )
     {
-        if ( ypabact_IsValidSeekAndExplodeTarget(unit, unit->_primT.pbact) )
+        if ( ypabact_IsValidSeekAndExplodeTarget(unit, unit->_primT.pbact) &&
+             unit->_primT.pbact->_pSector &&
+             unit->_primT.pbact->_pSector->IsCanSee(unit->_owner) )
             return unit->_primT.pbact;
 
         setTarget_msg arg67;
@@ -6445,7 +6403,7 @@ static NC_STACK_ypabact *ypabact_GetSeekAndExplodeRammingTarget(NC_STACK_ypabact
     return NULL;
 }
 
-bool NC_STACK_ypabact::ApplySeekAndExplodeRammingGuidance(bool clearAvoidanceFlags)
+bool NC_STACK_ypabact::ApplySeekAndExplodeRammingGuidance()
 {
     if ( _oflags & BACT_OFLAG_USERINPT )
         return false;
@@ -6454,37 +6412,18 @@ bool NC_STACK_ypabact::ApplySeekAndExplodeRammingGuidance(bool clearAvoidanceFla
     if ( !target )
         return false;
 
-    bool horizontalAirRamming = ypabact_ShouldSeekAndExplodeUseHorizontalAirRamming(this, target);
-    float safeVerticalDir = _target_dir.y;
-
     vec3d desired = target->_position - _position;
-    if ( horizontalAirRamming )
-        desired.y = 0.0;
-
     float desiredLen = desired.length();
     if ( desiredLen <= 0.001 )
         return false;
 
+    // Refresh the destination every frame from the live target. Do not replace
+    // _target_dir here: the class-specific AI may already have adjusted it for
+    // walls, buildings or terrain, and V1 must retain that vanilla avoidance.
     _target_vec = desired;
-    _target_dir = desired / desiredLen;
-
-    if ( horizontalAirRamming )
-    {
-        // Keep the vertical correction calculated by the unit's own flight AI
-        // so heli/flyer/ufo ramming does not cancel ground-avoidance lift.
-        _target_dir.y = safeVerticalDir;
-        if ( _target_dir.normalise() <= 0.001 )
-            _target_dir = desired / desiredLen;
-    }
 
     _status_flg |= BACT_STFLAG_MOVE | BACT_STFLAG_ATTACK;
     _status_flg &= ~BACT_STFLAG_APPROACH;
-
-    if ( horizontalAirRamming )
-        _status_flg &= ~BACT_STFLAG_LAND;
-
-    if ( clearAvoidanceFlags )
-        _status_flg &= ~(BACT_STFLAG_DODGE_LEFT | BACT_STFLAG_DODGE_RIGHT);
 
     return true;
 }
@@ -8394,6 +8333,7 @@ static bool ypabact_LaserHitscan(NC_STACK_ypabact *shooter, const World::TWeapPr
 
     NC_STACK_ypabact *best = NULL;
     float bestAlong = range + 1.0f;
+    vec3d bestHitPoint;
 
     for (int y = center.y - sectorRadius; y <= center.y + sectorRadius; y++)
     {
@@ -8410,26 +8350,61 @@ static bool ypabact_LaserHitscan(NC_STACK_ypabact *shooter, const World::TWeapPr
                 if ( !ypabact_IsLaserDamageTarget(shooter, bct) )
                     continue;
 
-                vec3d to = bct->_position - origin;
-                float along = to.dot(dir);
-                if ( along <= 0.0f || along > range )
-                    continue;
-
-                vec3d closest = origin + dir * along;
-                float perp = (bct->_position - closest).length();
-
-                // Clean hit thickness: unit body radius + weapon radius only. F10
-                // debug displays the weapon radius, so do not add hidden distance
-                // based tolerance here.
                 float weaponRadius = wproto.radius > 0.0f ? wproto.radius : 1.0f;
-                float hitRadius = bct->_radius + weaponRadius;
+                float bodyAlong = range + 1.0f;
+                vec3d bodyHitPoint;
+                bool bodyHit = false;
+                World::rbcolls *colls = bct->getBACT_collNodes();
 
-                if ( perp > hitRadius )
+                if ( colls )
+                {
+                    mat3x3 rotT = bct->_rotation.Transpose();
+                    for (const World::TRoboColl &sphere : colls->roboColls)
+                    {
+                        if ( sphere.robo_coll_radius <= 0.01f )
+                            continue;
+
+                        vec3d center = bct->_position + rotT.Transform(sphere.coll_pos);
+                        vec3d to = center - origin;
+                        float along = to.dot(dir);
+                        if ( along <= 0.0f || along > range )
+                            continue;
+
+                        vec3d closest = origin + dir * along;
+                        if ( (center - closest).length() > sphere.robo_coll_radius + weaponRadius )
+                            continue;
+
+                        if ( along < bodyAlong )
+                        {
+                            bodyAlong = along;
+                            bodyHitPoint = closest;
+                            bodyHit = true;
+                        }
+                    }
+                }
+                else
+                {
+                    vec3d to = bct->_position - origin;
+                    float along = to.dot(dir);
+                    if ( along > 0.0f && along <= range )
+                    {
+                        vec3d closest = origin + dir * along;
+                        if ( (bct->_position - closest).length() <= bct->_radius + weaponRadius )
+                        {
+                            bodyAlong = along;
+                            bodyHitPoint = closest;
+                            bodyHit = true;
+                        }
+                    }
+                }
+
+                if ( !bodyHit )
                     continue;
 
-                if ( along < bestAlong )
+                if ( bodyAlong < bestAlong )
                 {
-                    bestAlong = along;
+                    bestAlong = bodyAlong;
+                    bestHitPoint = bodyHitPoint;
                     best = bct;
                 }
             }
@@ -8442,7 +8417,7 @@ static bool ypabact_LaserHitscan(NC_STACK_ypabact *shooter, const World::TWeapPr
     if ( outHit )
     {
         outHit->target = best;
-        outHit->hitPoint = best->_position;
+        outHit->hitPoint = bestHitPoint;
         outHit->along = bestAlong;
     }
 
@@ -10149,7 +10124,7 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
          *  so kidref will be not attached to anything.
          *  Looks it's somehow related to mentioned problem with dead cache.
         **/
-        
+
         wobj->_kidRef.Detach();
         wobj->_parent = NULL;
 
@@ -10222,10 +10197,10 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
                 }
             }
         }
-        
+
         if ( missileArg.flags & 4 )
             wobj->SetIgnoreBuilds(1);
-            
+
 
         if ( missileArg.tgType != BACT_TGT_TYPE_UNIT )
         {
@@ -10489,7 +10464,7 @@ void NC_STACK_ypabact::ModifyEnergy(bact_arg84 *arg)
         if (_world->getYW_invulnerable() && arg->energy > -1000000)
             return;
     }
-    
+
     bool isNetGame = false;
     if (_world && _world->_isNetGame)
         isNetGame = true;
@@ -11064,189 +11039,286 @@ void NC_STACK_ypabact::GetClosestCollisionBodySphere(const vec3d &target, vec3d 
     }
 }
 
-size_t NC_STACK_ypabact::CollisionWithBact(int arg)
+bool NC_STACK_ypabact::GetUnitCollisionContact(NC_STACK_ypabact *other,
+                                                vec3d *selfCenter,
+                                                vec3d *otherCenter,
+                                                float *penetration)
 {
-    bool isViewer = getBACT_viewer();
+    if ( !other || other == this )
+        return false;
 
-    float trad;
-    if ( isViewer )
-        trad = _viewer_radius;
-    else
-        trad = _radius;
+    float broad = GetCollisionBroadRadius() + other->GetCollisionBroadRadius();
+    if ( (_position - other->_position).square() > broad * broad )
+        return false;
 
+    World::rbcolls *selfColls = getBACT_collNodes();
+    World::rbcolls *otherColls = other->getBACT_collNodes();
+    int selfCount = selfColls ? (int)selfColls->roboColls.size() : 1;
+    int otherCount = otherColls ? (int)otherColls->roboColls.size() : 1;
+    mat3x3 selfRotT = _rotation.Transpose();
+    mat3x3 otherRotT = other->_rotation.Transpose();
+    float bestPenetration = 0.0f;
+    vec3d bestSelf;
+    vec3d bestOther;
 
-    int v49 = 0;
-
-    World::rbcolls *v46 = getBACT_collNodes();
-
-    if ( _fly_dir_length == 0.0 )
-        return 0;
-
-    vec3d stru_5150E8(0.0, 0.0, 0.0);
-
-    int v45 = 0;
-    NC_STACK_ypabact *collisionEffectTarget = NULL;
-    float collisionEffectTargetDist = std::numeric_limits<float>::max();
-
-    World::rbcolls *v55;
-
-    for ( NC_STACK_ypabact* &bnode : _pSector->unitsList )
+    for (int i = 0; i < selfCount; i++)
     {
-        int v53 = bnode->_status == BACT_STATUS_DEAD && (bnode->_vp_extra[0].flags & 1) && (_oflags & BACT_OFLAG_USERINPT) && bnode->_scale_time > 0 ;
-
-        if ( bnode != this && bnode->_bact_type != BACT_TYPES_MISSLE && (!bnode->IsDestroyed() || v53) )
+        vec3d a = _position;
+        float ar = getBACT_viewer() && !selfColls ? _viewer_radius : _radius;
+        if ( selfColls )
         {
+            const World::TRoboColl &sphere = selfColls->roboColls[i];
+            if ( sphere.robo_coll_radius <= 0.01f )
+                continue;
+            a += selfRotT.Transform(sphere.coll_pos);
+            ar = sphere.robo_coll_radius;
+        }
 
-            v55 = bnode->getBACT_collNodes();
-
-            int v9;
-
-            if ( v55 )
+        for (int j = 0; j < otherCount; j++)
+        {
+            vec3d b = other->_position;
+            float br = other->_radius;
+            if ( otherColls )
             {
-                v9 = v55->roboColls.size();
-                v49 = 1;
+                const World::TRoboColl &sphere = otherColls->roboColls[j];
+                if ( sphere.robo_coll_radius <= 0.01f )
+                    continue;
+                b += otherRotT.Transform(sphere.coll_pos);
+                br = sphere.robo_coll_radius;
             }
-            else
+
+            float overlap = ar + br - (b - a).length();
+            if ( overlap > bestPenetration )
             {
-                v9 = 1;
-            }
-
-            for (int i = v9 - 1; i >= 0; i--)
-            {
-                float ttrad;
-                vec3d v41;
-
-                if (!v55)
-                {
-                    ttrad = trad;
-                    v41 = bnode->_position;
-                }
-                else
-                {
-                    World::TRoboColl *v10 = &v55->roboColls[i];
-                    ttrad = v10->robo_coll_radius;
-
-                    v41 = bnode->_position + bnode->_rotation.Transpose().Transform(v10->coll_pos);
-
-                    if ( ttrad < 0.01 )
-                        continue;
-                }
-
-                vec3d selfCenter = _position;
-                float selfRadius = trad;
-                if ( _autoCollisionSpheres )
-                    GetClosestCollisionBodySphere(v41, &selfCenter, &selfRadius);
-
-                float collDist = (selfCenter - v41).length();
-                if ( collDist <= selfRadius + ttrad )
-                {
-                    if ( !v53 )
-                    {
-                        stru_5150E8 += v41;
-
-                        v45++;
-
-                        if ( collDist < collisionEffectTargetDist )
-                        {
-                            collisionEffectTargetDist = collDist;
-                            collisionEffectTarget = bnode;
-                        }
-                    }
-                    else
-                    {
-                        CollisionWithBact__sub0(this, bnode);
-
-                        bnode->_scale_time = -1;
-
-                        if ( _world->_GameShell )
-                            SFXEngine::SFXe.startSound(&_world->_GameShell->samples1_info, World::SOUND_ID_PLASMA);
-
-                        if ( _world->_isNetGame )
-                        {
-                            uamessage_endPlasma epMsg;
-                            epMsg.msgID = UAMSG_ENDPLASMA;
-                            epMsg.owner = bnode->_owner;
-                            epMsg.id = bnode->_gid;
-
-                            _world->NetBroadcastMessage(&epMsg, sizeof(epMsg), true);
-
-                            if ( bnode->_owner != _owner )
-                            {
-                                bnode->_vp_extra[0].flags = 0;
-                                bnode->_vp_extra[0].SetVP((NC_STACK_base::Instance *)NULL);// = NULL;
-                            }
-                        }
-                        break;
-                    }
-                }
+                bestPenetration = overlap;
+                bestSelf = a;
+                bestOther = b;
             }
         }
     }
 
-    if ( !v45 || (v46 && !v49 && !_autoCollisionSpheres) )
+    if ( bestPenetration <= 0.0f )
+        return false;
+
+    if ( selfCenter )
+        *selfCenter = bestSelf;
+    if ( otherCenter )
+        *otherCenter = bestOther;
+    if ( penetration )
+        *penetration = bestPenetration;
+    return true;
+}
+
+bool NC_STACK_ypabact::ResolveGenesisCompoundOverlap(int frameTime)
+{
+    if ( _status != BACT_STATUS_CREATE || !getBACT_bactCollisions() || !_pSector ||
+         IsDestroyed() || !ypabact_IsGenesisSeparationVehicle(this) )
+        return false;
+
+    vec3d correction(0.0, 0.0, 0.0);
+    vec3d strongestDir(0.0, 0.0, 0.0);
+    float strongestPenetration = 0.0f;
+    int contacts = 0;
+
+    float frameScale = (float)frameTime / 18.0f;
+    frameScale = std::max(0.25f, std::min(frameScale, 2.0f));
+
+    for (NC_STACK_ypabact *other : _pSector->unitsList.safe_iter())
+    {
+        if ( !other || other == this || !ypabact_IsGenesisSeparationVehicle(other) ||
+             other->IsDestroyed() || other->_status == BACT_STATUS_DEAD )
+            continue;
+
+        vec3d selfCenter;
+        vec3d otherCenter;
+        float penetration = 0.0f;
+        if ( !GetUnitCollisionContact(other, &selfCenter, &otherCenter, &penetration) ||
+             penetration <= 0.75f )
+            continue;
+
+        // Genesis separation is deliberately horizontal for every class. It
+        // clears overlapping spawn volumes without changing flight altitude,
+        // terrain support or the first post-genesis fall/landing behaviour.
+        vec3d away = _position - other->_position;
+        away.y = 0.0f;
+
+        if ( away.normalise() <= 0.001f )
+        {
+            away = selfCenter - otherCenter;
+            away.y = 0.0f;
+        }
+
+        if ( away.normalise() <= 0.001f )
+        {
+            // Exact same-position spawns need a deterministic opposite pair
+            // direction; otherwise both units remain welded indefinitely.
+            uintptr_t selfKey = reinterpret_cast<uintptr_t>(this);
+            uintptr_t otherKey = reinterpret_cast<uintptr_t>(other);
+            uintptr_t lo = std::min(selfKey, otherKey);
+            uintptr_t hi = std::max(selfKey, otherKey);
+            uint32_t hash = (uint32_t)((lo >> 4) ^ (hi >> 9) ^ (lo * 2654435761u));
+            float angle = (float)(hash % 6283u) * 0.001f;
+            away = vec3d(cos(angle), 0.0, sin(angle));
+            if ( selfKey > otherKey )
+                away = -away;
+        }
+
+        float pairStep = std::min((penetration - 0.75f) * 0.55f, 14.0f * frameScale);
+        correction += away * pairStep;
+        contacts++;
+
+        if ( penetration > strongestPenetration )
+        {
+            strongestPenetration = penetration;
+            strongestDir = away;
+        }
+    }
+
+    if ( contacts == 0 )
+        return false;
+
+    if ( correction.XZ().length() <= 0.001f )
+        correction = strongestDir * std::min(strongestPenetration * 0.5f, 8.0f * frameScale);
+
+    float correctionLength = correction.XZ().length();
+    float maxTotalStep = 18.0f * frameScale;
+    if ( correctionLength > maxTotalStep && correctionLength > 0.001f )
+        correction *= maxTotalStep / correctionLength;
+
+    vec3d candidate = _position + correction;
+    candidate.y = _position.y;
+
+    ypaworld_arg136 worldMove;
+    worldMove.stPos = _position;
+    worldMove.vect = candidate - _position;
+    worldMove.flags = 0;
+    _world->ypaworld_func136(&worldMove);
+
+    if ( worldMove.isect )
+        return false;
+
+    // Preserve apparent velocity/history while moving only the spawn volume.
+    _position = candidate;
+    _old_pos += correction;
+    CorrectPositionInLevelBox(NULL);
+    return true;
+}
+
+float NC_STACK_ypabact::GetCollisionBroadRadius()
+{
+    float broadRadius = _radius;
+    World::rbcolls *colls = getBACT_collNodes();
+    if ( !colls )
+        return broadRadius;
+
+    float padding = getBACT_collPadding();
+    for (const World::TRoboColl &sphere : colls->roboColls)
+    {
+        if ( sphere.robo_coll_radius <= 0.01 )
+            continue;
+
+        float extent = sphere.coll_pos.length() + sphere.robo_coll_radius + padding;
+        if ( extent > broadRadius )
+            broadRadius = extent;
+    }
+
+    return broadRadius;
+}
+
+size_t NC_STACK_ypabact::CollisionWithBact(int arg)
+{
+    bool isViewer = getBACT_viewer();
+    if ( _fly_dir_length == 0.0 || !_pSector )
+        return 0;
+
+    vec3d collisionCenters(0.0, 0.0, 0.0);
+    int collisionCount = 0;
+
+    for ( NC_STACK_ypabact *bnode : _pSector->unitsList.safe_iter() )
+    {
+        int plasma = bnode && bnode->_status == BACT_STATUS_DEAD &&
+                     (bnode->_vp_extra[0].flags & 1) &&
+                     (_oflags & BACT_OFLAG_USERINPT) && bnode->_scale_time > 0;
+
+        if ( !bnode || bnode == this || bnode->_bact_type == BACT_TYPES_MISSLE ||
+             (bnode->IsDestroyed() && !plasma) )
+            continue;
+
+        vec3d selfCenter;
+        vec3d targetCenter;
+        if ( !GetUnitCollisionContact(bnode, &selfCenter, &targetCenter, NULL) )
+            continue;
+
+        if ( !plasma )
+        {
+            // Feed the coll-sphere pair into the exact vanilla radius response:
+            // same averaging, angle gate and Recoil, only the tested centers differ.
+            collisionCenters += _position + (targetCenter - selfCenter);
+            collisionCount++;
+            continue;
+        }
+
+        CollisionWithBact__sub0(this, bnode);
+        bnode->_scale_time = -1;
+
+        if ( _world->_GameShell )
+            SFXEngine::SFXe.startSound(&_world->_GameShell->samples1_info, World::SOUND_ID_PLASMA);
+
+        if ( _world->_isNetGame )
+        {
+            uamessage_endPlasma epMsg;
+            epMsg.msgID = UAMSG_ENDPLASMA;
+            epMsg.owner = bnode->_owner;
+            epMsg.id = bnode->_gid;
+            _world->NetBroadcastMessage(&epMsg, sizeof(epMsg), true);
+
+            if ( bnode->_owner != _owner )
+            {
+                bnode->_vp_extra[0].flags = 0;
+                bnode->_vp_extra[0].SetVP((NC_STACK_base::Instance *)NULL);
+            }
+        }
+    }
+
+    if ( !collisionCount )
     {
         _status_flg &= ~BACT_STFLAG_BCRASH;
         return 0;
     }
 
-    stru_5150E8 /= (double)v45;
+    collisionCenters /= (double)collisionCount;
+    vec3d collisionDir = collisionCenters - _position;
+    float collisionDirLength = collisionDir.length();
 
-    vec3d stru_5150F4 = stru_5150E8 - _position;
-
-    float v26 = stru_5150F4.length();
-
-    if ( v26 < 0.0001)
+    if ( collisionDirLength < 0.0001 )
         return 0;
 
-    bact_arg88 v33;
-    v33.pos1 = stru_5150F4 / v26;
+    bact_arg88 recoil;
+    recoil.pos1 = collisionDir / collisionDirLength;
 
-    // FIX MY MATH
-    // stru_5150F4 should be normalised?
-    // May be replace it with "dot < 0.0" ?
-    // Because cos of 1.0...0 is 0..PI/2 and 0...-1.0 is PI/2..PI
-    if ( clp_acos( stru_5150F4.dot( _fly_dir ) ) > C_PI_2 )
+    if ( clp_acos(collisionDir.dot(_fly_dir)) > C_PI_2 )
         return 0;
 
-    if ( !(_status_flg & BACT_STFLAG_BCRASH) )
+    if ( !(_status_flg & BACT_STFLAG_BCRASH) && isViewer )
     {
-        bool collisionEffectsApplied = false;
-        if ( collisionEffectTarget )
-            collisionEffectsApplied = ApplyUnitCollisionEffects(collisionEffectTarget, collisionEffectTarget->_position - _position, _fly_dir_length);
+        SFXEngine::SFXe.startSound(&_soundcarrier, 6);
+        _status_flg |= BACT_STFLAG_BCRASH;
 
-        if ( isViewer )
-        {
-            ypabact_StartSoundOnce(this, 6);
-
-            _status_flg |= BACT_STFLAG_BCRASH;
-
-            yw_arg180 v40;
-            v40.field_4 = 1.0;
-            v40.field_8 = stru_5150E8.x;
-            v40.field_C = stru_5150E8.z;
-            v40.effects_type = 5;
-
-            _world->ypaworld_func180(&v40);
-        }
-        else if ( collisionEffectsApplied )
-        {
-            if ( ypabact_IsCustomUnitCollisionConfigActive() )
-                ypabact_StartSoundOnce(this, 6);
-
-            _status_flg |= BACT_STFLAG_BCRASH;
-        }
+        yw_arg180 effect;
+        effect.field_4 = 1.0;
+        effect.field_8 = collisionCenters.x;
+        effect.field_C = collisionCenters.z;
+        effect.effects_type = 5;
+        _world->ypaworld_func180(&effect);
     }
 
     if ( fabs(_fly_dir_length) < 0.1 )
         _fly_dir_length = 1.0;
 
-    Recoil(&v33);
-
+    Recoil(&recoil);
     _target_vec = _fly_dir;
-
     _AI_time1 = _clock;
     _AI_time2 = _clock;
-
     return 1;
 }
 
@@ -11313,9 +11385,9 @@ NC_STACK_ypabact * NC_STACK_ypabact::GetEnemyCandidateInSector(const cellArea &c
         // Do not target same fraction unit or owner == 0
         if ( cel_unit->_owner == _owner || cel_unit->_owner == World::OWNER_0 )
             continue;
-            
+
         int jobLevel;
-        
+
         switch ( cel_unit->_bact_type )
         {
         case BACT_TYPES_BACT:
@@ -11344,9 +11416,9 @@ NC_STACK_ypabact * NC_STACK_ypabact::GetEnemyCandidateInSector(const cellArea &c
         // do not target if job for this unit is less of previous
         if ( jobLevel < *job )
             continue;
-        
+
         float radivs = (_position - cel_unit->_position).length();
-        
+
         // do not target if distance more than for old selected unit
         if ( radivs > *radius && !cel_unit->getBACT_viewer() )
             continue;
@@ -11402,7 +11474,7 @@ NC_STACK_ypabact * NC_STACK_ypabact::GetEnemyCandidateInSector(const cellArea &c
                 for ( const TBactAttacker &ainf : cel_unit->_attackersList )
                 {
                     if ( ainf.attacker->_secndTtype == BACT_TGT_TYPE_UNIT &&
-                         ainf.attacker->_secndT.pbact == cel_unit && 
+                         ainf.attacker->_secndT.pbact == cel_unit &&
                          ainf.attacker->_owner == _owner )
                         countOwnAttackers++;
 
@@ -11413,14 +11485,14 @@ NC_STACK_ypabact * NC_STACK_ypabact::GetEnemyCandidateInSector(const cellArea &c
                 // If current unit already attacked by more than 1 another units - skip it
                 if ( countOwnAttackers > 1 )
                     continue;
-                
+
                 // If we is leader and if some of us kids do not has second target unit
                 // let's skip this unit and leave it for targeting by kid
                 if (isLeader && IsAnyKidWithoutSecondUnitTarget() )
                     continue;
             }
         }
-        
+
         // If test of sector below of unit is OK then make it current candidate
         // and do tests for next units in this sector
         if ( TestTargetSector(cel_unit) )
@@ -11524,8 +11596,8 @@ void NC_STACK_ypabact::GetForcesRatio(bact_arg92 *arg)
                 {
                     if ( cl_unit->_owner )
                     {
-                        if ( cl_unit->_status != BACT_STATUS_DEAD && 
-                            (cl_unit->_bact_type != BACT_TYPES_ROBO || cl_unit->_owner != _owner) && 
+                        if ( cl_unit->_status != BACT_STATUS_DEAD &&
+                            (cl_unit->_bact_type != BACT_TYPES_ROBO || cl_unit->_owner != _owner) &&
                              cl_unit->_bact_type != BACT_TYPES_MISSLE )
                         {
                             if ( cl_unit->_owner == _owner )
@@ -11549,8 +11621,8 @@ void NC_STACK_ypabact::GetForcesRatio(bact_arg92 *arg)
                 {
                     if ( cl_unit->_owner )
                     {
-                        if ( cl_unit->_status != BACT_STATUS_DEAD && 
-                            (cl_unit->_bact_type != BACT_TYPES_ROBO || cl_unit->_owner != _owner) && 
+                        if ( cl_unit->_status != BACT_STATUS_DEAD &&
+                            (cl_unit->_bact_type != BACT_TYPES_ROBO || cl_unit->_owner != _owner) &&
                              cl_unit->_bact_type != BACT_TYPES_MISSLE )
                         {
                             if ( cl_unit->_owner == _owner )
@@ -11574,8 +11646,8 @@ void NC_STACK_ypabact::GetForcesRatio(bact_arg92 *arg)
                 {
                     if ( cl_unit->_owner )
                     {
-                        if ( cl_unit->_status != BACT_STATUS_DEAD && 
-                            (cl_unit->_bact_type != BACT_TYPES_ROBO || cl_unit->_owner != _owner) && 
+                        if ( cl_unit->_status != BACT_STATUS_DEAD &&
+                            (cl_unit->_bact_type != BACT_TYPES_ROBO || cl_unit->_owner != _owner) &&
                              cl_unit->_bact_type != BACT_TYPES_MISSLE )
                         {
                             if ( cl_unit->_owner == _owner )
@@ -11599,8 +11671,8 @@ void NC_STACK_ypabact::GetForcesRatio(bact_arg92 *arg)
                 {
                     if ( cl_unit->_owner )
                     {
-                        if ( cl_unit->_status != BACT_STATUS_DEAD && 
-                            (cl_unit->_bact_type != BACT_TYPES_ROBO || cl_unit->_owner != _owner) && 
+                        if ( cl_unit->_status != BACT_STATUS_DEAD &&
+                            (cl_unit->_bact_type != BACT_TYPES_ROBO || cl_unit->_owner != _owner) &&
                              cl_unit->_bact_type != BACT_TYPES_MISSLE )
                         {
                             if ( cl_unit->_owner == _owner )
@@ -11620,8 +11692,8 @@ void NC_STACK_ypabact::GetForcesRatio(bact_arg92 *arg)
                 {
                     if ( cl_unit->_owner )
                     {
-                        if ( cl_unit->_status != BACT_STATUS_DEAD && 
-                            (cl_unit->_bact_type != BACT_TYPES_ROBO || cl_unit->_owner != _owner) && 
+                        if ( cl_unit->_status != BACT_STATUS_DEAD &&
+                            (cl_unit->_bact_type != BACT_TYPES_ROBO || cl_unit->_owner != _owner) &&
                              cl_unit->_bact_type != BACT_TYPES_MISSLE )
                         {
                             if ( cl_unit->_owner == _owner )
@@ -11644,8 +11716,8 @@ void NC_STACK_ypabact::GetForcesRatio(bact_arg92 *arg)
                 {
                     if ( cl_unit->_owner )
                     {
-                        if ( cl_unit->_status != BACT_STATUS_DEAD && 
-                            (cl_unit->_bact_type != BACT_TYPES_ROBO || cl_unit->_owner != _owner) && 
+                        if ( cl_unit->_status != BACT_STATUS_DEAD &&
+                            (cl_unit->_bact_type != BACT_TYPES_ROBO || cl_unit->_owner != _owner) &&
                              cl_unit->_bact_type != BACT_TYPES_MISSLE )
                         {
                             if ( cl_unit->_owner == _owner )
@@ -11669,8 +11741,8 @@ void NC_STACK_ypabact::GetForcesRatio(bact_arg92 *arg)
                 {
                     if ( cl_unit->_owner )
                     {
-                        if ( cl_unit->_status != BACT_STATUS_DEAD && 
-                            (cl_unit->_bact_type != BACT_TYPES_ROBO || cl_unit->_owner != _owner) && 
+                        if ( cl_unit->_status != BACT_STATUS_DEAD &&
+                            (cl_unit->_bact_type != BACT_TYPES_ROBO || cl_unit->_owner != _owner) &&
                              cl_unit->_bact_type != BACT_TYPES_MISSLE )
                         {
                             if ( cl_unit->_owner == _owner )
@@ -11694,8 +11766,8 @@ void NC_STACK_ypabact::GetForcesRatio(bact_arg92 *arg)
                 {
                     if ( cl_unit->_owner )
                     {
-                        if ( cl_unit->_status != BACT_STATUS_DEAD && 
-                            (cl_unit->_bact_type != BACT_TYPES_ROBO || cl_unit->_owner != _owner) && 
+                        if ( cl_unit->_status != BACT_STATUS_DEAD &&
+                            (cl_unit->_bact_type != BACT_TYPES_ROBO || cl_unit->_owner != _owner) &&
                              cl_unit->_bact_type != BACT_TYPES_MISSLE )
                         {
                             if ( cl_unit->_owner == _owner )
@@ -11719,8 +11791,8 @@ void NC_STACK_ypabact::GetForcesRatio(bact_arg92 *arg)
                 {
                     if ( cl_unit->_owner )
                     {
-                        if ( cl_unit->_status != BACT_STATUS_DEAD && 
-                            (cl_unit->_bact_type != BACT_TYPES_ROBO || cl_unit->_owner != _owner) && 
+                        if ( cl_unit->_status != BACT_STATUS_DEAD &&
+                            (cl_unit->_bact_type != BACT_TYPES_ROBO || cl_unit->_owner != _owner) &&
                              cl_unit->_bact_type != BACT_TYPES_MISSLE )
                         {
                             if ( cl_unit->_owner == _owner )
@@ -11853,7 +11925,6 @@ void NC_STACK_ypabact::Renew()
     _mgun_angle = 0.0;
     _mgun_power_set = false;
     _mgun_angle_set = false;
-    _mgun_ai_range = 1000.0;
     _mgun_ai_fire_alignment = 0.85;
     _mgun_damage_sectors = false;
     _mgun_sector_damage_accum = 0.0;
@@ -11942,12 +12013,13 @@ void NC_STACK_ypabact::Renew()
     _weaponRecoilPlayerRecoveryEndTime = 0;
     _weaponRecoilPushVel = vec3d(0.0, 0.0, 0.0);
     _aoePushVel = vec3d(0.0, 0.0, 0.0);
+    _deinitInProgress = false;
     ypabact_ResetDamagedFX(this);
     ClearActiveDebuff();
     _fe_time = -45000;
     _salve_counter = 0;
     _kill_after_shot = 0;
-    
+
     Common::DeleteAndNull(&_current_vp);
 
     _vp_active = 0;
@@ -11960,13 +12032,13 @@ void NC_STACK_ypabact::Renew()
 
     for (World::DestFX &x : _destroyFX)
         x = World::DestFX();
-    
+
     _extDestroyFX.clear();
     _chainFX.clear();
 
     for (extra_vproto &vp : _vp_extra)
         vp = extra_vproto();
-    
+
     _current_waypoint = 0;
 
     _attackersList.clear();
@@ -12225,12 +12297,12 @@ void NC_STACK_ypabact::MarkSectorsForView()
     /* Missle does not have kids, if else it's a BUG or must be another missle */
     if ( _bact_type == BACT_TYPES_MISSLE )
         return;
- 
+
     /* Unit already dead also must do not have any kids */
     if ( _status == BACT_STATUS_DEAD || _status == BACT_STATUS_CREATE )
         return;
-    
-    if ( !_parent || _cellId != _parent->_cellId || 
+
+    if ( !_parent || _cellId != _parent->_cellId ||
         (_radar > _parent->_radar || _unhideRadar > _parent->_unhideRadar) )
     {
         if ( _owner < 8 )
@@ -12806,7 +12878,7 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
         if ( cockpitAim )
             fireDir = ypabact_GetCockpitViewDirection(this, fireDir);
         vec3d shotDir = ypabact_ApplyDirectionalSpread(_rotation, fireDir, spreadX, spreadY);
-        float minigunTraceRange = v88 ? 1000.0 : (_mgun_ai_range > 0.0 ? _mgun_ai_range : 1000.0);
+        float minigunTraceRange = 1000.0f;
 
         NC_STACK_ypabact *v108 = NULL;
         float v123 = 0.0;
@@ -13552,7 +13624,7 @@ void NC_STACK_ypabact::ReorganizeGroup(bact_arg109 *arg)
                     kid->_commandID = arg->field_4->_commandID;
 
                     arg->field_4->AddSubject(kid);
-                    
+
                     kid->CopyTargetOf(arg->field_4);
                 }
 
@@ -13763,8 +13835,8 @@ size_t NC_STACK_ypabact::TargetAssess(bact_arg110 *arg)
     bool primTgtDone = false;
     bool primTgtNear = false;
 
-    if ( arg->tgType == BACT_TGT_TYPE_FRMT 
-         && 
+    if ( arg->tgType == BACT_TGT_TYPE_FRMT
+         &&
         (_primTtype == BACT_TGT_TYPE_FRMT || _secndTtype == BACT_TGT_TYPE_FRMT) )
         return TA_MOVE;
 
@@ -13849,7 +13921,7 @@ size_t NC_STACK_ypabact::TargetAssess(bact_arg110 *arg)
 
                 return TA_CANCEL;
             }
-            
+
             if ( !isSecTgt || _bact_type == BACT_TYPES_GUN )
                 return TA_FIGHT;
 
@@ -14104,7 +14176,7 @@ void NC_STACK_ypabact::StartDestFXByType(uint8_t type)
                     StartDestFX(fx);
             }
         }
-        
+
         for (const World::DestFX &x : _extDestroyFX)
         {
             if (x.ModelID != 0 && x.Type == type)
@@ -14226,7 +14298,7 @@ void NC_STACK_ypabact::CorrectPositionOnLand()
 void NC_STACK_ypabact::CorrectPositionInLevelBox(void *)
 {
     int v4 = 0;
-    
+
     constexpr float CurSectrLen = World::CVSectorLength + 10.0;
 
     if ( _position.x > _wrldSize.x - CurSectrLen )
@@ -15161,10 +15233,10 @@ size_t NC_STACK_ypabact::PathFinder(bact_arg124 *arg)
         }
 
         std::list<cellArea *>::iterator it = openList.begin();
-        
+
         std::list<cellArea *>::iterator selected = it;
         float selected_value = (*selected)->cost_to_this + (*selected)->cost_to_target;
-        
+
         for(it++; it != openList.end(); it++)
         {
             float v49 = (*it)->cost_to_this + (*it)->cost_to_target;
@@ -15175,7 +15247,7 @@ size_t NC_STACK_ypabact::PathFinder(bact_arg124 *arg)
                 selected_value = v49;
             }
         }
-        
+
         current_pcell = *selected;
 
         openList.erase(selected); // Remove OLIST
@@ -15199,7 +15271,7 @@ size_t NC_STACK_ypabact::PathFinder(bact_arg124 *arg)
 
     cellArea *curcell = pathCells.top();
     pathCells.pop();
-    
+
     cellArea *nextcell = pathCells.top();
 
     int v61 = nextcell->CellId.x - curcell->CellId.x;
@@ -15217,7 +15289,7 @@ size_t NC_STACK_ypabact::PathFinder(bact_arg124 *arg)
         }
 
         curcell = nextcell;
-        
+
         pathCells.pop();
         nextcell = pathCells.top();
 
@@ -15254,7 +15326,7 @@ size_t NC_STACK_ypabact::PathFinder(bact_arg124 *arg)
 
             v61 = nextcell->CellId.x - curcell->CellId.x;
             v62 = nextcell->CellId.y - curcell->CellId.y;
-            
+
             arg->waypoints[ step_id ] = World::SectorIDToCenterPos3(curcell->CellId) + vec3d(tx, 0.0, tz);
             maxsteps--;
             step_id++;
@@ -15495,7 +15567,7 @@ void NC_STACK_ypabact::SetVP(NC_STACK_base *vp)
 void NC_STACK_ypabact::setBACT_aggression(int aggr)
 {
     _aggr = aggr;
-    
+
     for (NC_STACK_ypabact* &nod : _kidList)
         nod->_aggr = aggr;
 }
@@ -15524,13 +15596,13 @@ bool NC_STACK_ypabact::IsNeedsWaypoints() const
 {
     if (IsGroundUnit())
         return true;
-    
+
     for (NC_STACK_ypabact* const &unit : _kidList)
     {
         if (unit->IsGroundUnit())
             return true;
     }
-    
+
     return false;
 }
 
@@ -15549,8 +15621,8 @@ void NC_STACK_ypabact::CleanAttackersTarget()
             attacker->_primTtype = BACT_TGT_TYPE_NONE;
             attacker->_assess_time = 0;
         }
-        
-        if ( attacker->_secndTtype == BACT_TGT_TYPE_UNIT && 
+
+        if ( attacker->_secndTtype == BACT_TGT_TYPE_UNIT &&
              attacker->_secndT.pbact == this )
         {
             attacker->_secndT.pbact = NULL;
@@ -15583,7 +15655,7 @@ void NC_STACK_ypabact::ChangeEscapeFlag(bool escape)
         _status_flg &= ~BACT_STFLAG_ESCAPE;
 
     // May be do it in recursion?
-    for( NC_STACK_ypabact* &node : _kidList ) 
+    for( NC_STACK_ypabact* &node : _kidList )
     {
         if ( escape )
             node->_status_flg |= BACT_STFLAG_ESCAPE;
@@ -15592,14 +15664,14 @@ void NC_STACK_ypabact::ChangeEscapeFlag(bool escape)
     }
 }
 
-bool NC_STACK_ypabact::IsHidden() const 
+bool NC_STACK_ypabact::IsHidden() const
 {
     if (_hidden)
         return true;
-    
+
     if (_world && _world->IsHidden(_owner))
         return true;
-    
+
     return false;
 }
 

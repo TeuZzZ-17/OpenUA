@@ -22,7 +22,7 @@
 #include "glfuncs.h"
 
 namespace GFX
-{   
+{
 GFXEngine GFXEngine::Instance;
 
 int GFXEngine::can_srcblend;
@@ -68,7 +68,7 @@ const std::array<vec3d, 17> GFXEngine::_clrEff
 
 std::vector<TGFXDeviceInfo> GFXEngine::_devices
 {
-    TGFXDeviceInfo("Opengl", "<primary>")         
+    TGFXDeviceInfo("Opengl", "<primary>")
 };
 
 struct HorizonFogConfig
@@ -204,10 +204,10 @@ bool TRenderNode::CompareSolid(TRenderNode *a, TRenderNode *b)
 {
     if ( !a->Mesh )
         return true;
-    
+
     if ( !b->Mesh )
         return false;
-    
+
     return a->Tex < b->Tex;
 }
 
@@ -304,10 +304,10 @@ void GFXEngine::StaticInit()
         return;
 
     _staticInited = true;
-    
+
     SDL_DisplayMode curr;
     SDL_GetCurrentDisplayMode(0, &curr);
-    
+
     switch(curr.format)
     {
         case SDL_PIXELFORMAT_RGB888:
@@ -316,7 +316,7 @@ void GFXEngine::StaticInit()
             _glPixfmt = GL_BGRA;
             _glPixtype = GL_UNSIGNED_BYTE;
             break;
-        
+
         case SDL_PIXELFORMAT_BGR888:
         case SDL_PIXELFORMAT_ABGR8888:
         default:
@@ -331,10 +331,10 @@ GFXEngine::GFXEngine()
 {
     for(TileMap *&t : _tiles)
         t = NULL;
-    
+
     for(SDL_Color &c : _palette)
         c = {0, 0, 0, 0};
-    
+
     _forcesoftcursor = 0;
     _field_38 = 0;
     _txt16bit = 0;
@@ -356,9 +356,9 @@ GFXEngine::GFXEngine()
     _corrIH = _corrH = 1.0;
 
     _solidFont = true;
-    
+
     _setFrustumClip(1.0, 8192.0);
-    
+
     _normClr = vec3d(1.0, 1.0, 1.0);
     _invClr = vec3d(0.0, 0.0, 0.0);
 }
@@ -368,7 +368,7 @@ std::string read_guid(const std::string &filename)
     FSMgr::FileHandle *fil = uaOpenFileAlloc(filename, "r");
     if ( !fil )
         return "";
-    
+
     std::string guid;
     fil->ReadLine(&guid);
     delete fil;
@@ -380,7 +380,7 @@ bool out_guid_to_file(const std::string &filename, const std::string &name)
     FSMgr::FileHandle *fil = uaOpenFileAlloc(filename, "w");
     if ( !fil )
         return false;
-    
+
     fil->puts(name);
     delete fil;
     return true;
@@ -491,7 +491,7 @@ void GFXEngine::DrawTextEntry(const ScreenText *txt)
                     tmp = TTF_RenderUTF8_Blended(_font.ttfFont, txt->string.c_str(), clr);
                     SDL_SetSurfaceBlendMode(tmp, SDL_BLENDMODE_BLEND);
                 }
-                
+
                 if (tmp)
                 {
                     SDL_Rect want;
@@ -583,10 +583,10 @@ int GFXEngine::LoadFontByDescr(const std::string &fontname)
 
     std::string facename;
     std::string s_height;
-    
+
     if (splt.size() > 0)
         facename = splt[0];
-    
+
     if (splt.size() > 1)
         s_height = splt[1];
     //const char *s_weight = strtok(0, ",");
@@ -647,7 +647,7 @@ size_t GFXEngine::windd_func0(IDVList &stak)
             can_stippling = 0;
         }
         break;
-        
+
         default:
         case 1:
         {
@@ -656,7 +656,7 @@ size_t GFXEngine::windd_func0(IDVList &stak)
             can_stippling = 0;
         }
         break;
-    
+
         case 2:
         {
             can_srcblend = 0;
@@ -680,12 +680,12 @@ size_t GFXEngine::windd_func0(IDVList &stak)
         case 0:
             SDL_GL_SetSwapInterval(0);
             break;
-        
+
         default:
         case 1:
             SDL_GL_SetSwapInterval(1);
             break;
-        
+
         case 2:
             {
                 if ( SDL_GL_SetSwapInterval(-1) == -1)
@@ -706,7 +706,7 @@ size_t GFXEngine::windd_func0(IDVList &stak)
 bool GFXEngine::SetResVariables(Common::Point res)
 {
     _resolution = res;   //stak.Get<int32_t>(ATT_WIDTH, 0);
-    
+
     _clip = _resolution - Common::Point(1, 1);
 
     _field_54c = _resolution.x / 2;
@@ -714,7 +714,7 @@ bool GFXEngine::SetResVariables(Common::Point res)
 
     _field_554 = _resolution.x / 2;
     _field_558 = _resolution.y / 2;
-    
+
     return true;
 }
 
@@ -742,7 +742,7 @@ size_t GFXEngine::func0(IDVList &stak)
 }
 
 void GFXEngine::ApplyResolution()
-{        
+{
     if ( (float)_resolution.x / (float)_resolution.y >= 1.4 )
     {
         int half = (_resolution.x + _resolution.y) / 2;
@@ -756,7 +756,7 @@ void GFXEngine::ApplyResolution()
         _corrIW = _corrW = 1.0;
         _corrIH = _corrH = 1.0;
     }
-    
+
     initPolyEngine();
 }
 
@@ -866,17 +866,17 @@ size_t GFXEngine::raster_func202(rstr_arg204 *arg)
     r2.top    = _field_558 * (arg->float14.top    + 1.0);
     r2.right  = _field_554 * (arg->float14.right  + 1.0);
     r2.bottom = _field_558 * (arg->float14.bottom + 1.0);
-    
+
     SDL_Rect src = r1;
     SDL_Rect dst = r2;
-    
+
     SDL_BlitScaled(arg->pbitm->swTex, &src, Screen(), &dst);
-    
+
     return 1;
 }
 
 size_t GFXEngine::raster_func204(rstr_arg204 *arg)
-{   
+{
     Common::Rect r1;
     r1.left   = (arg->float4.left   + 1.0) * (arg->pbitm->width / 2);
     r1.top    = (arg->float4.top    + 1.0) * (arg->pbitm->height / 2);
@@ -888,7 +888,7 @@ size_t GFXEngine::raster_func204(rstr_arg204 *arg)
     r2.top    = _field_558 * (arg->float14.top    + 1.0);
     r2.right  = _field_554 * (arg->float14.right  + 1.0);
     r2.bottom = _field_558 * (arg->float14.bottom + 1.0);
-    
+
     if ( _clip.IsIntersects(r2) )
     {
         if ( r2.left < _clip.left )
@@ -914,7 +914,7 @@ size_t GFXEngine::raster_func204(rstr_arg204 *arg)
             r1.bottom += (_clip.bottom - r2.bottom) * r1.Height() / r2.Height();
             r2.bottom = _clip.bottom;
         }
-    
+
         SDL_Rect src = r1;
         SDL_Rect dst = r2;
         SDL_BlitScaled(arg->pbitm->swTex, &src, Screen(), &dst);
@@ -927,16 +927,16 @@ void GFXEngine::SetRenderStates(int setAll)
 {
 //    static const std::array<int, 4> blends = {GL_ZERO, GL_ONE, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA};
     GfxStates *newStates;
-    
+
     if (setAll < 2)
         newStates = &_states;
     else
         newStates = &_lastStates;
-    
+
     bool forceSetShader = false;
     if (setAll)
         forceSetShader = true;
-    
+
     if (_glext)
     {
         if (setAll || (newStates->Prog.ID != _lastStates.Prog.ID))
@@ -945,48 +945,48 @@ void GFXEngine::SetRenderStates(int setAll)
             {
                 if (_lastStates.Prog.PosLoc != -1)
                     Glext::GLDisableVertexAttribArray(_lastStates.Prog.PosLoc);
-                
+
                 if (_lastStates.Prog.ColorLoc != -1)
                     Glext::GLDisableVertexAttribArray(_lastStates.Prog.ColorLoc);
-                
+
                 if (_lastStates.Prog.UVLoc != -1)
                     Glext::GLDisableVertexAttribArray(_lastStates.Prog.UVLoc);
             }
-            
+
             Glext::GLUseProgram(newStates->Prog.ID);
-            
+
             forceSetShader = true;
-            
+
             if (_vbo && newStates->Prog.ID)
             {
                 if (newStates->Prog.PosLoc != -1)
                     Glext::GLEnableVertexAttribArray(newStates->Prog.PosLoc);
-                
+
                 if (newStates->Prog.ColorLoc != -1)
                     Glext::GLEnableVertexAttribArray(newStates->Prog.ColorLoc);
             }
         }
     }
-    
+
     if (_vbo)
-    {        
+    {
         if (setAll || (newStates->DataBuf != _lastStates.DataBuf))
         {
             Glext::GLBindBuffer(GL_ARRAY_BUFFER, newStates->DataBuf);
         }
-        
+
         if (setAll || (newStates->IndexBuf != _lastStates.IndexBuf))
         {
             Glext::GLBindBuffer(GL_ELEMENT_ARRAY_BUFFER, newStates->IndexBuf);
         }
-        
+
         if (forceSetShader || (newStates->Tex != _lastStates.Tex))
         {
             if (newStates->Tex)
             {
                 if (newStates->Prog.UVLoc != -1)
                     Glext::GLEnableVertexAttribArray(newStates->Prog.UVLoc);
-                
+
                 glBindTexture(GL_TEXTURE_2D, newStates->Tex);
 
                 _vboStatesBlock.Textured = 1;
@@ -995,14 +995,14 @@ void GFXEngine::SetRenderStates(int setAll)
             {
                 if (newStates->Prog.UVLoc != -1)
                     Glext::GLDisableVertexAttribArray(newStates->Prog.UVLoc);
-                
+
                 glBindTexture(GL_TEXTURE_2D, 0);
 
                 _vboStatesBlock.Textured = 0;
             }
             _vboStatesChanged = true;
         }
-        
+
         if ((forceSetShader || (newStates->Fog != _lastStates.Fog) ||
             (newStates->FogLength != _lastStates.FogLength) ||
             (newStates->FogStart != _lastStates.FogStart) ||
@@ -1028,7 +1028,7 @@ void GFXEngine::SetRenderStates(int setAll)
             }
             _vboStatesChanged = true;
         }
-        
+
         if ((forceSetShader || (newStates->AFog != _lastStates.AFog) ||
             (newStates->AFogLength != _lastStates.AFogLength) ||
             (newStates->AFogStart != _lastStates.AFogStart) ||
@@ -1047,7 +1047,7 @@ void GFXEngine::SetRenderStates(int setAll)
             }
             _vboStatesChanged = true;
         }
-        
+
         if (forceSetShader || (newStates->Shaded != _lastStates.Shaded))
         {
             if (newStates->Shaded)
@@ -1060,7 +1060,7 @@ void GFXEngine::SetRenderStates(int setAll)
             }
             _vboStatesChanged = true;
         }
-        
+
         if (setAll || (newStates->AlphaTest != _lastStates.AlphaTest))
         {
             if (newStates->AlphaTest == false)
@@ -1102,7 +1102,7 @@ void GFXEngine::SetRenderStates(int setAll)
                 };
 
                 glFogfv(GL_FOG_COLOR, fcolors);
-                
+
                 glFogf(GL_FOG_START, newStates->FogStart);
                 glFogf(GL_FOG_END, newStates->FogStart + newStates->FogLength);
             }
@@ -1111,7 +1111,7 @@ void GFXEngine::SetRenderStates(int setAll)
                 glDisable(GL_FOG);
             }
         }
-        
+
         if (setAll || (newStates->Shaded != _lastStates.Shaded))
         {
             if (newStates->Shaded)
@@ -1119,7 +1119,7 @@ void GFXEngine::SetRenderStates(int setAll)
             else
                 glShadeModel(GL_FLAT);
         }
-        
+
         if (setAll || (newStates->Tex != _lastStates.Tex))
         {
             if (newStates->Tex)
@@ -1135,7 +1135,7 @@ void GFXEngine::SetRenderStates(int setAll)
                 glDisableClientState(GL_TEXTURE_COORD_ARRAY);
             }
         }
-        
+
         if (setAll || (newStates->AlphaTest != _lastStates.AlphaTest))
         {
             if (newStates->AlphaTest == false)
@@ -1149,7 +1149,7 @@ void GFXEngine::SetRenderStates(int setAll)
             }
         }
     }
-    
+
     if (setAll || (newStates->DepthTest != _lastStates.DepthTest))
     {
         if (newStates->DepthTest)
@@ -1180,7 +1180,7 @@ void GFXEngine::SetRenderStates(int setAll)
             }
         }
     }
-    
+
     if (setAll || (newStates->SrcBlend != _lastStates.SrcBlend)
                    || (newStates->DstBlend != _lastStates.DstBlend))
     {
@@ -1225,15 +1225,15 @@ void GFXEngine::RenderingMeshOld(TRenderNode *nod)
 {
     if ( !_sceneBeginned )
         return;
-    
+
     if (!nod)
         return;
-    
+
     TMesh *mesh = nod->Mesh;
-    
+
     if (!mesh)
         return;
-    
+
     uint32_t flags = nod->Flags;
 
     _states.Shaded = false;
@@ -1249,7 +1249,7 @@ void GFXEngine::RenderingMeshOld(TRenderNode *nod)
     _states.AlphaTest = false;
     _states.AFog = false;
     _states.Prog = TShaderProg();
-    
+
     bool useComputedColor = false;
 
     if ( flags & RFLAGS_TEXTURED )
@@ -1263,7 +1263,7 @@ void GFXEngine::RenderingMeshOld(TRenderNode *nod)
         _states.TexBlend = 2; //MODULATE
         _states.Shaded = true;
     }
-    
+
     if ( flags & RFLAGS_FOG )
     {
         _states.Fog = true;
@@ -1272,7 +1272,7 @@ void GFXEngine::RenderingMeshOld(TRenderNode *nod)
         _states.FogStrength = 1.0f;
         _states.FogColor = TGLColor(0.0, 0.0, 0.0, 1.0);
     }
-    
+
     if ( flags & RFLAGS_LUMTRACY )
     {
         if ( !_zbuf_when_tracy )
@@ -1298,7 +1298,7 @@ void GFXEngine::RenderingMeshOld(TRenderNode *nod)
         {
             _states.AlphaBlend = true;
             _states.TexBlend = 1; //MODULATEALPHA;
-            _states.SrcBlend = GL_SRC_ALPHA;//D3DBLEND_SRCALPHA;, 
+            _states.SrcBlend = GL_SRC_ALPHA;//D3DBLEND_SRCALPHA;,
             _states.DstBlend = GL_ONE_MINUS_SRC_ALPHA;//D3DBLEND_INVSRCALPHA;
             _states.Stipple = true;
             _states.Shaded = false;
@@ -1306,11 +1306,11 @@ void GFXEngine::RenderingMeshOld(TRenderNode *nod)
     }
     else if ( flags & RFLAGS_ZEROTRACY )
     {
-        _states.AlphaTest = true;        
+        _states.AlphaTest = true;
 
         if ( _pixfmt->BytesPerPixel != 1 )
         {
-            _states.SrcBlend = GL_SRC_ALPHA;//D3DBLEND_SRCALPHA;, 
+            _states.SrcBlend = GL_SRC_ALPHA;//D3DBLEND_SRCALPHA;,
             _states.DstBlend = GL_ONE_MINUS_SRC_ALPHA;//D3DBLEND_INVSRCALPHA;
         }
 
@@ -1325,7 +1325,7 @@ void GFXEngine::RenderingMeshOld(TRenderNode *nod)
         _states.Shaded = true;
     }
 
-    
+
     if (flags & RFLAGS_COMPUTED_COLOR)
         useComputedColor = true;
 
@@ -1420,12 +1420,12 @@ void GFXEngine::RenderingMeshOld(TRenderNode *nod)
     SetModelViewMatrix( nod->TForm );
 
     glVertexPointer(3, GL_FLOAT, sizeof(TVertex), &mesh->Vertexes[0].Pos);
-    
+
     if (useComputedColor)
         glColorPointer(4, GL_FLOAT, sizeof(TVertex), &mesh->Vertexes[0].ComputedColor);
     else
         glColorPointer(4, GL_FLOAT, sizeof(TVertex), &mesh->Vertexes[0].Color);
-    
+
     if (flags & RFLAGS_TEXTURED)
     {
         if ( (flags & RFLAGS_DYNAMIC_TEXTURE) && nod->coordsID >= 0 )
@@ -1433,7 +1433,7 @@ void GFXEngine::RenderingMeshOld(TRenderNode *nod)
         else
             glTexCoordPointer(2, GL_FLOAT, sizeof(TVertex), &mesh->Vertexes[0].TexCoord);
     }
-    
+
     glDrawElements(GL_TRIANGLES, mesh->Indixes.size(), GLINDEXTYPE, mesh->Indixes.data());
 }
 
@@ -1441,15 +1441,15 @@ void GFXEngine::RenderingMesh(TRenderNode *nod)
 {
     if ( !_sceneBeginned )
         return;
-    
+
     if (!nod)
         return;
-    
+
     TMesh *mesh = nod->Mesh;
-    
+
     if (!mesh)
         return;
-    
+
     uint32_t flags = nod->Flags;
 
     _states.Shaded = false;
@@ -1465,7 +1465,7 @@ void GFXEngine::RenderingMesh(TRenderNode *nod)
     _states.AlphaTest = false;
     _states.AFog = false;
     _states.Prog = _stdShaderProg;
-    
+
     if ( flags & RFLAGS_TEXTURED )
     {
         if (nod->Tex)
@@ -1477,7 +1477,7 @@ void GFXEngine::RenderingMesh(TRenderNode *nod)
         _states.TexBlend = 2; //MODULATE
         _states.Shaded = true;
     }
-    
+
     if ( flags & RFLAGS_FOG )
     {
         _states.Fog = true;
@@ -1486,7 +1486,7 @@ void GFXEngine::RenderingMesh(TRenderNode *nod)
         _states.FogStrength = 1.0f;
         _states.FogColor = TGLColor(0.0, 0.0, 0.0, 1.0);
     }
-    
+
     if ( flags & RFLAGS_LUMTRACY )
     {
         if ( !_zbuf_when_tracy )
@@ -1512,7 +1512,7 @@ void GFXEngine::RenderingMesh(TRenderNode *nod)
         {
             _states.AlphaBlend = true;
             _states.TexBlend = 1; //MODULATEALPHA;
-            _states.SrcBlend = GL_SRC_ALPHA;//D3DBLEND_SRCALPHA;, 
+            _states.SrcBlend = GL_SRC_ALPHA;//D3DBLEND_SRCALPHA;,
             _states.DstBlend = GL_ONE_MINUS_SRC_ALPHA;//D3DBLEND_INVSRCALPHA;
             _states.Stipple = true;
             _states.Shaded = false;
@@ -1520,11 +1520,11 @@ void GFXEngine::RenderingMesh(TRenderNode *nod)
     }
     else if ( flags & RFLAGS_ZEROTRACY )
     {
-        _states.AlphaTest = true;        
+        _states.AlphaTest = true;
 
         if ( _pixfmt->BytesPerPixel != 1 )
         {
-            _states.SrcBlend = GL_SRC_ALPHA;//D3DBLEND_SRCALPHA;, 
+            _states.SrcBlend = GL_SRC_ALPHA;//D3DBLEND_SRCALPHA;,
             _states.DstBlend = GL_ONE_MINUS_SRC_ALPHA;//D3DBLEND_INVSRCALPHA;
         }
 
@@ -1539,7 +1539,7 @@ void GFXEngine::RenderingMesh(TRenderNode *nod)
         _states.Shaded = true;
     }
 
-    
+
     if (flags & RFLAGS_DISABLE_ZWRITE)
         _states.Zwrite = false;
 
@@ -1588,12 +1588,12 @@ void GFXEngine::RenderingMesh(TRenderNode *nod)
     SetModelViewMatrix(nod->TForm);
 
     Glext::GLVertexAttribPointer(_lastStates.Prog.PosLoc, 3, GL_FLOAT, GL_FALSE,  sizeof(TVertex), (void *)offsetof(TVertex, Pos));
-    
+
     if (flags & RFLAGS_COMPUTED_COLOR)
         Glext::GLVertexAttribPointer(_lastStates.Prog.ColorLoc, 4, GL_FLOAT, GL_FALSE,  sizeof(TVertex), (void *)offsetof(TVertex, ComputedColor));
     else
         Glext::GLVertexAttribPointer(_lastStates.Prog.ColorLoc, 4, GL_FLOAT, GL_FALSE,  sizeof(TVertex), (void *)offsetof(TVertex, Color));
-    
+
     if (flags & RFLAGS_TEXTURED)
     {
         if ( (flags & RFLAGS_DYNAMIC_TEXTURE) && nod->coordsID >= 0 )
@@ -1623,7 +1623,7 @@ void GFXEngine::RenderNode(TRenderNode *node)
 {
     if (!node)
         return;
-    
+
     switch(node->Type)
     {
         case TRenderNode::TYPE_MESH:
@@ -1632,7 +1632,7 @@ void GFXEngine::RenderNode(TRenderNode *node)
             else
                 RenderingMeshOld(node);
             break;
-            
+
         case TRenderNode::TYPE_PARTICLE:
         {
             if (_vbo)
@@ -1641,7 +1641,7 @@ void GFXEngine::RenderNode(TRenderNode *node)
                 RenderingMeshOld(node);
         }
             break;
-            
+
         default:
             break;
     }
@@ -1651,13 +1651,13 @@ void GFXEngine::QueueRenderMesh(TRenderNode *nod)
 {
     if (!nod)
         return;
-    
-    TMesh *mesh = nod->Mesh;    
+
+    TMesh *mesh = nod->Mesh;
     if (!mesh)
         return;
-    
+
     uint32_t flags = nod->Flags;
-    
+
     if (flags & RFLAGS_SKY)
         _renderSkyBoxList.push_back(nod);
     else if (flags & RFLAGS_ZEROTRACY)
@@ -1673,40 +1673,40 @@ void GFXEngine::Rasterize(uint32_t RasterEtapes)
     if (RasterEtapes & RASTER_SKY)
     {
         _renderSkyBoxList.sort(TRenderNode::CompareSolid);
-        
+
         while(!_renderSkyBoxList.empty())
         {
             RenderNode( _renderSkyBoxList.front() );
             _renderSkyBoxList.pop_front();
         }
     }
-    
+
     if (RasterEtapes & RASTER_SOLID)
     {
         _renderSolidList.sort(TRenderNode::CompareSolid);
-        
+
         while(!_renderSolidList.empty())
         {
             RenderNode( _renderSolidList.front() );
             _renderSolidList.pop_front();
         }
     }
-    
+
     if (RasterEtapes & RASTER_ZEROTR)
     {
         _renderZeroTracyList.sort(TRenderNode::CompareSolid);
-        
+
         while(!_renderZeroTracyList.empty())
         {
             RenderNode( _renderZeroTracyList.front() );
             _renderZeroTracyList.pop_front();
         }
     }
-    
+
     if (RasterEtapes & RASTER_LUMATR)
     {
         _renderLumaTracyList.sort(TRenderNode::CompareTransparent);
-        
+
         while(!_renderLumaTracyList.empty())
         {
             RenderNode( _renderLumaTracyList.front() );
@@ -1746,14 +1746,14 @@ void GFXEngine::ProcessDrawSeq(const CmdStream &drawSeq, const CmdIncludes *incl
         const CmdStream &seq;
         const int32_t pos;
     };
-    
+
     int v11;
 
     int bytesPerColor = Screen()->format->BytesPerPixel;
 
     int32_t curPos = 0;
     const CmdStream *curStream = &drawSeq;
-    
+
     int w_pixels = Screen()->pitch / bytesPerColor;
     TileMap *tile = NULL;
 
@@ -1801,36 +1801,36 @@ void GFXEngine::ProcessDrawSeq(const CmdStream &drawSeq, const CmdIncludes *incl
             int cpy_height = line_height - y_off;
 
             //SDL_Rect srcR, dstR;
-            Common::Rect dstR(x_out, y_out, x_out + cpy_width, y_out + cpy_height);            
+            Common::Rect dstR(x_out, y_out, x_out + cpy_width, y_out + cpy_height);
             /*dstR.x = x_out;
             dstR.y = y_out;
             dstR.w = cpy_width;
             dstR.h = cpy_height;*/
-            
+
             Common::Rect srcR;
             srcR.left = chrr.x + x_off;
             srcR.top = chrr.y + y_off;
             srcR.bottom = chrr.y + y_off + cpy_height;
-            
+
             if (v11)
                 srcR.right = chrr.x + x_off + cpy_width;
             else
                 srcR.right = chrr.x + x_off + 1;
-            
+
             DrawFill(tile->img->GetSwTex(), srcR, Screen(), dstR);
-                    
+
             /*srcR.h = cpy_height;
-            
+
             if (v11)
                 srcR.w = cpy_width;
             else
                 srcR.w = 1;
-            
+
             for(int i = 0; i < cpy_width; i += srcR.w)
             {
                 SDL_BlitSurface(tile->img->GetSwTex(), &srcR, Screen(), &dstR);
                 dstR.x += srcR.w;
-            }*/     
+            }*/
 
             line_width = 0;
             x_off = 0;
@@ -1844,16 +1844,16 @@ void GFXEngine::ProcessDrawSeq(const CmdStream &drawSeq, const CmdIncludes *incl
             switch ( opcode )
             {
             case 0: // End
-                
+
                 if (Stack.empty())
                 {
                     DrawScreenText();
                     return;
                 }
-                
+
                 curPos = Stack.top().pos;
                 curStream = &Stack.top().seq;
-                
+
                 Stack.pop();
                 break;
 
@@ -1982,12 +1982,12 @@ void GFXEngine::ProcessDrawSeq(const CmdStream &drawSeq, const CmdIncludes *incl
             {
                 int block_width = FontUA::get_s16(*curStream, &curPos);
                 int flag = txt_flag | FontUA::get_u16(*curStream, &curPos);
-                
+
                 int32_t sz = FontUA::get_u16(*curStream, &curPos);
 
                 std::string txt;
                 txt.assign((const char *)(curStream->data()) + curPos, sz);
-                
+
 
                 curPos += sz + 1;
                 AddScreenText(txt, x_out_txt, y_out_txt, block_width, tile->h, flag);
@@ -2044,10 +2044,10 @@ void GFXEngine::raster_func211(const Common::Rect &arg)
 void GFXEngine::BeginScene()
 {
     SetRenderStates(2);
-    
+
     SetProjectionMatrix( _frustum );
     SetModelViewMatrix( mat4x4f() );
-    
+
     _sceneBeginned = 1;
 }
 
@@ -2055,12 +2055,12 @@ void GFXEngine::BeginScene()
 void GFXEngine::EndScene()
 {
     _sceneBeginned = 0;
-    
+
     _renderSkyBoxList.clear();
     _renderSolidList.clear();
     _renderZeroTracyList.clear();
     _renderLumaTracyList.clear();
-    
+
     _renderNodesCache.Rewind();
 }
 
@@ -2098,42 +2098,42 @@ void GFXEngine::raster_func221(const Common::Rect &arg)
 void GFXEngine::BeginFrame()
 {
     SDL_FillRect(Screen(), NULL, SDL_MapRGBA(Screen()->format, 0, 0, 0, 0) );
-    
+
     Common::Point scrSz = System::GetResolution();
     glViewport(0, 0, scrSz.x, scrSz.y);
-    
+
     bool saved = _states.Zwrite;
-    
+
     _states.Zwrite = true;
     SetRenderStates(0);
-    
+
     if (_colorEffects)
     {
         Glext::GLBindFramebuffer(GL_FRAMEBUFFER, 0);
-    
+
         glClearColor(0, 0, 0, 0);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    
+
         Glext::GLBindFramebuffer(GL_FRAMEBUFFER, _fbo);
     }
 
     glClearColor(0, 0, 0, 0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    
+
     _states.Zwrite = saved;
     SetRenderStates(0);
-    
+
     if (!_vbo)
     {
         glEnableClientState(GL_VERTEX_ARRAY);
         glEnableClientState(GL_COLOR_ARRAY);
     }
-    
+
     _states.Prog = _stdShaderProg;
 }
 
 void GFXEngine::EndFrame()
-{       
+{
     if (_vhsFilterActive)
     {
         if (_colorEffects > 1)
@@ -2180,25 +2180,25 @@ void GFXEngine::EndFrame()
     }
     else if (_colorEffects > 1)
     {
-        Glext::GLBindFramebuffer(GL_FRAMEBUFFER, 0);   
+        Glext::GLBindFramebuffer(GL_FRAMEBUFFER, 0);
         DrawFBO();
-    }    
+    }
 
     Gui::Root::Instance.Draw(Screen());
     DrawScreenSurface();
     Gui::Root::Instance.HwCompose();
-    
+
     if (_colorEffects == 1 && !_vhsFilterActive)
     {
-        Glext::GLBindFramebuffer(GL_FRAMEBUFFER, 0);   
+        Glext::GLBindFramebuffer(GL_FRAMEBUFFER, 0);
         DrawFBO();
     }
-    
+
     System::Flip();
 }
 
 void GFXEngine::SetColorEffectsPowers(const std::vector<ColorFx> &arg)
-{    
+{
     if (arg.empty())
     {
         _normClr = vec3d(1.0, 1.0, 1.0);
@@ -2259,11 +2259,11 @@ bool GFXEngine::AllocTexture(ResBitmap *bitm)
             SDL_Surface *conv = ConvertSDLSurface(bitm->swTex, _pixfmt);
             if ( !conv )
                 return false;
-            
+
             SDL_LockSurface(conv);
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, bitm->width, bitm->height, 0, _glPixfmt, _glPixtype, conv->pixels);
             SDL_UnlockSurface(conv);
-            
+
             SDL_FreeSurface(conv);
         }
     }
@@ -2376,7 +2376,7 @@ const std::vector<TGFXDeviceInfo>& GFXEngine::GetDevices()
 void GFXEngine::SetDeviceByGUID(const std::string &guid, bool writefile)
 {
     std::string guidWrite = guid;
-    
+
     bool found = false;
     for( TGFXDeviceInfo &dev: _devices )
     {
@@ -2388,7 +2388,7 @@ void GFXEngine::SetDeviceByGUID(const std::string &guid, bool writefile)
         else
             dev.isCurrent = false;
     }
-    
+
     if ( !found )
     {
         for( TGFXDeviceInfo &dev: _devices )
@@ -2400,7 +2400,7 @@ void GFXEngine::SetDeviceByGUID(const std::string &guid, bool writefile)
                 guidWrite = "<primary>";
             }
         }
-        
+
         for( TGFXDeviceInfo &dev: _devices )
         {
             if (dev.guid == "<software>")
@@ -2410,7 +2410,7 @@ void GFXEngine::SetDeviceByGUID(const std::string &guid, bool writefile)
                 guidWrite = "<software>";
             }
         }
-        
+
         if (!_devices.empty())
         {
             TGFXDeviceInfo &dev = _devices[0];
@@ -2419,7 +2419,7 @@ void GFXEngine::SetDeviceByGUID(const std::string &guid, bool writefile)
             guidWrite = dev.guid;
         }
     }
-    
+
     if (writefile)
     {
         if (guidWrite == "<primary>" || guidWrite == "<software>")
@@ -2469,7 +2469,7 @@ void GFXEngine::setW3D_texFilt(int arg)
 void GFXEngine::SetPalette(UA_PALETTE &newPal)
 {
     _palette = newPal;
-    
+
     _normClr = vec3d(1.0, 1.0, 1.0);
     _invClr = vec3d(0.0, 0.0, 0.0);
 }
@@ -2491,13 +2491,13 @@ void GFXEngine::draw2DandFlush()
 {
     if (_colorEffects)
         Glext::GLBindFramebuffer(GL_FRAMEBUFFER, 0);
-    
+
     Gui::Root::Instance.Draw(Screen());
     DrawScreenSurface();
     Gui::Root::Instance.HwCompose();
 
     SDL_FillRect(Screen(), NULL, SDL_MapRGBA(Screen()->format, 0, 0, 0, 0) );
-    
+
     if (_colorEffects)
         Glext::GLBindFramebuffer(GL_FRAMEBUFFER, _fbo);
 }
@@ -2549,7 +2549,7 @@ void GFXEngine::_setFrustumClip(float _near, float _far)
     //-z * frustum
     _frustumNear = _near;
     _frustumFar = _far;
-    
+
     _frustum = mat4x4f::UAFrustum(_near, _far);
 }
 
@@ -2659,7 +2659,7 @@ TileMap::TileMap()
     img = NULL;
     h = 0;
 }
-    
+
 TileMap::~TileMap()
 {
     if (img)
@@ -2679,7 +2679,7 @@ void TileMap::Draw(SDL_Surface *surface, const Common::PointRect &pos, uint8_t c
     if (src.w > pos.w)
         src.w = pos.w;
     if (src.h > pos.h)
-        src.h = pos.h;    
+        src.h = pos.h;
     SDL_Rect dst = pos;
     SDL_BlitSurface(img->GetSwTex(), &src, surface, &dst);
 }
@@ -2690,7 +2690,7 @@ void TileMap::Draw(SDL_Surface *surface, const Common::Rect &pos, uint8_t c)
     if (src.w > pos.Width())
         src.w = pos.Width();
     if (src.h > pos.Height())
-        src.h = pos.Height();    
+        src.h = pos.Height();
     SDL_Rect dst = pos;
     SDL_BlitSurface(img->GetSwTex(), &src, surface, &dst);
 }
@@ -2984,46 +2984,46 @@ SDL_Cursor *GFXEngine::LoadCursor(const std::string &name)
 void GFXEngine::Init()
 {
     StaticInit();
-    
+
     _glext = Glext::init();
-    
+
     SetDeviceByGUID( read_guid("env/guid3d.def") );
-    
+
     System::EventsAddHandler(EventsWatcher);
-    
+
     System::IniConf::ReadFromNucleusIni();
     HorizonLoadConfigFromIni();
-    
+
     _vbo = System::IniConf::GfxVBO.Get<bool>();
     _colorEffects = System::IniConf::GfxColorEffects.Get<int32_t>();
-    
+
     if (!_glext)
     {
         _colorEffects = 0;
         _vbo = false;
     }
-    
+
     if (_vbo)
     {
         Glext::GLGenVertexArrays(1, &_globalVao);
         Glext::GLBindVertexArray(_globalVao);
-        
+
         Glext::GLGenBuffers(1, &_vboParams);
         Glext::GLBindBuffer(GL_UNIFORM_BUFFER, _vboParams);
-        Glext::GLBufferData(GL_UNIFORM_BUFFER, _vboParamsSize, NULL, GL_STREAM_DRAW); 
-        
+        Glext::GLBufferData(GL_UNIFORM_BUFFER, _vboParamsSize, NULL, GL_STREAM_DRAW);
+
         Glext::GLBindBufferBase(GL_UNIFORM_BUFFER, _vboParamsBlockBinding, _vboParams);
     }
-    
+
     std::array<Common::Point, 17> checkModes
     {{
-        {640, 480},     {800, 600},     {1024, 768},    {1280, 1024}, 
-        {1440, 1050},   {1600, 1200},   {720, 480},     {852, 480}, 
-        {1280, 720},    {1366, 768},    {1600, 900},    {1920, 1080}, 
+        {640, 480},     {800, 600},     {1024, 768},    {1280, 1024},
+        {1440, 1050},   {1600, 1200},   {720, 480},     {852, 480},
+        {1280, 720},    {1366, 768},    {1600, 900},    {1920, 1080},
         {1920, 1200},   {2560, 1080},   {2560, 1440},   {3440, 1440},
         {3840, 2160}
      }};
-    
+
     graphicsModes.reserve(checkModes.size());
 
     for(Common::Point m : checkModes)
@@ -3048,7 +3048,7 @@ void GFXEngine::Init()
             AddGfxMode(mode);
         }
     }
-    
+
     // Force to add custom resolutions
     std::vector<std::string> customModes = Stok::Split(System::IniConf::GfxAdditionalModes.Get<std::string>(), ",");
     for (std::string mod : customModes)
@@ -3057,7 +3057,7 @@ void GFXEngine::Init()
         if (vals.size() >= 2)
         {
             SDL_DisplayMode target, closest;
-            
+
             target.w = std::stoi(vals[0]);
             target.h = std::stoi(vals[1]);
             target.format = _pixfmt->format;
@@ -3070,22 +3070,22 @@ void GFXEngine::Init()
             mode.mode = target;
             mode.bpp = _pixfmt->BytesPerPixel;
             mode.name = GfxMode::GenName(mode.w, mode.h);
-                
+
             if (SDL_GetClosestDisplayMode(0, &target, &closest) )
             {
                 mode.mode = closest;
                 mode.bpp = SDL_BYTESPERPIXEL(closest.format) * 8;
                 mode.name = GfxMode::GenName(mode.w, mode.h);
             }
-            
+
             AddGfxMode(mode);
         }
     }
-    
-    
+
+
 
     std::sort(graphicsModes.begin(), graphicsModes.end(), GfxMode::SortCompare);
-    
+
     cursors[0] = LoadCursor("Pointer");
     cursors[1] = LoadCursor("Cancel");
     cursors[2] = LoadCursor("Select");
@@ -3104,7 +3104,7 @@ void GFXEngine::Init()
 
     RecreateScreenSurface();
     Gui::Instance.SetScreenSize(GetScreenSize());
-    
+
     LoadPalette(System::IniConf::GfxPalette.Get<std::string>());
 
     if (_vbo)
@@ -3112,13 +3112,13 @@ void GFXEngine::Init()
         _stdPsShader = CompileShader(GL_FRAGMENT_SHADER, _stdPShaderText);
         _stdVsShader = CompileShader(GL_VERTEX_SHADER,   _stdVShaderText);
         uint32_t progID = Glext::GLCreateProgram();
-        
+
         Glext::GLAttachShader(progID, _stdPsShader);
         Glext::GLAttachShader(progID, _stdVsShader);
         Glext::GLLinkProgram(progID);
-        
+
         _stdShaderProg = TShaderProg( progID );
-        
+
         BindVBOParameters(_stdShaderProg);
     }
 
@@ -3140,7 +3140,7 @@ void GFXEngine::Init()
         Glext::GLBindRenderbuffer(GL_RENDERBUFFER, _fbod);
         Glext::GLRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 640, 480);
 
-        
+
         Glext::GLFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, _fbod);
 
         Glext::GLFrameBufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, _fboTex, 0);
@@ -3161,11 +3161,11 @@ void GFXEngine::Init()
         }
 
         uint32_t progID = Glext::GLCreateProgram();
-        
+
         Glext::GLAttachShader(progID, _psShader);
         Glext::GLAttachShader(progID, _vsShader);
         Glext::GLLinkProgram(progID);
-        
+
         _colorEffectsShaderProg = TColorEffectsProg(progID);
 
         if (_vbo)
@@ -3187,44 +3187,44 @@ void GFXEngine::Deinit()
         TTF_CloseFont(_font.ttfFont);
         _font.ttfFont = NULL;
     }
-    
+
     if (ScreenSurface)
         SDL_FreeSurface(ScreenSurface);
-    
+
     ScreenSurface = NULL;
-    
+
     if (_stdQuadDataBuf)
         Glext::GLDeleteBuffers(1, &_stdQuadDataBuf);
-    
+
     _stdQuadDataBuf = 0;
-    
+
     if (_stdQuadIndexBuf)
         Glext::GLDeleteBuffers(1, &_stdQuadIndexBuf);
-    
+
     _stdQuadIndexBuf = 0;
-    
+
     if (_stdShaderProg.ID)
         Glext::GLDeleteProgram(_stdShaderProg.ID);
-    
+
     if (_stdVsShader)
         Glext::GLDeleteShader(_stdVsShader);
-    
+
     if (_stdPsShader)
         Glext::GLDeleteShader(_stdPsShader);
-    
+
     _stdShaderProg.ID = 0;
     _stdVsShader = 0;
-    _stdPsShader = 0;   
-    
+    _stdPsShader = 0;
+
     if (_colorEffectsShaderProg.ID)
-        Glext::GLDeleteProgram(_colorEffectsShaderProg.ID); 
-    
+        Glext::GLDeleteProgram(_colorEffectsShaderProg.ID);
+
     if (_psShader)
         Glext::GLDeleteShader(_psShader);
-    
+
     if (_vsShader)
         Glext::GLDeleteShader(_vsShader);
-    
+
     _colorEffectsShaderProg.ID = 0;
     _vsShader = 0;
     _psShader = 0;
@@ -3273,7 +3273,7 @@ int GFXEngine::EventsWatcher(void *, SDL_Event *event)
     }
     break;
     }
-    
+
     return 1; // This event can be passed to another event watcher
 }
 
@@ -3326,18 +3326,18 @@ GfxMode GFXEngine::windd_func0__sub0(const std::string &file)
         if ( fil->ReadLine(&line) )
         {
             size_t pos = line.find_first_of("\n\r");
-            
+
             if (pos != std::string::npos)
                 line.erase(pos);
-            
+
             bool windowed = false;
             pos = line.find("Windowed");
-            
+
             if (pos != std::string::npos && pos >= 1)
             {
                 windowed = true;
                 line.erase(pos - 1);
-            }           
+            }
 
             for (const GfxMode &m : graphicsModes)
             {
@@ -3371,7 +3371,7 @@ void GFXEngine::SetResolution(const Common::Point &res, bool windowed)
 {
     if (GfxSelectedMode == res && GfxSelectedMode.windowed == windowed)
         return;
-    
+
     UA_PALETTE *screen_palette = GetPalette();
 
     UA_PALETTE palette_copy;
@@ -3392,7 +3392,7 @@ void GFXEngine::SetResolution(const Common::Point &res, bool windowed)
     EndFrame();
 
     //cls3D->Delete();
-    
+
     GfxMode picked;
     if ( res )
     {
@@ -3413,22 +3413,22 @@ void GFXEngine::SetResolution(const Common::Point &res, bool windowed)
     {
         picked = windd_func0__sub0("env/vid.def");
     }
-    
+
     if (!picked.windowed)
         System::SetVideoMode(Common::Point(picked.w, picked.h), SDL_WINDOW_FULLSCREEN_DESKTOP, &picked.mode);
     else
         System::SetVideoMode(Common::Point(picked.w, picked.h), 0, NULL);
-    
-    SetResVariables(picked);        
+
+    SetResVariables(picked);
     ApplyResolution();
-    
+
     RecreateScreenSurface();
-    
+
     BeginFrame();
     SetPalette(palette_copy);
-    
+
     GfxSelectedMode = picked;
-    
+
     FSMgr::FileHandle *fil = uaOpenFileAlloc("env/vid.def", "w");
     if ( fil )
     {
@@ -3436,12 +3436,12 @@ void GFXEngine::SetResolution(const Common::Point &res, bool windowed)
             fil->printf("%s Windowed\n", picked.name.c_str());
         else
             fil->printf("%s\n", picked.name.c_str());
-            
+
         delete fil;
     }
-    
+
     Gui::Instance.SetScreenSize(GetScreenSize());
-    
+
     UpdateFBOSizes();
 }
 
@@ -4009,11 +4009,11 @@ SDL_Surface *GFXEngine::Screen()
 // Draw line Bresenham's algorithm
 void GFXEngine::DrawLine(SDL_Surface *surface, const Common::Line &line, uint8_t cr, uint8_t cg, uint8_t cb )
 {
-    if ((line.Width() == 0 && line.Height() == 0) || 
+    if ((line.Width() == 0 && line.Height() == 0) ||
          !Common::Rect(surface->w, surface->h).IsIn(line.P1()) ||
          !Common::Rect(surface->w, surface->h).IsIn(line.P2()) )
         return;
-    
+
     int rilWidth = surface->pitch / surface->format->BytesPerPixel;
 
     int xCount = line.Width();
@@ -4050,7 +4050,7 @@ void GFXEngine::DrawLine(SDL_Surface *surface, const Common::Line &line, uint8_t
             stepOdd = -rilWidth;
         else
             stepOdd = rilWidth;
-        
+
         steps = xCount;
         subSteps = yCount;
     }
@@ -4058,11 +4058,11 @@ void GFXEngine::DrawLine(SDL_Surface *surface, const Common::Line &line, uint8_t
     int incr1 = 2 * subSteps;
     int t = 2 * subSteps - steps;
     int incr2 = 2 * (subSteps - steps);
-    
+
     SDL_LockSurface(surface);
-    
-    void *surfPos = (void *) ((uint8_t *) surface->pixels 
-                    + line.y1 * surface->pitch 
+
+    void *surfPos = (void *) ((uint8_t *) surface->pixels
+                    + line.y1 * surface->pitch
                     + line.x1 * surface->format->BytesPerPixel );
 
     switch(surface->format->BytesPerPixel)
@@ -4086,7 +4086,7 @@ void GFXEngine::DrawLine(SDL_Surface *surface, const Common::Line &line, uint8_t
             }
         }
         break;
-        
+
         case 2:
         {
             uint16_t *surf = (uint16_t *)surfPos;
@@ -4106,7 +4106,7 @@ void GFXEngine::DrawLine(SDL_Surface *surface, const Common::Line &line, uint8_t
             }
         }
         break;
-        
+
         case 4:
         {
             uint32_t *surf = (uint32_t *)surfPos;
@@ -4126,11 +4126,11 @@ void GFXEngine::DrawLine(SDL_Surface *surface, const Common::Line &line, uint8_t
             }
         }
         break;
-        
+
         default:
         break;
     }
-    
+
     SDL_UnlockSurface(surface);
 }
 
@@ -4138,20 +4138,20 @@ void GFXEngine::BlitScaleMasked(SDL_Surface *src, Common::Rect sRect, SDL_Surfac
 {
     if (mask->format->BitsPerPixel != 8)
         return;
-        
+
     if (src->w != mask->w || src->h != mask->h)
         return;
-    
+
     if (sRect.IsEmpty() || !sRect.IsValid())
         sRect = Common::Rect(src->w, src->h);
     else if (!Common::Rect(src->w, src->h).IsIn(sRect))
         return;
-    
+
     if (dRect.IsEmpty() || !dRect.IsValid())
         dRect = Common::Rect(dst->w, dst->h);
     else if (!Common::Rect(dst->w, dst->h).IsIn(dRect))
         return;
-    
+
     // Try fast
     if (src->format->format == dst->format->format)
     {
@@ -4162,17 +4162,17 @@ void GFXEngine::BlitScaleMasked(SDL_Surface *src, Common::Rect sRect, SDL_Surfac
                 SDL_LockSurface(src);
                 SDL_LockSurface(mask);
                 SDL_LockSurface(dst);
-                
+
                 int32_t dY = (sRect.Height() << 16) / dRect.Height();
                 int32_t dX = (sRect.Width()  << 16) / dRect.Width();
-                
+
                 int32_t srcY  = sRect.top << 16;
                 for (int y = dRect.top; y < dRect.bottom; y++)
                 {
                     uint16_t *dBuf = (uint16_t *)((uint8_t *)dst->pixels + y * dst->pitch) + dRect.left;
                     uint16_t *sBuf = (uint16_t *)((uint8_t *)src->pixels + (srcY >> 16) * src->pitch) + sRect.left;
                     uint8_t  *mBuf = (uint8_t *)mask->pixels + (srcY >> 16) * mask->pitch + sRect.left;
-                    
+
                     int32_t xx = 0;
                     for (int x = dRect.left; x < dRect.right; x++)
                     {
@@ -4183,29 +4183,29 @@ void GFXEngine::BlitScaleMasked(SDL_Surface *src, Common::Rect sRect, SDL_Surfac
                     }
                     srcY += dY;
                 }
-                
+
                 SDL_UnlockSurface(dst);
                 SDL_UnlockSurface(mask);
                 SDL_UnlockSurface(src);
             }
             break;
-            
+
             case 4:
             {
                 SDL_LockSurface(src);
                 SDL_LockSurface(mask);
                 SDL_LockSurface(dst);
-                
+
                 int32_t dY = (sRect.Height() << 16) / dRect.Height();
                 int32_t dX = (sRect.Width()  << 16) / dRect.Width();
-                
+
                 int32_t srcY  = sRect.top << 16;
                 for (int y = dRect.top; y < dRect.bottom; y++)
                 {
                     uint32_t *dBuf = (uint32_t *)((uint8_t *)dst->pixels + y * dst->pitch) + dRect.left;
                     uint32_t *sBuf = (uint32_t *)((uint8_t *)src->pixels + (srcY >> 16) * src->pitch) + sRect.left;
                     uint8_t  *mBuf = (uint8_t *)mask->pixels + (srcY >> 16) * mask->pitch + sRect.left;
-                    
+
                     int32_t xx = 0;
                     for (int x = dRect.left; x < dRect.right; x++)
                     {
@@ -4216,13 +4216,13 @@ void GFXEngine::BlitScaleMasked(SDL_Surface *src, Common::Rect sRect, SDL_Surfac
                     }
                     srcY += dY;
                 }
-                
+
                 SDL_UnlockSurface(dst);
                 SDL_UnlockSurface(mask);
                 SDL_UnlockSurface(src);
             }
             break;
-            
+
             default:
             break;
         }
@@ -4235,7 +4235,7 @@ void GFXEngine::BlitScaleMasked(SDL_Surface *src, Common::Rect sRect, SDL_Surfac
 
         uint8_t sbpp = src->format->BytesPerPixel;
         uint8_t dbpp = dst->format->BytesPerPixel;
-        
+
         int32_t dY = (sRect.Height() << 16) / dRect.Height();
         int32_t dX = (sRect.Width()  << 16) / dRect.Width();
 
@@ -4253,14 +4253,14 @@ void GFXEngine::BlitScaleMasked(SDL_Surface *src, Common::Rect sRect, SDL_Surfac
                 {
                     uint8_t r,g,b;
                     uint32_t clr = 0;
-                    
+
                     uint8_t *spix = sBuf + (xx >> 16) * sbpp;
                     for(int i = 0; i < sbpp; i++)
                         clr |= spix[i] << (i * 8);
-                    
+
                     SDL_GetRGB(clr, src->format, &r, &g, &b);
                     clr = SDL_MapRGB(dst->format, r, g, b);
-                    
+
                     for(int i = 0; i < dbpp; i++)
                         dBuf[i] = (clr >> (i * 8)) & 0xFF;
                 }
@@ -4282,22 +4282,22 @@ void GFXEngine::DrawFillIntCpy(SDL_Surface *src, const Common::Rect &sRect, SDL_
     const int32_t sw = sRect.Width();
     const int32_t dh = dRect.Height();
     const int32_t dw = dRect.Width();
-        
+
     SDL_LockSurface(src);
     SDL_LockSurface(dst);
-                    
+
     if (dw > sw)
     {
         uint8_t *psrc = (uint8_t *)src->pixels + sRect.top * src->pitch + sRect.left * src->format->BytesPerPixel;
         uint8_t *pdst = (uint8_t *)dst->pixels + dRect.top * dst->pitch + dRect.left * dst->format->BytesPerPixel;
-        
+
         const int32_t nit = dw / sw;
         const int32_t nit2 = (dw % sw) * dst->format->BytesPerPixel;
         const int32_t cpsz = sw * dst->format->BytesPerPixel;
         const int32_t skipdst = dst->pitch - dw * dst->format->BytesPerPixel + nit2;
-                
+
         int sptch = src->pitch;
-        
+
         int ln = 0;
         uint8_t *psrcl = psrc;
         for(int ih = dh; ih > 0; --ih)
@@ -4307,10 +4307,10 @@ void GFXEngine::DrawFillIntCpy(SDL_Surface *src, const Common::Rect &sRect, SDL_
                 memcpy(pdst, psrcl, cpsz);
                 pdst += cpsz;
             }
-            
+
             memcpy(pdst, psrcl, nit2);
             pdst += skipdst;
-            
+
             ++ln;
             if (ln >= sh)
             {
@@ -4319,25 +4319,25 @@ void GFXEngine::DrawFillIntCpy(SDL_Surface *src, const Common::Rect &sRect, SDL_
             }
             else
                 psrcl += sptch;
-        }        
+        }
     }
     else
     {
         uint8_t *psrc = (uint8_t *)src->pixels + sRect.top * src->pitch + sRect.left * src->format->BytesPerPixel;
         uint8_t *pdst = (uint8_t *)dst->pixels + dRect.top * dst->pitch + dRect.left * dst->format->BytesPerPixel;
-        
+
         const int32_t cpsz = dw * dst->format->BytesPerPixel;
         const int32_t skipdst = dst->pitch;
-                
+
         int sptch = src->pitch;
-        
+
         int ln = 0;
         uint8_t *psrcl = psrc;
         for(int ih = dh; ih > 0; --ih)
-        {            
+        {
             memcpy(pdst, psrcl, cpsz);
             pdst += skipdst;
-            
+
             ++ln;
             if (ln >= sh)
             {
@@ -4346,13 +4346,13 @@ void GFXEngine::DrawFillIntCpy(SDL_Surface *src, const Common::Rect &sRect, SDL_
             }
             else
                 psrcl += sptch;
-        }        
+        }
     }
-                
+
     SDL_UnlockSurface(dst);
     SDL_UnlockSurface(src);
 }
-    
+
 template <typename T>
 void GFXEngine::DrawFillIntCKey(SDL_Surface *src, const Common::Rect &sRect, SDL_Surface *dst, const Common::Rect &dRect)
 {
@@ -4360,31 +4360,31 @@ void GFXEngine::DrawFillIntCKey(SDL_Surface *src, const Common::Rect &sRect, SDL
     const int32_t sw = sRect.Width();
     const int32_t dh = dRect.Height();
     const int32_t dw = dRect.Width();
-        
+
     SDL_LockSurface(src);
     SDL_LockSurface(dst);
-    
+
     uint32_t clrKey = 0;
     SDL_GetColorKey(src, &clrKey);
-                
+
     if (dw > sw)
     {
         const int32_t skipdst = dst->pitch - dw * dst->format->BytesPerPixel;
         uint8_t *psrc = (uint8_t *)src->pixels + sRect.top * src->pitch + sRect.left * src->format->BytesPerPixel;
         uint8_t *pdst = (uint8_t *)dst->pixels + dRect.top * dst->pitch + dRect.left * dst->format->BytesPerPixel;
-        
+
         const int32_t nit = dw / sw;
         const int32_t nit2 = dw % sw;
-        
+
         const int sz = dst->format->BytesPerPixel;
-        
+
         int sptch = src->pitch;
-        
+
         int ln = 0;
         uint8_t *psrcl = psrc;
         for(int ih = dh; ih > 0; --ih)
         {
-            
+
             for(int n = nit; n > 0; --n)
             {
                 const uint8_t *lsrc = psrcl;
@@ -4392,13 +4392,13 @@ void GFXEngine::DrawFillIntCKey(SDL_Surface *src, const Common::Rect &sRect, SDL
                 {
                     if (*(T *)lsrc != clrKey)
                         *(T *)pdst = *(T *)lsrc;
-                    
+
                     lsrc += sz;
                     pdst += sz;
                 }
             }
-            
-            uint8_t *rsrc = psrcl;            
+
+            uint8_t *rsrc = psrcl;
             for(int iw = nit2; iw > 0; --iw)
             {
                 if (*(T *)rsrc != clrKey)
@@ -4407,7 +4407,7 @@ void GFXEngine::DrawFillIntCKey(SDL_Surface *src, const Common::Rect &sRect, SDL
                 rsrc += sz;
                 pdst += sz;
             }
-            
+
             ++ln;
             if (ln >= sh)
             {
@@ -4416,25 +4416,25 @@ void GFXEngine::DrawFillIntCKey(SDL_Surface *src, const Common::Rect &sRect, SDL
             }
             else
                 psrcl += sptch;
-            
+
             pdst += skipdst;
-        }        
+        }
     }
     else
     {
         const int32_t skipdst = dst->pitch - dw * dst->format->BytesPerPixel;
         uint8_t *psrc = (uint8_t *)src->pixels + sRect.top * src->pitch + sRect.left * src->format->BytesPerPixel;
         uint8_t *pdst = (uint8_t *)dst->pixels + dRect.top * dst->pitch + dRect.left * dst->format->BytesPerPixel;
-        
+
         const int sz = dst->format->BytesPerPixel;
-        
+
         int sptch = src->pitch;
-        
+
         int ln = 0;
         uint8_t *psrcl = psrc;
         for(int ih = dh; ih > 0; --ih)
-        {            
-            uint8_t *rsrc = psrcl;            
+        {
+            uint8_t *rsrc = psrcl;
             for(int iw = dw; iw > 0; --iw)
             {
                 if (*(T *)rsrc != clrKey)
@@ -4443,7 +4443,7 @@ void GFXEngine::DrawFillIntCKey(SDL_Surface *src, const Common::Rect &sRect, SDL
                 rsrc += sz;
                 pdst += sz;
             }
-            
+
             ++ln;
             if (ln >= sh)
             {
@@ -4452,11 +4452,11 @@ void GFXEngine::DrawFillIntCKey(SDL_Surface *src, const Common::Rect &sRect, SDL
             }
             else
                 psrcl += sptch;
-            
+
             pdst += skipdst;
-        }        
+        }
     }
-                
+
     SDL_UnlockSurface(dst);
     SDL_UnlockSurface(src);
 }
@@ -4468,29 +4468,29 @@ void GFXEngine::DrawFillIntACpy(SDL_Surface* src, const Common::Rect& sRect, SDL
     const int32_t sw = sRect.Width();
     const int32_t dh = dRect.Height();
     const int32_t dw = dRect.Width();
-        
+
     SDL_LockSurface(src);
     SDL_LockSurface(dst);
-    
+
     if (dw > sw)
     {
         const int32_t skipdst = dst->pitch - dw * dst->format->BytesPerPixel;
         uint8_t *psrc = (uint8_t *)src->pixels + sRect.top * src->pitch + sRect.left * src->format->BytesPerPixel;
         uint8_t *pdst = (uint8_t *)dst->pixels + dRect.top * dst->pitch + dRect.left * dst->format->BytesPerPixel;
-        
+
         const int32_t nit = dw / sw;
         const int32_t nit2 = dw % sw;
         uint32_t amask = src->format->Amask;
-        
+
         const int sz = dst->format->BytesPerPixel;
-        
+
         int sptch = src->pitch;
-        
+
         int ln = 0;
         uint8_t *psrcl = psrc;
         for(int ih = dh; ih > 0; --ih)
         {
-            
+
             for(int n = nit; n > 0; --n)
             {
                 const uint8_t *lsrc = psrcl;
@@ -4498,13 +4498,13 @@ void GFXEngine::DrawFillIntACpy(SDL_Surface* src, const Common::Rect& sRect, SDL
                 {
                     if (*(T *)lsrc & amask)
                         *(T *)pdst = *(T *)lsrc;
-                    
+
                     lsrc += sz;
                     pdst += sz;
                 }
             }
-            
-            uint8_t *rsrc = psrcl;            
+
+            uint8_t *rsrc = psrcl;
             for(int iw = nit2; iw > 0; --iw)
             {
                 if (*(T *)rsrc & amask)
@@ -4513,7 +4513,7 @@ void GFXEngine::DrawFillIntACpy(SDL_Surface* src, const Common::Rect& sRect, SDL
                 rsrc += sz;
                 pdst += sz;
             }
-            
+
             ++ln;
             if (ln >= sh)
             {
@@ -4522,26 +4522,26 @@ void GFXEngine::DrawFillIntACpy(SDL_Surface* src, const Common::Rect& sRect, SDL
             }
             else
                 psrcl += sptch;
-            
+
             pdst += skipdst;
-        }        
+        }
     }
     else
     {
         const int32_t skipdst = dst->pitch - dw * dst->format->BytesPerPixel;
         uint8_t *psrc = (uint8_t *)src->pixels + sRect.top * src->pitch + sRect.left * src->format->BytesPerPixel;
         uint8_t *pdst = (uint8_t *)dst->pixels + dRect.top * dst->pitch + dRect.left * dst->format->BytesPerPixel;
-        
+
         const int sz = dst->format->BytesPerPixel;
-        
+
         int sptch = src->pitch;
         uint32_t amask = src->format->Amask;
-        
+
         int ln = 0;
         uint8_t *psrcl = psrc;
         for(int ih = dh; ih > 0; --ih)
-        {            
-            uint8_t *rsrc = psrcl;            
+        {
+            uint8_t *rsrc = psrcl;
             for(int iw = dw; iw > 0; --iw)
             {
                 if (*(T *)rsrc & amask)
@@ -4550,7 +4550,7 @@ void GFXEngine::DrawFillIntACpy(SDL_Surface* src, const Common::Rect& sRect, SDL
                 rsrc += sz;
                 pdst += sz;
             }
-            
+
             ++ln;
             if (ln >= sh)
             {
@@ -4559,11 +4559,11 @@ void GFXEngine::DrawFillIntACpy(SDL_Surface* src, const Common::Rect& sRect, SDL
             }
             else
                 psrcl += sptch;
-            
+
             pdst += skipdst;
-        }        
+        }
     }
-                
+
     SDL_UnlockSurface(dst);
     SDL_UnlockSurface(src);
 }
@@ -4572,9 +4572,9 @@ void GFXEngine::DrawFill(SDL_Surface *src, const Common::Rect &sRect, SDL_Surfac
 {
     if (sRect.IsEmpty() || dRect.IsEmpty())
         return;
-    
+
     if (src->format->format == dst->format->format)
-    {     
+    {
 #if SDL_VERSION_ATLEAST(2, 0, 9)
         if (SDL_HasColorKey(src))
 #else
@@ -4618,7 +4618,7 @@ void GFXEngine::DrawFill(SDL_Surface *src, const Common::Rect &sRect, SDL_Surfac
             }
             else
                 DrawFillIntCpy(src, sRect, dst, dRect);
-        }  
+        }
     }
     else
     {
@@ -4690,7 +4690,7 @@ void GFXEngine::RecreateScreenSurface()
 void GFXEngine::DrawVtxQuad(const std::array<GFX::TVertex, 4> &vtx)
 {
     static const uint16_t indexes[6] = {0, 1, 2, 0, 2, 3};
-    
+
     if (_vbo)
     {
         if (!_stdQuadDataBuf)
@@ -4699,23 +4699,23 @@ void GFXEngine::DrawVtxQuad(const std::array<GFX::TVertex, 4> &vtx)
             Glext::GLBindBuffer(GL_ARRAY_BUFFER, _stdQuadDataBuf);
             Glext::GLBufferData(GL_ARRAY_BUFFER, sizeof(TVertex) * vtx.size(), NULL, GL_STREAM_DRAW);
         }
-        
+
         if (!_stdQuadIndexBuf)
         {
             Glext::GLGenBuffers(1, &_stdQuadIndexBuf);
             Glext::GLBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _stdQuadIndexBuf);
             Glext::GLBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indexes), &indexes, GL_STATIC_DRAW);
         }
-        
+
         _states.DataBuf = _stdQuadDataBuf;
         _states.IndexBuf = _stdQuadIndexBuf;
-        
+
         SetRenderStates(0);
-        
-        Glext::GLBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(TVertex) * vtx.size(), vtx.data()); 
-        
+
+        Glext::GLBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(TVertex) * vtx.size(), vtx.data());
+
         if (_lastStates.Prog.PosLoc != -1)
-            Glext::GLVertexAttribPointer(_lastStates.Prog.PosLoc, 3, GL_FLOAT, GL_FALSE,  sizeof(TVertex), (void *)offsetof(TVertex, Pos));  
+            Glext::GLVertexAttribPointer(_lastStates.Prog.PosLoc, 3, GL_FLOAT, GL_FALSE,  sizeof(TVertex), (void *)offsetof(TVertex, Pos));
         if (_lastStates.Prog.ColorLoc != -1)
             Glext::GLVertexAttribPointer(_lastStates.Prog.ColorLoc, 4, GL_FLOAT, GL_FALSE,  sizeof(TVertex), (void *)offsetof(TVertex, Color));
         if (_lastStates.Prog.UVLoc != -1)
@@ -4748,13 +4748,13 @@ void GFXEngine::DrawVtxQuad(const std::array<GFX::TVertex, 4> &vtx)
 void GFXEngine::DrawScreenSurface()
 {
     GfxStates save = _states;
-    
+
     Common::Point scrSz = System::GetResolution();
     glViewport(0, 0, scrSz.x, scrSz.y);
-    
+
     SetProjectionMatrix( mat4x4f() );
     SetModelViewMatrix( mat4x4f() );
-    
+
     _states.DepthTest = false;
     _states.Zwrite = false;
     _states.AlphaBlend = true;
@@ -4768,7 +4768,7 @@ void GFXEngine::DrawScreenSurface()
     _states.LinearFilter = true;
 
     SetRenderStates(0);
-    
+
     // Will be binded with SetRenderStates
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, ScreenSurface->w, ScreenSurface->h, _glPixfmt, _glPixtype, ScreenSurface->pixels);
 
@@ -4778,9 +4778,9 @@ void GFXEngine::DrawScreenSurface()
         GFX::TVertex( vec3f( 1.0, -1.0, 0.0), tUtV(1.0, 1.0) ),
         GFX::TVertex( vec3f( 1.0,  1.0, 0.0), tUtV(1.0, 0.0) )
     };
-    
+
     DrawVtxQuad(vtx);
-    
+
     _states = save;
 }
 
@@ -4789,15 +4789,15 @@ uint32_t GFXEngine::CompileShader(int32_t type, const std::string &string)
     GLuint sh = Glext::GLCreateShader(type);
     if (!sh)
         return 0;
-    
+
     const GLchar *source = (const GLchar *)string.c_str();
-    
+
     Glext::GLShaderSource(sh, 1, &source, 0);
     Glext::GLCompileShader(sh);
-    
+
     GLint tmpvar;
     Glext::GLGetShaderiv(sh, GL_COMPILE_STATUS, &tmpvar);
-    
+
     if (tmpvar == GL_FALSE)
     {
         Glext::GLGetShaderiv(sh, GL_INFO_LOG_LENGTH, &tmpvar);
@@ -4812,7 +4812,7 @@ uint32_t GFXEngine::CompileShader(int32_t type, const std::string &string)
         Glext::GLDeleteShader(sh);
         return 0;
     }
-    
+
     return sh;
 }
 
@@ -4836,24 +4836,24 @@ uint32_t GFXEngine::LoadShader(int32_t type, const std::string &fl)
     delete[] tmp;
 
     delete f;
-    
+
     return CompileShader(type, b);
 }
 
 void GFXEngine::DrawFBO()
 {
     GfxStates save = _states;
-    
+
     Common::Point scrSz = System::GetResolution();
     glViewport(0, 0, scrSz.x, scrSz.y);
-        
+
     SetProjectionMatrix( mat4x4f() );
     SetModelViewMatrix( mat4x4f() );
-    
+
     _states.DepthTest = false;
     _states.Zwrite = false;
     _states.AlphaBlend = true;
-    
+
     if (_fboBlend == 0)
     {
         _states.SrcBlend = GL_ONE;
@@ -4864,30 +4864,30 @@ void GFXEngine::DrawFBO()
         _states.SrcBlend = GL_SRC_ALPHA;
         _states.DstBlend = GL_ONE_MINUS_SRC_ALPHA;
     }
-    
+
     _states.Tex = _fboTex;
     _states.TexBlend = 2;
     _states.Prog = _colorEffectsShaderProg;
-    
+
     _states.AlphaTest = false;
     _states.Shaded = true;
     _states.LinearFilter = true;
 
     // Apply texture and program
     SetRenderStates(0);
-    
+
     if (_colorEffectsShaderProg.NormLoc >= 0)
         Glext::GLUniform3f(_colorEffectsShaderProg.NormLoc, _normClr.x, _normClr.y, _normClr.z);
-    
+
     if (_colorEffectsShaderProg.InvLoc >= 0)
         Glext::GLUniform3f(_colorEffectsShaderProg.InvLoc, _invClr.x, _invClr.y, _invClr.z);
-    
+
     if (_colorEffectsShaderProg.RandLoc >= 0)
         Glext::GLUniform1i(_colorEffectsShaderProg.RandLoc, rand());
-    
+
     if (_colorEffectsShaderProg.ScrSizeLoc >= 0)
         Glext::GLUniform2i(_colorEffectsShaderProg.ScrSizeLoc, scrSz.x, scrSz.y);
-    
+
     if (_colorEffectsShaderProg.MillisecsLoc >= 0)
         Glext::GLUniform1i(_colorEffectsShaderProg.MillisecsLoc, SDL_GetTicks());
 
@@ -5095,7 +5095,7 @@ void GFXEngine::UpdateFBOSizes()
 
         _states.Tex = _fboTex;
         SetRenderStates(0);
-        
+
         glTexImage2D(GL_TEXTURE_2D, 0, FBOTEXTYPE, scrSz.x, scrSz.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 
         Glext::GLBindRenderbuffer(GL_RENDERBUFFER, _fbod);
@@ -5133,31 +5133,31 @@ float GFXEngine::GetColorEffectPower(int id)
         default:
         case 0:
             return 1.0;
-        
+
         case 1:
             pwr = System::IniConf::GfxColorEffPower1.Get<int32_t>();
             break;
-        
+
         case 2:
             pwr = System::IniConf::GfxColorEffPower2.Get<int32_t>();
             break;
-        
+
         case 3:
             pwr = System::IniConf::GfxColorEffPower3.Get<int32_t>();
             break;
-        
+
         case 4:
             pwr = System::IniConf::GfxColorEffPower4.Get<int32_t>();
             break;
-            
+
         case 5:
             pwr = System::IniConf::GfxColorEffPower5.Get<int32_t>();
             break;
-            
+
         case 6:
             pwr = System::IniConf::GfxColorEffPower6.Get<int32_t>();
             break;
-            
+
         case 7:
             pwr = System::IniConf::GfxColorEffPower7.Get<int32_t>();
             break;
@@ -5198,13 +5198,13 @@ float GFXEngine::GetColorEffectPower(int id)
             pwr = System::IniConf::GfxColorEffPower16.Get<int32_t>();
             break;
     }
-    
+
     if (pwr < 0)
         pwr = 0;
-    
+
     if (pwr > 100)
         pwr = 100;
-    
+
     return (float)pwr / 100.0;
 }
 
@@ -5214,7 +5214,7 @@ Common::Point GFXEngine::ConvertPosTo2DStuff(const Common::Point &pos)
 
     if (real == _resolution)
         return pos;
-    
+
     Common::Point t( pos.x * _resolution.x / real.x,
                      pos.y * _resolution.y / real.y );
 
@@ -5238,7 +5238,7 @@ TMesh::TMesh(const TMesh &b)
     Indixes = b.Indixes;
     CoordsCache = b.CoordsCache;
     BoundBox = b.BoundBox;
-    
+
     glDataBuf = 0;
     glIndexBuf = 0;
 }
@@ -5250,17 +5250,17 @@ TMesh &TMesh::operator=(const TMesh& b)
     Indixes = b.Indixes;
     CoordsCache = b.CoordsCache;
     BoundBox = b.BoundBox;
-    
+
     glDataBuf = 0;
     glIndexBuf = 0;
-    
+
     return *this;
 }
 
 TMesh::~TMesh()
 {
     GFX::Engine.MeshFreeVBO(this);
-    
+
     // Just notify about still existing buffers
     if (glDataBuf || glIndexBuf)
         printf("TMesh still has buffers!\n");
@@ -5269,35 +5269,35 @@ TMesh::~TMesh()
 void GFXEngine::MeshMakeVBO(TMesh *mesh)
 {
     if (_vbo)
-    {        
+    {
         if (!mesh->glDataBuf)
             Glext::GLGenBuffers(1, &mesh->glDataBuf);
-        
+
         if (!mesh->glIndexBuf)
             Glext::GLGenBuffers(1, &mesh->glIndexBuf);
-                
+
         Glext::GLBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->glIndexBuf);
         Glext::GLBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh->Indixes.size() * sizeof(IndexType), mesh->Indixes.data(), GL_STATIC_DRAW);
-        
+
         Glext::GLBindBuffer(GL_ARRAY_BUFFER, mesh->glDataBuf);
         int32_t vtxDataSz = mesh->Vertexes.size() * sizeof(TVertex);
         int32_t coordDataSz = mesh->Vertexes.size() * sizeof(tUtV);
         Glext::GLBufferData(GL_ARRAY_BUFFER, vtxDataSz + mesh->CoordsCache.size() * coordDataSz, NULL, GL_STATIC_DRAW);
-        
+
         int32_t off = 0;
         Glext::GLBufferSubData(GL_ARRAY_BUFFER, off, vtxDataSz, mesh->Vertexes.data());
-        
+
         off += vtxDataSz;
         for (TCoordsCache &cch : mesh->CoordsCache)
         {
             Glext::GLBufferSubData(GL_ARRAY_BUFFER, off, coordDataSz, cch.Coords.data());
             cch.BufferPos = off;
-            
+
             off += coordDataSz;
         }
-        
+
         Glext::GLBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _lastStates.IndexBuf);
-        Glext::GLBindBuffer(GL_ARRAY_BUFFER, _lastStates.DataBuf);  
+        Glext::GLBindBuffer(GL_ARRAY_BUFFER, _lastStates.DataBuf);
     }
 }
 
@@ -5310,13 +5310,13 @@ void GFXEngine::MeshFreeVBO(TMesh *mesh)
             Glext::GLDeleteBuffers(1, &mesh->glDataBuf);
             mesh->glDataBuf = 0;
         }
-        
+
         if (mesh->glIndexBuf)
         {
             Glext::GLDeleteBuffers(1, &mesh->glIndexBuf);
             mesh->glIndexBuf = 0;
         }
-        
+
 //        if (mesh->glVao)
 //        {
 //            Glext::GLDeleteVertexArrays(1, &mesh->glVao);
@@ -5329,7 +5329,7 @@ void GFXEngine::BindVBOParameters(TShaderProg &shader)
 {
     if (_vbo)
     {
-        uint32_t blockIndex = Glext::GLGetUniformBlockIndex(shader.ID, "Parameters");   
+        uint32_t blockIndex = Glext::GLGetUniformBlockIndex(shader.ID, "Parameters");
         if (blockIndex != GL_INVALID_INDEX)
             Glext::GLUniformBlockBinding(shader.ID, blockIndex, _vboParamsBlockBinding);
     }
@@ -5340,12 +5340,12 @@ void GFXEngine::CommitUBOParameters()
     if (_vbo && _vboStatesChanged)
     {
         _vboStatesChanged = false;
-        
+
         Glext::GLBindBuffer(GL_UNIFORM_BUFFER, _vboParams);
-        
+
         // Orphan ubo
         Glext::GLBufferData(GL_UNIFORM_BUFFER, _vboParamsSize, NULL, GL_STREAM_DRAW);
-        
+
         Glext::GLBufferData(GL_UNIFORM_BUFFER, _vboParamsSize, &_vboStatesBlock, GL_STREAM_DRAW);
     }
 }

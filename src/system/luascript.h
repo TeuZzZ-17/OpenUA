@@ -19,7 +19,7 @@ extern "C" {
 
 namespace System
 {
-    
+
 class LuaScript
 {
 public:
@@ -28,23 +28,23 @@ public:
 
     virtual bool LoadFile(const std::string &fname);
     void CallFunc(const std::string &name);
-    
+
     void RunBuffer(const std::string &buffer);
-    
+
 protected:
     void Register();
-    
+
     static void RunScript(lua_State *l, const std::string &fname);
     static void RunBuffer(lua_State *l, const std::string &buffer);
     static void PushPointer(lua_State *l, void *data);
-    
+
 protected:
     static int ExportRunScript(lua_State *l);
-    
+
 protected:
     lua_State* _lua = NULL;
 };
-    
+
 }
 
 #endif

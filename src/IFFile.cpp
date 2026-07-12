@@ -1124,7 +1124,7 @@ IFFile::IFFile(FSMgr::FileHandle *f, bool del)
 : file_handle(f, false)
 {
     ctxStack.emplace_front(TAG_FORM, TAG_NONE, 0x80000000, 0);
-    
+
     if (f && del)
         delete f;
 }

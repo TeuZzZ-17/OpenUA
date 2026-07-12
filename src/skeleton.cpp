@@ -45,7 +45,7 @@ rsrc * NC_STACK_skeleton::rsrc_func64(IDVList &stak)
 
     res->data = sklt;
 
-    
+
     sklt->POO.resize(elm_num);
     sklt->tformedVertex.resize(elm_num);
 
@@ -124,7 +124,7 @@ bool NC_STACK_skeleton::TransformVertexes(skeleton_arg_132 *arg, const std::vect
 {
     if ( in.empty() )
         return false;
-    
+
     if ( in.size() != out->size() )
         out->resize( in.size() );
 

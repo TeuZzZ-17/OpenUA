@@ -125,10 +125,10 @@ public:
 
     virtual void SendData(uint64_t to, void *data, uint32_t sz, uint8_t flags = 0, uint8_t channel = CHANNEL_USR) = 0;
     virtual void BroadcastData(void *data, uint32_t sz, uint8_t flags = 0, uint8_t channel = CHANNEL_USR) = 0;
-    
+
     virtual uint64_t GetMyID() {return 0;};
     virtual std::string GetMyName() {return std::string();};
-    
+
     virtual uint64_t GetMySesID() {return 0;};
 
 

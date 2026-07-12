@@ -47,11 +47,11 @@ struct TDPPlayerData
     {
         NPD_ITSME     =  (1 << 0),
     };
-    
+
     uint32_t Index;
     std::string name;
     uint32_t flags;
-    
+
     bool IsItMe() const { return (flags & NPD_ITSME) != 0; }
 };
 
@@ -115,21 +115,21 @@ public:
 
     virtual size_t SetMode(bool hosting);
     size_t GetMode();
-    
+
     void SetWantedName(const std::string &name);
     std::string GetMyName();
     std::string GetCurrentSessionName();
-    
+
     // Only for client
     bool Connect(const std::string &connString);
     bool IsConnected();
     bool HasLobby();
     bool IsJoined();
-    
-    
+
+
     // Only for host
     bool Host(const std::string &gameName, int playerNum);
-    
+
 
     virtual size_t EnumSessions(IDVPair *stak);
     virtual size_t GetSessionName(windp_getNameMsg *arg);
@@ -139,7 +139,7 @@ public:
     virtual size_t CloseSession(IDVPair *stak);
     virtual size_t GetSessionStatus();
     virtual size_t SetSessionName(const char *sessName);
-    
+
 
     virtual size_t CreatePlayer(windp_createPlayerMsg *pl);
     virtual size_t DeletePlayer(const char *playerName);
@@ -155,18 +155,18 @@ public:
     bool Send(void *data, size_t dataSize, const std::string &recvID, bool garantee);
     bool Broadcast(void *data, size_t dataSize, bool garantee);
     size_t QueueBroadcast(void *data, size_t dataSize, bool garantee);
-    
+
     size_t BroadcastLowLevel(void *data, size_t dataSize, bool garantee);
     size_t SendLowLevel(void *data, size_t dataSize, const std::string &recvID, bool garantee);
-    
+
     bool Recv(windp_recvMsg *recv);
-    
+
     size_t FlushBroadcastBuffer();
 
     virtual size_t GetCaps(IDVPair *stak);
     virtual size_t LockSession(int *);
     virtual size_t Reset(IDVPair *stak);
-    
+
 
     virtual bool GetRemoteStart(windp_arg87 *arg);
 
@@ -181,7 +181,7 @@ public:
         //memset(&wdp_intern, 0, sizeof(wdp_intern));
     };
     virtual ~NC_STACK_windp() {};
-    
+
     virtual const std::string ClassName() const {
         return __ClassName;
     };
@@ -199,13 +199,13 @@ public:
         SESSION_STATUS_JOINED = 1,
         SESSION_STATUS_HOSTING = 2
     };
-    
+
     enum
     {
         CONF_CONN_WAIT = 5000,
         CONF_USERS_GET_TIME = 1000,
         CONF_SESS_GET_TIME = 1000,
-        
+
         CONF_SEND_SIZE = 1024,
     };
 
@@ -219,7 +219,7 @@ protected:
     };
 
     void _clear();
-    
+
     void ReloadUsersList();
     void ReloadSessionsList();
     uint64_t GetUserID(const std::string &name);
@@ -269,7 +269,7 @@ public:
     int guaranteed;*/
     std::vector<uint8_t> broadcastBuff;
     int broadcastBuff_off = 0;
-    
+
     int guaranteed_md;
     /*nlist recv_list;
     nlist send_list;

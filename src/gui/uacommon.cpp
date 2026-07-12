@@ -5,7 +5,7 @@
 
 namespace Gui
 {
-    
+
 std::array<TileMap *, UA::TILESET_MAX> UA::_UATiles;
 SDL_Color UA::_UATextColor;
 SDL_Color UA::_UAButtonTextColor;
@@ -34,7 +34,7 @@ void UA::LoadFont(const std::string &fontstr)
     auto res = Stok::Split(fontstr, ","); // Fontname, height
 
     std::string fontname;
-    
+
     if ( res.size() >= 2 && !res[0].empty() && !res[1].empty() )
     {
         _UAFontH = stoi(res[1]);
@@ -57,7 +57,7 @@ void UA::LoadFont(const std::string &fontstr)
 
     if (!_UATTF)
         return;
-   
+
     if (!System::IniConf::GfxSolidFont.Get<bool>())
         TTF_SetFontHinting(_UATTF, TTF_HINTING_LIGHT);
     else
@@ -146,7 +146,7 @@ void UA::DrawText(SDL_Surface *srf, const std::string &text, int flag, const SDL
     SDL_BlitSurface(tmp, NULL, srf, &want);
 
     clr = color;
-    
+
     if (System::IniConf::GfxSolidFont.Get<bool>())
     {
         SDL_SetPaletteColors(tmp->format->palette, &clr, 1, 1);

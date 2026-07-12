@@ -17,13 +17,13 @@ public:
     virtual void Renew();
     virtual void HandBrake(update_msg *arg);
 
-    NC_STACK_ypaflyer() 
+    NC_STACK_ypaflyer()
     {
         _flyerBoost = 0.0;
         _flyerType    = 0;
     };
     virtual ~NC_STACK_ypaflyer() {};
-    
+
     virtual const std::string ClassName() const {
         return __ClassName;
     };
@@ -36,14 +36,14 @@ public:
     virtual void setFLY_type(int);
 
     virtual int getFLY_type();
-    
-    
+
+
     void sb_0x4b255c(float a2, vec3d v, int a4);
     void ypaflyer_func70__sub0(float angl);
 
     //Data
     static constexpr const char * __ClassName = "ypaflyer.class";
-    
+
     float _flyerBoost = 0.0;
     int _flyerType    = 0;
 };

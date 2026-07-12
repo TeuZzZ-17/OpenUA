@@ -64,7 +64,7 @@ int yw_write_user(FSMgr::FileHandle *fil, UserData *usr)
         if ( i < 7 )
             jodie += "_";
     }
-    
+
     fil->printf(jodie);
 
     fil->printf("      ; the contact flags\n");
@@ -218,12 +218,12 @@ int yw_write_video(FSMgr::FileHandle *fil, UserData *usr)
     fil->printf("    fxnumber = %d\n", usr->fxnumber);
     fil->printf("    default_view = %s\n", usr->defaultCockpitCamera ? "cockpit" : "pov");
     fil->printf("    palette_theme = %s\n", usr->paletteTheme.empty() ? "Original" : usr->paletteTheme.c_str());
-    
+
     if (usr->IsWindowedFlag())
         fil->printf("    ;#!gfxmode = %d_%d_1\n", usr->p_YW->_gfxMode.w, usr->p_YW->_gfxMode.h);
     else
         fil->printf("    ;#!gfxmode = %d_%d_0\n", usr->p_YW->_gfxMode.w, usr->p_YW->_gfxMode.h);
-    
+
     fil->printf("end\n\n");
 
     return 1;
@@ -383,7 +383,7 @@ int yw_write_item_modifers(NC_STACK_ypaworld *yw, FSMgr::FileHandle *fil)
             fil->printf("    energy         = %d\n", proto.energy);
             fil->printf("end\n\n");
         }
-        
+
         i++;
     }
 
@@ -432,7 +432,7 @@ void yw_write_map(NC_STACK_ypaworld *yw, const Common::PlaneBytes &map, const st
             fil->printf(padding.c_str());
 
         const uint8_t * v6 = map.Line(y);
-        
+
         for (uint32_t x = 0; x < map.Width(); x++ )
         {
             fil->printf("%02x ", *v6);
@@ -507,7 +507,7 @@ int yw_write_bact(NC_STACK_ypabact *bct, FSMgr::FileHandle *fil)
         fil->printf("    viewer         = yes\n");
     else
         fil->printf("    viewer         = no\n");
-    
+
     if ( bct->getBACT_inputting() )
         fil->printf("    user           = yes\n");
     else
@@ -676,7 +676,7 @@ int yw_write_extraviewer(NC_STACK_ypabact *bct, FSMgr::FileHandle *fil)
     if ( bct->_bact_type == BACT_TYPES_GUN )
     {
         int v7 = -1;
-        
+
         fil->printf("\nbegin_extraviewer\n");
 
         int i = 0;
@@ -687,7 +687,7 @@ int yw_write_extraviewer(NC_STACK_ypabact *bct, FSMgr::FileHandle *fil)
                 v7 = i;
                 break;
             }
-            
+
             i++;
         }
 
@@ -709,7 +709,7 @@ bool NC_STACK_ypaworld::yw_write_units(FSMgr::FileHandle *fil)
     for ( World::RefBactList::reverse_iterator staIt = _unitsList.rbegin(); staIt != _unitsList.rend(); staIt++ )
     {
         NC_STACK_ypabact *station = *staIt;
-        
+
         if ( station->_status != BACT_STATUS_DEAD )
         {
             if ( !yw_write_robo((NC_STACK_yparobo *)station, fil) )
@@ -739,7 +739,7 @@ bool NC_STACK_ypaworld::yw_write_units(FSMgr::FileHandle *fil)
                             return false;
                     }
                 }
-                
+
                 for ( World::RefBactList::reverse_iterator slvIt = commander->_kidList.rbegin(); slvIt != commander->_kidList.rend(); slvIt++ )
                 {
                     NC_STACK_ypabact *slave = *slvIt;
@@ -794,7 +794,7 @@ int yw_write_kwfactor(NC_STACK_ypaworld *yw, FSMgr::FileHandle *fil)
         if ( kw.second.pCell )
             fil->printf("    kw = %d_%d_%d\n", kw.second.CellId.x, kw.second.CellId.y, kw.second.EffectivePower);
     }
-    
+
     fil->printf("end\n\n");
     return 1;
 }
@@ -824,7 +824,7 @@ int yw_write_superbomb(NC_STACK_ypaworld *yw, FSMgr::FileHandle *fil)
         fil->printf("    radius            = %d\n", sitem.CurrentRadius);
         fil->printf("    last_radius       = %d\n", sitem.LastRadius);
         fil->printf("end\n");
-        
+
         i++;
     }
 

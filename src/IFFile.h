@@ -13,17 +13,17 @@ public:
         uint32_t TAG_EXTENSION = 0;
         int32_t TAG_SIZE = 0;
         int32_t position = 0;
-        
+
         Context() = default;
-        Context(uint32_t tag, uint32_t tag_ext, int32_t tag_sz, int32_t pos) 
-        : TAG(tag), TAG_EXTENSION(tag_ext), TAG_SIZE(tag_sz), position(pos) 
+        Context(uint32_t tag, uint32_t tag_ext, int32_t tag_sz, int32_t pos)
+        : TAG(tag), TAG_EXTENSION(tag_ext), TAG_SIZE(tag_sz), position(pos)
         {}
-        
+
         bool Is(uint32_t tag) const
         {
             return TAG == tag;
         }
-        
+
         bool Is(uint32_t tag, uint32_t ext) const
         {
             return TAG == tag && TAG_EXTENSION == ext;
@@ -48,36 +48,36 @@ public:
     {
         IFF_FLAGS_POP     = 2
     };
-    
+
     IFFile() = default;
 
     IFFile(const std::string &diskPath, const std::string &mode);
     virtual ~IFFile() = default;
-    
+
     IFFile(IFFile &&) = default;
     IFFile& operator=(IFFile &&) = default;
-    
+
     IFFile(FSMgr::FileHandle *, bool del = true);
     IFFile(FSMgr::FileHandle &);
     IFFile(FSMgr::FileHandle &&);
-    
+
     IFFile(const IFFile&) = delete;
     IFFile& operator=(const IFFile &) = delete;
-    
-    
-    
+
+
+
     virtual void close() override;
-    
+
 
     int pushChunk(uint32_t TAG1, uint32_t TAG2, int32_t TAG_SZ);
     int popChunk();
     int parse();
     bool skipChunk();
-    
+
     size_t read(void *buf, size_t sz) override;
     size_t write(const void *buf, size_t sz) override;
-    const IFFile::Context &GetCurrentChunk(); 
-    
+    const IFFile::Context &GetCurrentChunk();
+
     virtual bool eof() const override;
     virtual bool OK() const override;
     virtual size_t tell() const override;

@@ -12,7 +12,7 @@ void UABaseButton::MouseMove(Common::Point pos, Common::Point scrPos, int button
         if ( IsLOn(pos) && button & MICE_LEFT)
             _btnFlags |= FLAG_PRESSED;
     }
-    
+
     Widget::MouseMove(pos, scrPos, button);
 }
 
@@ -28,7 +28,7 @@ void UABaseButton::MouseDown(Common::Point pos, Common::Point scrPos, int button
             OnBtnPress();
         }
     }
-    
+
     Widget::MouseDown(pos, scrPos, button);
 }
 
@@ -40,11 +40,11 @@ void UABaseButton::MouseUp(Common::Point pos, Common::Point scrPos, int button)
         {
             if ((_btnFlags & FLAG_PRESSED))
                 OnBtnClick();
-                
+
             _btnFlags &= ~FLAG_PRESSED;
         }
     }
-    
+
     Widget::MouseUp(pos, scrPos, button);
 }
 
@@ -78,11 +78,11 @@ UATextButton::UATextButton(Widget *parent, const std::string &txt, const Common:
 : UABaseButton(parent)
 {
     Init();
-    
+
     _flags |= FLAG_ENABLED;
-    
+
     _text = txt;
-    _rect = xyw;   
+    _rect = xyw;
     _rect.SetSize( FixSizes(_rect.Size()) );
 }
 
@@ -109,16 +109,16 @@ void UATextButton::Draw(SDL_Surface *surface, const Common::Rect &dirt)
         return;
 
     Common::PointRect txtRect(0, 0, _rect.Width(), tiles->h);
-    
+
     if ( !(_btnFlags & FLAG_NOBORDERS) ) // Draw borders
     {
         tiles->Draw(surface, Common::Point(), _lTile);
         tiles->Draw(surface, Common::Point(txtRect.w - tiles->map[_rTile].w, 0), _rTile);
-            
+
         txtRect.w -= tiles->map[_lTile].w + tiles->map[_rTile].w;
         txtRect.x += tiles->map[_lTile].w;
     }
-    
+
     tiles->Fill(surface, txtRect, _mTile); // Center part
 
     int tflags = 0;
@@ -139,11 +139,11 @@ Common::Point UATextButton::FixSizes(Common::Point sz)
     {
         TileMap *tiles = _UATiles[_tilesetUp];
         sz.y = tiles->h;
-        
+
         int minW = tiles->map[_mTile].w;
         if (!(_btnFlags & FLAG_NOBORDERS))
             minW += tiles->map[_lTile].w + tiles->map[_rTile].w;
-        
+
         if (sz.x < minW)
             sz.x = minW;
     }
@@ -155,10 +155,10 @@ void UATextButton::Resize(Common::Point sz)
     Widget::Resize( FixSizes(sz) );
 }
 
-void UATextButton::SetTileSets(int up, int down, int lock) 
-{ 
-    _tilesetUp = up; 
-    _tilesetDown = down; 
+void UATextButton::SetTileSets(int up, int down, int lock)
+{
+    _tilesetUp = up;
+    _tilesetDown = down;
     _tilesetLock = lock;
 }
 
@@ -176,12 +176,12 @@ UATileButton::UATileButton(Widget *parent, const std::string &upTiles, const Com
 : UABaseButton(parent)
 {
     _flags |= FLAG_ENABLED;
-    
+
     _upTiles = upTiles;
     _downTiles = upTiles;
     _rect = xyw;
-    _upTilesSet = up; 
-    _downTilesSet = down; 
+    _upTilesSet = up;
+    _downTilesSet = down;
 
     _rect.SetSize( FixSizes(_rect.Size()) );
 }
@@ -190,13 +190,13 @@ UATileButton::UATileButton(Widget *parent, const std::string &upTiles, const std
 : UABaseButton(parent)
 {
     _flags |= FLAG_ENABLED;
-    
+
     _upTiles = upTiles;
     _downTiles = downTiles;
     _rect = xyw;
-    _upTilesSet = up; 
-    _downTilesSet = down; 
-    
+    _upTilesSet = up;
+    _downTilesSet = down;
+
     _rect.SetSize( FixSizes(_rect.Size()) );
 }
 
@@ -211,7 +211,7 @@ void UATileButton::Draw(SDL_Surface *surface, const Common::Rect &dirt)
     TileMap *tiles = _UATiles[setID];
     if (!tiles)
         return;
-    
+
     std::string *tileStr;
     TileMap *tilesStrSet;
     if ( (_btnFlags & FLAG_PRESSED) && !(_btnFlags & FLAG_TOUCH) )
@@ -224,11 +224,11 @@ void UATileButton::Draw(SDL_Surface *surface, const Common::Rect &dirt)
         tileStr = &_upTiles;
         tilesStrSet = _UATiles[_upTilesSet];
     }
-    
+
     int usedWidth = 0;
     for ( uint8_t t: *tileStr )
         usedWidth += tilesStrSet->map[ t ].w;
-    
+
     int dx = 0;
     int maxW = _rect.Width();
     int freeSpace = maxW - usedWidth;
@@ -237,7 +237,7 @@ void UATileButton::Draw(SDL_Surface *surface, const Common::Rect &dirt)
         freeSpace -= tiles->map[ _lTile ].w + tiles->map[ _rTile ].w;
         dx += tiles->map[ _lTile ].w;
     }
-    
+
     if ( freeSpace > 0 )
     {
         if (_btnFlags & FLAG_CENTER)
@@ -253,17 +253,17 @@ void UATileButton::Draw(SDL_Surface *surface, const Common::Rect &dirt)
             freeSpace = 0;
         }
     }
-    
+
     for ( uint8_t t: *tileStr )
     {
         if (dx >= maxW)
             break;
         Common::Rect dstRect(dx, 0, maxW, tiles->h);
-        
+
         tilesStrSet->Draw(surface, dstRect, t);
         dx += tilesStrSet->map[ t ].w;
     }
-    
+
     if ( freeSpace > 0 )
        tiles->Fill(surface, Common::PointRect(dx, 0, freeSpace, tiles->h), _mTile);
 
@@ -278,14 +278,14 @@ void UATileButton::Resize(Common::Point sz)
 {
     if (_UATiles[_tilesetUp])
         sz.y = _UATiles[_tilesetUp]->h;
-    
+
     Widget::Resize(sz);
 }
 
-void UATileButton::SetTileSets(int up, int down, int lock) 
-{ 
-    _tilesetUp = up; 
-    _tilesetDown = down; 
+void UATileButton::SetTileSets(int up, int down, int lock)
+{
+    _tilesetUp = up;
+    _tilesetDown = down;
     _tilesetLock = lock;
 }
 
@@ -298,7 +298,7 @@ Common::Point UATileButton::FixSizes(Common::Point sz)
     int minW = 0;
     for (uint8_t t: _upTiles)
         minW += valtiles->map[t].w;
-        
+
     if (!(_btnFlags & FLAG_NOBORDERS))
         minW += tiles->map[_lTile].w + tiles->map[_rTile].w;
 
@@ -335,16 +335,16 @@ UAOneTileButton::UAOneTileButton(Widget *parent, uint8_t upTile, uint8_t downTil
 void UAOneTileButton::Init(uint8_t upTile, uint8_t downTile, const Common::PointRect &xyw, int upSet, int downSet)
 {
     _flags |= FLAG_ENABLED;
-    
+
     _upTile = upTile;
     _downTile = downTile;
     _rect = xyw;
-    _upTileSet = upSet; 
-    _downTileSet = downSet; 
-    
+    _upTileSet = upSet;
+    _downTileSet = downSet;
+
     _rect.SetSize( _UATiles[_upTileSet]->map[_upTile].Size() );
 }
-        
+
 void UAOneTileButton::Resize(Common::Point sz)
 {
     Widget::Resize(_UATiles[_upTileSet]->map[_upTile].Size());

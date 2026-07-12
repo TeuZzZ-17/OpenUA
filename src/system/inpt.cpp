@@ -12,21 +12,21 @@ INPEngine INPEngine::Instance;
 int INPEngine::Init()
 {
     NC_STACK_winp::InitFirst();
-    
+
     RegisterInterface( NC_STACK_winp::GetQueryInterface() );
 
-    
+
     System::IniConf::ReadFromNucleusIni();
 
     for (InputNodeList &lst : _buttons)
         lst.clear();
-    
+
     for (InputNodeList &lst : _sliders)
         lst.clear();
-    
+
     for (int16_t &k : _hotKeys)
         k = KC_NONE;
-    
+
     SDL_Haptic *joyHaptic = NC_STACK_winp::GetJoyHaptic();
     if (joyHaptic)
     {
@@ -77,7 +77,7 @@ int INPEngine::Init()
     {
         ypa_log_out("input.engine: WARNING: no Keyboard driver defined in prefs file.\n");
     }
-    
+
     Common::Ini::Key *Buttons[] = {
         &System::IniConf::InputButton0
     ,   &System::IniConf::InputButton1
@@ -124,7 +124,7 @@ int INPEngine::Init()
         }
         i++;
     }
-    
+
     Common::Ini::Key *Sliders[] = {
         &System::IniConf::InputSlider0
     ,   &System::IniConf::InputSlider1
@@ -172,8 +172,8 @@ int INPEngine::Init()
         }
         i++;
     }
-    
-    Common::Ini::Key *Hotkeys[] = {   
+
+    Common::Ini::Key *Hotkeys[] = {
         &System::IniConf::InputHotkey0
     ,   &System::IniConf::InputHotkey1
     ,   &System::IniConf::InputHotkey2
@@ -247,7 +247,7 @@ void INPEngine::Deinit()
 
     for (InputNodeList &lst : _buttons)
         FreeKNodes(&lst);
-    
+
     for (InputNodeList &lst : _sliders)
         FreeKNodes(&lst);
 }
@@ -265,12 +265,12 @@ void INPEngine::QueryInput(TInputState *state)
     {
         if ( _keyboard.KeyboardQuery )
             _keyboard.KeyboardQuery(state);
-        
+
         state->HotKeyID = CheckHotKey(state->KbdLastHit);
-        
+
         if ( _wimp.PointerQuery )
             _wimp.PointerQuery(&state->ClickInf);
-        
+
         ClickCheck.CheckClick(&state->ClickInf);
 
         for (size_t i = 0; i < _buttons.size(); i++)
@@ -312,7 +312,7 @@ void INPEngine::AddClickBoxBack(ClickBox *box)
 void INPEngine::RemClickBox(ClickBox *box)
 {
     ClickCheck.CBoxList.remove(box);
-}    
+}
 
 bool INPEngine::InitDriver(uint8_t type, const std::string &val)
 {
@@ -356,7 +356,7 @@ void INPEngine::RegisterInterface(const TQueryState& iface)
             return;
         }
     }
-    
+
     Interfaces.push_back(iface);
 }
 
@@ -367,7 +367,7 @@ TQueryState INPEngine::FindInterface(const std::string &name)
         if (!StriCmp(i.ClassName, name))
             return i;
     }
-    
+
     return TQueryState("");
 }
 
@@ -376,9 +376,9 @@ std::string INPEngine::ParseInputNodeNext(const std::string &inputStr, InputNode
 {
     if (!lst)
         return std::string();
-    
+
     lst->emplace_back();
-    
+
     InputNode &node = lst->back();
 
     std::string *out = &node.DriverName;
@@ -393,47 +393,47 @@ std::string INPEngine::ParseInputNodeNext(const std::string &inputStr, InputNode
                 if (finishParse)
                     return inputStr.substr(i);
                 break;
-                
+
             case '#':
                 if (finishParse)
                     return inputStr.substr(i);
-                
+
                 node.Flags |= InputNode::FLAG_FSLIDE;
                 break;
-            
+
             case '&':
                 if (finishParse)
                     return inputStr.substr(i);;
 
                 node.Flags |= InputNode::FLAG_AND;
                 break;
-                
+
             case ':':
                 finishParse = true;
                 out = &node.KeyName;
                 break;
-            
+
             case '|':
                 if (finishParse)
                     return inputStr.substr(i);;
 
                 node.Flags |= InputNode::FLAG_OR;
                 break;
-            
+
             case '~':
                 if (finishParse)
                     return inputStr.substr(i);;
 
                 node.Flags |= InputNode::FLAG_INV;
                 break;
-            
+
             default:
                 (*out) += inputStr[i];
         }
     }
     return std::string();
 }
-    
+
 bool INPEngine::SetInputExpression(bool slider, uint32_t index, const std::string &keysStr)
 {
     InputNodeList *pLst;
@@ -470,12 +470,12 @@ void INPEngine::UpdateList(InputNodeList *lst, bool *btn, float *slider)
 {
     bool btmp = true;
     float ftmp = 0.0;
-    
+
     if (btn)
         btmp = *btn;
     if (slider)
         ftmp = *slider;
-    
+
     for ( InputNode &node : *lst )
     {
         if ( node.DriverObj )
@@ -501,7 +501,7 @@ void INPEngine::UpdateList(InputNodeList *lst, bool *btn, float *slider)
             }
         }
     }
-    
+
     if (btn)
         *btn = btmp;
     if (slider)
@@ -515,7 +515,7 @@ bool INPEngine::SetHotKey(uint16_t id, const std::string &keyname)
         int16_t kId = GetKeyIDByName(keyname);
         if (kId == -1)
             return false;
-        
+
         if ( KeyMatrix.at(kId).IsSlider == false )
         {
             _hotKeys[ id ] = kId;
@@ -555,13 +555,13 @@ int16_t INPEngine::GetKeyIDByName(const std::string &name)
         if ( !StriCmp(m.Name, name) )
             return m.ID;
     }
-    
+
     for( KeyMapName &m : KeyAltNamesTable )
     {
         if ( !StriCmp(m.Name, name) )
             return m.ID;
     }
-    
+
     return -1;
 }
 
@@ -592,7 +592,7 @@ int16_t INPEngine::GetHotKey(uint16_t id)
 {
     if (id < _hotKeys.size())
         return _hotKeys[id];
-    
+
     return KC_NONE;
 }
 
@@ -872,134 +872,134 @@ void INPEngine::FFstopAll()
 }
 
 std::array<KeyInfo, KC_MAX> INPEngine::KeyMatrix {{
-    {KC_NONE, false},       {KC_ESCAPE, false},         
-    {KC_SPACE, false},      {KC_UP, false},      
-    {KC_DOWN, false},       {KC_LEFT, false},      
-    {KC_RIGHT, false},      {KC_F1, false},              
+    {KC_NONE, false},       {KC_ESCAPE, false},
+    {KC_SPACE, false},      {KC_UP, false},
+    {KC_DOWN, false},       {KC_LEFT, false},
+    {KC_RIGHT, false},      {KC_F1, false},
     {KC_F2, false},         {KC_F3, false},
-    {KC_F4, false},         {KC_F5, false},              
-    {KC_F6, false},         {KC_F7, false},      
-    {KC_F8, false},         {KC_F9, false},          
-    {KC_F10, false},        {KC_F11, false},            
+    {KC_F4, false},         {KC_F5, false},
+    {KC_F6, false},         {KC_F7, false},
+    {KC_F8, false},         {KC_F9, false},
+    {KC_F10, false},        {KC_F11, false},
     {KC_F12, false},        {KC_BACKSPACE, false},
-    {KC_TAB, false},        {KC_CLEAR, false},        
-    {KC_RETURN, false},     {KC_CTRL, false},  
-    {KC_SHIFT, false},      {KC_ALT, false},           
+    {KC_TAB, false},        {KC_CLEAR, false},
+    {KC_RETURN, false},     {KC_CTRL, false},
+    {KC_SHIFT, false},      {KC_ALT, false},
     {KC_PAUSE, false},      {KC_PGUP, false},
-    {KC_PGDOWN, false},     {KC_END, false},            
+    {KC_PGDOWN, false},     {KC_END, false},
     {KC_HOME, false},       {KC_SELECT, false},
     {KC_EXECUTE, false},    {KC_SNAPSHOT, false},
-    {KC_INSERT, false},     {KC_DELETE, false},         
+    {KC_INSERT, false},     {KC_DELETE, false},
     {KC_HELP, false},       {KC_1, false},
-    {KC_2, false},          {KC_3, false},                  
-    {KC_4, false},          {KC_5, false},          
-    {KC_6, false},          {KC_7, false},              
-    {KC_8, false},          {KC_9, false},                  
+    {KC_2, false},          {KC_3, false},
+    {KC_4, false},          {KC_5, false},
+    {KC_6, false},          {KC_7, false},
+    {KC_8, false},          {KC_9, false},
     {KC_0, false},          {KC_A, false},
-    {KC_B, false},          {KC_C, false},                  
-    {KC_D, false},          {KC_E, false},          
-    {KC_F, false},          {KC_G, false},              
-    {KC_H, false},          {KC_I, false},                  
+    {KC_B, false},          {KC_C, false},
+    {KC_D, false},          {KC_E, false},
+    {KC_F, false},          {KC_G, false},
+    {KC_H, false},          {KC_I, false},
     {KC_J, false},          {KC_K, false},
-    {KC_L, false},          {KC_M, false},                  
-    {KC_N, false},          {KC_O, false},          
-    {KC_P, false},          {KC_Q, false},              
-    {KC_R, false},          {KC_S, false},                  
+    {KC_L, false},          {KC_M, false},
+    {KC_N, false},          {KC_O, false},
+    {KC_P, false},          {KC_Q, false},
+    {KC_R, false},          {KC_S, false},
     {KC_T, false},          {KC_U, false},
-    {KC_V, false},          {KC_W, false},                  
-    {KC_X, false},          {KC_Y, false},          
-    {KC_Z, false},          {KC_NUM0, false},   
-    {KC_NUM1, false},       {KC_NUM2, false},       
+    {KC_V, false},          {KC_W, false},
+    {KC_X, false},          {KC_Y, false},
+    {KC_Z, false},          {KC_NUM0, false},
+    {KC_NUM1, false},       {KC_NUM2, false},
     {KC_NUM3, false},       {KC_NUM4, false},
-    {KC_NUM5, false},       {KC_NUM6, false},       
-    {KC_NUM7, false},       {KC_NUM8, false}, 
+    {KC_NUM5, false},       {KC_NUM6, false},
+    {KC_NUM7, false},       {KC_NUM8, false},
     {KC_NUM9, false},       {KC_NUMMUL, false},
-    {KC_NUMPLUS, false},    {KC_NUMDOT, false},     
+    {KC_NUMPLUS, false},    {KC_NUMDOT, false},
     {KC_NUMMINUS, false},   {KC_NUMENTER, false},
-    {KC_NUMDIV, false},     {KC_EXTRA1, false},   
+    {KC_NUMDIV, false},     {KC_EXTRA1, false},
     {KC_EXTRA2, false},     {KC_EXTRA3, false},
-    {KC_EXTRA4, false},     {KC_EXTRA5, false},   
-    {KC_EXTRA6, false},     {KC_EXTRA7, false},       
+    {KC_EXTRA4, false},     {KC_EXTRA5, false},
+    {KC_EXTRA6, false},     {KC_EXTRA7, false},
     {KC_EXTRA8, false},     {KC_EXTRA9, false},
-    {KC_EXTRA10, false},    {KC_EXTRA11, false},      
+    {KC_EXTRA10, false},    {KC_EXTRA11, false},
     {KC_EXTRA12, false},    {KC_EXTRA13, false},
     {KC_EXTRA14, false},    {KC_EXTRA15, false},
-    {KC_EXTRA16, false},    {KC_EXTRA17, false},        
+    {KC_EXTRA16, false},    {KC_EXTRA17, false},
     {KC_EXTRA18, false},    {KC_LMB, false},
-    {KC_RMB, false},        {KC_MMB, false},                
-    {KC_MOUSEX, true},      {KC_MOUSEY, true},     
-    {KC_JOYB0, false},      {KC_JOYB1, false},          
-    {KC_JOYB2, false},      {KC_JOYB3, false},              
+    {KC_RMB, false},        {KC_MMB, false},
+    {KC_MOUSEX, true},      {KC_MOUSEY, true},
+    {KC_JOYB0, false},      {KC_JOYB1, false},
+    {KC_JOYB2, false},      {KC_JOYB3, false},
     {KC_JOYB4, false},      {KC_JOYB5, false},
-    {KC_JOYB6, false},      {KC_JOYB7, false},              
-    {KC_JOYX, true},        {KC_JOYY, true},      
-    {KC_JOYTHROTTLE, true}, {KC_JOYHATX, true},         
+    {KC_JOYB6, false},      {KC_JOYB7, false},
+    {KC_JOYX, true},        {KC_JOYY, true},
+    {KC_JOYTHROTTLE, true}, {KC_JOYHATX, true},
     {KC_JOYHATY, true},     {KC_JOYRUDDER, true}
 }};
 
 std::array<KeyMapName, KC_MAX> INPEngine::KeyNamesTable {{
-    {"nop", KC_NONE},        {"esc", KC_ESCAPE},         
-    {"space", KC_SPACE},     {"up", KC_UP},      
-    {"down", KC_DOWN},       {"left", KC_LEFT},      
-    {"right", KC_RIGHT},     {"f1", KC_F1},              
+    {"nop", KC_NONE},        {"esc", KC_ESCAPE},
+    {"space", KC_SPACE},     {"up", KC_UP},
+    {"down", KC_DOWN},       {"left", KC_LEFT},
+    {"right", KC_RIGHT},     {"f1", KC_F1},
     {"f2", KC_F2},           {"f3", KC_F3},
-    {"f4", KC_F4},           {"f5", KC_F5},              
-    {"f6", KC_F6},           {"f7", KC_F7},      
-    {"f8", KC_F8},           {"f9", KC_F9},          
-    {"f10", KC_F10},         {"f11", KC_F11},            
+    {"f4", KC_F4},           {"f5", KC_F5},
+    {"f6", KC_F6},           {"f7", KC_F7},
+    {"f8", KC_F8},           {"f9", KC_F9},
+    {"f10", KC_F10},         {"f11", KC_F11},
     {"f12", KC_F12},         {"bs", KC_BACKSPACE},
-    {"tab", KC_TAB},         {"clear", KC_CLEAR},        
-    {"return", KC_RETURN},   {"ctrl", KC_CTRL},    
-    {"rshift", KC_SHIFT},     {"alt", KC_ALT},           
+    {"tab", KC_TAB},         {"clear", KC_CLEAR},
+    {"return", KC_RETURN},   {"ctrl", KC_CTRL},
+    {"rshift", KC_SHIFT},     {"alt", KC_ALT},
     {"pause", KC_PAUSE},     {"pageup", KC_PGUP},
-    {"pagedown", KC_PGDOWN}, {"end", KC_END},            
+    {"pagedown", KC_PGDOWN}, {"end", KC_END},
     {"home", KC_HOME},       {"select", KC_SELECT},
     {"execute", KC_EXECUTE}, {"snapshot", KC_SNAPSHOT},
-    {"ins", KC_INSERT},      {"del", KC_DELETE},         
+    {"ins", KC_INSERT},      {"del", KC_DELETE},
     {"help", KC_HELP},       {"1", KC_1},
-    {"2", KC_2},             {"3", KC_3},                  
-    {"4", KC_4},             {"5", KC_5},          
-    {"6", KC_6},             {"7", KC_7},              
-    {"8", KC_8},             {"9", KC_9},                  
+    {"2", KC_2},             {"3", KC_3},
+    {"4", KC_4},             {"5", KC_5},
+    {"6", KC_6},             {"7", KC_7},
+    {"8", KC_8},             {"9", KC_9},
     {"0", KC_0},             {"a", KC_A},
-    {"b", KC_B},             {"c", KC_C},                  
-    {"d", KC_D},             {"e", KC_E},          
-    {"f", KC_F},             {"g", KC_G},              
-    {"h", KC_H},             {"i", KC_I},                  
+    {"b", KC_B},             {"c", KC_C},
+    {"d", KC_D},             {"e", KC_E},
+    {"f", KC_F},             {"g", KC_G},
+    {"h", KC_H},             {"i", KC_I},
     {"j", KC_J},             {"k", KC_K},
-    {"l", KC_L},             {"m", KC_M},                  
-    {"n", KC_N},             {"o", KC_O},          
-    {"p", KC_P},             {"q", KC_Q},              
-    {"r", KC_R},             {"s", KC_S},                  
+    {"l", KC_L},             {"m", KC_M},
+    {"n", KC_N},             {"o", KC_O},
+    {"p", KC_P},             {"q", KC_Q},
+    {"r", KC_R},             {"s", KC_S},
     {"t", KC_T},             {"u", KC_U},
-    {"v", KC_V},             {"w", KC_W},                  
-    {"x", KC_X},             {"y", KC_Y},          
-    {"z", KC_Z},             {"num0", KC_NUM0},   
-    {"num1", KC_NUM1},       {"num2", KC_NUM2},       
+    {"v", KC_V},             {"w", KC_W},
+    {"x", KC_X},             {"y", KC_Y},
+    {"z", KC_Z},             {"num0", KC_NUM0},
+    {"num1", KC_NUM1},       {"num2", KC_NUM2},
     {"num3", KC_NUM3},       {"num4", KC_NUM4},
-    {"num5", KC_NUM5},       {"num6", KC_NUM6},       
-    {"num7", KC_NUM7},       {"num8", KC_NUM8}, 
+    {"num5", KC_NUM5},       {"num6", KC_NUM6},
+    {"num7", KC_NUM7},       {"num8", KC_NUM8},
     {"num9", KC_NUM9},       {"nummul", KC_NUMMUL},
-    {"numplus", KC_NUMPLUS}, {"numdot", KC_NUMDOT},     
+    {"numplus", KC_NUMPLUS}, {"numdot", KC_NUMDOT},
     {"numminus", KC_NUMMINUS},{"enter", KC_NUMENTER},
-    {"numdiv", KC_NUMDIV},   {"extra1", KC_EXTRA1},   
+    {"numdiv", KC_NUMDIV},   {"extra1", KC_EXTRA1},
     {"extra2", KC_EXTRA2},   {"extra3", KC_EXTRA3},
-    {"extra4", KC_EXTRA4},   {"extra5", KC_EXTRA5},   
-    {"extra6", KC_EXTRA6},   {"extra7", KC_EXTRA7},       
+    {"extra4", KC_EXTRA4},   {"extra5", KC_EXTRA5},
+    {"extra6", KC_EXTRA6},   {"extra7", KC_EXTRA7},
     {"extra8", KC_EXTRA8},   {"extra9", KC_EXTRA9},
-    {"extra10", KC_EXTRA10}, {"extra11", KC_EXTRA11},      
+    {"extra10", KC_EXTRA10}, {"extra11", KC_EXTRA11},
     {"extra12", KC_EXTRA12}, {"extra13", KC_EXTRA13},
     {"extra14", KC_EXTRA14}, {"extra15", KC_EXTRA15},
-    {"extra16", KC_EXTRA16}, {"extra17", KC_EXTRA17},        
+    {"extra16", KC_EXTRA16}, {"extra17", KC_EXTRA17},
     {"extra18", KC_EXTRA18}, {"lmb", KC_LMB},
-    {"rmb", KC_RMB},         {"mmb", KC_MMB},                
-    {"mousex", KC_MOUSEX},   {"mousey", KC_MOUSEY},     
-    {"joyb0", KC_JOYB0},     {"joyb1", KC_JOYB1},          
-    {"joyb2", KC_JOYB2},     {"joyb3", KC_JOYB3},              
+    {"rmb", KC_RMB},         {"mmb", KC_MMB},
+    {"mousex", KC_MOUSEX},   {"mousey", KC_MOUSEY},
+    {"joyb0", KC_JOYB0},     {"joyb1", KC_JOYB1},
+    {"joyb2", KC_JOYB2},     {"joyb3", KC_JOYB3},
     {"joyb4", KC_JOYB4},     {"joyb5", KC_JOYB5},
-    {"joyb6", KC_JOYB6},     {"joyb7", KC_JOYB7},              
-    {"joyx", KC_JOYX},       {"joyy", KC_JOYY},      
-    {"joythrottle", KC_JOYTHROTTLE},{"joyhatx", KC_JOYHATX},         
+    {"joyb6", KC_JOYB6},     {"joyb7", KC_JOYB7},
+    {"joyx", KC_JOYX},       {"joyy", KC_JOYY},
+    {"joythrottle", KC_JOYTHROTTLE},{"joyhatx", KC_JOYHATX},
     {"joyhaty", KC_JOYHATY}, {"joyrudder", KC_JOYRUDDER}
 }};
 

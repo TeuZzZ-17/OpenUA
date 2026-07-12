@@ -236,17 +236,17 @@ public:
         else
             return str.substr(pos);
     }
-    
+
     static std::vector<std::string> Split(const std::string &str, const std::string &chars)
     {
         std::vector<std::string> result;
-        
+
         Stok parse(str, chars);
-        
+
         std::string val;
         while( parse.GetNext( &val ) )
             result.push_back(val);
-        
+
         return result;
     }
 private:
@@ -257,7 +257,7 @@ private:
 
 namespace Utils
 {
-    
+
 inline void StringSetEnd(std::string *str, const std::string &chars)
 {
     size_t line_end = str->find_first_of(chars);
