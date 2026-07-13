@@ -1412,25 +1412,16 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     else if ( ParseDecorationFXParam(parser, p1, p2, _vhcl->decoration_fx) )
     {
     }
-    else if ( !StriCmp(p1, "damaged_icon") )
+    else if ( !StriCmp(p1, "regen_icon") ||
+              !StriCmp(p1, "drain_icon") ||
+              !StriCmp(p1, "damaged_icon") ||
+              !StriCmp(p1, "spawn_icon") ||
+              !StriCmp(p1, "radar_icon") ||
+              !StriCmp(p1, "power_icon") ||
+              !StriCmp(p1, "seek_and_explode_icon") )
     {
-        _vhcl->damaged_icon = p2;
-    }
-    else if ( !StriCmp(p1, "regen_icon") )
-    {
-        // Legacy no-op: regen status icon is hardcoded.
-    }
-    else if ( !StriCmp(p1, "drain_icon") )
-    {
-        // Legacy no-op: drain status icon is hardcoded.
-    }
-    else if ( !StriCmp(p1, "spawn_icon") )
-    {
-        _vhcl->spawn_icon = p2;
-    }
-    else if ( !StriCmp(p1, "radar_icon") )
-    {
-        _vhcl->radar_icon = p2;
+        // Legacy no-op: vehicle capability icons are assigned automatically.
+        // Keep accepting old script keys so vanilla/OpenUA scripts still load.
     }
     else if ( !StriCmp(p1, "unit_gun_icon") )
     {
@@ -1438,14 +1429,6 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
             gun->icon = p2;
         else
             _vhcl->unit_gun_icon = p2;
-    }
-    else if ( !StriCmp(p1, "power_icon") )
-    {
-        _vhcl->power_icon = p2;
-    }
-    else if ( !StriCmp(p1, "seek_and_explode_icon") )
-    {
-        _vhcl->seek_and_explode_icon = p2;
     }
     else if ( !StriCmp(p1, "power") )
     {
@@ -1612,6 +1595,11 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     {
         int damage = parser.stol(p2, NULL, 0);
         _vhcl->death_damage = damage > 0 ? damage : 0;
+    }
+    else if ( !StriCmp(p1, "death_damage_radius") )
+    {
+        float radius = parser.stof(p2, 0);
+        _vhcl->death_damage_radius = radius > 0.0 ? radius : 0.0;
     }
     else if ( !StriCmp(p1, "proximity_defense_enable") )
     {
@@ -2563,12 +2551,7 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->vp_tint = TVisualTint();
         _vhcl->wireframe_tint = TVisualTint();
         _vhcl->damaged_fx = TDamagedFXConfig();
-        _vhcl->damaged_icon.clear();
-        _vhcl->spawn_icon.clear();
-        _vhcl->radar_icon.clear();
         _vhcl->unit_gun_icon.clear();
-        _vhcl->power_icon.clear();
-        _vhcl->seek_and_explode_icon.clear();
         _vhcl->power = 0;
         _vhcl->power_radius = 0.0;
         _vhcl->damaged_force_malus = 0.0;
@@ -2589,6 +2572,7 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->spawn_at_death_instant = 0;
         _vhcl->spawn_at_death_immunity_time = 0;
         _vhcl->death_damage = 0;
+        _vhcl->death_damage_radius = 0.0;
         _vhcl->proximity_defense_enable = 0;
         _vhcl->proximity_defense_weapon = 0;
         _vhcl->proximity_defense_trigger_radius = 0.0;

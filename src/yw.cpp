@@ -12,6 +12,7 @@
 #include "loaders.h"
 
 #include "button.h"
+#include "amesh.h"
 #include "font.h"
 #include "yparobo.h"
 #include "windp.h"
@@ -135,7 +136,7 @@ static void yw_AddModelPoint(yw_ModelPointCloud *cloud, const vec3d &point)
 }
 
 static void yw_CollectVPModelPoints(NC_STACK_base *base, const mat3x3 &rot, const vec3d &pos,
-                                    yw_ModelPointCloud *cloud)
+                                    yw_ModelPointCloud *cloud, bool solidMaterialsOnly)
 {
     if ( !base )
         return;
@@ -147,8 +148,40 @@ static void yw_CollectVPModelPoints(NC_STACK_base *base, const mat3x3 &rot, cons
         {
             bool sampledPolygons = false;
 
-            for (const UAskeleton::Polygon &poly : data->polygons)
+            std::vector<bool> eligiblePolygons;
+            if ( solidMaterialsOnly )
             {
+                eligiblePolygons.resize(data->polygons.size(), false);
+
+                for (NC_STACK_ade *ade : *base->GetAdeList())
+                {
+                    NC_STACK_area *area = dynamic_cast<NC_STACK_area *>(ade);
+                    if ( !area || area->getAREA_tracy() == 2 )
+                        continue;
+
+                    if ( NC_STACK_amesh *amesh = dynamic_cast<NC_STACK_amesh *>(area) )
+                    {
+                        for (const NC_STACK_amesh::ATTS &att : amesh->atts)
+                        {
+                            if ( att.polyID >= 0 && (size_t)att.polyID < eligiblePolygons.size() )
+                                eligiblePolygons[att.polyID] = true;
+                        }
+                    }
+                    else
+                    {
+                        int polyID = area->getADE_poly();
+                        if ( polyID >= 0 && (size_t)polyID < eligiblePolygons.size() )
+                            eligiblePolygons[polyID] = true;
+                    }
+                }
+            }
+
+            for (size_t polyID = 0; polyID < data->polygons.size(); polyID++)
+            {
+                if ( solidMaterialsOnly && !eligiblePolygons[polyID] )
+                    continue;
+
+                const UAskeleton::Polygon &poly = data->polygons[polyID];
                 if ( poly.num_vertices < 3 )
                     continue;
 
@@ -202,7 +235,7 @@ static void yw_CollectVPModelPoints(NC_STACK_base *base, const mat3x3 &rot, cons
             // A few simple legacy VPs have no polygon table. POO is the only
             // useful geometry in that case; SEN remains excluded because it is
             // metadata and often lies far outside the rendered model.
-            if ( !sampledPolygons )
+            if ( !sampledPolygons && !solidMaterialsOnly )
             {
                 for (const UAskeleton::Vertex &v : data->POO)
                     yw_AddModelPoint(cloud, pos + rot.Transform(static_cast<vec3d>(v)));
@@ -215,18 +248,23 @@ static void yw_CollectVPModelPoints(NC_STACK_base *base, const mat3x3 &rot, cons
         TF::TForm3D &tf = kid->TForm();
         mat3x3 kidRot = rot * tf.SclRot;
         vec3d kidPos = pos + rot.Transform(tf.Pos);
-        yw_CollectVPModelPoints(kid, kidRot, kidPos, cloud);
+        yw_CollectVPModelPoints(kid, kidRot, kidPos, cloud, solidMaterialsOnly);
     }
 }
 
 static void yw_CollectVPPointCloud(NC_STACK_base *vp, const vec3d &scale, const vec3d &orientation,
-                                   yw_ModelPointCloud *cloud)
+                                   yw_ModelPointCloud *cloud, bool solidMaterialsOnly)
 {
     if ( !vp )
         return;
 
     yw_ModelPointCloud raw;
-    yw_CollectVPModelPoints(vp, mat3x3::Ident(), vec3d(0.0, 0.0, 0.0), &raw);
+    yw_CollectVPModelPoints(vp, mat3x3::Ident(), vec3d(0.0, 0.0, 0.0), &raw, solidMaterialsOnly);
+
+    // Some energy effects and legacy VPs have no opaque/chroma-keyed material
+    // geometry. Preserve their previous automatic collision as a safe fallback.
+    if ( solidMaterialsOnly && !raw.valid )
+        yw_CollectVPModelPoints(vp, mat3x3::Ident(), vec3d(0.0, 0.0, 0.0), &raw, false);
 
     if ( !raw.valid )
         return;
@@ -631,14 +669,14 @@ static void yw_AddHiddenAutoCollBridges(World::rbcolls *colls)
 }
 
 static World::rbcolls yw_GenerateAutoCollSpheresFromVP(NC_STACK_base *vp, const vec3d &scale,
-                                                       const vec3d &orientation, bool essentialHull = false,
-                                                       bool forceBilateral = false)
+                                                       const vec3d &orientation, bool essentialHull,
+                                                       bool forceBilateral, bool solidMaterialsOnly)
 {
     World::rbcolls out;
     const int maxSpheres = 16;
 
     yw_ModelPointCloud cloud;
-    yw_CollectVPPointCloud(vp, scale, orientation, &cloud);
+    yw_CollectVPPointCloud(vp, scale, orientation, &cloud, solidMaterialsOnly);
     if ( !cloud.valid || cloud.points.size() < 3 )
         return out;
 
@@ -792,6 +830,27 @@ static void yw_SimplifyAutoWeaponCollSpheres(World::rbcolls *colls)
 
         spheres[bestA] = yw_MergeCollisionSpheres(spheres[bestA], spheres[bestB]);
         spheres.erase(spheres.begin() + bestB);
+    }
+}
+
+static float yw_GetWeaponAutoCollisionScale()
+{
+    std::string value = System::IniConf::GameWeaponAutoCollisionScale.Get<std::string>();
+    if ( value.empty() || value.find(',') != std::string::npos )
+        return 1.0f;
+
+    try
+    {
+        size_t pos = 0;
+        float scale = std::stof(value, &pos);
+        if ( value.find_first_not_of(" \t\r\n", pos) != std::string::npos || !isfinite(scale) )
+            return 1.0f;
+
+        return yw_ClampFloat(scale, 1.0f, 10.0f);
+    }
+    catch (...)
+    {
+        return 1.0f;
     }
 }
 
@@ -1241,6 +1300,7 @@ size_t NC_STACK_ypaworld::Init(IDVList &stak)
 
 size_t NC_STACK_ypaworld::Deinit()
 {
+    _debugAoeRings.clear();
     FreeGameDataCursors();
     dprintf("MAKE ME %s\n","ypaworld_func1");
     return NC_STACK_nucleus::Deinit();
@@ -2401,7 +2461,7 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
                 autoCollVP = getModel(vhcl.vp_genesis);
 
             spawnColl = yw_GenerateAutoCollSpheresFromVP(autoCollVP, vhcl.vp_scale,
-                                                         vhcl.vp_orientation, true, true);
+                                                         vhcl.vp_orientation, true, true, false);
 
             // Cache successful generation in the shared prototype. This keeps
             // repeated spawns cheap while preserving coll_defined=false, so the
@@ -2551,6 +2611,7 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_spawn_at_death_protection_end_time = 0;
         bacto->_spawn_at_death_restore_vulnerable = false;
         bacto->_death_damage = vhcl.death_damage > 0 ? vhcl.death_damage : 0;
+        bacto->_death_damage_radius = vhcl.death_damage_radius > 0.0 ? vhcl.death_damage_radius : 0.0;
         bacto->_death_damage_applied_dead = false;
         bacto->_death_damage_applied_megadeth = false;
         bacto->_carrier_spawn_root_gid = 0;
@@ -2805,7 +2866,8 @@ NC_STACK_ypamissile * NC_STACK_ypaworld::ypaworld_func147(ypaworld_arg146 *arg)
         if ( !autoCollVP )
             autoCollVP = getModel(wproto.vp_genesis);
 
-        spawnColl = yw_GenerateAutoCollSpheresFromVP(autoCollVP, wproto.vp_scale, wproto.vp_orientation);
+        spawnColl = yw_GenerateAutoCollSpheresFromVP(autoCollVP, wproto.vp_scale,
+                                                     wproto.vp_orientation, false, false, true);
         yw_SimplifyAutoWeaponCollSpheres(&spawnColl);
         if ( !spawnColl.roboColls.empty() )
             wproto.coll = spawnColl;
@@ -2813,15 +2875,22 @@ NC_STACK_ypamissile * NC_STACK_ypaworld::ypaworld_func147(ypaworld_arg146 *arg)
 
     wobj->_collNodes = spawnColl;
     wobj->_autoCollisionSpheres = useAutoCollisionSpheres && !spawnColl.roboColls.empty();
-    for (const World::TRoboColl &sphere : wobj->_collNodes.roboColls)
+    if ( wobj->_autoCollisionSpheres )
     {
-        if ( sphere.robo_coll_radius <= 0.01 )
-            continue;
+        // Keep the cached prototype spheres canonical. Scale only this spawn's
+        // runtime copy so repeated spawns can never compound the multiplier.
+        float autoCollisionScale = yw_GetWeaponAutoCollisionScale();
+        wobj->_radius = 0.0f;
+        for (World::TRoboColl &sphere : wobj->_collNodes.roboColls)
+        {
+            sphere.robo_coll_radius *= autoCollisionScale;
+            if ( sphere.robo_coll_radius <= 0.01 )
+                continue;
 
-        float hitPadding = wproto.radius_defined ? wproto.radius : 0.0f;
-        float extent = sphere.coll_pos.length() + sphere.robo_coll_radius + hitPadding;
-        if ( extent > wobj->_radius )
-            wobj->_radius = extent;
+            float extent = sphere.coll_pos.length() + sphere.robo_coll_radius;
+            if ( extent > wobj->_radius )
+                wobj->_radius = extent;
+        }
     }
 
     wobj->_destroyFX = wproto.dfx;
@@ -3314,6 +3383,8 @@ void NC_STACK_ypaworld::DeleteLevel()
     else
         plowner = 0;
 
+    BeginLevelTeardown();
+
     while ( !_deadCacheList.empty() )
     {
         NC_STACK_ypabact *bct = _deadCacheList.front();
@@ -3366,6 +3437,71 @@ void NC_STACK_ypaworld::DeleteLevel()
     {
         LoadProtosScript(_initScriptFilePath);
     }
+
+    EndLevelTeardown();
+}
+
+void NC_STACK_ypaworld::BeginLevelTeardown()
+{
+    _levelTeardownInProgress = true;
+
+    // NC_STACK_ypaworld is reused by restart/load/menu transitions. Invalidate
+    // every mission-owned reference before the first BACT is destroyed so UI,
+    // debug and delayed runtime state cannot observe the outgoing hierarchy.
+    _particles.Clear();
+    Common::DeleteAndNull(&_script);
+    _transientVPs.clear();
+    _nextTransientVPId = 1;
+    _damageHoverTargets.clear();
+    _inBuildProcess.clear();
+    _debugAoeRings.clear();
+    ClearMortarMarkers();
+    _mortarManualGid = 0;
+    _mortarManualRadius = 0.0f;
+
+    _hudMissileMultiLockTargets.clear();
+    _cmdrsRemap.clear();
+    _spectatorFollowTarget = NULL;
+    _lastMsgSender = NULL;
+    _viewerBact = NULL;
+    _userRobo = NULL;
+    _userUnit = NULL;
+    _bactOnMouse = NULL;
+    _bactPrevClicked = NULL;
+    _cellOnMouse = NULL;
+    _guiDragElement = NULL;
+    _guiDragging = false;
+    _guiDragDefaultMouse = false;
+    _mouseGrabbed = false;
+    _guiActFlags = 0;
+    _doAction = World::DOACTION_0;
+    _guiVisor = bact_hudi();
+    _updateMessage = update_msg();
+
+    _vehicleTakenControlTimestamp = 0;
+    _vehicleTakenCommandId = 0;
+    _activeCmdrID = 0;
+    _activeCmdrRemapIndex = 0;
+    _activeCmdrKidsCount = 0;
+    _cmdrIdToSelect = -1;
+    _makingWaypointsMode = false;
+    _waypointCount = 0;
+    _playerInHSGun = false;
+    _upgradeId = 0;
+    _upgradeTimeStamp = 0;
+    _upgradeVehicleId = 0;
+    _upgradeWeaponId = 0;
+    _upgradeBuildId = 0;
+}
+
+void NC_STACK_ypaworld::EndLevelTeardown()
+{
+    _levelTeardownInProgress = false;
+}
+
+bool NC_STACK_ypaworld::IsLevelTeardownInProgress() const
+{
+    return _levelTeardownInProgress;
 }
 
 
@@ -7644,6 +7780,7 @@ size_t NC_STACK_ypaworld::ypaworld_func162(const std::string &fname)
     TGameRecorder *repl = _replayPlayer;
 
     repl->filename = fname;
+    _debugAoeRings.clear();
     _timeStamp = 0;
 
     if ( !recorder_open_replay(repl) )

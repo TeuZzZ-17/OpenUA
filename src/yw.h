@@ -2065,6 +2065,9 @@ public:
     virtual void ypaworld_func149(ypaworld_arg136 *arg);
     virtual void ypaworld_func150(yw_arg150 *arg);
     virtual void DeleteLevel();
+    void BeginLevelTeardown();
+    void EndLevelTeardown();
+    bool IsLevelTeardownInProgress() const;
     virtual void ypaworld_func153(bact_hudi *arg);
     virtual bool InitGameShell(UserData *usr);
     virtual void DeinitGameShell();
@@ -2268,6 +2271,7 @@ public:
     void DoSectorsEnergyRecalc();
     void RecalcSectorsPowerForPS(const TPowerStationInfo &ps);
     void AddMobileVehiclePowerToAccumMap();
+    bool IsValidMobilePowerGenerator(NC_STACK_ypabact *unit);
     TMobilePowerInfluence FindMobilePowerInfluenceForUnit(NC_STACK_ypabact *target);
 
     void sub_4D12D8(int id, int a3);
@@ -2346,7 +2350,9 @@ public:
     void debug_info_draw(TInputState *inpt);
     void debug_count_units();
     void debug_draw_coll_spheres();
+    void ExpireDebugAoeRings();
     void DebugAddAoeRing(const vec3d &pos, float radius, uint8_t r, uint8_t g, uint8_t b);
+    void DebugAddSphere(const vec3d &pos, float radius, uint8_t r, uint8_t g, uint8_t b, int durationMs);
 
     // OpenUA custom: mortar bombardment markers + manual map-click control.
     void AddMortarMarker(const vec3d &pos, float radius, int owner, int lingerMs);
@@ -2684,6 +2690,7 @@ public:
     bool _gamePaused = false;
     uint32_t _gamePausedTimeStamp = 0;
     bool _debugGameplayFrozen = false;
+    bool _levelTeardownInProgress = false;
 
     int32_t _timeStamp = 0;
     int32_t _frameTime = 0;
@@ -2778,6 +2785,8 @@ public:
         uint8_t r           = 255;
         uint8_t g           = 255;
         uint8_t b           = 255;
+        bool    sphere      = false;
+        int32_t createdStamp = 0;
         int32_t expireStamp = 0;
     };
     std::vector<DebugAoeRing> _debugAoeRings;

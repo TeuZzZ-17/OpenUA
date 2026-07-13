@@ -444,7 +444,10 @@ public:
     virtual void EnergyInteract(update_msg *arg);
     virtual void BeforeSoundCarrierUpdate();
     void UpdateCarrierSpawn(update_msg *arg);
+    bool CanUseCarrierSpawn();
     void UpdateProximityDefense(update_msg *arg);
+    bool CanUseProximityDefense();
+    bool CanUseProximityDefenseAtDeath();
     void UpdateMortar(update_msg *arg); // OpenUA custom: radar-guided mortar barrage AI
     bool StartMortarBarrage(const vec3d &targetCenter); // OpenUA custom: begin a barrage at a point
     bool CanManualMortar(const vec3d &targetPos, int *outWeaponId, bool *outReadyNow = nullptr); // OpenUA custom: manual-call validity (+ ready-now flag)
@@ -454,6 +457,7 @@ public:
     float GetMortarBarrageRadius(); // OpenUA custom: bombardment zone radius of this unit's mortar (0 if none)
     float GetMortarReadinessRatio(); // OpenUA custom: 0..1 cooldown readiness for UI bars
     void UpdateSeekAndExplode(update_msg *arg);
+    bool IsSeekAndExplodeArmed();
     bool ApplySeekAndExplodeRammingGuidance();
     // OpenUA custom: continuous laser beam ("model = laser"). UpdateLaser drives the
     // static tick damage, beam state and loop sound each frame; the firing paths only
@@ -942,6 +946,7 @@ public:
     int _spawn_at_death_protection_end_time;
     bool _spawn_at_death_restore_vulnerable;
     int _death_damage;
+    float _death_damage_radius;
     bool _death_damage_applied_dead;
     bool _death_damage_applied_megadeth;
     int _carrier_spawn_root_gid;

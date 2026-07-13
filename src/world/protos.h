@@ -404,12 +404,7 @@ struct TVhclProto
     TVisualTint wireframe_tint; // OpenUA custom: UI wireframe-only RGBA tint multiplier
     TDamagedFXConfig damaged_fx;
     TDecorationFXConfig decoration_fx;
-    std::string damaged_icon;
-    std::string spawn_icon;
-    std::string radar_icon;
     std::string unit_gun_icon;
-    std::string power_icon;
-    std::string seek_and_explode_icon;
     int power = 0;
     float power_radius = 0.0;
     float damaged_force_malus = 0.0;
@@ -430,6 +425,7 @@ struct TVhclProto
     int spawn_at_death_instant = 0;
     int spawn_at_death_immunity_time = 0;
     int death_damage = 0; // OpenUA custom: direct radius damage applied on death phases
+    float death_damage_radius = 0.0; // OpenUA custom: independent 3D radius for death_damage
     int proximity_defense_enable = 0;
     int proximity_defense_weapon = 0;
     float proximity_defense_trigger_radius = 0.0;
@@ -699,7 +695,7 @@ struct TWeapProto
     float maxrot = 0.0;
     float heightStd = 0;
     // Explicit radius keeps legacy direct projectile collision unless
-    // auto_collision selects VP spheres and reuses radius as hit padding.
+    // auto_collision selects VP spheres and retains radius as metadata only.
     float radius = 0.0;
     bool radius_defined = false;
     bool auto_collision = false;

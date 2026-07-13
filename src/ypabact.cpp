@@ -5,6 +5,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <stack>
+#include <set>
 #include <algorithm>
 #include <limits>
 #include <vector>
@@ -916,6 +917,11 @@ static bool ypabact_CanCarrierSpawn(NC_STACK_ypabact *carrier)
     return true;
 }
 
+bool NC_STACK_ypabact::CanUseCarrierSpawn()
+{
+    return ypabact_CanCarrierSpawn(this);
+}
+
 static bool ypabact_IsCarrierSpawnEnemy(NC_STACK_ypabact *carrier, NC_STACK_ypabact *unit)
 {
     if ( !ypabact_IsCarrierSpawnAliveUnit(unit) )
@@ -1052,7 +1058,7 @@ static int ypabact_CalcShieldedCustomDamage(NC_STACK_ypabact *target, int rawDam
 
 static void ypabact_ApplyDeathDamage(NC_STACK_ypabact *unit, bool megadethPhase)
 {
-    if ( !unit || !unit->getBACT_pWorld() || unit->_death_damage <= 0 || unit->_radius <= 0.0 )
+    if ( !unit || !unit->getBACT_pWorld() || unit->_death_damage <= 0 || unit->_death_damage_radius <= 0.0 )
         return;
 
     bool &applied = megadethPhase ? unit->_death_damage_applied_megadeth : unit->_death_damage_applied_dead;
@@ -1062,10 +1068,14 @@ static void ypabact_ApplyDeathDamage(NC_STACK_ypabact *unit, bool megadethPhase)
     applied = true;
 
     NC_STACK_ypaworld *world = unit->getBACT_pWorld();
-    float radiusSq = unit->_radius * unit->_radius;
-    int sectorRadius = (int)(unit->_radius / World::CVSectorLength) + 2;
-    Common::Point center = World::PositionToSectorID(unit->_position);
+    const vec3d eventPos = unit->_position;
+    float radiusSq = unit->_death_damage_radius * unit->_death_damage_radius;
+    int sectorRadius = (int)(unit->_death_damage_radius / World::CVSectorLength) + 2;
+    Common::Point center = World::PositionToSectorID(eventPos);
     std::vector<NC_STACK_ypabact *> targets;
+    std::set<NC_STACK_ypabact *> visited;
+
+    world->DebugAddSphere(eventPos, unit->_death_damage_radius, 255, 0, 0, 3000);
 
     for (int y = center.y - sectorRadius; y <= center.y + sectorRadius; y++)
     {
@@ -1082,8 +1092,8 @@ static void ypabact_ApplyDeathDamage(NC_STACK_ypabact *unit, bool megadethPhase)
                 if ( !ypabact_IsDeathDamageTarget(unit, target) )
                     continue;
 
-                vec3d delta = target->_position - unit->_position;
-                if ( delta.dot(delta) <= radiusSq )
+                vec3d delta = target->_position - eventPos;
+                if ( delta.dot(delta) <= radiusSq && visited.insert(target).second )
                     targets.push_back(target);
             }
         }
@@ -1630,6 +1640,7 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _spawn_at_death_protection_end_time = 0;
     _spawn_at_death_restore_vulnerable = false;
     _death_damage = 0;
+    _death_damage_radius = 0.0;
     _death_damage_applied_dead = false;
     _death_damage_applied_megadeth = false;
     _carrier_spawn_root_gid = 0;
@@ -1820,6 +1831,7 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _spawn_at_death_protection_end_time = 0;
     _spawn_at_death_restore_vulnerable = false;
     _death_damage = 0;
+    _death_damage_radius = 0.0;
     _death_damage_applied_dead = false;
     _death_damage_applied_megadeth = false;
     _carrier_spawn_root_gid = 0;
@@ -2016,7 +2028,18 @@ size_t NC_STACK_ypabact::Deinit()
     _status_flg |= BACT_STFLAG_CLEAN;
 
     if ( !(_status_flg & BACT_STFLAG_DEATH1) )
-        Die();
+    {
+        if ( _world && _world->IsLevelTeardownInProgress() )
+        {
+            // Level teardown is destruction, not a gameplay death. DeleteLevel
+            // already owns the whole hierarchy, so death hooks must not damage,
+            // spawn, fire or reparent objects while its lists are being erased.
+            _status = BACT_STATUS_DEAD;
+            _status_flg |= BACT_STFLAG_DEATH1;
+        }
+        else
+            Die();
+    }
 
     if ( _pSector )
         _cellRef.Detach();
@@ -2066,7 +2089,8 @@ void NC_STACK_ypabact::CleanupUnitGuns(bool releaseGuns, bool parentDying)
         NC_STACK_ypabact *fallback = parentDying ? _world->_userRobo : this;
         ypabact_SafeDetachControlFrom(gunObj, fallback);
 
-        if ( !gunObj->IsDestroyed() && !(gunObj->_status_flg & BACT_STFLAG_DEATH1) )
+        if ( (!_world || !_world->IsLevelTeardownInProgress()) &&
+             !gunObj->IsDestroyed() && !(gunObj->_status_flg & BACT_STFLAG_DEATH1) )
         {
             gunObj->_killer = _killer;
             gunObj->Die();
@@ -2242,7 +2266,8 @@ void NC_STACK_ypabact::CleanupUnitDummies(bool releaseDummies, bool parentDying)
         NC_STACK_ypabact *fallback = parentDying ? _world->_userRobo : this;
         ypabact_SafeDetachControlFrom(dummyObj, fallback);
 
-        if ( !dummyObj->IsDestroyed() && !(dummyObj->_status_flg & BACT_STFLAG_DEATH1) )
+        if ( (!_world || !_world->IsLevelTeardownInProgress()) &&
+             !dummyObj->IsDestroyed() && !(dummyObj->_status_flg & BACT_STFLAG_DEATH1) )
         {
             dummyObj->_killer = _killer;
             dummyObj->Die();
@@ -6233,6 +6258,11 @@ static bool ypabact_IsSeekAndExplodeArmed(NC_STACK_ypabact *unit)
     return (weapons[weaponId]._weaponFlags & 1) != 0;
 }
 
+bool NC_STACK_ypabact::IsSeekAndExplodeArmed()
+{
+    return ypabact_IsSeekAndExplodeArmed(this);
+}
+
 static bool ypabact_IsValidSeekAndExplodeTarget(NC_STACK_ypabact *unit, NC_STACK_ypabact *target)
 {
     if ( !unit ||
@@ -6865,6 +6895,11 @@ static bool ypabact_CanUseProximityDefense(NC_STACK_ypabact *unit)
     return true;
 }
 
+bool NC_STACK_ypabact::CanUseProximityDefense()
+{
+    return ypabact_CanUseProximityDefense(this);
+}
+
 static vec3d ypabact_GetProximityDefenseLocalDirection(NC_STACK_ypabact *unit, int shotIndex, int totalShots)
 {
     float yaw = ((float)shotIndex / (float)totalShots) * 360.0;
@@ -7056,6 +7091,11 @@ static bool ypabact_CanUseProximityDefenseAtDeath(NC_STACK_ypabact *unit)
         return false;
 
     return true;
+}
+
+bool NC_STACK_ypabact::CanUseProximityDefenseAtDeath()
+{
+    return ypabact_CanUseProximityDefenseAtDeath(this);
 }
 
 static void ypabact_FireProximityDefenseAtDeath(NC_STACK_ypabact *unit)
@@ -11959,6 +11999,7 @@ void NC_STACK_ypabact::Renew()
     _spawn_at_death_protection_end_time = 0;
     _spawn_at_death_restore_vulnerable = false;
     _death_damage = 0;
+    _death_damage_radius = 0.0;
     _death_damage_applied_dead = false;
     _death_damage_applied_megadeth = false;
     _carrier_spawn_root_gid = 0;
@@ -13114,6 +13155,17 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
 
                 if ( gunFireBact )
                 {
+                    // Vehicle-side MGUN is hitscan.  The temporary missile below
+                    // exists only for the impact VP; keep it out of compound/F10
+                    // weapon-sphere handling.  Static model = gun actors retain
+                    // the normal physical-weapon path.
+                    if ( _bact_type != BACT_TYPES_GUN )
+                    {
+                        gunFireBact->_collNodes.roboColls.clear();
+                        gunFireBact->_autoCollisionSpheres = false;
+                        gunFireBact->_status_flg |= BACT_STFLAG_CLEAN;
+                    }
+
                     gunFireBact->_owner = _owner;
 
                     gunFireBact->_kidRef.Detach();

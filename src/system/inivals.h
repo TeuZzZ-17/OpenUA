@@ -231,6 +231,7 @@ public:
     static Common::Ini::Key GameSpectatorMode;
     static Common::Ini::Key GameSpectatorVehicleID;
     static Common::Ini::Key GameWeaponWeaponCollision;
+    static Common::Ini::Key GameWeaponAutoCollisionScale;
     static Common::Ini::Key GameRoboBuildingCollisionDamagePercent;
     static Common::Ini::Key GamePowerStationEnergyMultiplier;
     static Common::Ini::Key GameFallDamageMultiplier;

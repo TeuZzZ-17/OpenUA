@@ -114,7 +114,6 @@ public:
     virtual int GetPowerFlyer();
     virtual int GetPowerRobo();
     virtual float GetStartHeight();
-    virtual float getBACT_collPadding() const override;
 
     vec3d CalcForceVector();
     bool TubeCollisionTest(bool applyDirectDamage = true, NC_STACK_ypabact **hitTarget = NULL);

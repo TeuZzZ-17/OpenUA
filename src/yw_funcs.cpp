@@ -3087,10 +3087,16 @@ void sb_0x44ac24(NC_STACK_ypaworld *yw)
     }
 
     if ( yw->_colsubSkeleton )
+    {
         yw->_colsubSkeleton->Delete();
+        yw->_colsubSkeleton = NULL;
+    }
 
     if ( yw->_colcompSkeleton )
+    {
         yw->_colcompSkeleton->Delete();
+        yw->_colcompSkeleton = NULL;
+    }
 
     if ( yw->_tracyBitmap )
     {

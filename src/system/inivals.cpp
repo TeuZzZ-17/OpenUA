@@ -241,6 +241,8 @@ Common::Ini::Key IniConf::GameRoboPlayerAIBehavior("game.robo_player_ai_behavior
 Common::Ini::Key IniConf::GameSpectatorMode("game.spectator_mode", Common::Ini::KT_BOOL, false);
 Common::Ini::Key IniConf::GameSpectatorVehicleID("game.spectator_vehicle_id", Common::Ini::KT_DIGIT, (int32_t)0);
 Common::Ini::Key IniConf::GameWeaponWeaponCollision("game.weapon_weapon_collision", Common::Ini::KT_BOOL, false);
+// OpenUA custom: radius-only scale for automatic weapon VP collision spheres.
+Common::Ini::Key IniConf::GameWeaponAutoCollisionScale("game.weapon_auto_collision_scale", Common::Ini::KT_WORD, std::string("1.0"));
 Common::Ini::Key IniConf::GameRoboBuildingCollisionDamagePercent("game.robo_building_collision_damage_percent", Common::Ini::KT_DIGIT, (int32_t)0);
 // OpenUA custom: multiplier for the vanilla power-station sector energy effect.
 // game.powerstation_energy_multiplier = 1.0 keeps vanilla; 3.0 triples recharge/drain.
@@ -462,6 +464,7 @@ void IniConf::Init()
         , &GameSpectatorMode
         , &GameSpectatorVehicleID
         , &GameWeaponWeaponCollision
+        , &GameWeaponAutoCollisionScale
         , &GameRoboBuildingCollisionDamagePercent
         , &GamePowerStationEnergyMultiplier
         , &GameFallDamageMultiplier

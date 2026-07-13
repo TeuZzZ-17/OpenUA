@@ -40,6 +40,13 @@ constexpr int STATUS_ICON_SIZE = 16;
 constexpr int STATUS_ICON_SPACING = 2;
 constexpr const char *STATUS_ICON_REGEN = "StatusIcons/regen.png";
 constexpr const char *STATUS_ICON_DRAIN = "StatusIcons/drain.png";
+constexpr const char *STATUS_ICON_DAMAGED = "StatusIcons/damaged.png";
+constexpr const char *STATUS_ICON_SPAWN = "StatusIcons/mobile_spawner.png";
+constexpr const char *STATUS_ICON_RADAR = "StatusIcons/mobile_radar.png";
+constexpr const char *STATUS_ICON_POWER = "StatusIcons/mobile_power.png";
+constexpr const char *STATUS_ICON_SEEK_AND_EXPLODE = "StatusIcons/true_kamikaze.png";
+constexpr const char *STATUS_ICON_INVISIBLE = "StatusIcons/invisible.png";
+constexpr const char *STATUS_ICON_PROXIMITY_DEFENSE = "StatusIcons/proximity_defense.png";
 
 struct StatusIconCacheEntry
 {
@@ -164,6 +171,19 @@ bool StatusIconIsNonRoboGun(NC_STACK_ypabact *bact)
     return !gun->IsRoboGun();
 }
 
+bool StatusIconCanUseVehicleCapabilityUnit(NC_STACK_ypabact *bact)
+{
+    return bact &&
+           bact->_owner != World::OWNER_0 &&
+           bact->_bact_type != BACT_TYPES_MISSLE &&
+           bact->_bact_type != BACT_TYPES_ROBO &&
+           bact->_bact_type != BACT_TYPES_GUN &&
+           bact->_status != BACT_STATUS_DEAD &&
+           bact->_status != BACT_STATUS_CREATE &&
+           bact->_status != BACT_STATUS_BEAM &&
+           !(bact->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2 | BACT_STFLAG_NORENDER));
+}
+
 bool StatusIconAdd(StatusIconList &icons, int &count, const std::string &path)
 {
     if ( path.empty() )
@@ -229,9 +249,6 @@ NC_STACK_bitmap *StatusIconLoad(const std::string &path)
     entry.bitmap = Utils::ProxyLoadImage({
         {NC_STACK_rsrc::RSRC_ATT_NAME, path},
         {NC_STACK_bitmap::BMD_ATT_CONVCOLOR, (int32_t)1}});
-
-    if ( !entry.bitmap || !entry.bitmap->GetBitmap() )
-        ypa_log_out("WARNING: Could not load status icon %s\n", path.c_str());
 
     auto inserted = g_statusIconCache.emplace(path, entry);
     return inserted.first->second.bitmap;
@@ -300,17 +317,9 @@ StatusIconPowerState StatusIconGetPowerStationState(NC_STACK_ypaworld *yw, NC_ST
 
 bool StatusIconCanUseMobilePowerUnit(NC_STACK_ypabact *bact)
 {
-    return bact &&
-           bact->_owner != World::OWNER_0 &&
+    return StatusIconCanUseVehicleCapabilityUnit(bact) &&
            bact->_energy > 0 &&
-           bact->_energy_max > 0 &&
-           bact->_bact_type != BACT_TYPES_MISSLE &&
-           bact->_bact_type != BACT_TYPES_ROBO &&
-           bact->_bact_type != BACT_TYPES_GUN &&
-           bact->_status != BACT_STATUS_DEAD &&
-           bact->_status != BACT_STATUS_CREATE &&
-           bact->_status != BACT_STATUS_BEAM &&
-           !(bact->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2 | BACT_STFLAG_NORENDER));
+           bact->_energy_max > 0;
 }
 
 void StatusIconCollectMobilePower(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact, StatusIconList &icons, int &iconCount)
@@ -341,6 +350,40 @@ void StatusIconCollectMountedUnitGunIcons(const std::vector<World::TRoboGun> &gu
     }
 }
 
+bool StatusIconHasVehicleSpawnConfig(NC_STACK_ypaworld *yw, const World::TVhclProto &vhcl)
+{
+    return yw &&
+           vhcl.spawn_units &&
+           vhcl.spawn_vehicle > 0 &&
+           (size_t)vhcl.spawn_vehicle < yw->_vhclProtos.size() &&
+           vhcl.spawn_trigger_radius > 0.0;
+}
+
+bool StatusIconHasVehicleSeekAndExplodeConfig(NC_STACK_ypaworld *yw, const World::TVhclProto &vhcl)
+{
+    if ( !yw || !vhcl.seek_and_explode )
+        return false;
+
+    if ( vhcl.seek_and_explode_weapon <= 0 )
+        return true;
+
+    if ( (size_t)vhcl.seek_and_explode_weapon >= yw->_weaponProtos.size() )
+        return false;
+
+    return (yw->_weaponProtos[vhcl.seek_and_explode_weapon]._weaponFlags & 1) != 0;
+}
+
+bool StatusIconHasVehicleProximityDefenseConfig(NC_STACK_ypaworld *yw, const World::TVhclProto &vhcl)
+{
+    if ( !yw || !vhcl.proximity_defense_enable ||
+         vhcl.proximity_defense_weapon <= 0 ||
+         (size_t)vhcl.proximity_defense_weapon >= yw->_weaponProtos.size() ||
+         vhcl.proximity_defense_shots <= 0 )
+        return false;
+
+    return vhcl.proximity_defense_at_death || vhcl.proximity_defense_trigger_radius > 0.0;
+}
+
 int StatusIconCollect(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact, World::TVhclProto *vhcl, StatusIconList &icons)
 {
     if ( !bact || !vhcl )
@@ -352,23 +395,30 @@ int StatusIconCollect(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact, World::TVhc
         StatusIconAdd(icons, iconCount, bact->_active_debuff.icon);
 
     if ( bact->_damaged_fx_active )
-        StatusIconAdd(icons, iconCount, vhcl->damaged_icon);
+        StatusIconAdd(icons, iconCount, STATUS_ICON_DAMAGED);
 
-    if ( StatusIconCanUseMobilePowerUnit(bact) )
+    if ( StatusIconCanUseVehicleCapabilityUnit(bact) )
     {
-        if ( vhcl->spawn_units )
-            StatusIconAdd(icons, iconCount, vhcl->spawn_icon);
+        if ( bact->CanUseCarrierSpawn() )
+            StatusIconAdd(icons, iconCount, STATUS_ICON_SPAWN);
 
-        if ( bact->_radar > 0 )
-            StatusIconAdd(icons, iconCount, vhcl->radar_icon);
+        if ( bact->_radar >= 2 )
+            StatusIconAdd(icons, iconCount, STATUS_ICON_RADAR);
 
-        StatusIconCollectMountedUnitGunIcons(bact->_unitGuns, vhcl->unit_gun_icon, icons, iconCount);
+        if ( StatusIconCanUseMobilePowerUnit(bact) )
+            StatusIconCollectMountedUnitGunIcons(bact->_unitGuns, vhcl->unit_gun_icon, icons, iconCount);
 
-        if ( vhcl->power > 0 && vhcl->power_radius > 0.0 )
-            StatusIconAdd(icons, iconCount, vhcl->power_icon);
+        if ( yw && yw->IsValidMobilePowerGenerator(bact) )
+            StatusIconAdd(icons, iconCount, STATUS_ICON_POWER);
 
-        if ( vhcl->seek_and_explode )
-            StatusIconAdd(icons, iconCount, vhcl->seek_and_explode_icon);
+        if ( bact->IsSeekAndExplodeArmed() )
+            StatusIconAdd(icons, iconCount, STATUS_ICON_SEEK_AND_EXPLODE);
+
+        if ( bact->IsInvisibleUnrevealed() )
+            StatusIconAdd(icons, iconCount, STATUS_ICON_INVISIBLE);
+
+        if ( bact->CanUseProximityDefense() || bact->CanUseProximityDefenseAtDeath() )
+            StatusIconAdd(icons, iconCount, STATUS_ICON_PROXIMITY_DEFENSE);
     }
 
     StatusIconPowerState powerState = StatusIconGetPowerStationState(yw, bact);
@@ -527,26 +577,32 @@ void StatusIconRenderCockpit(NC_STACK_ypaworld *yw, sklt_wis *wis, NC_STACK_ypab
     StatusIconRenderList(yw, icons, iconCount, left, top, STATUS_ICON_SIZE);
 }
 
-int StatusIconCollectVehicleRoleIcons(World::TVhclProto *vhcl, StatusIconList &icons)
+int StatusIconCollectVehicleRoleIcons(NC_STACK_ypaworld *yw, World::TVhclProto *vhcl, StatusIconList &icons)
 {
-    if ( !vhcl )
+    if ( !yw || !vhcl )
         return 0;
 
     int iconCount = 0;
 
-    if ( vhcl->spawn_units )
-        StatusIconAdd(icons, iconCount, vhcl->spawn_icon);
+    if ( StatusIconHasVehicleSpawnConfig(yw, *vhcl) )
+        StatusIconAdd(icons, iconCount, STATUS_ICON_SPAWN);
 
-    if ( vhcl->radar > 0 )
-        StatusIconAdd(icons, iconCount, vhcl->radar_icon);
+    if ( vhcl->radar >= 2 )
+        StatusIconAdd(icons, iconCount, STATUS_ICON_RADAR);
 
     StatusIconCollectMountedUnitGunIcons(vhcl->unit_guns, vhcl->unit_gun_icon, icons, iconCount);
 
     if ( vhcl->power > 0 && vhcl->power_radius > 0.0 )
-        StatusIconAdd(icons, iconCount, vhcl->power_icon);
+        StatusIconAdd(icons, iconCount, STATUS_ICON_POWER);
 
-    if ( vhcl->seek_and_explode )
-        StatusIconAdd(icons, iconCount, vhcl->seek_and_explode_icon);
+    if ( StatusIconHasVehicleSeekAndExplodeConfig(yw, *vhcl) )
+        StatusIconAdd(icons, iconCount, STATUS_ICON_SEEK_AND_EXPLODE);
+
+    if ( vhcl->invisible )
+        StatusIconAdd(icons, iconCount, STATUS_ICON_INVISIBLE);
+
+    if ( StatusIconHasVehicleProximityDefenseConfig(yw, *vhcl) )
+        StatusIconAdd(icons, iconCount, STATUS_ICON_PROXIMITY_DEFENSE);
 
     return iconCount;
 }
@@ -570,7 +626,7 @@ void StatusIconRenderHudInfoRoles(NC_STACK_ypaworld *yw, sklt_wis *wis, World::T
         return;
 
     StatusIconList icons;
-    int iconCount = StatusIconCollectVehicleRoleIcons(vhcl, icons);
+    int iconCount = StatusIconCollectVehicleRoleIcons(yw, vhcl, icons);
     if ( iconCount <= 0 )
         return;
 

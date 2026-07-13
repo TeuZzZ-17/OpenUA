@@ -183,6 +183,7 @@ int NC_STACK_ypaworld::LevelCommonLoader(TLevelDescription *mapp, int levelID, i
 
     _gameplayStats.fill( World::TPlayerStatus() );
 
+    _debugAoeRings.clear();
     _timeStamp = 0;
     _msgTimestampHSReturn = 0;
     _msgTimestampEnemySector = 0;
@@ -4031,6 +4032,11 @@ static bool yw_IsValidMobilePowerGenerator(NC_STACK_ypaworld *yw, NC_STACK_ypaba
     return proto.power > 0 && proto.power_radius > 0.0;
 }
 
+bool NC_STACK_ypaworld::IsValidMobilePowerGenerator(NC_STACK_ypabact *unit)
+{
+    return yw_IsValidMobilePowerGenerator(this, unit);
+}
+
 static void yw_AddMobilePowerInfluenceFromGenerator(NC_STACK_ypaworld *yw,
                                                     NC_STACK_ypabact *target,
                                                     NC_STACK_ypabact *generator,
@@ -6735,6 +6741,8 @@ void NC_STACK_ypaworld::debug_info_draw(TInputState *inpt)
             _hideHudForScreenshots = !_hideHudForScreenshots;
     }
 
+    ExpireDebugAoeRings();
+
     if ( _showCollDebug )
         debug_draw_coll_spheres();
 
@@ -7059,14 +7067,13 @@ void NC_STACK_ypaworld::debug_draw_coll_spheres()
             uint8_t sphereR = 60;
             uint8_t sphereG = isWeapon ? 130 : 220;
             uint8_t sphereB = isWeapon ? 235 : 60;
-            float hitPadding = unit->getBACT_collPadding();
             for (const World::TRoboColl &cs : colls->roboColls)
             {
                 if (!cs.debug_visible || cs.robo_coll_radius < 0.01f)
                     continue;
 
                 vec3d sphWorld = pos + rotT.Transform(cs.coll_pos);
-                float debugRadius = cs.robo_coll_radius + hitPadding;
+                float debugRadius = cs.robo_coll_radius;
                 drawRing(sphWorld, debugRadius, 0, sphereR, sphereG, sphereB);
                 drawRing(sphWorld, debugRadius, 1, sphereR, sphereG, sphereB);
                 drawRing(sphWorld, debugRadius, 2, sphereR, sphereG, sphereB);
@@ -7131,24 +7138,40 @@ void NC_STACK_ypaworld::debug_draw_coll_spheres()
         }
     }
 
-    // --- TRANSIENT AoE IMPACT RINGS (recorded at detonation, fade out by timestamp) ---
-    for (size_t i = 0; i < _debugAoeRings.size(); )
+    // --- TRANSIENT AoE IMPACT RINGS (lifetime is maintained independently of rendering) ---
+    for (const DebugAoeRing &ring : _debugAoeRings)
     {
-        DebugAoeRing &ring = _debugAoeRings[i];
-        if (_timeStamp >= ring.expireStamp)
-        {
-            _debugAoeRings[i] = _debugAoeRings.back();
-            _debugAoeRings.pop_back();
-            continue;
-        }
         if ((ring.pos - camPos).length() <= RING_MAX_DIST)
-            drawFlatRing(ring.pos, ring.radius, ring.r, ring.g, ring.b);
-        i++;
+        {
+            if ( ring.sphere )
+            {
+                drawRing(ring.pos, ring.radius, 0, ring.r, ring.g, ring.b);
+                drawRing(ring.pos, ring.radius, 1, ring.r, ring.g, ring.b);
+                drawRing(ring.pos, ring.radius, 2, ring.r, ring.g, ring.b);
+            }
+            else
+                drawFlatRing(ring.pos, ring.radius, ring.r, ring.g, ring.b);
+        }
     }
 
     FontUA::reset_tileset(&labels, 15);
     FontUA::set_end(&labels);
     GFX::Engine.ProcessDrawSeq(labels);
+}
+
+void NC_STACK_ypaworld::ExpireDebugAoeRings()
+{
+    for (size_t i = 0; i < _debugAoeRings.size(); )
+    {
+        const DebugAoeRing &ring = _debugAoeRings[i];
+        if ( _timeStamp < ring.createdStamp || _timeStamp >= ring.expireStamp )
+        {
+            _debugAoeRings[i] = _debugAoeRings.back();
+            _debugAoeRings.pop_back();
+            continue;
+        }
+        i++;
+    }
 }
 
 void NC_STACK_ypaworld::DebugAddAoeRing(const vec3d &pos, float radius, uint8_t r, uint8_t g, uint8_t b)
@@ -7163,9 +7186,30 @@ void NC_STACK_ypaworld::DebugAddAoeRing(const vec3d &pos, float radius, uint8_t 
     ring.r = r;
     ring.g = g;
     ring.b = b;
+    ring.createdStamp = _timeStamp;
     ring.expireStamp = _timeStamp + 1536; // ~1.5s (1024 ticks = 1s)
 
     _debugAoeRings.push_back(ring);
+    if ( _debugAoeRings.size() > 256 )
+        _debugAoeRings.erase(_debugAoeRings.begin());
+}
+
+void NC_STACK_ypaworld::DebugAddSphere(const vec3d &pos, float radius, uint8_t r, uint8_t g, uint8_t b, int durationMs)
+{
+    if ( !_showCollDebug || radius < 0.01f || durationMs <= 0 )
+        return;
+
+    DebugAoeRing sphere;
+    sphere.pos = pos;
+    sphere.radius = radius;
+    sphere.r = r;
+    sphere.g = g;
+    sphere.b = b;
+    sphere.sphere = true;
+    sphere.createdStamp = _timeStamp;
+    sphere.expireStamp = _timeStamp + (int32_t)(((int64_t)durationMs * 1024 + 999) / 1000);
+
+    _debugAoeRings.push_back(sphere);
     if ( _debugAoeRings.size() > 256 )
         _debugAoeRings.erase(_debugAoeRings.begin());
 }

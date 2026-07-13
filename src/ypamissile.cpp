@@ -952,7 +952,6 @@ bool NC_STACK_ypamissile::AutoCollisionSpheresHitBact(NC_STACK_ypabact *target) 
     World::rbcolls *targetColls = target->getBACT_collNodes();
     mat3x3 missileRotT = _rotation.Transpose();
     mat3x3 targetRotT = target->_rotation.Transpose();
-    float hitPadding = getBACT_collPadding();
 
     for (const World::TRoboColl &missileSphere : _collNodes.roboColls)
     {
@@ -979,7 +978,7 @@ bool NC_STACK_ypamissile::AutoCollisionSpheresHitBact(NC_STACK_ypabact *target) 
                 targetRadius = targetSphere.robo_coll_radius;
             }
 
-            float radiusSum = missileSphere.robo_coll_radius + hitPadding + targetRadius;
+            float radiusSum = missileSphere.robo_coll_radius + targetRadius;
             float distanceSq = ypamissile_SegmentSegmentDistanceSq(start, end, targetCenter, targetCenter);
             if ( distanceSq <= radiusSum * radiusSum )
                 return true;
@@ -1666,7 +1665,7 @@ bool NC_STACK_ypamissile::CanCollideWithWeapon(NC_STACK_ypamissile *other) const
             if ( sphere.robo_coll_radius <= 0.01 )
                 continue;
             selfOffset = selfRotT.Transform(sphere.coll_pos);
-            selfRadius = sphere.robo_coll_radius + getBACT_collPadding();
+            selfRadius = sphere.robo_coll_radius;
         }
 
         for (int j = 0; j < otherCount; j++)
@@ -1679,7 +1678,7 @@ bool NC_STACK_ypamissile::CanCollideWithWeapon(NC_STACK_ypamissile *other) const
                 if ( sphere.robo_coll_radius <= 0.01 )
                     continue;
                 otherOffset = otherRotT.Transform(sphere.coll_pos);
-                otherRadius = sphere.robo_coll_radius + other->getBACT_collPadding();
+                otherRadius = sphere.robo_coll_radius;
             }
 
             float radiusSum = selfRadius + otherRadius;
@@ -3209,13 +3208,4 @@ int NC_STACK_ypamissile::GetPowerRobo()
 float NC_STACK_ypamissile::GetStartHeight()
 {
     return _mislStartHeight;
-}
-
-float NC_STACK_ypamissile::getBACT_collPadding() const
-{
-    if ( !_autoCollisionSpheres || !_world || (size_t)_vehicleID >= _world->GetWeaponsProtos().size() )
-        return 0.0f;
-
-    const World::TWeapProto &proto = _world->GetWeaponsProtos().at(_vehicleID);
-    return proto.radius_defined && proto.radius > 0.0f ? proto.radius : 0.0f;
 }
