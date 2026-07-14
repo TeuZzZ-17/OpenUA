@@ -710,6 +710,7 @@ static World::rbcolls yw_GenerateAutoCollSpheresFromVP(NC_STACK_base *vp, const 
 
     out.roboColls.reserve(cells.size());
     float thinThreshold = yw_ClampFloat(targetSpan * 0.10f, 2.5f, 5.0f);
+    yw_ModelPointCloud acceptedBounds;
 
     for (const yw_ModelPointCloud &cell : cells)
     {
@@ -720,6 +721,9 @@ static World::rbcolls yw_GenerateAutoCollSpheresFromVP(NC_STACK_base *vp, const 
         float minDimension = std::min(cellSize.x, std::min(cellSize.y, cellSize.z));
         if ( essentialHull && minDimension < thinThreshold )
             continue;
+
+        yw_AddModelPoint(&acceptedBounds, cell.min);
+        yw_AddModelPoint(&acceptedBounds, cell.max);
 
         vec3d center = (cell.min + cell.max) * 0.5;
         float radius = 0.0;
@@ -738,6 +742,14 @@ static World::rbcolls yw_GenerateAutoCollSpheresFromVP(NC_STACK_base *vp, const 
         sphere.coll_pos = center;
         sphere.robo_coll_radius = radius;
         out.roboColls.push_back(sphere);
+    }
+
+    const yw_ModelPointCloud &physicalBounds = acceptedBounds.valid ? acceptedBounds : cloud;
+    out.modelBoundsValid = physicalBounds.valid;
+    if ( out.modelBoundsValid )
+    {
+        out.modelMin = physicalBounds.min;
+        out.modelMax = physicalBounds.max;
     }
 
     if ( essentialHull && !out.roboColls.empty() )
@@ -768,6 +780,70 @@ static World::rbcolls yw_GenerateAutoCollSpheresFromVP(NC_STACK_base *vp, const 
     }
 
     return out;
+}
+
+static bool yw_GetVehicleAutoCollisionBounds(const World::rbcolls &colls,
+                                             int modelType,
+                                             float *radius, float *viewerRadius,
+                                             float *overeof)
+{
+    float bodyRadius = 0.0f;
+    float groundOffset = 0.0f;
+    float minX = std::numeric_limits<float>::max();
+    float maxX = -std::numeric_limits<float>::max();
+    float minZ = std::numeric_limits<float>::max();
+    float maxZ = -std::numeric_limits<float>::max();
+    bool foundSphere = false;
+
+    for (const World::TRoboColl &sphere : colls.roboColls)
+    {
+        if ( sphere.robo_coll_radius <= 0.01f )
+            continue;
+
+        foundSphere = true;
+        bodyRadius = std::max(bodyRadius,
+                              (float)sphere.coll_pos.length() + sphere.robo_coll_radius);
+        groundOffset = std::max(groundOffset,
+                                (float)sphere.coll_pos.y + sphere.robo_coll_radius);
+        minX = std::min(minX, (float)sphere.coll_pos.x - sphere.robo_coll_radius);
+        maxX = std::max(maxX, (float)sphere.coll_pos.x + sphere.robo_coll_radius);
+        minZ = std::min(minZ, (float)sphere.coll_pos.z - sphere.robo_coll_radius);
+        maxZ = std::max(maxZ, (float)sphere.coll_pos.z + sphere.robo_coll_radius);
+    }
+
+    if ( !foundSphere )
+        return false;
+
+    // These remain runtime compatibility bounds for legacy terrain, landing
+    // and broad-phase code. auto_collision makes their script values
+    // unnecessary, but not the runtime concepts themselves.
+    if ( radius )
+        *radius = std::max(bodyRadius, 1.0f);
+    if ( viewerRadius )
+    {
+        float extentX = std::max(fabs(minX), fabs(maxX));
+        float extentZ = std::max(fabs(minZ), fabs(maxZ));
+        bool usesGroundFootprint = modelType == BACT_TYPES_TANK ||
+                                   modelType == BACT_TYPES_CAR ||
+                                   modelType == BACT_TYPES_HOVER;
+
+        // Tank/car alignment casts terrain probes around the vehicle, so use
+        // the long footprint axis. Airborne vehicle collision still consumes
+        // vwr_radius as one sphere, where the short axis is the stable body
+        // core and avoids turning wings or a long nose into distant impacts.
+        float footprintRadius = usesGroundFootprint ? std::max(extentX, extentZ)
+                                                    : std::min(extentX, extentZ);
+        *viewerRadius = std::max(footprintRadius, 1.0f);
+    }
+    if ( overeof )
+    {
+        // Generated spheres circumscribe their source cells and therefore
+        // extend below the actual mesh. Use the accepted model bottom when
+        // available; manual/fallback compounds retain the sphere-derived bound.
+        float modelBottom = colls.modelBoundsValid ? (float)colls.modelMax.y : groundOffset;
+        *overeof = std::max(modelBottom, 1.0f);
+    }
+    return true;
 }
 
 static World::TRoboColl yw_MergeCollisionSpheres(const World::TRoboColl &a, const World::TRoboColl &b)
@@ -2484,18 +2560,76 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
 
         bacto->_collNodes = spawnColl;
         bacto->_autoCollisionSpheres = useAutoCollisionSpheres && !spawnColl.roboColls.empty();
-        for (const World::TRoboColl &cs : bacto->_collNodes.roboColls)
-        {
-            if ( cs.robo_coll_radius > 0.01 )
-            {
-                float ext = cs.coll_pos.length() + cs.robo_coll_radius;
-                if ( ext > bacto->_radius )
-                    bacto->_radius = ext;
-            }
-        }
-
         bacto->_overeof = vhcl.overeof;
         bacto->_viewer_overeof = vhcl.vwr_overeof;
+
+        float automaticRadius = 0.0f;
+        float automaticViewerRadius = 0.0f;
+        float automaticOvereof = 0.0f;
+        bool useAutomaticBounds = vhcl.auto_collision && vhcl.model_id != BACT_TYPES_ROBO &&
+                                  yw_GetVehicleAutoCollisionBounds(spawnColl, vhcl.model_id,
+                                                                  &automaticRadius,
+                                                                  &automaticViewerRadius,
+                                                                  &automaticOvereof);
+
+        if ( useAutomaticBounds )
+        {
+            static std::vector<bool> loggedAutomaticBounds;
+            if ( loggedAutomaticBounds.size() <= (size_t)vhcl_id->vehicle_id )
+                loggedAutomaticBounds.resize((size_t)vhcl_id->vehicle_id + 1, false);
+            if ( !loggedAutomaticBounds[vhcl_id->vehicle_id] )
+            {
+                loggedAutomaticBounds[vhcl_id->vehicle_id] = true;
+                float largestSphere = 0.0f;
+                float minX = std::numeric_limits<float>::max();
+                float maxX = -std::numeric_limits<float>::max();
+                float minZ = std::numeric_limits<float>::max();
+                float maxZ = -std::numeric_limits<float>::max();
+                float highestCenterY = -std::numeric_limits<float>::max();
+                for (const World::TRoboColl &sphere : spawnColl.roboColls)
+                {
+                    if ( sphere.robo_coll_radius <= 0.01f )
+                        continue;
+                    largestSphere = std::max(largestSphere, sphere.robo_coll_radius);
+                    minX = std::min(minX, (float)sphere.coll_pos.x - sphere.robo_coll_radius);
+                    maxX = std::max(maxX, (float)sphere.coll_pos.x + sphere.robo_coll_radius);
+                    minZ = std::min(minZ, (float)sphere.coll_pos.z - sphere.robo_coll_radius);
+                    maxZ = std::max(maxZ, (float)sphere.coll_pos.z + sphere.robo_coll_radius);
+                    highestCenterY = std::max(highestCenterY, (float)sphere.coll_pos.y);
+                }
+
+                ypa_log_out("[AUTO_BOUNDS] vehicle=%d model=%d spheres=%u"
+                            " legacy=(radius=%.3f vwr_radius=%.3f overeof=%.3f vwr_overeof=%.3f)"
+                            " automatic=(radius=%.3f vwr_radius=%.3f overeof=%.3f vwr_overeof=%.3f)"
+                            " compound=(largest_sphere=%.3f span_x=%.3f span_z=%.3f max_center_y=%.3f)"
+                            " model_y=(valid=%d min=%.3f max=%.3f)\n",
+                            vhcl_id->vehicle_id, vhcl.model_id,
+                            (unsigned)spawnColl.roboColls.size(),
+                            vhcl.radius, vhcl.vwr_radius, vhcl.overeof, vhcl.vwr_overeof,
+                            automaticRadius, automaticViewerRadius,
+                            automaticOvereof, automaticOvereof,
+                            largestSphere, maxX - minX, maxZ - minZ, highestCenterY,
+                            spawnColl.modelBoundsValid,
+                            spawnColl.modelMin.y, spawnColl.modelMax.y);
+            }
+
+            bacto->_radius = automaticRadius;
+            bacto->_viewer_radius = automaticViewerRadius;
+            bacto->_overeof = automaticOvereof;
+            bacto->_viewer_overeof = automaticOvereof;
+        }
+        else
+        {
+            for (const World::TRoboColl &cs : bacto->_collNodes.roboColls)
+            {
+                if ( cs.robo_coll_radius > 0.01 )
+                {
+                    float ext = cs.coll_pos.length() + cs.robo_coll_radius;
+                    if ( ext > bacto->_radius )
+                        bacto->_radius = ext;
+                }
+            }
+        }
         bacto->_airconst = vhcl.airconst;
         bacto->_airconst_static = vhcl.airconst;
         bacto->_adist_sector = vhcl.adist_sector;

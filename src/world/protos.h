@@ -122,6 +122,9 @@ struct rbcolls
 {
     int field_0 = 0;
     std::vector<TRoboColl> roboColls;
+    bool modelBoundsValid = false;
+    vec3d modelMin;
+    vec3d modelMax;
 
     rbcolls() {};
 
@@ -134,12 +137,18 @@ struct rbcolls
     {
         field_0 = b.field_0;
         roboColls = std::move(b.roboColls);
+        modelBoundsValid = b.modelBoundsValid;
+        modelMin = b.modelMin;
+        modelMax = b.modelMax;
     }
 
     rbcolls &operator=(const rbcolls &b)
     {
         field_0 = b.field_0;
         roboColls = b.roboColls;
+        modelBoundsValid = b.modelBoundsValid;
+        modelMin = b.modelMin;
+        modelMax = b.modelMax;
         return *this;
     }
 };
@@ -474,7 +483,7 @@ struct TVhclProto
     float height = 0.0;
     float radius = 0.0;
     bool radius_defined = false;             // OpenUA: true only when radius is explicitly authored
-    bool auto_collision = false;             // OpenUA: force VP compound collision while retaining radius metadata
+    bool auto_collision = false;             // OpenUA: force compound collision and automatic runtime body bounds
     float overeof = 0.0;
     float vwr_radius = 0.0;
     float vwr_overeof = 0.0;

@@ -983,7 +983,18 @@ int NC_STACK_ypacar::AlignVehicleUser(float dtime, const vec3d &oldDir)
         return 0;
     }
 
-    float v90 = _viewer_overeof * v166 * 0.8;
+    float groundRecoveryExtent = _viewer_overeof;
+    if ( _autoCollisionSpheres )
+    {
+        // vwr_overeof is also used as the downward recovery-probe length.
+        // Automatic bounds keep it equal to the real body height, which is
+        // intentionally too short when a car tips over a descending edge.
+        // Derive probe reach from the automatic horizontal footprint without
+        // moving the rendered/collision body back to the legacy viewer height.
+        groundRecoveryExtent = std::max(groundRecoveryExtent, _viewer_radius * 0.8f);
+    }
+
+    float v90 = groundRecoveryExtent * v166 * 0.8;
 
     ypaworld_arg136 arg136_4;
     arg136_4.stPos = _position - vec3d::OY(v90);

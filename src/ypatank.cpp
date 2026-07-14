@@ -61,6 +61,27 @@ static void ypatank_StartSoundOnce(NC_STACK_ypatank *tank, int soundId)
     if ( tank && !tank->_soundcarrier.Sounds[soundId].IsEnabled() )
         SFXEngine::SFXe.startSound(&tank->_soundcarrier, soundId);
 }
+
+static bool ypatank_IsVehicleCollisionTarget(const NC_STACK_ypabact *target)
+{
+    if ( !target )
+        return false;
+
+    switch ( target->_bact_type )
+    {
+    case BACT_TYPES_BACT:
+    case BACT_TYPES_TANK:
+    case BACT_TYPES_ZEPP:
+    case BACT_TYPES_FLYER:
+    case BACT_TYPES_UFO:
+    case BACT_TYPES_CAR:
+    case BACT_TYPES_HOVER:
+        return true;
+    default:
+        return false;
+    }
+}
+
 static const float YPATANK_FIXED_TICK_GROUND_POSE_ROT_MULT_DEFAULT = 5.5f;
 
 static bool ypatank_UseFixedTickGroundPose()
@@ -1421,9 +1442,16 @@ size_t NC_STACK_ypatank::CollisionWithBact(int arg)
                     && v12 != this )
             {
 
-                // Tank-vs-tank keeps the vanilla response below; only the old
-                // radius overlap is replaced by the closest compound pair.
-                if ( !v114 && v12->_bact_type == BACT_TYPES_TANK )
+                World::rbcolls *targetCompound = v12->getBACT_collNodes();
+                bool useSingleCompoundContact = !v114 &&
+                                                ypatank_IsVehicleCollisionTarget(v12) &&
+                                                (v12->_bact_type == BACT_TYPES_TANK || targetCompound);
+
+                // Feed every live compound vehicle through one symmetric
+                // sphere-pair contact. This preserves the existing response
+                // while preventing a compound target from being omitted or
+                // appended once for every overlapping target sphere.
+                if ( useSingleCompoundContact )
                 {
                     vec3d selfCenter;
                     vec3d targetCenter;
@@ -1455,7 +1483,6 @@ size_t NC_STACK_ypatank::CollisionWithBact(int arg)
                             frameMotion.normalise() > 0.001f &&
                             contactDirection.normalise() > 0.001f &&
                             frameMotion.dot(contactDirection) > 0.0f;
-
                         // Keep the vanilla forward cone, but do not ignore a
                         // real compound overlap that this frame is entering at
                         // a corner. The response below remains entirely vanilla.
@@ -1488,7 +1515,7 @@ size_t NC_STACK_ypatank::CollisionWithBact(int arg)
                     continue;
                 }
 
-                World::rbcolls *v96 = v12->getBACT_collNodes();
+                World::rbcolls *v96 = targetCompound;
 
                 int v110;
 
@@ -1716,7 +1743,7 @@ size_t NC_STACK_ypatank::CollisionWithBact(int arg)
 
                 if ( !(_status_flg & BACT_STFLAG_BCRASH) )
                 {
-                    SFXEngine::SFXe.startSound(&_soundcarrier, 6);
+                    ypatank_StartSoundOnce(this, 6);
                     _status_flg |= BACT_STFLAG_BCRASH;
                 }
 
@@ -1745,7 +1772,10 @@ size_t NC_STACK_ypatank::CollisionWithBact(int arg)
                 _status_flg &= ~BACT_STFLAG_MOVE;
 
                 if ( !(_status_flg & BACT_STFLAG_BCRASH) )
+                {
+                    ypatank_StartSoundOnce(this, 6);
                     _status_flg |= BACT_STFLAG_BCRASH;
+                }
 
                 if ( v108 || !v105 )
                 {
@@ -2231,8 +2261,20 @@ int NC_STACK_ypatank::AlignVehicleUser(float dtime, const vec3d &oldDir)
                     return 2;
                 }
 
-                _position.x = _old_pos.x - v48.x * 10.0;
-                _position.z = _old_pos.z - v48.z * 10.0;
+                if ( _autoCollisionSpheres )
+                {
+                    // A compound tank re-enters an oblique wall every frame if
+                    // the legacy 10-unit correction keeps its forward motion.
+                    // Consume that motion just like the frontal wall branch.
+                    _thraction = 0;
+                    _fly_dir_length = 0;
+                    _position = _old_pos;
+                }
+                else
+                {
+                    _position.x = _old_pos.x - v48.x * 10.0;
+                    _position.z = _old_pos.z - v48.z * 10.0;
+                }
             }
             return 2;
         }
@@ -2289,8 +2331,17 @@ int NC_STACK_ypatank::AlignVehicleUser(float dtime, const vec3d &oldDir)
                     return 1;
                 }
 
-                _position.x = _old_pos.x - v54.x * 10.0;
-                _position.z = _old_pos.z - v54.z * 10.0;
+                if ( _autoCollisionSpheres )
+                {
+                    _thraction = 0;
+                    _fly_dir_length = 0;
+                    _position = _old_pos;
+                }
+                else
+                {
+                    _position.x = _old_pos.x - v54.x * 10.0;
+                    _position.z = _old_pos.z - v54.z * 10.0;
+                }
             }
             return 1;
         }

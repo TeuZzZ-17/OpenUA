@@ -4644,6 +4644,18 @@ void NC_STACK_ypabact::AI_layer3(update_msg *arg)
 
             if ( _status_flg & BACT_STFLAG_LAND )
             {
+                if ( _bact_type == BACT_TYPES_BACT )
+                {
+                    // A player can leave a landed helicopter while it is still
+                    // tilted. Reuse the normal landing rotation recovery while
+                    // it waits, otherwise the idle path only corrects height
+                    // and preserves the intersecting pose until the next order.
+                    bact_arg86 settle;
+                    settle.field_one = 0;
+                    settle.field_two = arg->frameTime;
+                    CrashOrLand(&settle);
+                }
+
                 setState_msg arg78;
                 arg78.unsetFlags = 0;
                 arg78.setFlags = 0;
@@ -11060,6 +11072,13 @@ void NC_STACK_ypabact::GetClosestCollisionBodySphere(const vec3d &target, vec3d 
     if ( !_autoCollisionSpheres || _collNodes.roboColls.empty() )
         return;
 
+    // Viewer vehicles are placed below the same ground point by
+    // vwr_overeof instead of overeof. Keep compound spheres attached to the
+    // vehicle's normal world-space body, not to that viewer-only offset.
+    vec3d collisionOrigin = _position;
+    if ( getBACT_viewer() )
+        collisionOrigin.y += _viewer_overeof - _overeof;
+
     float bestSeparation = std::numeric_limits<float>::max();
     mat3x3 rotT = _rotation.Transpose();
 
@@ -11068,7 +11087,7 @@ void NC_STACK_ypabact::GetClosestCollisionBodySphere(const vec3d &target, vec3d 
         if ( sphere.robo_coll_radius <= 0.01 )
             continue;
 
-        vec3d sphereCenter = _position + rotT.Transform(sphere.coll_pos);
+        vec3d sphereCenter = collisionOrigin + rotT.Transform(sphere.coll_pos);
         float separation = (target - sphereCenter).length() - sphere.robo_coll_radius;
         if ( separation < bestSeparation )
         {
@@ -11087,12 +11106,20 @@ bool NC_STACK_ypabact::GetUnitCollisionContact(NC_STACK_ypabact *other,
     if ( !other || other == this )
         return false;
 
-    float broad = GetCollisionBroadRadius() + other->GetCollisionBroadRadius();
-    if ( (_position - other->_position).square() > broad * broad )
-        return false;
-
     World::rbcolls *selfColls = getBACT_collNodes();
     World::rbcolls *otherColls = other->getBACT_collNodes();
+    vec3d selfOrigin = _position;
+    vec3d otherOrigin = other->_position;
+
+    if ( selfColls && getBACT_viewer() )
+        selfOrigin.y += _viewer_overeof - _overeof;
+    if ( otherColls && other->getBACT_viewer() )
+        otherOrigin.y += other->_viewer_overeof - other->_overeof;
+
+    float broad = GetCollisionBroadRadius() + other->GetCollisionBroadRadius();
+    if ( (selfOrigin - otherOrigin).square() > broad * broad )
+        return false;
+
     int selfCount = selfColls ? (int)selfColls->roboColls.size() : 1;
     int otherCount = otherColls ? (int)otherColls->roboColls.size() : 1;
     mat3x3 selfRotT = _rotation.Transpose();
@@ -11103,7 +11130,7 @@ bool NC_STACK_ypabact::GetUnitCollisionContact(NC_STACK_ypabact *other,
 
     for (int i = 0; i < selfCount; i++)
     {
-        vec3d a = _position;
+        vec3d a = selfOrigin;
         float ar = getBACT_viewer() && !selfColls ? _viewer_radius : _radius;
         if ( selfColls )
         {
@@ -11116,7 +11143,7 @@ bool NC_STACK_ypabact::GetUnitCollisionContact(NC_STACK_ypabact *other,
 
         for (int j = 0; j < otherCount; j++)
         {
-            vec3d b = other->_position;
+            vec3d b = otherOrigin;
             float br = other->_radius;
             if ( otherColls )
             {
@@ -11339,17 +11366,21 @@ size_t NC_STACK_ypabact::CollisionWithBact(int arg)
     if ( clp_acos(collisionDir.dot(_fly_dir)) > C_PI_2 )
         return 0;
 
-    if ( !(_status_flg & BACT_STFLAG_BCRASH) && isViewer )
+    if ( !(_status_flg & BACT_STFLAG_BCRASH) )
     {
-        SFXEngine::SFXe.startSound(&_soundcarrier, 6);
+        if ( !_soundcarrier.Sounds[6].IsEnabled() )
+            SFXEngine::SFXe.startSound(&_soundcarrier, 6);
         _status_flg |= BACT_STFLAG_BCRASH;
 
-        yw_arg180 effect;
-        effect.field_4 = 1.0;
-        effect.field_8 = collisionCenters.x;
-        effect.field_C = collisionCenters.z;
-        effect.effects_type = 5;
-        _world->ypaworld_func180(&effect);
+        if ( isViewer )
+        {
+            yw_arg180 effect;
+            effect.field_4 = 1.0;
+            effect.field_8 = collisionCenters.x;
+            effect.field_C = collisionCenters.z;
+            effect.effects_type = 5;
+            _world->ypaworld_func180(&effect);
+        }
     }
 
     if ( fabs(_fly_dir_length) < 0.1 )
