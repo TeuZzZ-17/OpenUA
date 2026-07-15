@@ -19,7 +19,7 @@ If MSYS2 asks you to close the terminal, close it and reopen it before continuin
 pacman -S --needed mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-SDL2 mingw-w64-x86_64-SDL2_image mingw-w64-x86_64-SDL2_ttf mingw-w64-x86_64-SDL2_net mingw-w64-x86_64-openal mingw-w64-x86_64-libvorbis mingw-w64-x86_64-ffmpeg mingw-w64-x86_64-lua
 
 5. Download the source code ZIP from:
-https://github.com/TeuZzZ-17/UA_source
+https://github.com/TeuZzZ-17/OpenUA
 
 6. Extract the UA_source folder to your Desktop.
 Example:
