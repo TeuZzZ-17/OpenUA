@@ -2,8 +2,10 @@
 #include <stdio.h>
 #include <stddef.h>
 #include <string.h>
+#include <algorithm>
 #include "yw.h"
 #include "ypaflyer.h"
+#include "system/inpt.h"
 #include "log.h"
 #include <math.h>
 
@@ -715,6 +717,69 @@ void NC_STACK_ypaflyer::User_layer(update_msg *arg)
 {
     _airconst = _airconst_static;
 
+    const bool qDown = Input::Engine.GetKeyState(Input::KC_Q);
+    const bool playerFlyerControl =
+        (_oflags & BACT_OFLAG_USERINPT) &&
+        (_status == BACT_STATUS_NORMAL || _status == BACT_STATUS_IDLE) &&
+        _bact_type == BACT_TYPES_FLYER;
+
+    // A glider inherited from AI can be physically resting in its WAIT pose
+    // even if the vanilla fast-flight branch discarded LAND. Probe only the
+    // authored/automatic resting offset plus a tiny tolerance: nearby terrain
+    // must never create a fake landing while the glider is still hovering.
+    if ( playerFlyerControl &&
+         _flyerType == 2 &&
+         !qDown &&
+         !(_status_flg & BACT_STFLAG_LAND) &&
+         (_status == BACT_STATUS_IDLE || _vp_active == 6) )
+    {
+        ypaworld_arg136 ground;
+        ground.stPos = _position;
+        ground.vect = vec3d(0.0, std::max(_overeof + 2.0f, 2.0f), 0.0);
+        ground.flags = 0;
+
+        _world->ypaworld_func136(&ground);
+
+        if ( ground.isect )
+        {
+            _status_flg |= BACT_STFLAG_LAND;
+            _fly_dir_length = 0.0;
+            _thraction = 0.0;
+            _flyerBoost = _mass * 9.80665;
+        }
+    }
+
+    bool landedAirControl =
+        playerFlyerControl &&
+        (_status_flg & BACT_STFLAG_LAND);
+    const bool takeoffRequested = landedAirControl && qDown;
+    bool landedMovementLocked = landedAirControl && !takeoffRequested;
+
+    if ( landedAirControl )
+    {
+        _fly_dir_length = 0.0;
+        _thraction = 0.0;
+
+        if ( landedMovementLocked )
+        {
+            _flyerBoost = _mass * 9.80665;
+        }
+        else
+        {
+            _status_flg &= ~BACT_STFLAG_LAND;
+            _flyerBoost = _mass * 9.80665f * 1.2f;
+
+            // Takeoff is a real state transition: besides changing the flight
+            // physics, stop the WAIT carrier and start the NORMAL one.  This
+            // must also happen when the minigun key is held during takeoff.
+            setState_msg takeoffState;
+            takeoffState.newStatus = BACT_STATUS_NORMAL;
+            takeoffState.unsetFlags = 0;
+            takeoffState.setFlags = 0;
+            SetState(&takeoffState);
+        }
+    }
+
     float a2 = (float)arg->frameTime / 1000.0;
 
     int a4 = getBACT_bactCollisions();
@@ -724,7 +789,7 @@ void NC_STACK_ypaflyer::User_layer(update_msg *arg)
         vec3d a3;
         a3 = _rotation.AxisZ();
 
-        float v60 = -arg->inpt->Sliders[0] * _maxrot * a2;
+        float v60 = landedMovementLocked ? 0.0f : -arg->inpt->Sliders[0] * _maxrot * a2;
 
         if ( a4 )
         {
@@ -766,7 +831,9 @@ void NC_STACK_ypaflyer::User_layer(update_msg *arg)
 
             float v9;
 
-            if ( _viewer_overeof <= _viewer_radius )
+            if ( _flyerType == 2 )
+                v9 = std::max((_overeof + 2.0f) / 1.5f, 2.0f / 1.5f);
+            else if ( _viewer_overeof <= _viewer_radius )
                 v9 = _viewer_radius;
             else
                 v9 = _viewer_overeof;
@@ -776,7 +843,17 @@ void NC_STACK_ypaflyer::User_layer(update_msg *arg)
 
             _world->ypaworld_func136(&arg136);
 
-            if ( arg136.isect && _thraction < _force * 0.001 && _flyerBoost <= _mass * 9.80665 )
+            // Once player ground control has been locked, LAND remains latched
+            // until Q requests takeoff.  Do not let a marginal ground ray clear
+            // it midway through the frame and re-enable the minigun.
+            if ( landedMovementLocked )
+            {
+                _status_flg |= BACT_STFLAG_LAND;
+                _fly_dir_length = 0;
+                _thraction = 0;
+                _flyerBoost = _mass * 9.80665;
+            }
+            else if ( arg136.isect && _thraction < _force * 0.001 && _flyerBoost <= _mass * 9.80665 )
             {
                 _status_flg |= BACT_STFLAG_LAND;
                 _fly_dir_length = 0;
@@ -787,6 +864,18 @@ void NC_STACK_ypaflyer::User_layer(update_msg *arg)
             else
             {
                 _status_flg &= ~BACT_STFLAG_LAND;
+            }
+
+            // A glider can become landed during this frame. Apply the player
+            // ground lock immediately instead of granting one extra frame of
+            // yaw, thrust, or minigun input before the next update.
+            if ( !qDown && (_status_flg & BACT_STFLAG_LAND) )
+            {
+                landedMovementLocked = true;
+                v60 = 0.0f;
+                _fly_dir_length = 0.0;
+                _thraction = 0.0;
+                _flyerBoost = _mass * 9.80665;
             }
 
             float tmp = 0.0;
@@ -832,7 +921,8 @@ void NC_STACK_ypaflyer::User_layer(update_msg *arg)
 
         _rotation *= mat3x3::RotateY(v60);
 
-        _thraction += _force * (a2 * 0.3) * arg->inpt->Sliders[2];
+        if ( !landedMovementLocked )
+            _thraction += _force * (a2 * 0.3) * arg->inpt->Sliders[2];
 
         if ( _thraction > _force )
             _thraction = _force;
@@ -841,7 +931,10 @@ void NC_STACK_ypaflyer::User_layer(update_msg *arg)
             _thraction = 0;
 
 
-        _flyerBoost = (fabs(_fly_dir_length) / 111.0 + 1.0) * (arg->inpt->Sliders[1] * 20000.0) * 0.5 + _mass * 9.80665;
+        if ( landedMovementLocked )
+            _flyerBoost = _mass * 9.80665;
+        else
+            _flyerBoost = (fabs(_fly_dir_length) / 111.0 + 1.0) * (arg->inpt->Sliders[1] * 20000.0) * 0.5 + _mass * 9.80665;
 
         float v22 = _pSector->height - _position.y;
 
@@ -851,6 +944,9 @@ void NC_STACK_ypaflyer::User_layer(update_msg *arg)
 
         if ( _flyerBoost > v72 )
             _flyerBoost = v72;
+
+        if ( takeoffRequested )
+            _flyerBoost = _mass * 9.80665f * 1.2f;
 
         bact_arg79 arg79;
         arg79.tgType = BACT_TGT_TYPE_DRCT;
@@ -886,7 +982,19 @@ void NC_STACK_ypaflyer::User_layer(update_msg *arg)
             LaunchMissile(&arg79);
         }
 
-        if ( HasMinigun() )
+        if ( HasMinigun() && (_status_flg & BACT_STFLAG_LAND) )
+        {
+            if ( _status_flg & BACT_STFLAG_FIRE )
+            {
+                setState_msg arg78;
+                arg78.setFlags = 0;
+                arg78.newStatus = BACT_STATUS_NOPE;
+                arg78.unsetFlags = BACT_STFLAG_FIRE;
+
+                SetState(&arg78);
+            }
+        }
+        else if ( HasMinigun() )
         {
             if ( !UsesVehicleMinigunTiming() && (_status_flg & BACT_STFLAG_FIRE) )
             {
@@ -923,8 +1031,17 @@ void NC_STACK_ypaflyer::User_layer(update_msg *arg)
             }
         }
 
-        if ( arg->inpt->Buttons.Is(3) )
+        if ( !landedMovementLocked && arg->inpt->Buttons.Is(3) )
             HandBrake(arg);
+
+        if ( landedMovementLocked )
+        {
+            // Firing stays active on the ground, but weapon recoil must not
+            // turn it into a movement command.
+            _fly_dir_length = 0.0;
+            _thraction = 0.0;
+            _flyerBoost = _mass * 9.80665;
+        }
 
         if ( _status_flg & BACT_STFLAG_LAND )
         {

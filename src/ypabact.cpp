@@ -16,6 +16,7 @@
 #include "ypamissile.h"
 #include "yw_net.h"
 
+#include "system/inpt.h"
 #include "system/inivals.h"
 #include "world/clonebalance.h"
 
@@ -4718,6 +4719,35 @@ void NC_STACK_ypabact::User_layer(update_msg *arg)
 {
     _airconst = _airconst_static;
 
+    const bool landedAirControl =
+        (_oflags & BACT_OFLAG_USERINPT) &&
+        (_status_flg & BACT_STFLAG_LAND) &&
+        (_status == BACT_STATUS_NORMAL || _status == BACT_STATUS_IDLE) &&
+        (_bact_type == BACT_TYPES_BACT || _bact_type == BACT_TYPES_ZEPP);
+    const bool takeoffRequested = landedAirControl && Input::Engine.GetKeyState(Input::KC_Q);
+    const bool landedMovementLocked = landedAirControl && !takeoffRequested;
+
+    if ( landedAirControl )
+    {
+        _fly_dir_length = 0.0;
+
+        if ( landedMovementLocked )
+        {
+            _thraction = _mass * 9.80665;
+        }
+        else
+        {
+            _status_flg &= ~BACT_STFLAG_LAND;
+            _thraction = std::min(_force, _mass * 9.80665f * 1.2f);
+
+            setState_msg takeoffState;
+            takeoffState.newStatus = BACT_STATUS_NORMAL;
+            takeoffState.unsetFlags = 0;
+            takeoffState.setFlags = 0;
+            SetState(&takeoffState);
+        }
+    }
+
     float v106 = arg->frameTime / 1000.0;
 
     if ( _status == BACT_STATUS_NORMAL || _status == BACT_STATUS_IDLE )
@@ -4820,10 +4850,11 @@ void NC_STACK_ypabact::User_layer(update_msg *arg)
             }
         }
 
-        float v110 = arg->inpt->Sliders[1] * _maxrot * v106;
-        float v103 = -arg->inpt->Sliders[0] * _maxrot * v106;
+        float v110 = landedMovementLocked ? 0.0f : arg->inpt->Sliders[1] * _maxrot * v106;
+        float v103 = landedMovementLocked ? 0.0f : -arg->inpt->Sliders[0] * _maxrot * v106;
 
-        if ( (fabs(_fly_dir.y) > 0.98 || _fly_dir_length == 0.0) && _rotation.m11 > 0.996 && arg->inpt->Sliders[1] == 0.0 )
+        if ( (fabs(_fly_dir.y) > 0.98 || _fly_dir_length == 0.0) && _rotation.m11 > 0.996 && arg->inpt->Sliders[1] == 0.0 &&
+             !(_bact_type == BACT_TYPES_BACT && (_status_flg & BACT_STFLAG_LAND)) )
         {
             vec2d axisX = _rotation.AxisX().XZ();;
 
@@ -4895,7 +4926,8 @@ void NC_STACK_ypabact::User_layer(update_msg *arg)
         _rotation = mat3x3::RotateZ(v104 * 0.5) * _rotation; // local
         _rotation *= mat3x3::RotateY(v103 * 0.5); // global
 
-        _thraction += _force * v106 * 0.5 * arg->inpt->Sliders[2];
+        if ( !landedMovementLocked )
+            _thraction += _force * v106 * 0.5 * arg->inpt->Sliders[2];
 
         if ( _thraction < 0.0 )
             _thraction = 0;
@@ -4956,7 +4988,18 @@ void NC_STACK_ypabact::User_layer(update_msg *arg)
             LaunchMissile(&v61);
         }
 
-        if ( HasMinigun() )
+        if ( HasMinigun() && (_status_flg & BACT_STFLAG_LAND) )
+        {
+            if ( _status_flg & BACT_STFLAG_FIRE )
+            {
+                arg78.setFlags = 0;
+                arg78.newStatus = BACT_STATUS_NOPE;
+                arg78.unsetFlags = BACT_STFLAG_FIRE;
+
+                SetState(&arg78);
+            }
+        }
+        else if ( HasMinigun() )
         {
             if ( !UsesVehicleMinigunTiming() && (_status_flg & BACT_STFLAG_FIRE) )
             {
@@ -4991,10 +5034,26 @@ void NC_STACK_ypabact::User_layer(update_msg *arg)
             }
         }
 
-        if ( arg->inpt->Buttons.Is(3) )
+        if ( _bact_type == BACT_TYPES_BACT && (_status_flg & BACT_STFLAG_LAND) )
+        {
+            // A helicopter may touch down while its nose is still low.  Use
+            // the handbrake's gradual rotational recovery, but do not apply
+            // its thrust/velocity changes when player control starts.
+            SmoothStabilizeUpright(arg->frameTime);
+        }
+        else if ( !landedMovementLocked && arg->inpt->Buttons.Is(3) )
         {
             HandBrake(arg);
 
+            v99 = _thraction;
+        }
+
+        if ( landedMovementLocked )
+        {
+            // Keep the landed craft planted, including after weapon recoil,
+            // while still allowing targeting, weapon HUD updates and firing.
+            _fly_dir_length = 0.0;
+            _thraction = _mass * 9.80665;
             v99 = _thraction;
         }
 
@@ -12143,12 +12202,27 @@ void NC_STACK_ypabact::Renew()
     _missiles_list.clear();
 }
 
+void NC_STACK_ypabact::SmoothStabilizeUpright(float frameTime)
+{
+    vec3d vaxis = _rotation.AxisY() * vec3d(0.0, 1.0, 0.0);
+
+    if ( vaxis.normalise() <= 0.001 )
+        return;
+
+    float remainingAngle = clp_acos( _rotation.AxisY().dot( vec3d(0.0, 1.0, 0.0) ) );
+    float angleStep = std::min(remainingAngle, _maxrot * frameTime * 0.001f);
+
+    // The final frame uses the remaining angular distance too: no axis reset,
+    // no visible snap, and no residual tilt.
+    if ( angleStep > 0.000001f )
+        _rotation *= mat3x3::AxisAngle(vaxis, angleStep);
+}
+
 void NC_STACK_ypabact::HandBrake(update_msg *arg)
 {
     _thraction = _mass * 9.77665;
 
     float v53 = arg->frameTime * 0.001;
-
     vec3d vaxis = _rotation.AxisY() * vec3d(0.0, 1.0, 0.0);
 
     if ( vaxis.normalise() > 0.001 )
@@ -12162,18 +12236,15 @@ void NC_STACK_ypabact::HandBrake(update_msg *arg)
 
             vec3d axisX = _rotation.AxisX().X0Z();
             axisX.normalise();
-
             _rotation.SetX( axisX );
 
             vec3d axisZ = _rotation.AxisZ().X0Z();
             axisZ.normalise();
-
             _rotation.SetZ( axisZ );
 
             if ( fabs(_fly_dir_length) < 0.1 )
             {
                 _fly_dir = vec3d(0.0, 1.0, 0.0);
-
                 _fly_dir_length = 0;
             }
         }
@@ -15618,7 +15689,31 @@ void NC_STACK_ypabact::setBACT_inputting(bool inpt)
         _oflags |= BACT_OFLAG_USERINPT;
         _world->setYW_userVehicle(this);
 
-        if ( _bact_type != BACT_TYPES_GUN )
+        const bool landedHelicopter =
+            _bact_type == BACT_TYPES_BACT &&
+            (_status_flg & BACT_STFLAG_LAND);
+
+        if ( landedHelicopter )
+        {
+            // AI rest height uses overeof, while player control uses
+            // viewer_overeof. Resolve that one-time height difference on the
+            // camera cut instead of replaying the landing animation.
+            ypaworld_arg136 ground;
+            ground.stPos = _position;
+            ground.vect = vec3d(0.0, std::max(_viewer_radius, _viewer_overeof) * 1.5f, 0.0);
+            ground.flags = 0;
+
+            _world->ypaworld_func136(&ground);
+
+            if ( ground.isect )
+            {
+                _position.y = ground.isectPos.y - _viewer_overeof;
+                _old_pos.y = _position.y;
+            }
+
+            _heliLandingVisualOffsetY = 0.0f;
+        }
+        else if ( _bact_type != BACT_TYPES_GUN )
             CorrectPositionOnLand();
     }
     else

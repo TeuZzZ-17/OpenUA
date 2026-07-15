@@ -903,6 +903,7 @@ void  UserData::sb_0x46ca74()
         ProfilesNode &profile = profiles.back();
 
         profile.name = userNameDir;
+        InputConfig[World::INPUT_BIND_COCKPIT_CAMERA] = UserData::TInputConf(World::INPUT_BIND_TYPE_HOTKEY, 47, Input::KC_K);
 
         std::string tmp = fmt::sprintf("save:%s", userNameDir);
         if ( !uaCreateDir(tmp) )

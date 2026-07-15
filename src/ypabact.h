@@ -494,6 +494,7 @@ public:
     virtual void ypabact_func95(IDVPair *arg);
     virtual void Renew();
     virtual void HandBrake(update_msg *arg);
+    void SmoothStabilizeUpright(float frameTime);
     virtual void ypabact_func98(IDVPair *arg);
     virtual void CreationTimeUpdate(update_msg *arg);
     virtual size_t IsDestroyed();

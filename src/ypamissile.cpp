@@ -573,7 +573,7 @@ bool NC_STACK_ypamissile::TryClusterSplit()
         child->_parent = NULL;
         _mislEmitter->_missiles_list.push_back(child);
 
-        if ( clusterSample && !clusterSoundPlayed )
+        if ( (clusterSample || cluster.snd.sndPrm.slot || cluster.snd.sndPrm_shk.slot) && !clusterSoundPlayed )
         {
             child->_mislClusterSoundCarrier.Clear();
             child->_mislClusterSoundCarrier.Resize(1);
@@ -588,8 +588,28 @@ bool NC_STACK_ypamissile::TryClusterSplit()
             snd.Pitch = cluster.snd.pitch;
             snd.SetLoop(false);
             snd.SetFragmented(false);
-            snd.SetPFx(false);
-            snd.SetShk(false);
+
+            if ( cluster.snd.sndPrm.slot )
+            {
+                snd.PPFx = &cluster.snd.sndPrm;
+                snd.SetPFx(true);
+            }
+            else
+            {
+                snd.PPFx = NULL;
+                snd.SetPFx(false);
+            }
+
+            if ( cluster.snd.sndPrm_shk.slot )
+            {
+                snd.PShkFx = &cluster.snd.sndPrm_shk;
+                snd.SetShk(true);
+            }
+            else
+            {
+                snd.PShkFx = NULL;
+                snd.SetShk(false);
+            }
 
             SFXEngine::SFXe.startSound(&child->_mislClusterSoundCarrier, 0);
             SFXEngine::SFXe.UpdateSoundCarrier(&child->_mislClusterSoundCarrier);

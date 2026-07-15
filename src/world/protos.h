@@ -483,10 +483,13 @@ struct TVhclProto
     float height = 0.0;
     float radius = 0.0;
     bool radius_defined = false;             // OpenUA: true only when radius is explicitly authored
-    bool auto_collision = false;             // OpenUA: force compound collision and automatic runtime body bounds
+    bool auto_collision = false;             // OpenUA: compound collision; missing runtime bounds are automatic
     float overeof = 0.0;
+    bool overeof_defined = false;            // OpenUA: true only when overeof is explicitly authored
     float vwr_radius = 0.0;
+    bool vwr_radius_defined = false;         // OpenUA: true only when vwr_radius is explicitly authored
     float vwr_overeof = 0.0;
+    bool vwr_overeof_defined = false;        // OpenUA: true only when vwr_overeof is explicitly authored
     bool cockpit_camera_enable = false;    // OpenUA custom: optional per-vehicle cockpit/player camera offset
     vec3d cockpit_camera_offset = vec3d(0.0, 0.0, 0.0);
     bool mgun_pov_fx_enable = false;

@@ -815,8 +815,8 @@ static bool yw_GetVehicleAutoCollisionBounds(const World::rbcolls &colls,
         return false;
 
     // These remain runtime compatibility bounds for legacy terrain, landing
-    // and broad-phase code. auto_collision makes their script values
-    // unnecessary, but not the runtime concepts themselves.
+    // and broad-phase code. auto_collision supplies any missing script value,
+    // but an explicitly authored bound remains authoritative.
     if ( radius )
         *radius = std::max(bodyRadius, 1.0f);
     if ( viewerRadius )
@@ -2613,10 +2613,14 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
                             spawnColl.modelMin.y, spawnColl.modelMax.y);
             }
 
-            bacto->_radius = automaticRadius;
-            bacto->_viewer_radius = automaticViewerRadius;
-            bacto->_overeof = automaticOvereof;
-            bacto->_viewer_overeof = automaticOvereof;
+            if ( !vhcl.radius_defined )
+                bacto->_radius = automaticRadius;
+            if ( !vhcl.vwr_radius_defined )
+                bacto->_viewer_radius = automaticViewerRadius;
+            if ( !vhcl.overeof_defined )
+                bacto->_overeof = automaticOvereof;
+            if ( !vhcl.vwr_overeof_defined )
+                bacto->_viewer_overeof = automaticOvereof;
         }
         else
         {
@@ -3007,6 +3011,17 @@ NC_STACK_ypamissile * NC_STACK_ypaworld::ypaworld_func147(ypaworld_arg146 *arg)
             wproto.coll = spawnColl;
     }
 
+    // Keep auto_collision operational even when a projectile VP has no usable
+    // polygon geometry. The parser default (or an explicit radius) provides a
+    // single safe compatibility sphere instead of silently disabling it.
+    if ( useAutoCollisionSpheres && spawnColl.roboColls.empty() && wproto.radius > 0.01f )
+    {
+        World::TRoboColl fallback;
+        fallback.robo_coll_radius = wproto.radius;
+        spawnColl.roboColls.push_back(fallback);
+        wproto.coll = spawnColl;
+    }
+
     wobj->_collNodes = spawnColl;
     wobj->_autoCollisionSpheres = useAutoCollisionSpheres && !spawnColl.roboColls.empty();
     if ( wobj->_autoCollisionSpheres )
@@ -3014,7 +3029,7 @@ NC_STACK_ypamissile * NC_STACK_ypaworld::ypaworld_func147(ypaworld_arg146 *arg)
         // Keep the cached prototype spheres canonical. Scale only this spawn's
         // runtime copy so repeated spawns can never compound the multiplier.
         float autoCollisionScale = yw_GetWeaponAutoCollisionScale();
-        wobj->_radius = 0.0f;
+        float automaticRadius = 0.0f;
         for (World::TRoboColl &sphere : wobj->_collNodes.roboColls)
         {
             sphere.robo_coll_radius *= autoCollisionScale;
@@ -3022,9 +3037,12 @@ NC_STACK_ypamissile * NC_STACK_ypaworld::ypaworld_func147(ypaworld_arg146 *arg)
                 continue;
 
             float extent = sphere.coll_pos.length() + sphere.robo_coll_radius;
-            if ( extent > wobj->_radius )
-                wobj->_radius = extent;
+            if ( extent > automaticRadius )
+                automaticRadius = extent;
         }
+
+        if ( !wproto.radius_defined )
+            wobj->_radius = automaticRadius;
     }
 
     wobj->_destroyFX = wproto.dfx;
@@ -3828,7 +3846,7 @@ bool NC_STACK_ypaworld::InitGameShell(UserData *usr)
     usr->InputConfig[World::INPUT_BIND_LAST_SEAT]   = UserData::TInputConf(World::INPUT_BIND_TYPE_HOTKEY, 44, Input::KC_NONE);
     usr->InputConfig[World::INPUT_BIND_SET_COMM]    = UserData::TInputConf(World::INPUT_BIND_TYPE_HOTKEY, 45, Input::KC_NONE);
     usr->InputConfig[World::INPUT_BIND_ANALYZER]    = UserData::TInputConf(World::INPUT_BIND_TYPE_HOTKEY, 46, Input::KC_NONE);
-    usr->InputConfig[World::INPUT_BIND_COCKPIT_CAMERA] = UserData::TInputConf(World::INPUT_BIND_TYPE_HOTKEY, 47, Input::KC_NONE);
+    usr->InputConfig[World::INPUT_BIND_COCKPIT_CAMERA] = UserData::TInputConf(World::INPUT_BIND_TYPE_HOTKEY, 47, Input::KC_K);
 
     usr->sub_46D2B4();
 

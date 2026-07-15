@@ -1309,14 +1309,17 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     else if ( !StriCmp(p1, "overeof") )
     {
         _vhcl->overeof = parser.stof(p2, 0);
+        _vhcl->overeof_defined = true;
     }
     else if ( !StriCmp(p1, "vwr_radius") )
     {
         _vhcl->vwr_radius = parser.stof(p2, 0);
+        _vhcl->vwr_radius_defined = true;
     }
     else if ( !StriCmp(p1, "vwr_overeof") )
     {
         _vhcl->vwr_overeof = parser.stof(p2, 0);
+        _vhcl->vwr_overeof_defined = true;
     }
     else if ( !StriCmp(p1, "adist_sector") )
     {
@@ -2614,8 +2617,11 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->radius_defined = false;
         _vhcl->auto_collision = false;
         _vhcl->overeof = 25.0;
+        _vhcl->overeof_defined = false;
         _vhcl->vwr_radius = 30.0;
+        _vhcl->vwr_radius_defined = false;
         _vhcl->vwr_overeof = 30.0;
+        _vhcl->vwr_overeof_defined = false;
         _vhcl->cockpit_camera_enable = false;
         _vhcl->cockpit_camera_offset = vec3d(0.0, 0.0, 0.0);
         _vhcl->mgun_pov_fx_enable = false;
@@ -2778,6 +2784,14 @@ bool WeaponProtoParser::IsScope(ScriptParser::Parser &parser, const std::string 
         _wpn->debuff.tick_snd.sndPrm_shk.pos.z = 0.2;
         _wpn->cluster = TWeaponClusterConfig();
         _wpn->cluster.snd.volume = 120;
+        _wpn->cluster.snd.sndPrm.mag0 = 1.0;
+        _wpn->cluster.snd.sndPrm.time = 1000;
+        _wpn->cluster.snd.sndPrm_shk.mag0 = 1.0;
+        _wpn->cluster.snd.sndPrm_shk.time = 1000;
+        _wpn->cluster.snd.sndPrm_shk.mute = 0.02;
+        _wpn->cluster.snd.sndPrm_shk.pos.x = 0.2;
+        _wpn->cluster.snd.sndPrm_shk.pos.y = 0.2;
+        _wpn->cluster.snd.sndPrm_shk.pos.z = 0.2;
         _wpn->chain = TWeaponChainConfig();
 
         for (TVhclSound &fx : _wpn->sndFXes)
@@ -3139,6 +3153,54 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     else if ( !StriCmp(p1, "snd_cluster_volume") )
     {
         _wpn->cluster.snd.volume = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "pal_cluster_slot") )
+    {
+        _wpn->cluster.snd.sndPrm.slot = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "pal_cluster_mag0") )
+    {
+        _wpn->cluster.snd.sndPrm.mag0 = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "pal_cluster_mag1") )
+    {
+        _wpn->cluster.snd.sndPrm.mag1 = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "pal_cluster_time") )
+    {
+        _wpn->cluster.snd.sndPrm.time = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "shk_cluster_slot") )
+    {
+        _wpn->cluster.snd.sndPrm_shk.slot = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "shk_cluster_mag0") )
+    {
+        _wpn->cluster.snd.sndPrm_shk.mag0 = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "shk_cluster_mag1") )
+    {
+        _wpn->cluster.snd.sndPrm_shk.mag1 = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "shk_cluster_time") )
+    {
+        _wpn->cluster.snd.sndPrm_shk.time = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "shk_cluster_mute") )
+    {
+        _wpn->cluster.snd.sndPrm_shk.mute = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "shk_cluster_x") )
+    {
+        _wpn->cluster.snd.sndPrm_shk.pos.x = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "shk_cluster_y") )
+    {
+        _wpn->cluster.snd.sndPrm_shk.pos.y = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "shk_cluster_z") )
+    {
+        _wpn->cluster.snd.sndPrm_shk.pos.z = parser.stof(p2, 0);
     }
     else if ( !StriCmp(p1, "chain_allow") )
     {
