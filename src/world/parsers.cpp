@@ -851,6 +851,47 @@ static bool ParseDecorationFXParam(ScriptParser::Parser &parser,
     return false;
 }
 
+static bool ParseImpactScarParam(ScriptParser::Parser &parser,
+                                 const std::string &p1,
+                                 const std::string &p2,
+                                 World::TWeaponImpactScarConfig &config)
+{
+    if ( !StriCmp(p1, "impact_scar") )
+    {
+        config.enabled = parser.stol(p2, NULL, 0) != 0;
+        return true;
+    }
+
+    if ( !StriCmp(p1, "impact_scar_terrain") )
+    {
+        config.terrain = parser.stol(p2, NULL, 0) != 0;
+        return true;
+    }
+
+    if ( !StriCmp(p1, "impact_scar_radius") )
+    {
+        float radius = parser.stof(p2, 0);
+        config.radius = radius > 0.0f ? radius : 0.0f;
+        return true;
+    }
+
+    if ( !StriCmp(p1, "impact_scar_duration") )
+    {
+        int duration = parser.stol(p2, NULL, 0);
+        config.duration = duration > 0 ? duration : 10000;
+        return true;
+    }
+
+    if ( !StriCmp(p1, "impact_scar_fade_time") )
+    {
+        int fadeTime = parser.stol(p2, NULL, 0);
+        config.fade_time = fadeTime >= 0 ? fadeTime : 2000;
+        return true;
+    }
+
+    return ParseTintParam(parser, "impact_scar_color", p1, p2, config.color);
+}
+
 // OpenUA custom: parse "*_tint = R_G_B_A" (each component 0..255).
 // Alpha is optional and defaults to 255. Out-of-range values are clamped.
 // Stored as normalized 0..1 float multipliers. Neutral default = no change.
@@ -2779,6 +2820,7 @@ bool WeaponProtoParser::IsScope(ScriptParser::Parser &parser, const std::string 
         _wpn->cluster = TWeaponClusterConfig();
         _wpn->cluster.snd.volume = 120;
         _wpn->chain = TWeaponChainConfig();
+        _wpn->impact_scar = TWeaponImpactScarConfig();
 
         for (TVhclSound &fx : _wpn->sndFXes)
         {
@@ -3360,6 +3402,9 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     {
     }
     else if ( ParseDecorationFXParam(parser, p1, p2, _wpn->decoration_fx) )
+    {
+    }
+    else if ( ParseImpactScarParam(parser, p1, p2, _wpn->impact_scar) )
     {
     }
     else if ( !StriCmp(p1, "type_icon") )

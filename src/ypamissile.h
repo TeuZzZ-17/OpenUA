@@ -161,6 +161,8 @@ protected:
     void RememberChainHit(NC_STACK_ypabact *target);
     bool IsChainHit(NC_STACK_ypabact *target) const;
     void UpdateMortarBallistic(update_msg *arg); // OpenUA custom: ballistic shell flight + timed impact
+    void RememberWorldImpactScar(const vec3d &position, const vec3d &normal, const vec3d &incomingDirection);
+    void SpawnPendingWorldImpactScar();
 
     struct TBuildingHitRef
     {
@@ -220,6 +222,10 @@ protected:
     std::vector<NC_STACK_ypabact *> _mislDirectHitUnits;
     std::vector<TBuildingHitRef> _mislDirectHitBuildings;
     std::vector<TBuildingHitRef> _mislDirectHitSectors;
+    bool _mislImpactScarPending = false;
+    vec3d _mislImpactScarPosition;
+    vec3d _mislImpactScarNormal;
+    vec3d _mislImpactScarIncoming;
     // OpenUA custom mortar shell state (only meaningful when _isMortarProjectile).
     bool  _isMortarProjectile = false;
     vec3d _mortarStartPos;

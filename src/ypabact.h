@@ -790,6 +790,7 @@ public:
     float _thraction;
     vec3d _fly_dir;
     float _fly_dir_length;
+    float _heliLandingVisualOffsetY = 0.0f; // OpenUA: render/camera-only smoothing of the vanilla heli ground snap
     int _weaponRecoilVisualEndTime = 0; // OpenUA: render-only tank firing tilt, does not affect physics
     int _weaponRecoilVisualDuration = 0;
     float _weaponRecoilVisualPitch = 0.0f;

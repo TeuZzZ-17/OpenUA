@@ -2787,6 +2787,20 @@ void NC_STACK_ypabact::Update(update_msg *arg)
     _clock += arg->frameTime;
     ypabact_UpdateSpawnAtDeathProtection(this);
 
+    // Keep vanilla heli landing physics exact, but gently consume the visual
+    // difference left by its final ground-position correction.
+    if ( (_isUnitGunChild || _isDummy) && _parent && _parent != this )
+    {
+        _heliLandingVisualOffsetY = _parent->_heliLandingVisualOffsetY;
+    }
+    else if ( _bact_type == BACT_TYPES_BACT && _heliLandingVisualOffsetY != 0.0f )
+    {
+        _heliLandingVisualOffsetY *= expf(-arg->frameTime / 60.0f);
+
+        if ( fabs(_heliLandingVisualOffsetY) < 0.05f )
+            _heliLandingVisualOffsetY = 0.0f;
+    }
+
     UpdateActiveDebuff(arg);
     UpdateDamageFX(arg);
     UpdateDecorationFX(arg);
@@ -2817,6 +2831,9 @@ void NC_STACK_ypabact::Update(update_msg *arg)
         else
             bact_cam.Pos = _position;
 
+        if ( _bact_type == BACT_TYPES_BACT )
+            bact_cam.Pos.y += _heliLandingVisualOffsetY;
+
         if ( _oflags & BACT_OFLAG_EXTRAVIEW )
             bact_cam.SclRot = _viewer_rotation;
         else
@@ -2826,6 +2843,8 @@ void NC_STACK_ypabact::Update(update_msg *arg)
     }
 
     _tForm.Pos = _position;
+    if ( _heliLandingVisualOffsetY != 0.0f )
+        _tForm.Pos.y += _heliLandingVisualOffsetY;
 
     if ( _status_flg & BACT_STFLAG_SCALE )
         _tForm.SclRot = _rotation.Transpose() * mat3x3::Scale( _scale );
@@ -3574,6 +3593,8 @@ void NC_STACK_ypabact::Render(baseRender_msg *arg)
             if ( bd->flags & EVPROTO_FLAG_ACTIVE )
             {
                 bd->vp->Bas->TForm().Pos = bd->pos;
+                if ( _bact_type == BACT_TYPES_BACT )
+                    bd->vp->Bas->TForm().Pos.y += _heliLandingVisualOffsetY;
 
                 if ( bd->flags & EVPROTO_FLAG_SCALE )
                     bd->vp->Bas->TForm().SclRot = bd->rotate.Transpose() * mat3x3::Scale( vec3d(bd->scale, bd->scale, bd->scale) );
@@ -4756,7 +4777,10 @@ void NC_STACK_ypabact::User_layer(update_msg *arg)
             {
                 _fly_dir_length = 0;
                 _status_flg |= BACT_STFLAG_LAND;
-                _position.y = arg136.isectPos.y - _viewer_overeof;
+                float landingY = arg136.isectPos.y - _viewer_overeof;
+                if ( _bact_type == BACT_TYPES_BACT )
+                    _heliLandingVisualOffsetY += _position.y - landingY;
+                _position.y = landingY;
                 _thraction = _mass * 9.80665;
             }
             else
@@ -12081,6 +12105,7 @@ void NC_STACK_ypabact::Renew()
     _weaponRecoilVisualDuration = 0;
     _weaponRecoilVisualPitch = 0.0f;
     _weaponRecoilVisualOffset = vec3d(0.0, 0.0, 0.0);
+    _heliLandingVisualOffsetY = 0.0f;
     _weaponRecoilAiRecoveryEndTime = 0;
     _weaponRecoilPlayerRecoveryEndTime = 0;
     _weaponRecoilPushVel = vec3d(0.0, 0.0, 0.0);
@@ -12128,13 +12153,10 @@ void NC_STACK_ypabact::HandBrake(update_msg *arg)
 
     if ( vaxis.normalise() > 0.001 )
     {
-        float v62 = clp_acos( _rotation.AxisY().dot( vec3d(0.0, 1.0, 0.0) ) );
-        float v11 = _maxrot * v53;
+        float remainingAngle = clp_acos( _rotation.AxisY().dot( vec3d(0.0, 1.0, 0.0) ) );
+        float angleStep = std::min(remainingAngle, _maxrot * v53);
 
-        if ( v62 > v11 )
-            v62 = (v62 * 1.5) * v11;
-
-        if ( fabs(v62) <= 0.0015 )
+        if ( remainingAngle <= angleStep + 0.0015 )
         {
             _rotation.SetY( vec3d(0.0, 1.0, 0.0) );
 
@@ -12157,7 +12179,7 @@ void NC_STACK_ypabact::HandBrake(update_msg *arg)
         }
         else
         {
-            _rotation *= mat3x3::AxisAngle(vaxis, v62);
+            _rotation *= mat3x3::AxisAngle(vaxis, angleStep);
         }
     }
 

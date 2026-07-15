@@ -1891,6 +1891,13 @@ struct ypaworld_arg136
     int polyID;
     UAskeleton::Data *skel;
     int flags;
+    Common::Point hitCell;
+    int16_t hitCollisionType;
+    int16_t hitBldX;
+    int16_t hitBldY;
+    int16_t hitMicroX;
+    int16_t hitMicroZ;
+    int16_t hitModelID;
 
     ypaworld_arg136()
     {
@@ -1899,6 +1906,13 @@ struct ypaworld_arg136
         polyID = 0;
         skel = NULL;
         flags = 0;
+        hitCell = Common::Point(-1, -1);
+        hitCollisionType = 0;
+        hitBldX = -1;
+        hitBldY = -1;
+        hitMicroX = -1;
+        hitMicroZ = -1;
+        hitModelID = -1;
     }
 };
 
@@ -2533,6 +2547,10 @@ public:
     bool HasTransientVP(int32_t id) const;
     void RemoveTransientVP(int32_t id);
     void UpdateDecorationFX(const World::TDecorationFXConfig &config, int32_t &nextTime, const vec3d &ownerPos, int32_t *persistentId = NULL);
+    bool AddImpactScar(const World::TWeaponImpactScarConfig &config, const ypaworld_arg136 &hit, const vec3d &incomingDirection);
+    bool AddImpactScarAtWorldHit(const World::TWeaponImpactScarConfig &config, const vec3d &position, const vec3d &normal, const vec3d &incomingDirection);
+    void RenderImpactScars(baseRender_msg *arg);
+    void ClearImpactScars();
     void NoteUserDamageHover(NC_STACK_ypabact *attacker, NC_STACK_ypabact *target);
     std::vector<NC_STACK_ypabact *> GetUserDamageHoverTargets();
     void ClearUserDamageHoverTarget(NC_STACK_ypabact *target);
@@ -2609,6 +2627,24 @@ public:
         int32_t until = 0;
     };
 
+    struct TImpactScar
+    {
+        vec3d pos;
+        vec3d normal;
+        float radius = 0.0f;
+        bool terrain = false;
+        Common::Point hitCell = Common::Point(-1, -1);
+        int16_t hitCollisionType = 0;
+        int16_t hitBldX = -1;
+        int16_t hitBldY = -1;
+        int16_t hitModelID = -1;
+        int32_t startTime = 0;
+        int32_t duration = 0;
+        int32_t fadeTime = 0;
+        World::TVisualTint color;
+        GFX::TMesh mesh;
+    };
+
     UserData *_GameShell = NULL;
 
     Common::Point _mapSize;
@@ -2641,6 +2677,9 @@ public:
     std::list<NC_STACK_base *> _overrideModels;
     std::list<TTransientVP> _transientVPs;
     int32_t _nextTransientVPId = 1;
+    std::list<TImpactScar> _impactScars;
+    NC_STACK_bitmap *_impactScarTexture = NULL;
+    bool _impactScarTextureLoadAttempted = false;
     std::vector<TDamageHoverTarget> _damageHoverTargets;
     std::map<int32_t, TConstructInfo> _inBuildProcess; // Buildings in creation process
     std::array<int16_t, 256> _buildHealthModelId = Common::ArrayInit<int16_t, 256>(0);
