@@ -308,10 +308,6 @@ size_t NC_STACK_ypamissile::Init(IDVList &stak)
     _mislAttachTargetGid = 0;
     _mislAttachOffset = vec3d(0.0, 0.0, 0.0);
     _mislLastAttachedPosition = vec3d(0.0, 0.0, 0.0);
-    _mislImpactScarPending = false;
-    _mislImpactScarPosition = vec3d(0.0, 0.0, 0.0);
-    _mislImpactScarNormal = vec3d(0.0, -1.0, 0.0);
-    _mislImpactScarIncoming = vec3d(0.0, 0.0, 0.0);
     _mislClusterSoundCarrier.Clear();
 
     for( auto& it : stak )
@@ -2152,40 +2148,6 @@ void NC_STACK_ypamissile::AttachDelayedDetonationToTarget(NC_STACK_ypabact *targ
     _fly_dir_length = 0.0;
 }
 
-void NC_STACK_ypamissile::RememberWorldImpactScar(const vec3d &position,
-                                                  const vec3d &normal,
-                                                  const vec3d &incomingDirection)
-{
-    _mislImpactScarPending = false;
-
-    if ( !_world || _vehicleID < 0 || (size_t)_vehicleID >= _world->GetWeaponsProtos().size() )
-        return;
-
-    const World::TWeapProto &weapon = _world->GetWeaponsProtos().at(_vehicleID);
-    if ( weapon.IsLaser() || weapon.IsVerticalLaser() || !weapon.impact_scar.enabled ||
-         weapon.impact_scar.radius <= 0.0f || weapon.impact_scar.duration <= 0 )
-        return;
-
-    _mislImpactScarPending = true;
-    _mislImpactScarPosition = position;
-    _mislImpactScarNormal = normal;
-    _mislImpactScarIncoming = incomingDirection;
-}
-
-void NC_STACK_ypamissile::SpawnPendingWorldImpactScar()
-{
-    if ( !_mislImpactScarPending || !_world || _vehicleID < 0 ||
-         (size_t)_vehicleID >= _world->GetWeaponsProtos().size() )
-        return;
-
-    _mislImpactScarPending = false;
-    const World::TWeapProto &weapon = _world->GetWeaponsProtos().at(_vehicleID);
-    _world->AddImpactScarAtWorldHit(weapon.impact_scar,
-                                    _mislImpactScarPosition,
-                                    _mislImpactScarNormal,
-                                    _mislImpactScarIncoming);
-}
-
 NC_STACK_ypabact *NC_STACK_ypamissile::FindAttachedTarget()
 {
     if ( !_world || !_mislAttachedToTarget || !_mislAttachTargetGid )
@@ -2379,8 +2341,6 @@ void NC_STACK_ypamissile::AI_layer3(update_msg *arg)
 
                 ChangeSectorEnergy(&v25);
             }
-
-            SpawnPendingWorldImpactScar();
         }
         else
         {
@@ -2481,12 +2441,9 @@ void NC_STACK_ypamissile::AI_layer3(update_msg *arg)
             {
                 vec3d impactNormal = compoundWorldHit ?
                     compoundImpactNormal : arg136.skel->polygons[ arg136.polyID ].Normal();
-                vec3d impactIncoming = _fly_dir;
                 AlignMissileByNormal( impactNormal );
 
                 _position = compoundWorldHit ? compoundImpactPos : arg136.isectPos;
-
-                RememberWorldImpactScar(_position, impactNormal, impactIncoming);
 
                 ResetViewing();
 
@@ -2527,8 +2484,6 @@ void NC_STACK_ypamissile::AI_layer3(update_msg *arg)
 
                         ChangeSectorEnergy(&v25);
                     }
-
-                    SpawnPendingWorldImpactScar();
                 }
 
                 int a4 = _mislEmitter->getBACT_inputting();
@@ -2801,10 +2756,6 @@ void NC_STACK_ypamissile::Renew()
     _mislAttachTargetGid = 0;
     _mislAttachOffset = vec3d(0.0, 0.0, 0.0);
     _mislLastAttachedPosition = vec3d(0.0, 0.0, 0.0);
-    _mislImpactScarPending = false;
-    _mislImpactScarPosition = vec3d(0.0, 0.0, 0.0);
-    _mislImpactScarNormal = vec3d(0.0, -1.0, 0.0);
-    _mislImpactScarIncoming = vec3d(0.0, 0.0, 0.0);
     SFXEngine::SFXe.StopCarrier(&_mislClusterSoundCarrier);
     _mislClusterSoundCarrier.Clear();
 

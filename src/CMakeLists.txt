@@ -76,7 +76,6 @@ set(SOURCES
     wintimer.cpp
     world/analyzer.cpp
     world/clonebalance.cpp
-    world/impactscar.cpp
     world/luaevents.cpp
     world/parsers.cpp
     world/nparticle.cpp

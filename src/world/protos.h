@@ -42,18 +42,6 @@ struct TVisualTint
     }
 };
 
-// OpenUA custom: optional visual-only scorch left by a physical weapon on
-// compatible world geometry. Disabled unless explicitly enabled by script.
-struct TWeaponImpactScarConfig
-{
-    bool enabled = false;
-    bool terrain = false;
-    float radius = 0.0f;
-    int duration = 10000;
-    int fade_time = 2000;
-    TVisualTint color = {20.0f / 255.0f, 18.0f / 255.0f, 14.0f / 255.0f, 160.0f / 255.0f};
-};
-
 struct TDecorationFXConfig
 {
     uint8_t mode = DECORATION_FX_PERIODIC;
@@ -659,7 +647,6 @@ struct TWeapProto
     TWeaponClusterConfig cluster;
     TWeaponChainConfig chain;
     TDecorationFXConfig decoration_fx;
-    TWeaponImpactScarConfig impact_scar;
 //    int field_870 = 0;
 //    int field_874 = 0;
     int energy = 0;

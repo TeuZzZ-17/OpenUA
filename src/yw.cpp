@@ -1294,7 +1294,6 @@ size_t NC_STACK_ypaworld::Init(IDVList &stak)
     _deadCacheList.clear();
     _transientVPs.clear();
     _nextTransientVPId = 1;
-    ClearImpactScars();
     _damageHoverTargets.clear();
     _fxLimit = 16;
     _renderSectors = stak.Get<int32_t>(YW_ATT_VISSECTORS, 9);
@@ -1378,9 +1377,6 @@ size_t NC_STACK_ypaworld::Init(IDVList &stak)
 size_t NC_STACK_ypaworld::Deinit()
 {
     _debugAoeRings.clear();
-    ClearImpactScars();
-    Common::DeleteAndNull(&_impactScarTexture);
-    _impactScarTextureLoadAttempted = false;
     FreeGameDataCursors();
     dprintf("MAKE ME %s\n","ypaworld_func1");
     return NC_STACK_nucleus::Deinit();
@@ -2222,13 +2218,6 @@ void NC_STACK_ypaworld::ypaworld_func136(ypaworld_arg136 *arg)
 {
     arg->tVal = 2.0;
     arg->isect = 0;
-    arg->hitCell = Common::Point(-1, -1);
-    arg->hitCollisionType = 0;
-    arg->hitBldX = -1;
-    arg->hitBldY = -1;
-    arg->hitMicroX = -1;
-    arg->hitMicroZ = -1;
-    arg->hitModelID = -1;
 
     vec3d stpos = arg->stPos;
 
@@ -3562,7 +3551,6 @@ void NC_STACK_ypaworld::DeleteLevel()
 
     _transientVPs.clear();
     _nextTransientVPId = 1;
-    ClearImpactScars();
     _damageHoverTargets.clear();
     ProtosFreeSounds();
 
@@ -3598,7 +3586,6 @@ void NC_STACK_ypaworld::BeginLevelTeardown()
     Common::DeleteAndNull(&_script);
     _transientVPs.clear();
     _nextTransientVPId = 1;
-    ClearImpactScars();
     _damageHoverTargets.clear();
     _inBuildProcess.clear();
     _debugAoeRings.clear();

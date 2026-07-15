@@ -1318,14 +1318,6 @@ void GFXEngine::RenderingMeshOld(TRenderNode *nod)
         _states.LinearFilter = false;
         _states.TexBlend = 2; //MODULATE
     }
-    else if ( flags & RFLAGS_ALPHABLEND )
-    {
-        _states.AlphaBlend = true;
-        _states.SrcBlend = GL_SRC_ALPHA;
-        _states.DstBlend = GL_ONE_MINUS_SRC_ALPHA;
-        _states.TexBlend = 2; //MODULATE
-        _states.Zwrite = false;
-    }
 
     if (flags & RFLAGS_SKY)
     {
@@ -1540,13 +1532,6 @@ void GFXEngine::RenderingMesh(TRenderNode *nod)
         _states.LinearFilter = false;
         _states.TexBlend = 2; //MODULATE
     }
-    else if ( flags & RFLAGS_ALPHABLEND )
-    {
-        _states.AlphaBlend = true;
-        _states.SrcBlend = GL_SRC_ALPHA;
-        _states.DstBlend = GL_ONE_MINUS_SRC_ALPHA;
-        _states.Zwrite = false;
-    }
 
     if (flags & RFLAGS_SKY)
     {
@@ -1677,8 +1662,6 @@ void GFXEngine::QueueRenderMesh(TRenderNode *nod)
         _renderSkyBoxList.push_back(nod);
     else if (flags & RFLAGS_ZEROTRACY)
         _renderZeroTracyList.push_back(nod);
-    else if (flags & RFLAGS_ALPHABLEND)
-        _renderLumaTracyList.push_back(nod);
     else if (flags & RFLAGS_LUMTRACY)
         _renderLumaTracyList.push_back(nod);
     else

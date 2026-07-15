@@ -1541,8 +1541,6 @@ TSectorCollision NC_STACK_ypaworld::sub_44DBF8(int _dx, int _dz, int _dxx, int _
     if ( _dxx > 0 && _dxx < 4 * _mapSize.x - 1 && _dzz > 0  &&  _dzz < 4 * _mapSize.y - 1)
     {
         tmp.Cell = Common::Point(_dxx / 4, _dzz / 4);
-        tmp.MicroX = _dxx;
-        tmp.MicroZ = _dzz;
 
         cellArea &cell = _cells(tmp.Cell);
 
@@ -1579,9 +1577,6 @@ TSectorCollision NC_STACK_ypaworld::sub_44DBF8(int _dx, int _dz, int _dxx, int _
             tmp.Flags = v8;
 
             int model_id = GetLegoBld(&cell, v16, v14);
-            tmp.BldX = v16;
-            tmp.BldY = v14;
-            tmp.ModelID = model_id;
 
             if ( v8 & 1 )
                 tmp.sklt = _legoArray[model_id].UseCollisionSkelet;
@@ -1887,13 +1882,6 @@ void NC_STACK_ypaworld::sub_44D8B8(ypaworld_arg136 *arg, const TSectorCollision 
                     arg->isectPos = loc.pos + px;
                     arg->polyID = i;
                     arg->skel = loc.sklt->GetSkelet();
-                    arg->hitCell = loc.Cell;
-                    arg->hitCollisionType = loc.CollisionType;
-                    arg->hitBldX = loc.BldX;
-                    arg->hitBldY = loc.BldY;
-                    arg->hitMicroX = loc.MicroX;
-                    arg->hitMicroZ = loc.MicroZ;
-                    arg->hitModelID = loc.ModelID;
                 }
             }
         }
@@ -3365,7 +3353,6 @@ void NC_STACK_ypaworld::RenderGame(base_64arg *bs64, int a2)
     RenderFillers(&rndrs);
 
     yw_RenderTransientVPs(this, &_transientVPs, &rndrs);
-    RenderImpactScars(&rndrs);
 
     bs64->field_C = rndrs.adeCount;
 

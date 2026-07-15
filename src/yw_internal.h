@@ -9,11 +9,6 @@ struct TSectorCollision
     vec3d pos;
     Common::Point Cell;
     int16_t CollisionType = 0;
-    int16_t BldX = -1;
-    int16_t BldY = -1;
-    int16_t MicroX = -1;
-    int16_t MicroZ = -1;
-    int16_t ModelID = -1;
     int16_t Flags = 0;
 };
 
