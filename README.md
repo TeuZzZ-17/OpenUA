@@ -1,5 +1,4 @@
-# UA_source
-![icon image](https://github.com/Marisa-Chan/UA_source/blob/master/svg/icon.svg?raw=true)
+# OpenUA
 
 Opensource reimplementation of **UrbanAssault** engine. You needed copy of original game files for play.
 
