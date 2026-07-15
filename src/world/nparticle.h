@@ -30,27 +30,28 @@ protected:
         GFX::TGLColor Tint = GFX::TGLColor(1.0, 1.0, 1.0, 1.0);
         vec3d Scale = vec3d(1.0, 1.0, 1.0);
         vec3d Spin = vec3d(0.0, 0.0, 0.0);
+        float LifetimeScale = 1.0f;
 
-        Frak(NC_STACK_particle *base, const vec3d& pos, const vec3d& vec, int32_t age = 0, const GFX::TGLColor &tint = GFX::TGLColor(1.0, 1.0, 1.0, 1.0), const vec3d &scale = vec3d(1.0, 1.0, 1.0), const vec3d &spin = vec3d(0.0, 0.0, 0.0))
+        Frak(NC_STACK_particle *base, const vec3d& pos, const vec3d& vec, int32_t age = 0, const GFX::TGLColor &tint = GFX::TGLColor(1.0, 1.0, 1.0, 1.0), const vec3d &scale = vec3d(1.0, 1.0, 1.0), const vec3d &spin = vec3d(0.0, 0.0, 0.0), float lifetimeScale = 1.0f)
         : pParticleGen(base), Pos(pos), Vec(vec), Age(age), Tint(tint),
           Scale(scale.x > 0.0 ? scale.x : 1.0,
                 scale.y > 0.0 ? scale.y : 1.0,
                 scale.z > 0.0 ? scale.z : 1.0),
-          Spin(spin)
+          Spin(spin), LifetimeScale(lifetimeScale > 0.0f ? lifetimeScale : 1.0f)
         {};
     };
 
 public:
     ParticleSystem();
 
-    void AddParticle(NC_STACK_particle *base, const vec3d& pos, const vec3d& vec, int32_t age = 0, const GFX::TGLColor &tint = GFX::TGLColor(1.0, 1.0, 1.0, 1.0), const vec3d &scale = vec3d(1.0, 1.0, 1.0), const vec3d &spin = vec3d(0.0, 0.0, 0.0));
+    void AddParticle(NC_STACK_particle *base, const vec3d& pos, const vec3d& vec, int32_t age = 0, const GFX::TGLColor &tint = GFX::TGLColor(1.0, 1.0, 1.0, 1.0), const vec3d &scale = vec3d(1.0, 1.0, 1.0), const vec3d &spin = vec3d(0.0, 0.0, 0.0), float lifetimeScale = 1.0f);
 
     void UpdateRender(area_arg_65 *rndrParams, int32_t delta);
 
     void Clear();
 
 protected:
-    void Render(Frak *p, const vec3d &scale, area_arg_65 *rndrParams);
+    void Render(Frak *p, const vec3d &scale, area_arg_65 *rndrParams, int32_t visualAge);
 
 
 protected:

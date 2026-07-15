@@ -3258,9 +3258,11 @@ static void yw_RenderTransientVPs(NC_STACK_ypaworld *world, std::list<NC_STACK_y
         GFX::TGLColor oldParticleTint = arg->particleTint;
         vec3d oldParticleScale = arg->particleScale;
         vec3d oldParticleSpin = arg->particleSpin;
+        float oldParticleLifetimeScale = arg->particleLifetimeScale;
         arg->particleTint = GFX::TGLColor(it->tint.r, it->tint.g, it->tint.b, it->tint.a);
         arg->particleScale = renderScale;
         arg->particleSpin = it->spin;
+        arg->particleLifetimeScale = 1.0f;
 
         bool tinted = !it->tint.IsNeutral();
         if ( tinted )
@@ -3274,6 +3276,7 @@ static void yw_RenderTransientVPs(NC_STACK_ypaworld *world, std::list<NC_STACK_y
         arg->particleTint = oldParticleTint;
         arg->particleScale = oldParticleScale;
         arg->particleSpin = oldParticleSpin;
+        arg->particleLifetimeScale = oldParticleLifetimeScale;
 
         it->age += arg->frameTime;
         ++it;

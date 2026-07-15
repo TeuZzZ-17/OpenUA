@@ -40,6 +40,8 @@ struct area_arg_65
     // OpenUA custom: per-emitter visual scale/spin copied to particles spawned during this render.
     vec3d particleScale = vec3d(1.0, 1.0, 1.0);
     vec3d particleSpin = vec3d(0.0, 0.0, 0.0);
+    // OpenUA custom: per-emitter particle lifetime multiplier. Neutral 1.0 preserves vanilla.
+    float particleLifetimeScale = 1.0f;
 
     area_arg_65()
     {
@@ -57,6 +59,7 @@ struct area_arg_65
         tint = GFX::TGLColor(1.0, 1.0, 1.0, 1.0);
         particleScale = vec3d(1.0, 1.0, 1.0);
         particleSpin = vec3d(0.0, 0.0, 0.0);
+        particleLifetimeScale = 1.0f;
     }
 };
 
@@ -74,6 +77,7 @@ struct baseRender_msg
     GFX::TGLColor particleTint = GFX::TGLColor(1.0, 1.0, 1.0, 1.0);
     vec3d particleScale = vec3d(1.0, 1.0, 1.0);
     vec3d particleSpin = vec3d(0.0, 0.0, 0.0);
+    float particleLifetimeScale = 1.0f;
 };
 
 

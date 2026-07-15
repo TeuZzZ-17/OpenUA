@@ -580,7 +580,9 @@ size_t NC_STACK_particle::Emit(area_arg_65 *arg, InstanceOpts * uopts)
 
             vec3d pos = v45 + v12 * timeDelta;
 
-            ypaworld->ParticleSystem().AddParticle(this, pos, v12, opts->Time, arg->tint, arg->particleScale, arg->particleSpin);
+            ypaworld->ParticleSystem().AddParticle(this, pos, v12, opts->Time, arg->tint,
+                                                   arg->particleScale, arg->particleSpin,
+                                                   arg->particleLifetimeScale);
 
             timeDelta += delta;
             opts->Time -= _genPause;

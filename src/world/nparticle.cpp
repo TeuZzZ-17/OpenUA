@@ -6,6 +6,8 @@
 #include "../base.h"
 #include "../utils.h"
 
+#include <cmath>
+
 namespace World
 {
 
@@ -40,10 +42,13 @@ static float ParticleSystem_MaxScaleAxis(const vec3d &scale)
     return maxScale > 0.0f ? maxScale : 1.0f;
 }
 
-void ParticleSystem::AddParticle(NC_STACK_particle *base, const vec3d& pos, const vec3d& vec, int32_t age, const GFX::TGLColor &tint, const vec3d &scale, const vec3d &spin)
+void ParticleSystem::AddParticle(NC_STACK_particle *base, const vec3d& pos, const vec3d& vec, int32_t age, const GFX::TGLColor &tint, const vec3d &scale, const vec3d &spin, float lifetimeScale)
 {
+    if ( !std::isfinite(lifetimeScale) || lifetimeScale <= 0.0f )
+        lifetimeScale = 1.0f;
+
     if (!_disableAdd && (int32_t)_particles.size() < System::IniConf::ParticlesLimit.Get<int32_t>())
-        _particles.emplace_back( base, pos, vec, age, tint, scale, spin );
+        _particles.emplace_back( base, pos, vec, age, tint, scale, spin, lifetimeScale );
 }
 
 void ParticleSystem::UpdateRender(area_arg_65 *rndrParams, int32_t delta)
@@ -63,12 +68,15 @@ void ParticleSystem::UpdateRender(area_arg_65 *rndrParams, int32_t delta)
         }
 
         f.Age += delta;
+        float scaledLifeTime = (float)f.pParticleGen->_lifeTime * f.LifetimeScale;
 
-        if (f.Age >= f.pParticleGen->_lifeTime)
+        if ((float)f.Age >= scaledLifeTime)
         {
             it = _particles.erase(it);
             continue;
         }
+
+        int32_t visualAge = (int32_t)((float)f.Age / f.LifetimeScale);
 
         // The acceleration and noise terms were historically applied once per
         // rendered frame, tuned for the vanilla ~60fps frame of ~17 clock units
@@ -78,12 +86,12 @@ void ParticleSystem::UpdateRender(area_arg_65 *rndrParams, int32_t delta)
         // contributes a quarter.
         float frameScale = (float)delta * (60.0f / 1024.0f);
 
-        f.Vec += (f.pParticleGen->_accelStart + f.pParticleGen->_accelDelta * f.Age) * frameScale;
+        f.Vec += (f.pParticleGen->_accelStart + f.pParticleGen->_accelDelta * visualAge) * frameScale;
         f.Pos += f.Vec * fsec + NC_STACK_particle::RandVec() * (f.pParticleGen->_noisePower * frameScale);
-        float baseScale = f.pParticleGen->_scaleStart + f.pParticleGen->_scaleDelta * f.Age;
+        float baseScale = f.pParticleGen->_scaleStart + f.pParticleGen->_scaleDelta * visualAge;
         vec3d scl(baseScale * f.Scale.x, baseScale * f.Scale.y, baseScale * f.Scale.z);
 
-        Render(&f, scl, rndrParams);
+        Render(&f, scl, rndrParams, visualAge);
 
         it++;
     }
@@ -92,7 +100,7 @@ void ParticleSystem::UpdateRender(area_arg_65 *rndrParams, int32_t delta)
 }
 
 
-void ParticleSystem::Render(Frak *p, const vec3d &scale, area_arg_65 *rndrParams)
+void ParticleSystem::Render(Frak *p, const vec3d &scale, area_arg_65 *rndrParams, int32_t visualAge)
 {
     TF::TForm3D *view = rndrParams->ViewTForm;
 
@@ -122,7 +130,7 @@ void ParticleSystem::Render(Frak *p, const vec3d &scale, area_arg_65 *rndrParams
 
     if ( p->pParticleGen->_lifePerAde )
     {
-        size_t id = p->Age / p->pParticleGen->_lifePerAde;
+        size_t id = visualAge / p->pParticleGen->_lifePerAde;
 
         if (id == p->pParticleGen->_meshCache.size()) // fix little overlap
             id = p->pParticleGen->_meshCache.size() - 1;
@@ -155,7 +163,7 @@ void ParticleSystem::Render(Frak *p, const vec3d &scale, area_arg_65 *rndrParams
 
             rend.Mesh = &mesh;
 
-            mat4x4 particleForm(ParticleSystem_BuildSpinMatrix(p->Spin, p->Age) * mat3x3::Scale(scale));
+            mat4x4 particleForm(ParticleSystem_BuildSpinMatrix(p->Spin, visualAge) * mat3x3::Scale(scale));
             particleForm.m03 = pos.x;
             particleForm.m13 = pos.y;
             particleForm.m23 = pos.z;

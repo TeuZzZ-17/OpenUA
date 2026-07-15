@@ -3529,20 +3529,26 @@ void NC_STACK_ypabact::Render(baseRender_msg *arg)
         if ( missileMain )
         {
             arg->particleTint = tintToGL(_vp_trail_tint);
-            arg->particleScale = _vp_trail_scale;
+            // Trail X/Y keep scaling each flat particle. Z is deliberately
+            // repurposed as a lifetime multiplier so values below 1.0 shorten
+            // the visible trail while 1.0 (or an absent key) stays vanilla.
+            arg->particleScale = vec3d(_vp_trail_scale.x, _vp_trail_scale.y, 1.0f);
             arg->particleSpin = _vp_trail_spin_speed;
+            arg->particleLifetimeScale = _vp_trail_scale.z;
         }
         else if ( mainBase )
         {
             arg->particleTint = arg->tint;
             arg->particleScale = shouldApplyVPScale(base) ? _vp_scale : vec3d(1.0, 1.0, 1.0);
             arg->particleSpin = ypabact_ShouldApplyVPSpin(this, base) ? _vp_spin_speed : vec3d(0.0, 0.0, 0.0);
+            arg->particleLifetimeScale = 1.0f;
         }
         else
         {
             arg->particleTint = GFX::TGLColor(1.0, 1.0, 1.0, 1.0);
             arg->particleScale = vec3d(1.0, 1.0, 1.0);
             arg->particleSpin = vec3d(0.0, 0.0, 0.0);
+            arg->particleLifetimeScale = 1.0f;
         }
     };
 
@@ -3575,12 +3581,14 @@ void NC_STACK_ypabact::Render(baseRender_msg *arg)
                 GFX::TGLColor oldParticleTint = arg->particleTint;
                 vec3d oldParticleScale = arg->particleScale;
                 vec3d oldParticleSpin = arg->particleSpin;
+                float oldParticleLifetimeScale = arg->particleLifetimeScale;
                 applyRenderControls(_current_vp->Bas);
                 _current_vp->Bas->Render(arg, _current_vp);
                 arg->tint = oldTint;
                 arg->particleTint = oldParticleTint;
                 arg->particleScale = oldParticleScale;
                 arg->particleSpin = oldParticleSpin;
+                arg->particleLifetimeScale = oldParticleLifetimeScale;
             }
         }
     }
@@ -3616,12 +3624,14 @@ void NC_STACK_ypabact::Render(baseRender_msg *arg)
                 GFX::TGLColor oldParticleTint = arg->particleTint;
                 vec3d oldParticleScale = arg->particleScale;
                 vec3d oldParticleSpin = arg->particleSpin;
+                float oldParticleLifetimeScale = arg->particleLifetimeScale;
                 applyRenderControls(bd->vp->Bas);
                 bd->vp->Bas->Render(arg, bd->vp);
                 arg->tint = oldTint;
                 arg->particleTint = oldParticleTint;
                 arg->particleScale = oldParticleScale;
                 arg->particleSpin = oldParticleSpin;
+                arg->particleLifetimeScale = oldParticleLifetimeScale;
             }
         }
     }

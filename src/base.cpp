@@ -508,6 +508,7 @@ size_t NC_STACK_base::Render(baseRender_msg *arg, Instance * inst, bool doCopy /
         _renderMsg.tint = arg->particleTint;
         _renderMsg.particleScale = arg->particleScale;
         _renderMsg.particleSpin = arg->particleSpin;
+        _renderMsg.particleLifetimeScale = arg->particleLifetimeScale;
 
         if (!inst)
             isVisible = _skeleton->skeleton_func132(&skel132);
@@ -620,6 +621,7 @@ size_t NC_STACK_base::RenderImmediately(baseRender_msg *arg, Instance * inst)
         _renderMsg.tint = arg->particleTint;
         _renderMsg.particleScale = arg->particleScale;
         _renderMsg.particleSpin = arg->particleSpin;
+        _renderMsg.particleLifetimeScale = arg->particleLifetimeScale;
 
         float distance = skel132.tform.Transform( _transform.Pos ).length();
 
