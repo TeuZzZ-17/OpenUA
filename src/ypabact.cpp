@@ -1614,6 +1614,15 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _weapon_spread_y_user_set = false;
     _num_weapons = 0;
     _weapon_time = 0;
+    _fire_x_mode = World::TVhclProto::FIRE_X_MODE_VANILLA;
+    _fire_x_start = 0.0;
+    _fire_x_step = 0.0;
+    _fire_x_slots = 0;
+    _fire_x_advanced = false;
+    _fire_x_slot_index = 0;
+    _fire_x_random_seeded = false;
+    _fire_x_random_state = 0;
+    _fire_x_random_order.clear();
     _gun_angle = 0.0;
     _gun_angle_user = 0.0;
     _gun_leftright = 0.0;
@@ -1801,6 +1810,10 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _damaged_snd_pitch_mult = 1.0;
     _damaged_fx_active = false;
     _active_debuff.Clear();
+    _fire_x_slot_index = 0;
+    _fire_x_random_seeded = false;
+    _fire_x_random_state = 0;
+    _fire_x_random_order.clear();
     _debuff_soundcarrier.Clear();
     _damaged_shake_carrier.Clear();
     _mgun_soundcarrier.Clear();
@@ -2025,6 +2038,15 @@ size_t NC_STACK_ypabact::Deinit()
     SFXEngine::SFXe.StopCarrier(&_mgun_soundcarrier);
     SFXEngine::SFXe.StopCarrier(&_mimic_soundcarrier);
     _active_debuff.Clear();
+    _fire_x_mode = World::TVhclProto::FIRE_X_MODE_VANILLA;
+    _fire_x_start = 0.0;
+    _fire_x_step = 0.0;
+    _fire_x_slots = 0;
+    _fire_x_advanced = false;
+    _fire_x_slot_index = 0;
+    _fire_x_random_seeded = false;
+    _fire_x_random_state = 0;
+    _fire_x_random_order.clear();
 
     _status_flg |= BACT_STFLAG_CLEAN;
 
@@ -3159,7 +3181,10 @@ static void ypabact_SpawnDecorationFXEvent(NC_STACK_ypabact *bact)
                                         true,
                                         bact->_decoration_fx.vp_tint,
                                         bact->_decoration_fx.vp_scale,
-                                        bact->_decoration_fx.vp_spin);
+                                        bact->_decoration_fx.vp_spin,
+                                        false,
+                                        vec3d(0.0, 0.0, 0.0),
+                                        true);
     }
 }
 
@@ -3217,7 +3242,10 @@ void NC_STACK_ypabact::UpdateDecorationFX(update_msg *)
                                                  true,
                                                  _decoration_fx.vp_tint,
                                                  _decoration_fx.vp_scale,
-                                                 _decoration_fx.vp_spin);
+                                                 _decoration_fx.vp_spin,
+                                                 false,
+                                                 vec3d(0.0, 0.0, 0.0),
+                                                 true);
         }
 
         return;
@@ -10011,6 +10039,114 @@ void NC_STACK_ypabact::UpdateSeekAndExplode(update_msg *)
     _invulnerable = wasInvulnerable;
 }
 
+static void ypabact_EnsureFireXRandomSeeded(NC_STACK_ypabact *unit)
+{
+    if ( !unit || unit->_fire_x_random_seeded )
+        return;
+
+    uint32_t seed = unit->_gid ^ ((uint32_t)unit->_vehicleID * 2654435761u) ^ 0xA341316Cu;
+    unit->_fire_x_random_state = seed ? seed : 0xC8013EA4u;
+    unit->_fire_x_random_seeded = true;
+}
+
+static uint32_t ypabact_PeekFireXRandom(NC_STACK_ypabact *unit)
+{
+    ypabact_EnsureFireXRandomSeeded(unit);
+    return unit->_fire_x_random_state * 1664525u + 1013904223u;
+}
+
+static uint32_t ypabact_NextFireXRandom(NC_STACK_ypabact *unit)
+{
+    unit->_fire_x_random_state = ypabact_PeekFireXRandom(unit);
+    return unit->_fire_x_random_state;
+}
+
+static void ypabact_BuildFireXRandomOrder(NC_STACK_ypabact *unit)
+{
+    if ( !unit || unit->_fire_x_slots <= 0 ||
+         unit->_fire_x_slots > World::TVhclProto::FIRE_X_MAX_SLOTS )
+        return;
+
+    ypabact_EnsureFireXRandomSeeded(unit);
+
+    unit->_fire_x_random_order.resize(unit->_fire_x_slots);
+    for (int i = 0; i < unit->_fire_x_slots; i++)
+        unit->_fire_x_random_order[i] = i;
+
+    for (int i = unit->_fire_x_slots - 1; i > 0; i--)
+    {
+        int j = (int)(ypabact_NextFireXRandom(unit) % (uint32_t)(i + 1));
+        std::swap(unit->_fire_x_random_order[i], unit->_fire_x_random_order[j]);
+    }
+
+    unit->_fire_x_slot_index = 0;
+}
+
+static float ypabact_GetProjectileFireX(NC_STACK_ypabact *unit, float vanillaFireX)
+{
+    if ( !unit || unit->_fire_x_mode == World::TVhclProto::FIRE_X_MODE_VANILLA )
+        return vanillaFireX;
+
+    if ( !unit->_fire_x_advanced )
+    {
+        if ( unit->_fire_x_mode == World::TVhclProto::FIRE_X_MODE_SEQUENCE )
+            return (unit->_fire_x_slot_index & 1) ? unit->_fire_pos.x : -unit->_fire_pos.x;
+
+        if ( unit->_fire_x_mode == World::TVhclProto::FIRE_X_MODE_RANDOM )
+        {
+            // Use a high PRNG bit: the low bit of this LCG alternates every call.
+            uint32_t nextRandom = ypabact_PeekFireXRandom(unit);
+            return (nextRandom & 0x80000000u) ? unit->_fire_pos.x : -unit->_fire_pos.x;
+        }
+
+        return vanillaFireX;
+    }
+
+    if ( unit->_fire_x_slots <= 0 ||
+         unit->_fire_x_slots > World::TVhclProto::FIRE_X_MAX_SLOTS )
+        return vanillaFireX;
+
+    int slot = unit->_fire_x_slot_index;
+    if ( unit->_fire_x_mode == World::TVhclProto::FIRE_X_MODE_RANDOM )
+    {
+        if ( unit->_fire_x_random_order.size() != (size_t)unit->_fire_x_slots ||
+             slot < 0 || slot >= unit->_fire_x_slots )
+            ypabact_BuildFireXRandomOrder(unit);
+
+        slot = unit->_fire_x_random_order[unit->_fire_x_slot_index];
+    }
+
+    return unit->_fire_x_start + (float)slot * unit->_fire_x_step;
+}
+
+static void ypabact_ConsumeProjectileFireX(NC_STACK_ypabact *unit)
+{
+    if ( !unit || unit->_fire_x_mode == World::TVhclProto::FIRE_X_MODE_VANILLA )
+        return;
+
+    if ( !unit->_fire_x_advanced )
+    {
+        if ( unit->_fire_x_mode == World::TVhclProto::FIRE_X_MODE_SEQUENCE )
+            unit->_fire_x_slot_index = (unit->_fire_x_slot_index + 1) & 1;
+        else if ( unit->_fire_x_mode == World::TVhclProto::FIRE_X_MODE_RANDOM )
+            ypabact_NextFireXRandom(unit);
+        return;
+    }
+
+    if ( unit->_fire_x_slots <= 0 ||
+         unit->_fire_x_slots > World::TVhclProto::FIRE_X_MAX_SLOTS )
+        return;
+
+    unit->_fire_x_slot_index++;
+    if ( unit->_fire_x_slot_index >= unit->_fire_x_slots )
+    {
+        if ( unit->_fire_x_mode == World::TVhclProto::FIRE_X_MODE_RANDOM )
+            ypabact_BuildFireXRandomOrder(unit);
+        else
+            unit->_fire_x_slot_index = 0;
+    }
+}
+
 size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
 {
     if ( _world && _world->IsSpectatorBact(this) )
@@ -10180,6 +10316,8 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
             v37 = (i * 2) * v14 / (v13 - 1) - v14;
         }
 
+        v37 = ypabact_GetProjectileFireX(this, v37);
+
         ypaworld_arg146 arg147;
         arg147.vehicle_id = selectedWeapon;
         arg147.pos = _position + _rotation.Transpose().Transform( vec3d(v37, arg->start_point.y, arg->start_point.z) );
@@ -10188,6 +10326,8 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
 
         if ( !wobj )
             return 0;
+
+        ypabact_ConsumeProjectileFireX(this);
 
         wobj->SetLauncherBact(this);
 

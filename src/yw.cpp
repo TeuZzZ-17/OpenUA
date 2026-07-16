@@ -2686,6 +2686,11 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_fire_pos.x = vhcl.fire_x;
         bacto->_fire_pos.y = vhcl.fire_y;
         bacto->_fire_pos.z = vhcl.fire_z;
+        bacto->_fire_x_mode = vhcl.fire_x_mode;
+        bacto->_fire_x_start = vhcl.fire_x_start;
+        bacto->_fire_x_step = vhcl.fire_x_step;
+        bacto->_fire_x_slots = vhcl.fire_x_slots;
+        bacto->_fire_x_advanced = vhcl.fire_x_advanced;
         bacto->_cockpit_camera_enable = vhcl.cockpit_camera_enable;
         bacto->_cockpit_camera_offset = vhcl.cockpit_camera_offset;
         bacto->_mgun_pov_fx_enable = vhcl.mgun_pov_fx_enable;

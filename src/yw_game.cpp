@@ -2585,7 +2585,7 @@ void NC_STACK_ypaworld::UpdateDecorationFX(const World::TDecorationFXConfig &con
                                    config.vp_spin);
 }
 
-int32_t NC_STACK_ypaworld::SpawnAttachedTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime, float scale, bool useOwnerTransform, const World::TVisualTint &tint, const vec3d &axisScale, const vec3d &spin, bool playerFirstPersonOnly, const vec3d &localRotation)
+int32_t NC_STACK_ypaworld::SpawnAttachedTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime, float scale, bool useOwnerTransform, const World::TVisualTint &tint, const vec3d &axisScale, const vec3d &spin, bool playerFirstPersonOnly, const vec3d &localRotation, bool hideInOwnerMissileCamera)
 {
     if ( !owner || modelId <= 0 || modelId >= (int32_t)_vhclModels.size() )
         return 0;
@@ -2608,6 +2608,7 @@ int32_t NC_STACK_ypaworld::SpawnAttachedTransientVP(int32_t modelId, NC_STACK_yp
     fx.followUseOwnerTransform = useOwnerTransform;
     fx.playerFirstPersonOnly = playerFirstPersonOnly;
     fx.localRotation = localRotation;
+    fx.hideInOwnerMissileCamera = hideInOwnerMissileCamera;
     fx.scale = scale > 0.0 ? scale : 1.0;
     fx.axisScale = vec3d(axisScale.x > 0.0f ? axisScale.x : 1.0f,
                          axisScale.y > 0.0f ? axisScale.y : 1.0f,
@@ -3184,6 +3185,15 @@ static void yw_RenderTransientVPs(NC_STACK_ypaworld *world, std::list<NC_STACK_y
             }
 
             if ( it->playerFirstPersonOnly && (!owner->IsPlayerFirstPersonCameraActive() || world->_viewerBact != owner) )
+            {
+                it->age += arg->frameTime;
+                ++it;
+                continue;
+            }
+
+            if ( it->hideInOwnerMissileCamera &&
+                 owner->_bact_type == BACT_TYPES_MISSLE &&
+                 world->_viewerBact == owner )
             {
                 it->age += arg->frameTime;
                 ++it;

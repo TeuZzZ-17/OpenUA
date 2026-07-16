@@ -10,6 +10,8 @@
 #include "../system/inivals.h"
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
 
 namespace World
 {
@@ -1150,6 +1152,37 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
 
     if ( !StriCmp(p1, "end") )
     {
+        bool fireXAdvancedAuthored = _vhcl->fire_x_start_defined ||
+                                     _vhcl->fire_x_step_defined ||
+                                     _vhcl->fire_x_slots_defined;
+        bool fireXSlotsValid = _vhcl->fire_x_slots_defined &&
+                               _vhcl->fire_x_slots > 0 &&
+                               _vhcl->fire_x_slots <= TVhclProto::FIRE_X_MAX_SLOTS;
+        bool fireXAdvancedValid = _vhcl->fire_x_start_defined &&
+                                  _vhcl->fire_x_step_defined &&
+                                  fireXSlotsValid &&
+                                  std::isfinite(_vhcl->fire_x_start) &&
+                                  std::isfinite(_vhcl->fire_x_step);
+
+        if ( fireXAdvancedValid )
+        {
+            double fireXLast = (double)_vhcl->fire_x_start +
+                               (double)(_vhcl->fire_x_slots - 1) * (double)_vhcl->fire_x_step;
+            fireXAdvancedValid = std::isfinite(fireXLast) &&
+                                 std::abs(fireXLast) <= (double)std::numeric_limits<float>::max();
+        }
+
+        if ( _vhcl->fire_x_mode != TVhclProto::FIRE_X_MODE_VANILLA )
+        {
+            _vhcl->fire_x_advanced = fireXAdvancedValid;
+
+            if ( fireXAdvancedAuthored && !fireXAdvancedValid )
+            {
+                ypa_log_out("WARNING: vehicle %d fire_x advanced rack ignored; require finite fire_x_start/fire_x_step, a finite final slot, and fire_x_slots in range 1-%d. Falling back to simple fire_x mode.\n",
+                            _vhclID, TVhclProto::FIRE_X_MAX_SLOTS);
+            }
+        }
+
         if ( _vhcl->model_id == BACT_TYPES_ROBO )
         {
             if (!_vhcl->RoboProto)
@@ -1920,6 +1953,48 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     else if ( !StriCmp(p1, "fire_z") )
     {
         _vhcl->fire_z = parser.stof(p2, 0);
+    }
+    else if ( !StriCmp(p1, "fire_x_mode") )
+    {
+        if ( !StriCmp(p2, "sequence") )
+            _vhcl->fire_x_mode = TVhclProto::FIRE_X_MODE_SEQUENCE;
+        else if ( !StriCmp(p2, "random") )
+            _vhcl->fire_x_mode = TVhclProto::FIRE_X_MODE_RANDOM;
+        else
+        {
+            _vhcl->fire_x_mode = TVhclProto::FIRE_X_MODE_VANILLA;
+            ypa_log_out("WARNING: vehicle %d unknown fire_x_mode '%s'; vanilla fire_x selection used.\n",
+                        _vhclID, p2.c_str());
+        }
+    }
+    else if ( !StriCmp(p1, "fire_x_start") )
+    {
+        size_t parsed = 0;
+        float value = parser.stof(p2, &parsed);
+        _vhcl->fire_x_start = (parsed == p2.size() && std::isfinite(value))
+                            ? value
+                            : std::numeric_limits<float>::quiet_NaN();
+        _vhcl->fire_x_start_defined = true;
+    }
+    else if ( !StriCmp(p1, "fire_x_step") )
+    {
+        size_t parsed = 0;
+        float value = parser.stof(p2, &parsed);
+        _vhcl->fire_x_step = (parsed == p2.size() && std::isfinite(value))
+                           ? value
+                           : std::numeric_limits<float>::quiet_NaN();
+        _vhcl->fire_x_step_defined = true;
+    }
+    else if ( !StriCmp(p1, "fire_x_slots") )
+    {
+        size_t parsed = 0;
+        long value = parser.stol(p2, &parsed, 0);
+        _vhcl->fire_x_slots = (parsed == p2.size() &&
+                               value >= std::numeric_limits<int>::min() &&
+                               value <= std::numeric_limits<int>::max())
+                              ? (int)value
+                              : 0;
+        _vhcl->fire_x_slots_defined = true;
     }
     else if ( !StriCmp(p1, "cockpit_camera_enable") )
     {

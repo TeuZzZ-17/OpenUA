@@ -921,6 +921,15 @@ public:
     World::MissileList _missiles_list;
     int _weapon_time;
     vec3d _fire_pos;
+    int8_t _fire_x_mode;
+    float _fire_x_start;
+    float _fire_x_step;
+    int _fire_x_slots;
+    bool _fire_x_advanced;
+    int _fire_x_slot_index;
+    bool _fire_x_random_seeded;
+    uint32_t _fire_x_random_state;
+    std::vector<int> _fire_x_random_order;
     float _gun_angle;
     float _gun_angle_user;
     float _gun_leftright;

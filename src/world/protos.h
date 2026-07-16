@@ -330,6 +330,15 @@ struct TUnitDummy
 
 struct TVhclProto
 {
+    enum FireXMode
+    {
+        FIRE_X_MODE_VANILLA = 0,
+        FIRE_X_MODE_SEQUENCE = 1,
+        FIRE_X_MODE_RANDOM = 2
+    };
+
+    enum { FIRE_X_MAX_SLOTS = 256 };
+
     enum
     {
         SND_NORMAL  = 0,
@@ -502,6 +511,14 @@ struct TVhclProto
     float fire_x = 0.0;
     float fire_y = 0.0;
     float fire_z = 0.0;
+    int8_t fire_x_mode = FIRE_X_MODE_VANILLA;
+    float fire_x_start = 0.0;
+    float fire_x_step = 0.0;
+    int fire_x_slots = 0;
+    bool fire_x_start_defined = false;
+    bool fire_x_step_defined = false;
+    bool fire_x_slots_defined = false;
+    bool fire_x_advanced = false;
     int16_t num_weapons = 0;
     float gun_power = 0.0;
     float gun_radius = 0.0;
