@@ -518,6 +518,12 @@ struct TVhclProto
     int8_t job_fightrobo = 0;
     int8_t job_conquer = 0;
     int8_t job_reconnoitre = 0;
+    bool job_fighttank_defined = false;
+    bool job_fighthelicopter_defined = false;
+    bool job_fightflyer_defined = false;
+    bool job_fightrobo_defined = false;
+    bool job_conquer_defined = false;
+    bool job_reconnoitre_defined = false;
     NC_STACK_skeleton *wireframe = NULL;
     NC_STACK_skeleton *hud_wireframe = NULL;
     NC_STACK_skeleton *mg_wireframe = NULL;
@@ -635,6 +641,7 @@ struct TWeapProto
     int16_t vp_megadeth = 0;
     int16_t vp_genesis = 0;
     int16_t vp_launch = 0;
+    vec3d vp_launch_scale = vec3d(1.0, 1.0, 1.0);
     vec3d vp_scale = vec3d(1.0, 1.0, 1.0);
     vec3d vp_orientation = vec3d(0.0, 0.0, 0.0);
     vec3d vp_spin = vec3d(0.0, 0.0, 0.0);
@@ -695,6 +702,10 @@ struct TWeapProto
     float energy_tank = 0.0;
     float energy_flyer = 0.0;
     float energy_robo = 0.0;
+    bool energy_heli_defined = false;
+    bool energy_tank_defined = false;
+    bool energy_flyer_defined = false;
+    bool energy_robo_defined = false;
     // Legacy/deprecated: parsed for old SCR compatibility, ignored for gameplay.
     // Projectile collision uses generic radius or automatic compound spheres.
     float radius_heli = 0.0;

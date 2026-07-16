@@ -567,7 +567,8 @@ bool NC_STACK_ypamissile::TryClusterSplit()
         child->_rotation.SetY(child->_rotation.AxisZ() * child->_rotation.AxisX());
 
         if ( childProto.vp_launch > 0 )
-            _world->SpawnTransientVP(childProto.vp_launch, child->_position, child->_rotation, 1000);
+            _world->SpawnTransientVP(childProto.vp_launch, child->_position, child->_rotation, 1000,
+                                     1.0, World::TVisualTint(), childProto.vp_launch_scale);
 
         child->_kidRef.Detach();
         child->_parent = NULL;
@@ -838,7 +839,8 @@ bool NC_STACK_ypamissile::SpawnChainProjectile(const vec3d &originPos, float ori
     child->_rotation.SetY(child->_rotation.AxisZ() * child->_rotation.AxisX());
 
     if ( wproto.vp_launch > 0 )
-        _world->SpawnTransientVP(wproto.vp_launch, child->_position, child->_rotation, 1000);
+        _world->SpawnTransientVP(wproto.vp_launch, child->_position, child->_rotation, 1000,
+                                 1.0, World::TVisualTint(), wproto.vp_launch_scale);
 
     child->_kidRef.Detach();
     child->_parent = NULL;

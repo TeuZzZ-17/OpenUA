@@ -7967,7 +7967,8 @@ static bool ypabact_FireMortarShell(NC_STACK_ypabact *unit, int weaponId, const 
     unit->_missiles_list.push_back(shell);
 
     if ( wproto.vp_launch > 0 )
-        world->SpawnTransientVP(wproto.vp_launch, shell->_position, shell->_rotation, 1000);
+        world->SpawnTransientVP(wproto.vp_launch, shell->_position, shell->_rotation, 1000,
+                                1.0, World::TVisualTint(), wproto.vp_launch_scale);
 
     SFXEngine::SFXe.startSound(&shell->_soundcarrier, 1);
 
@@ -9270,7 +9271,8 @@ void NC_STACK_ypabact::UpdateLaser(update_msg *arg)
         }
 
         if ( !beamWasActive && wproto.vp_launch > 0 )
-            _world->SpawnTransientVP(wproto.vp_launch, beam.start, ypabact_LaserRotationFromDir(dir, _rotation), 90);
+            _world->SpawnTransientVP(wproto.vp_launch, beam.start, ypabact_LaserRotationFromDir(dir, _rotation), 90,
+                                     1.0, World::TVisualTint(), wproto.vp_launch_scale);
 
         if ( spawnBeamVPs )
             ypabact_SpawnLaserBeamVPs(this, wproto, beam.start, beam.end);
@@ -9597,7 +9599,8 @@ static NC_STACK_ypabact *ypabact_UpdateVerticalLaserBeam(NC_STACK_ypabact *shoot
 
     if ( !beamWasActive && wproto.vp_launch > 0 )
         world->SpawnTransientVP(wproto.vp_launch, beam.start,
-                                ypabact_LaserRotationFromDir(down, shooter->_rotation), 90);
+                                ypabact_LaserRotationFromDir(down, shooter->_rotation), 90,
+                                1.0, World::TVisualTint(), wproto.vp_launch_scale);
 
     if ( spawnBeamVPs )
         ypabact_SpawnLaserBeamVPs(shooter, wproto, beam.start, beam.end);
@@ -10263,7 +10266,8 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
         }
 
         if ( wproto.vp_launch > 0 )
-            _world->SpawnTransientVP(wproto.vp_launch, wobj->_position, wobj->_rotation, 1000);
+            _world->SpawnTransientVP(wproto.vp_launch, wobj->_position, wobj->_rotation, 1000,
+                                     1.0, World::TVisualTint(), wproto.vp_launch_scale);
 
         /** Missiles will be stored in another list
          *  so kidref will be not attached to anything.

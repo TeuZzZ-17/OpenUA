@@ -2003,26 +2003,32 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     else if ( !StriCmp(p1, "job_fighthelicopter") )
     {
         _vhcl->job_fighthelicopter = parser.stoi(p2);
+        _vhcl->job_fighthelicopter_defined = true;
     }
     else if ( !StriCmp(p1, "job_fightflyer") )
     {
         _vhcl->job_fightflyer = parser.stoi(p2);
+        _vhcl->job_fightflyer_defined = true;
     }
     else if ( !StriCmp(p1, "job_fighttank") )
     {
         _vhcl->job_fighttank = parser.stoi(p2);
+        _vhcl->job_fighttank_defined = true;
     }
     else if ( !StriCmp(p1, "job_fightrobo") )
     {
         _vhcl->job_fightrobo = parser.stoi(p2);
+        _vhcl->job_fightrobo_defined = true;
     }
     else if ( !StriCmp(p1, "job_reconnoitre") )
     {
         _vhcl->job_reconnoitre = parser.stoi(p2);
+        _vhcl->job_reconnoitre_defined = true;
     }
     else if ( !StriCmp(p1, "job_conquer") )
     {
         _vhcl->job_conquer = parser.stoi(p2);
+        _vhcl->job_conquer_defined = true;
     }
     else if ( !StriCmp(p1, "gun_side_angle") )
     {
@@ -2763,6 +2769,7 @@ bool WeaponProtoParser::IsScope(ScriptParser::Parser &parser, const std::string 
         _wpn->vp_dead = 4;
         _wpn->vp_genesis = 5;
         _wpn->vp_launch = 0;
+        _wpn->vp_launch_scale = vec3d(1.0, 1.0, 1.0);
         _wpn->vp_scale = vec3d(1.0, 1.0, 1.0);
         _wpn->vp_orientation = vec3d(0.0, 0.0, 0.0);
         _wpn->vp_spin = vec3d(0.0, 0.0, 0.0);
@@ -3017,18 +3024,22 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     else if ( !StriCmp(p1, "energy_heli") )
     {
         _wpn->energy_heli = parser.stof(p2, 0);
+        _wpn->energy_heli_defined = true;
     }
     else if ( !StriCmp(p1, "energy_tank") )
     {
         _wpn->energy_tank = parser.stof(p2, 0);
+        _wpn->energy_tank_defined = true;
     }
     else if ( !StriCmp(p1, "energy_flyer") )
     {
         _wpn->energy_flyer = parser.stof(p2, 0);
+        _wpn->energy_flyer_defined = true;
     }
     else if ( !StriCmp(p1, "energy_robo") )
     {
         _wpn->energy_robo = parser.stof(p2, 0);
+        _wpn->energy_robo_defined = true;
     }
     else if ( !StriCmp(p1, "mass") )
     {
@@ -3396,6 +3407,11 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     else if ( !StriCmp(p1, "vp_launch") )
     {
         _wpn->vp_launch = parser.stol(p2, NULL, 0);
+    }
+    else if ( !StriCmp(p1, "vp_launch_scale") )
+    {
+        float scale = ParseVPScaleValue(parser, p2);
+        _wpn->vp_launch_scale = vec3d(scale, scale, scale);
     }
     else if ( ParseVPScaleParam(parser, "vp", p1, p2, _wpn->vp_scale) )
     {

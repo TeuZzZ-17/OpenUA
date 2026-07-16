@@ -3028,9 +3028,28 @@ static std::string db_vehicle_job_stars(int value)
 
 static bool db_vehicle_has_job_stats(const World::TVhclProto &p)
 {
-    return p.job_fightrobo > 0 || p.job_fighttank > 0 ||
-           p.job_fightflyer > 0 || p.job_fighthelicopter > 0 ||
-           p.job_conquer > 0 || p.job_reconnoitre > 0;
+    return p.job_fightrobo_defined || p.job_fighttank_defined ||
+           p.job_fightflyer_defined || p.job_fighthelicopter_defined ||
+           p.job_conquer_defined || p.job_reconnoitre_defined;
+}
+
+static std::string db_compact_pair_line(const std::string &leftLabel,
+                                        const std::string &leftValue,
+                                        bool hasLeft,
+                                        const std::string &rightLabel,
+                                        const std::string &rightValue,
+                                        bool hasRight)
+{
+    std::string line;
+    if ( hasLeft )
+        line = leftLabel + ": " + leftValue;
+    if ( hasRight )
+    {
+        if ( !line.empty() )
+            line += "  ";
+        line += rightLabel + ": " + rightValue;
+    }
+    return db_trunc(line, 30);
 }
 
 static void db_add_vehicle_job_lines(std::vector<std::string> *lines,
@@ -3040,19 +3059,70 @@ static void db_add_vehicle_job_lines(std::vector<std::string> *lines,
     if ( !lines || !db_vehicle_has_job_stats(p) )
         return;
 
-    const std::string hostStars = db_vehicle_job_stars(p.job_fightrobo);
-    const std::string tankStars = db_vehicle_job_stars(p.job_fighttank);
-    const std::string planeStars = db_vehicle_job_stars(p.job_fightflyer);
-    const std::string heliStars = db_vehicle_job_stars(p.job_fighthelicopter);
-    const std::string conquerStars = db_vehicle_job_stars(p.job_conquer);
-    const std::string reconStars = db_vehicle_job_stars(p.job_reconnoitre);
+    if ( (p.job_fightrobo_defined || p.job_fighttank_defined) &&
+         (int)lines->size() < maxLines )
+    {
+        lines->push_back(db_compact_pair_line(
+            "Vs Host", db_vehicle_job_stars(p.job_fightrobo), p.job_fightrobo_defined,
+            "Tanks", db_vehicle_job_stars(p.job_fighttank), p.job_fighttank_defined));
+    }
+    if ( (p.job_fightflyer_defined || p.job_fighthelicopter_defined) &&
+         (int)lines->size() < maxLines )
+    {
+        lines->push_back(db_compact_pair_line(
+            "Vs Planes", db_vehicle_job_stars(p.job_fightflyer), p.job_fightflyer_defined,
+            "Helis", db_vehicle_job_stars(p.job_fighthelicopter), p.job_fighthelicopter_defined));
+    }
+    if ( (p.job_conquer_defined || p.job_reconnoitre_defined) &&
+         (int)lines->size() < maxLines )
+    {
+        lines->push_back(db_compact_pair_line(
+            "Conquer", db_vehicle_job_stars(p.job_conquer), p.job_conquer_defined,
+            "Recon", db_vehicle_job_stars(p.job_reconnoitre), p.job_reconnoitre_defined));
+    }
+}
 
-    if ( (int)lines->size() < maxLines )
-        lines->push_back(db_trunc("Vs Host: " + hostStars + "  Tanks: " + tankStars, 30));
-    if ( (int)lines->size() < maxLines )
-        lines->push_back(db_trunc("Vs Planes: " + planeStars + " Helis: " + heliStars, 30));
-    if ( (int)lines->size() < maxLines )
-        lines->push_back(db_trunc("Conquer: " + conquerStars + "  Recon: " + reconStars, 30));
+static bool db_weapon_has_energy_multipliers(const World::TWeapProto &p)
+{
+    return p.energy_robo_defined || p.energy_tank_defined ||
+           p.energy_flyer_defined || p.energy_heli_defined;
+}
+
+static std::string db_weapon_energy_stars(float value)
+{
+    if ( value <= 0.0f )
+        return "-";
+
+    // Weapon class multipliers are commonly authored in 0.5 steps:
+    // 0.5 = one marker, 1.0 = two markers, 1.5 = three markers.
+    int stars = (int)(value * 2.0f + 0.5f);
+    if ( stars < 1 )
+        stars = 1;
+
+    return std::string((size_t)stars, '*');
+}
+
+static void db_add_weapon_energy_lines(std::vector<std::string> *lines,
+                                       int maxLines,
+                                       const World::TWeapProto &p)
+{
+    if ( !lines || !db_weapon_has_energy_multipliers(p) )
+        return;
+
+    if ( (p.energy_robo_defined || p.energy_tank_defined) &&
+         (int)lines->size() < maxLines )
+    {
+        lines->push_back(db_compact_pair_line(
+            "Vs Host", db_weapon_energy_stars(p.energy_robo), p.energy_robo_defined,
+            "Tanks", db_weapon_energy_stars(p.energy_tank), p.energy_tank_defined));
+    }
+    if ( (p.energy_flyer_defined || p.energy_heli_defined) &&
+         (int)lines->size() < maxLines )
+    {
+        lines->push_back(db_compact_pair_line(
+            "Vs Planes", db_weapon_energy_stars(p.energy_flyer), p.energy_flyer_defined,
+            "Helis", db_weapon_energy_stars(p.energy_heli), p.energy_heli_defined));
+    }
 }
 
 static void db_add_speciality_lines(std::vector<std::string> *lines,
@@ -3797,6 +3867,7 @@ void UserData::PopulateDetailPane()
         statLines.push_back(p.recoil > 0.0 ?
                             "Weapon Recoil: " + db_float_display(p.recoil) :
                             "Weapon Recoil: None");
+        db_add_weapon_energy_lines(&statLines, DB_STATS_LINES, p);
         db_add_speciality_lines(&statLines, DB_STATS_LINES, db_weapon_specialties(p));
     }
     else
