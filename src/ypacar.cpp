@@ -304,7 +304,7 @@ void NC_STACK_ypacar::User_layer(update_msg *arg)
 {
     _airconst = _airconst_static;
 
-    UpdateHandBrakeInput(arg->inpt->Buttons.Is(3));
+    UpdateHandBrakeInput(arg->inpt->HandBrakePressed);
 
     int a4 = getBACT_bactCollisions();
 

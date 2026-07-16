@@ -89,6 +89,7 @@ struct TInputState
 
     std::array<float, 32> Sliders = Common::ArrayInit<float, 32>(0.0);
     Common::BitMan<32> Buttons;
+    bool HandBrakePressed = false; // OpenUA: explicit brake input before synthetic joystick auto-brake
     TClickBoxInf ClickInf;
 };
 

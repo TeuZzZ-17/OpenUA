@@ -90,15 +90,21 @@ static bool ParseAttachedFXPositionMode(const std::string &value, TAttachedFXPos
     if ( !mode )
         return false;
 
-    if ( !StriCmp(value, "surface") )
+    if ( !StriCmp(value, "center") )
     {
-        *mode = ATTACHED_FX_POSITION_SURFACE;
+        *mode = ATTACHED_FX_POSITION_CENTER;
         return true;
     }
 
     if ( !StriCmp(value, "everywhere") )
     {
         *mode = ATTACHED_FX_POSITION_EVERYWHERE;
+        return true;
+    }
+
+    if ( !StriCmp(value, "near-center") )
+    {
+        *mode = ATTACHED_FX_POSITION_NEAR_CENTER;
         return true;
     }
 
@@ -1461,10 +1467,10 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     {
         _vhcl->damaged_fx.interval_max = parser.stol(p2, NULL, 0);
     }
-    else if ( !StriCmp(p1, "damaged_fx_random_position_mode") )
+    else if ( !StriCmp(p1, "damaged_fx_position_mode") )
     {
         if ( !ParseAttachedFXPositionMode(p2, &_vhcl->damaged_fx.position_mode) )
-            ypa_log_out("WARNING: vehicle %d unknown damaged_fx_random_position_mode '%s'; legacy centered placement used.\n",
+            ypa_log_out("WARNING: vehicle %d unknown damaged_fx_position_mode '%s'; legacy placement used.\n",
                         _vhclID, p2.c_str());
     }
     else if ( !StriCmp(p1, "damaged_fx_trail_only") )
@@ -3068,10 +3074,10 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
         EnsureDebuffFXSlot(_wpn->debuff.fx_vps, debuffFxSlot);
         _wpn->debuff.fx_vps[debuffFxSlot] = vp > 0 ? vp : 0;
     }
-    else if ( !StriCmp(p1, "debuff_fx_random_position_mode") )
+    else if ( !StriCmp(p1, "debuff_fx_position_mode") )
     {
         if ( !ParseAttachedFXPositionMode(p2, &_wpn->debuff.fx_position_mode) )
-            ypa_log_out("WARNING: unknown debuff_fx_random_position_mode '%s'; legacy centered placement used.\n",
+            ypa_log_out("WARNING: unknown debuff_fx_position_mode '%s'; legacy placement used.\n",
                         p2.c_str());
     }
     else if ( !StriCmp(p1, "debuff_fx_trail_only") )

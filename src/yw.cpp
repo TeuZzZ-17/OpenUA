@@ -491,6 +491,16 @@ bool NC_STACK_ypaworld::SampleAttachedFXLocalPosition(NC_STACK_ypabact *owner,
     if ( !owner || !localPosition || mode == World::ATTACHED_FX_POSITION_LEGACY )
         return false;
 
+    if ( mode == World::ATTACHED_FX_POSITION_CENTER )
+    {
+        *localPosition = vec3d(0.0, 0.0, 0.0);
+        return true;
+    }
+
+    if ( mode != World::ATTACHED_FX_POSITION_EVERYWHERE &&
+         mode != World::ATTACHED_FX_POSITION_NEAR_CENTER )
+        return false;
+
     NC_STACK_base *source = owner->_vp_normal;
     if ( !source ) source = owner->_vp_wait;
     if ( !source ) source = owner->_vp_fire;
@@ -522,37 +532,42 @@ bool NC_STACK_ypaworld::SampleAttachedFXLocalPosition(NC_STACK_ypabact *owner,
         mat3x3 transform = yw_BuildVPRotationMatrix(owner->_vp_orientation);
         transform *= mat3x3::Scale(yw_SafeVPScale(owner->_vp_scale));
         yw_CollectAttachedFXTriangles(source, transform, vec3d(0.0, 0.0, 0.0), cache, &bounds);
-        if ( cache->totalArea > 0.0f )
+        if ( !cache->triangles.empty() )
             yw_BuildAttachedFXVolumeCache(cache, bounds);
     }
 
-    if ( mode == World::ATTACHED_FX_POSITION_EVERYWHERE && !cache->volumePoints.empty() )
+    if ( !cache->volumePoints.empty() )
     {
         size_t index = (size_t)(rand() % (int)cache->volumePoints.size());
         *localPosition = cache->volumePoints[index];
-        return true;
     }
-
-    if ( cache->triangles.empty() || cache->totalArea <= 0.0f )
-        return false;
-
-    float selectedArea = ((float)rand() / ((float)RAND_MAX + 1.0f)) * cache->totalArea;
-    const TAttachedFXTriangle *selected = &cache->triangles.back();
-    for (const TAttachedFXTriangle &triangle : cache->triangles)
+    else
     {
-        if ( selectedArea < triangle.cumulativeArea )
+        if ( cache->triangles.empty() || cache->totalArea <= 0.0f )
+            return false;
+
+        float selectedArea = ((float)rand() / ((float)RAND_MAX + 1.0f)) * cache->totalArea;
+        const TAttachedFXTriangle *selected = &cache->triangles.back();
+        for (const TAttachedFXTriangle &triangle : cache->triangles)
         {
-            selected = &triangle;
-            break;
+            if ( selectedArea < triangle.cumulativeArea )
+            {
+                selected = &triangle;
+                break;
+            }
         }
+
+        float r1 = (float)rand() / ((float)RAND_MAX + 1.0f);
+        float r2 = (float)rand() / ((float)RAND_MAX + 1.0f);
+        float root = sqrt(r1);
+        *localPosition = selected->a * (1.0f - root) +
+                         selected->b * (root * (1.0f - r2)) +
+                         selected->c * (root * r2);
     }
 
-    float r1 = (float)rand() / ((float)RAND_MAX + 1.0f);
-    float r2 = (float)rand() / ((float)RAND_MAX + 1.0f);
-    float root = sqrt(r1);
-    *localPosition = selected->a * (1.0f - root) +
-                     selected->b * (root * (1.0f - r2)) +
-                     selected->c * (root * r2);
+    if ( mode == World::ATTACHED_FX_POSITION_NEAR_CENTER )
+        *localPosition = *localPosition * 0.25f;
+
     return true;
 }
 

@@ -480,7 +480,7 @@ void NC_STACK_ypaufo::AI_layer3(update_msg *arg)
 
 void NC_STACK_ypaufo::User_layer(update_msg *arg)
 {
-    UpdateHandBrakeInput(arg->inpt->Buttons.Is(3));
+    UpdateHandBrakeInput(arg->inpt->HandBrakePressed);
 
     float v88 = arg->frameTime / 1000.0;
 

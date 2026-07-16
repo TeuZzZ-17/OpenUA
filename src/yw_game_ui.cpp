@@ -12763,6 +12763,7 @@ void NC_STACK_ypaworld::ypaworld_func64__sub1(TInputState *inpt)
     TClickBoxInf *winp = &inpt->ClickInf;
 
     inpt->Buttons.UnSet(31);
+    inpt->HandBrakePressed = inpt->Buttons.Is(3);
 
     int v38 = 0;
 
@@ -12841,7 +12842,10 @@ void NC_STACK_ypaworld::ypaworld_func64__sub1(TInputState *inpt)
             inpt->Buttons.Set(0);
 
         if ( winp->flag & TClickBoxInf::FLAG_MM_HOLD )
+        {
             inpt->Buttons.Set(3);
+            inpt->HandBrakePressed = true;
+        }
 
         SetShowingTooltip(Locale::TIP_MOUSECAPTURED);
     }
@@ -13014,7 +13018,10 @@ void NC_STACK_ypaworld::ypaworld_func64__sub1(TInputState *inpt)
             inpt->Buttons.Set(1);
 
         if ( inpt->Buttons.Is(19) )
+        {
             inpt->Buttons.Set(3);
+            inpt->HandBrakePressed = true;
+        }
     }
 }
 

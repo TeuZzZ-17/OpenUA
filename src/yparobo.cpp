@@ -5440,7 +5440,7 @@ void NC_STACK_yparobo::yparobo_func71__sub0(update_msg *arg)
 
 void NC_STACK_yparobo::User_layer(update_msg *arg)
 {
-    UpdateHandBrakeInput(arg->inpt->Buttons.Is(3));
+    UpdateHandBrakeInput(arg->inpt->HandBrakePressed);
 
     int a4 = getBACT_bactCollisions();
 

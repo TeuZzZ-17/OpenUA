@@ -2936,10 +2936,12 @@ void NC_STACK_ypabact::Update(update_msg *arg)
             SFXEngine::SFXe.UpdateSoundCarrier(&_mgun_soundcarrier);
         }
         if ( _mgun_vp_fire_end_time > 0 && _clock >= _mgun_vp_fire_end_time &&
-             !(_status_flg & BACT_STFLAG_FIRE) && _vp_active == 7 && _status == BACT_STATUS_NORMAL )
+             !(_status_flg & BACT_STFLAG_FIRE) && _vp_active == 7 &&
+             (_status == BACT_STATUS_NORMAL || _status == BACT_STATUS_IDLE) )
         {
-            SetVP(_vp_normal);
-            _vp_active = 1;
+            const bool idle = _status == BACT_STATUS_IDLE;
+            SetVP(idle ? _vp_wait : _vp_normal);
+            _vp_active = idle ? 6 : 1;
             _mgun_vp_fire_end_time = 0;
         }
         ypabact_UpdateStatusSoundCarrier(this, &_debuff_soundcarrier);
@@ -4775,7 +4777,7 @@ void NC_STACK_ypabact::User_layer(update_msg *arg)
 {
     _airconst = _airconst_static;
 
-    UpdateHandBrakeInput(arg->inpt->Buttons.Is(3));
+    UpdateHandBrakeInput(arg->inpt->HandBrakePressed);
 
     const bool landedAirControl =
         (_oflags & BACT_OFLAG_USERINPT) &&
@@ -12955,7 +12957,7 @@ static void ypabact_PlayVehicleMinigunPulse(NC_STACK_ypabact *bact)
 
 static void ypabact_StartVehicleMinigunFireVP(NC_STACK_ypabact *bact, int now)
 {
-    if ( !bact || bact->_status != BACT_STATUS_NORMAL )
+    if ( !bact || (bact->_status != BACT_STATUS_NORMAL && bact->_status != BACT_STATUS_IDLE) )
         return;
 
     bact->_mgun_vp_fire_end_time = now + 180;
@@ -14905,6 +14907,13 @@ size_t NC_STACK_ypabact::SetStateInternal(setState_msg *arg)
     if ( arg->unsetFlags )
         _status_flg &= ~arg->unsetFlags;
 
+    // Timed vehicle MGUNs do not set BACT_STFLAG_FIRE. Preserve their cockpit
+    // vp_fire while ground movement and handbraking alternate NORMAL/IDLE.
+    const bool keepTimedMgunFireVP =
+        UsesVehicleMinigunTiming() && _vp_active == 7 &&
+        _mgun_vp_fire_end_time > _clock &&
+        (arg->newStatus == BACT_STATUS_NORMAL || arg->newStatus == BACT_STATUS_IDLE);
+
     if ( arg->newStatus == BACT_STATUS_DEAD && (_vp_active != 2 && _vp_active != 3) )
     {
         _energy = -10000;
@@ -14961,7 +14970,7 @@ size_t NC_STACK_ypabact::SetStateInternal(setState_msg *arg)
         result = 1;
     }
 
-    if ( arg->newStatus == BACT_STATUS_NORMAL && 1 != _vp_active )
+    if ( arg->newStatus == BACT_STATUS_NORMAL && 1 != _vp_active && !keepTimedMgunFireVP )
     {
         SetVP(_vp_normal);
 
@@ -15028,7 +15037,7 @@ size_t NC_STACK_ypabact::SetStateInternal(setState_msg *arg)
         result = 1;
     }
 
-    if ( arg->newStatus == BACT_STATUS_IDLE && _vp_active != 6 )
+    if ( arg->newStatus == BACT_STATUS_IDLE && _vp_active != 6 && !keepTimedMgunFireVP )
     {
         SetVP(_vp_wait);
         _vp_active = 6;
