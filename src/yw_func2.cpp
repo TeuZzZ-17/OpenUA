@@ -3015,6 +3015,46 @@ static bool db_static_gun_support_active(const World::TVhclProto &p)
            p.initParams.find(NC_STACK_ypagun::GUN_ATT_NO_FALL) != p.initParams.end();
 }
 
+static std::string db_vehicle_job_stars(int value)
+{
+    // Match the vanilla advanced unit-info scale: every two job points become
+    // one marker, with a minimum visible rating of one marker.
+    int stars = value / 2;
+    if ( stars < 1 )
+        stars = 1;
+
+    return std::string((size_t)stars, '*');
+}
+
+static bool db_vehicle_has_job_stats(const World::TVhclProto &p)
+{
+    return p.job_fightrobo > 0 || p.job_fighttank > 0 ||
+           p.job_fightflyer > 0 || p.job_fighthelicopter > 0 ||
+           p.job_conquer > 0 || p.job_reconnoitre > 0;
+}
+
+static void db_add_vehicle_job_lines(std::vector<std::string> *lines,
+                                     int maxLines,
+                                     const World::TVhclProto &p)
+{
+    if ( !lines || !db_vehicle_has_job_stats(p) )
+        return;
+
+    const std::string hostStars = db_vehicle_job_stars(p.job_fightrobo);
+    const std::string tankStars = db_vehicle_job_stars(p.job_fighttank);
+    const std::string planeStars = db_vehicle_job_stars(p.job_fightflyer);
+    const std::string heliStars = db_vehicle_job_stars(p.job_fighthelicopter);
+    const std::string conquerStars = db_vehicle_job_stars(p.job_conquer);
+    const std::string reconStars = db_vehicle_job_stars(p.job_reconnoitre);
+
+    if ( (int)lines->size() < maxLines )
+        lines->push_back(db_trunc("Vs Host: " + hostStars + "  Tanks: " + tankStars, 30));
+    if ( (int)lines->size() < maxLines )
+        lines->push_back(db_trunc("Vs Planes: " + planeStars + " Helis: " + heliStars, 30));
+    if ( (int)lines->size() < maxLines )
+        lines->push_back(db_trunc("Conquer: " + conquerStars + "  Recon: " + reconStars, 30));
+}
+
 static void db_add_speciality_lines(std::vector<std::string> *lines,
                                     int maxLines,
                                     const std::vector<std::string> &items)
@@ -3743,6 +3783,7 @@ void UserData::PopulateDetailPane()
         statLines.push_back(p.has_push_resistance && p.push_resistance > 0.0 ?
                             fmt::sprintf("Push Resistance: %.2f", p.push_resistance) :
                             "Push Resistance: None");
+        db_add_vehicle_job_lines(&statLines, DB_STATS_LINES, p);
         db_add_speciality_lines(&statLines, DB_STATS_LINES, db_vehicle_specialties(p));
     }
     else if ( db_tab == 1 )
