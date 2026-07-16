@@ -5440,6 +5440,8 @@ void NC_STACK_yparobo::yparobo_func71__sub0(update_msg *arg)
 
 void NC_STACK_yparobo::User_layer(update_msg *arg)
 {
+    UpdateHandBrakeInput(arg->inpt->Buttons.Is(3));
+
     int a4 = getBACT_bactCollisions();
 
     float v36 = _target_vec.length();
@@ -6045,9 +6047,13 @@ void NC_STACK_yparobo::Renew()
     _roboTimeScale = System::IniConf::GameTimeLine.Get<int>();
 }
 
-void NC_STACK_yparobo::HandBrake(update_msg *)
+void NC_STACK_yparobo::HandBrake(update_msg *arg)
 {
-    _fly_dir_length *= 0.8;
+    NC_STACK_ypabact::HandBrake(arg);
+
+    if ( GetHandBrakePower() <= 0.0f )
+        return;
+
     _thraction = 0;
     _roboFlotage = _mass * 9.80665;
 }

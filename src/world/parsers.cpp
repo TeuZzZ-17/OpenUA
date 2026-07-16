@@ -2734,6 +2734,9 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
             x.sndPrm_shk.time = 1000;
         }
 
+        _vhcl->sndFX[TVhclProto::SND_HANDBRAKE].MainSample.Name =
+            System::IniConf::GameHandBrakeSound.Get<std::string>();
+
         _vhcl->initParams.clear();
         _vhcl->is_mimic = 0;
         _vhcl->mimic_vehicle_list.clear();

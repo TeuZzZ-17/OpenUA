@@ -236,6 +236,9 @@ public:
     static Common::Ini::Key GamePowerStationEnergyMultiplier;
     static Common::Ini::Key GameFallDamageMultiplier;
     static Common::Ini::Key GamePushAtDeathMultiplier;
+    static Common::Ini::Key GameHandBrakePower;
+    static Common::Ini::Key GameHandBrakeSound;
+    static Common::Ini::Key GameHandBrakeRecoilReduction;
 
     // OpenUA: Black Sect "imperfect grey clone" runtime balance (owner/faction 5 only).
     // Pure runtime maluses applied to live actors; never mutate shared prototypes.

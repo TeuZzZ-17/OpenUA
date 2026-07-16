@@ -100,6 +100,17 @@ static float ypabact_ReadFallDamageMultiplier()
     return ypabact_ReadNonNegativeFloatIni(System::IniConf::GameFallDamageMultiplier, 1.0f);
 }
 
+static float ypabact_ReadHandBrakePower()
+{
+    return ypabact_ReadNonNegativeFloatIni(System::IniConf::GameHandBrakePower, 1.0f);
+}
+
+static float ypabact_ReadHandBrakeRecoilReduction()
+{
+    return std::min(1.0f, ypabact_ReadNonNegativeFloatIni(
+        System::IniConf::GameHandBrakeRecoilReduction, 0.8f));
+}
+
 
 static bool ypabact_IsCustomFallDamageConfigActive()
 {
@@ -4756,6 +4767,8 @@ void NC_STACK_ypabact::AI_layer3(update_msg *arg)
 void NC_STACK_ypabact::User_layer(update_msg *arg)
 {
     _airconst = _airconst_static;
+
+    UpdateHandBrakeInput(arg->inpt->Buttons.Is(3));
 
     const bool landedAirControl =
         (_oflags & BACT_OFLAG_USERINPT) &&
@@ -10509,9 +10522,10 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
         // shot, so AI/third-person behavior stays unchanged and recoil remains
         // completely independent from push_resistance.
         if ( arg->flags & BACT_ARG79_FLAG_RECOIL_BRAKE_HELD )
-            recoilAmount *= 0.2f;
+            recoilAmount *= 1.0f - ypabact_ReadHandBrakeRecoilReduction();
 
-        ApplyWeaponRecoil(recoilDirSum, recoilAmount);
+        if ( recoilAmount > 0.0f )
+            ApplyWeaponRecoil(recoilDirSum, recoilAmount);
     }
 
     if ( _kill_after_shot )
@@ -12203,6 +12217,7 @@ void NC_STACK_ypabact::Renew()
     _mpos.x = 0;
     _mpos.y = 0;
     _mpos.z = 0;
+    _handbrakeHeld = false;
     _gun_leftright = 0.0;
     _scale_time = 0;
     _clock = 0;
@@ -12374,41 +12389,54 @@ void NC_STACK_ypabact::SmoothStabilizeUpright(float frameTime)
 
 void NC_STACK_ypabact::HandBrake(update_msg *arg)
 {
+    const float brakePower = GetHandBrakePower();
+    if ( brakePower <= 0.0f )
+        return;
+
     _thraction = _mass * 9.77665;
 
-    float v53 = arg->frameTime * 0.001;
-    vec3d vaxis = _rotation.AxisY() * vec3d(0.0, 1.0, 0.0);
+    SmoothStabilizeUpright(arg->frameTime);
 
-    if ( vaxis.normalise() > 0.001 )
+    const float brakeRetention = std::pow(0.01f, brakePower * arg->frameTime * 0.001f);
+    _fly_dir_length *= brakeRetention;
+
+    if ( fabs(_fly_dir_length) < 0.1 )
     {
-        float remainingAngle = clp_acos( _rotation.AxisY().dot( vec3d(0.0, 1.0, 0.0) ) );
-        float angleStep = std::min(remainingAngle, _maxrot * v53);
+        _fly_dir = vec3d(0.0, 1.0, 0.0);
+        _fly_dir_length = 0.0;
+    }
+}
 
-        if ( remainingAngle <= angleStep + 0.0015 )
-        {
-            _rotation.SetY( vec3d(0.0, 1.0, 0.0) );
+float NC_STACK_ypabact::GetHandBrakePower() const
+{
+    return ypabact_ReadHandBrakePower();
+}
 
-            vec3d axisX = _rotation.AxisX().X0Z();
-            axisX.normalise();
-            _rotation.SetX( axisX );
-
-            vec3d axisZ = _rotation.AxisZ().X0Z();
-            axisZ.normalise();
-            _rotation.SetZ( axisZ );
-
-            if ( fabs(_fly_dir_length) < 0.1 )
-            {
-                _fly_dir = vec3d(0.0, 1.0, 0.0);
-                _fly_dir_length = 0;
-            }
-        }
-        else
-        {
-            _rotation *= mat3x3::AxisAngle(vaxis, angleStep);
-        }
+void NC_STACK_ypabact::UpdateHandBrakeInput(bool pressed)
+{
+    if ( !pressed )
+    {
+        ReleaseHandBrake();
+        return;
     }
 
-    _fly_dir_length *= 0.8;
+    if ( _handbrakeHeld )
+        return;
+
+    _handbrakeHeld = true;
+
+    const size_t soundId = World::TVhclProto::SND_HANDBRAKE;
+    if ( _soundcarrier.Sounds.size() <= soundId )
+        return;
+
+    TSoundSource &sound = _soundcarrier.Sounds[soundId];
+    if ( sound.PSample && !sound.IsEnabled() )
+        SFXEngine::SFXe.startSound(&_soundcarrier, soundId);
+}
+
+void NC_STACK_ypabact::ReleaseHandBrake()
+{
+    _handbrakeHeld = false;
 }
 
 void NC_STACK_ypabact::ypabact_func98(IDVPair *arg)

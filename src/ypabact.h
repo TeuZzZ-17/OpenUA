@@ -494,6 +494,9 @@ public:
     virtual void ypabact_func95(IDVPair *arg);
     virtual void Renew();
     virtual void HandBrake(update_msg *arg);
+    float GetHandBrakePower() const;
+    void UpdateHandBrakeInput(bool pressed);
+    void ReleaseHandBrake();
     void SmoothStabilizeUpright(float frameTime);
     virtual void ypabact_func98(IDVPair *arg);
     virtual void CreationTimeUpdate(update_msg *arg);
@@ -791,6 +794,7 @@ public:
     float _thraction;
     vec3d _fly_dir;
     float _fly_dir_length;
+    bool _handbrakeHeld = false;
     float _heliLandingVisualOffsetY = 0.0f; // OpenUA: render/camera-only smoothing of the vanilla heli ground snap
     int _weaponRecoilVisualEndTime = 0; // OpenUA: render-only tank firing tilt, does not affect physics
     int _weaponRecoilVisualDuration = 0;

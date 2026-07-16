@@ -715,6 +715,8 @@ void NC_STACK_ypaflyer::AI_layer3(update_msg *arg)
 
 void NC_STACK_ypaflyer::User_layer(update_msg *arg)
 {
+    UpdateHandBrakeInput(arg->inpt->Buttons.Is(3));
+
     _airconst = _airconst_static;
 
     const bool qDown = Input::Engine.GetKeyState(Input::KC_Q);
@@ -1240,6 +1242,9 @@ void NC_STACK_ypaflyer::Renew()
 void NC_STACK_ypaflyer::HandBrake(update_msg *arg)
 {
     NC_STACK_ypabact::HandBrake(arg);
+
+    if ( GetHandBrakePower() <= 0.0f )
+        return;
 
     _thraction = 0;
     _flyerBoost = _mass * 9.80665;

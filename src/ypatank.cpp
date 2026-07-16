@@ -915,6 +915,8 @@ void NC_STACK_ypatank::User_layer(update_msg *arg)
 {
     _airconst = _airconst_static;
 
+    UpdateHandBrakeInput(arg->inpt->Buttons.Is(3));
+
     int a4 = getBACT_bactCollisions();
 
     float v90 = arg->frameTime * 0.001;
@@ -1141,24 +1143,14 @@ void NC_STACK_ypatank::User_layer(update_msg *arg)
 
             if ( arg->inpt->Buttons.Is(3) )
             {
-                _thraction = 0;
-
-                if ( fabs(_fly_dir_length) >= 4.0 )
+                HandBrake(arg);
+                if ( GetHandBrakePower() > 0.0f )
                 {
-                    float v46 = 1.0 - v90 * 4.0;
-
-                    if ( v46 < 0.1 )
-                        v46 = 0.1;
-
-                    _fly_dir_length *= v46;
+                    _thraction = 0;
+                    arg74.flag = 2;
                 }
                 else
-                {
-                    _status_flg &= ~BACT_STFLAG_MOVE;
-                    _fly_dir_length = 0;
-                }
-
-                arg74.flag = 2;
+                    arg74.flag = 0;
             }
             else
             {

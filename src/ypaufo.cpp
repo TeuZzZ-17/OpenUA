@@ -480,6 +480,8 @@ void NC_STACK_ypaufo::AI_layer3(update_msg *arg)
 
 void NC_STACK_ypaufo::User_layer(update_msg *arg)
 {
+    UpdateHandBrakeInput(arg->inpt->Buttons.Is(3));
+
     float v88 = arg->frameTime / 1000.0;
 
     int a4 = getBACT_bactCollisions();
@@ -613,14 +615,12 @@ void NC_STACK_ypaufo::User_layer(update_msg *arg)
 
         if ( arg->inpt->Buttons.Is(3) )
         {
-            _thraction = 0;
-
-            _ufoBoost = _mass * 9.80665;
-
-            _fly_dir_length *= 0.7;
-
-            if ( _fly_dir_length < 0.1 )
-                _fly_dir_length = 0;
+            HandBrake(arg);
+            if ( GetHandBrakePower() > 0.0f )
+            {
+                _thraction = 0;
+                _ufoBoost = _mass * 9.80665;
+            }
         }
 
         bact_arg79 arg79;
