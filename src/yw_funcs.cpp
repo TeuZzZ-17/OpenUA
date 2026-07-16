@@ -1363,6 +1363,7 @@ void NC_STACK_ypaworld::FreeLegos()
 void NC_STACK_ypaworld::FreeBriefDataSet()
 {
     _vhclModels.clear();
+    _attachedFXGeometryCache.clear();
     FreeLegos();
     FreeFillers();
     ClearOverrideModels();
@@ -3066,6 +3067,7 @@ void NC_STACK_ypaworld::FreeGameDataCursors()
 void sb_0x44ac24(NC_STACK_ypaworld *yw)
 {
     yw->_vhclModels.clear();
+    yw->_attachedFXGeometryCache.clear();
 
     yw->FreeLegos();
 
@@ -3296,6 +3298,7 @@ void UserData::clear()
 
 void NC_STACK_ypaworld::ClearOverrideModels()
 {
+    _attachedFXGeometryCache.clear();
     while(!_overrideModels.empty())
     {
         _overrideModels.front()->Delete();

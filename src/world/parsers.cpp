@@ -85,6 +85,27 @@ static void EnsureDebuffFXSlot(std::vector<int16_t> &slots, int slot)
         slots.resize(slot + 1, 0);
 }
 
+static bool ParseAttachedFXPositionMode(const std::string &value, TAttachedFXPositionMode *mode)
+{
+    if ( !mode )
+        return false;
+
+    if ( !StriCmp(value, "surface") )
+    {
+        *mode = ATTACHED_FX_POSITION_SURFACE;
+        return true;
+    }
+
+    if ( !StriCmp(value, "everywhere") )
+    {
+        *mode = ATTACHED_FX_POSITION_EVERYWHERE;
+        return true;
+    }
+
+    *mode = ATTACHED_FX_POSITION_LEGACY;
+    return false;
+}
+
 static float Clamp01(float value)
 {
     if ( value < 0.0f )
@@ -1440,10 +1461,15 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     {
         _vhcl->damaged_fx.interval_max = parser.stol(p2, NULL, 0);
     }
-    else if ( !StriCmp(p1, "damaged_fx_random_pos") )
+    else if ( !StriCmp(p1, "damaged_fx_random_position_mode") )
     {
-        float radius = parser.stof(p2, 0);
-        _vhcl->damaged_fx.random_pos = radius > 0.0 ? radius : 0.0;
+        if ( !ParseAttachedFXPositionMode(p2, &_vhcl->damaged_fx.position_mode) )
+            ypa_log_out("WARNING: vehicle %d unknown damaged_fx_random_position_mode '%s'; legacy centered placement used.\n",
+                        _vhclID, p2.c_str());
+    }
+    else if ( !StriCmp(p1, "damaged_fx_trail_only") )
+    {
+        _vhcl->damaged_fx.trail_only = parser.stol(p2, NULL, 0) != 0;
     }
     else if ( ParseDecorationFXParam(parser, p1, p2, _vhcl->decoration_fx) )
     {
@@ -3042,10 +3068,15 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
         EnsureDebuffFXSlot(_wpn->debuff.fx_vps, debuffFxSlot);
         _wpn->debuff.fx_vps[debuffFxSlot] = vp > 0 ? vp : 0;
     }
-    else if ( !StriCmp(p1, "debuff_fx_random_pos") )
+    else if ( !StriCmp(p1, "debuff_fx_random_position_mode") )
     {
-        float radius = parser.stof(p2, 0);
-        _wpn->debuff.fx_random_pos = radius > 0.0 ? radius : 0.0;
+        if ( !ParseAttachedFXPositionMode(p2, &_wpn->debuff.fx_position_mode) )
+            ypa_log_out("WARNING: unknown debuff_fx_random_position_mode '%s'; legacy centered placement used.\n",
+                        p2.c_str());
+    }
+    else if ( !StriCmp(p1, "debuff_fx_trail_only") )
+    {
+        _wpn->debuff.fx_trail_only = parser.stol(p2, NULL, 0) != 0;
     }
     else if ( !StriCmp(p1, "debuff_icon") )
     {

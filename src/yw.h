@@ -2528,6 +2528,8 @@ public:
     int32_t SpawnTransientVP(int32_t modelId, const vec3d &pos, const mat3x3 &rot, int32_t lifeTime, float scale = 1.0, const World::TVisualTint &tint = World::TVisualTint(), const vec3d &axisScale = vec3d(1.0, 1.0, 1.0), const vec3d &spin = vec3d(0.0, 0.0, 0.0));
     void SpawnChainFX(const World::TChainFXConfig &config, const vec3d &pos, const mat3x3 &rot);
     int32_t SpawnAttachedTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime, float scale = 1.0, bool useOwnerTransform = false, const World::TVisualTint &tint = World::TVisualTint(), const vec3d &axisScale = vec3d(1.0, 1.0, 1.0), const vec3d &spin = vec3d(0.0, 0.0, 0.0), bool playerFirstPersonOnly = false, const vec3d &localRotation = vec3d(0.0, 0.0, 0.0), bool hideInOwnerMissileCamera = false);
+    int32_t SpawnAttachedStatusTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime, bool trailOnly, bool rotateOffsetWithOwner);
+    bool SampleAttachedFXLocalPosition(NC_STACK_ypabact *owner, World::TAttachedFXPositionMode mode, vec3d *localPosition);
     bool UpdateRandomFXTimer(int intervalMin, int intervalMax, int32_t &nextTime);
     int32_t SpawnRandomizedTransientVP(int32_t modelId, const vec3d &ownerPos, float randomPos, const World::TVisualTint &tint = World::TVisualTint(), int32_t lifeTime = 1000, float scale = 1.0, const vec3d &offset = vec3d(0.0, 0.0, 0.0), const vec3d &axisScale = vec3d(1.0, 1.0, 1.0), const vec3d &spin = vec3d(0.0, 0.0, 0.0));
     bool HasTransientVP(int32_t id) const;
@@ -2585,6 +2587,7 @@ public:
         int32_t followOwnerGid = 0;
         vec3d followLocalOffset;
         bool followUseOwnerTransform = false;
+        bool followRotateOffset = false;
         bool playerFirstPersonOnly = false;
         vec3d localRotation = vec3d(0.0, 0.0, 0.0);
         bool hideInOwnerMissileCamera = false;
@@ -2602,6 +2605,24 @@ public:
         TTransientVP(NC_STACK_base *base, const vec3d &p, const mat3x3 &r, int32_t life)
         : vp(base ? base->GenRenderInstance() : NULL), pos(p), rot(r), lifeTime(life)
         {};
+    };
+
+    struct TAttachedFXTriangle
+    {
+        vec3d a;
+        vec3d b;
+        vec3d c;
+        float cumulativeArea = 0.0f;
+    };
+
+    struct TAttachedFXGeometryCache
+    {
+        NC_STACK_base *source = NULL;
+        vec3d scale = vec3d(1.0, 1.0, 1.0);
+        vec3d orientation = vec3d(0.0, 0.0, 0.0);
+        std::vector<TAttachedFXTriangle> triangles;
+        std::vector<vec3d> volumePoints;
+        float totalArea = 0.0f;
     };
 
     struct TDamageHoverTarget
@@ -2642,6 +2663,7 @@ public:
     std::list<NC_STACK_base *> _overrideModels;
     std::list<TTransientVP> _transientVPs;
     int32_t _nextTransientVPId = 1;
+    std::vector<TAttachedFXGeometryCache> _attachedFXGeometryCache;
     std::vector<TDamageHoverTarget> _damageHoverTargets;
     std::map<int32_t, TConstructInfo> _inBuildProcess; // Buildings in creation process
     std::array<int16_t, 256> _buildHealthModelId = Common::ArrayInit<int16_t, 256>(0);

@@ -195,13 +195,21 @@ constexpr size_t ROBO_GUN_MAX_COUNT = 20;
 constexpr size_t UNIT_DUMMY_MAX_COUNT = 20; // OpenUA: max dummy attachment slots per parent vehicle
 constexpr size_t UNIT_COLL_MAX_COUNT = 32;  // OpenUA: max compound collision spheres per vehicle
 
+enum TAttachedFXPositionMode
+{
+    ATTACHED_FX_POSITION_LEGACY = 0,
+    ATTACHED_FX_POSITION_SURFACE,
+    ATTACHED_FX_POSITION_EVERYWHERE
+};
+
 struct TDamagedFXConfig
 {
     std::vector<int16_t> vps = {0};
     float threshold = 0.0;
     int interval_min = 0;
     int interval_max = 0;
-    float random_pos = 0.0;
+    TAttachedFXPositionMode position_mode = ATTACHED_FX_POSITION_LEGACY;
+    bool trail_only = false;
     TSndFxPosParam shake;
 
     TDamagedFXConfig()
@@ -230,7 +238,8 @@ struct TWeaponDebuffConfig
     float shield_malus = 0.0;
     float snd_pitch_mult = 1.0;
     std::vector<int16_t> fx_vps;
-    float fx_random_pos = 0.0;
+    TAttachedFXPositionMode fx_position_mode = ATTACHED_FX_POSITION_LEGACY;
+    bool fx_trail_only = false;
     TVhclSound tick_snd;
 };
 

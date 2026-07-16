@@ -2618,6 +2618,25 @@ int32_t NC_STACK_ypaworld::SpawnAttachedTransientVP(int32_t modelId, NC_STACK_yp
     return fx.id;
 }
 
+int32_t NC_STACK_ypaworld::SpawnAttachedStatusTransientVP(int32_t modelId, NC_STACK_ypabact *owner,
+                                                          const vec3d &localOffset, int32_t lifeTime,
+                                                          bool trailOnly, bool rotateOffsetWithOwner)
+{
+    int32_t id = SpawnAttachedTransientVP(modelId, owner, localOffset, lifeTime);
+    if ( id <= 0 || _transientVPs.empty() )
+        return id;
+
+    TTransientVP &fx = _transientVPs.back();
+    if ( fx.id != id )
+        return id;
+
+    fx.followRotateOffset = rotateOffsetWithOwner;
+    if ( trailOnly && fx.vp )
+        fx.vp->skipGeometry = true;
+
+    return id;
+}
+
 bool NC_STACK_ypaworld::HasTransientVP(int32_t id) const
 {
     if ( id <= 0 )
@@ -3215,7 +3234,10 @@ static void yw_RenderTransientVPs(NC_STACK_ypaworld *world, std::list<NC_STACK_y
             }
             else
             {
-                it->pos = owner->_position + it->followLocalOffset;
+                vec3d offset = it->followLocalOffset;
+                if ( it->followRotateOffset )
+                    offset = owner->_rotation.Transpose().Transform(offset);
+                it->pos = owner->_position + offset;
                 it->rot = mat3x3::Ident();
             }
         }

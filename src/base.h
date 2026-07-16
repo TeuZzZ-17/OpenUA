@@ -125,6 +125,7 @@ public:
         NC_STACK_base *Bas = NULL;
         std::vector<Instance *> KidsOpts;
         std::vector<NC_STACK_ade::InstanceOpts *> Particles;
+        bool skipGeometry = false; // Per-instance root mesh suppression; particles and child instances still render.
     };
 
 public:

@@ -519,6 +519,9 @@ size_t NC_STACK_base::Render(baseRender_msg *arg, Instance * inst, bool doCopy /
 
         for(GFX::TMesh &msh : Meshes)
         {
+            if ( inst && inst->skipGeometry )
+                break;
+
             arg->adeCount += msh.Indixes.size() / 3;
             GFX::TRenderNode& rend = GFX::Engine.AllocRenderNode();
             rend = GFX::TRenderNode( GFX::TRenderNode::TYPE_MESH );
@@ -627,6 +630,9 @@ size_t NC_STACK_base::RenderImmediately(baseRender_msg *arg, Instance * inst)
 
         for(GFX::TMesh &msh : Meshes)
         {
+            if ( inst && inst->skipGeometry )
+                break;
+
             GFX::TRenderNode rend( GFX::TRenderNode::TYPE_MESH );
             rend.Distance = distance;
             rend.Color = msh.Mat.Color;
