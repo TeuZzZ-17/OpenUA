@@ -604,6 +604,12 @@ static vec3d ypabact_BuildLegacyAttachedFXOffset(float overeof)
     return localOffset;
 }
 
+static vec3d ypabact_BuildUniformStatusFXScale(float scale)
+{
+    float safeScale = scale > 0.0f ? scale : 1.0f;
+    return vec3d(safeScale, safeScale, safeScale);
+}
+
 static bool ypabact_BuildAttachedFXOffset(NC_STACK_ypabact *bact,
                                           bool hasRandomOffsetPercent,
                                           float randomOffsetPercent,
@@ -653,7 +659,8 @@ static void ypabact_SpawnDebuffFXEvent(NC_STACK_ypabact *bact, int lifetime)
                                                           bact->_active_debuff.fx_random_offset_percent,
                                                           &localOffset);
         world->SpawnAttachedStatusTransientVP(fxVp, bact, localOffset, lifetime,
-                                              bact->_active_debuff.fx_trail_only, rotateOffset);
+                                              bact->_active_debuff.fx_trail_only, rotateOffset,
+                                              ypabact_BuildUniformStatusFXScale(bact->_active_debuff.fx_vp_scale));
     }
 }
 
@@ -2988,6 +2995,7 @@ void NC_STACK_ypabact::ApplyWeaponDebuff(World::TWeaponDebuffConfig &debuff, NC_
     _active_debuff.shield_malus = std::max(0.0f, std::min(debuff.shield_malus, 1.0f));
     _active_debuff.snd_pitch_mult = ypabact_SafeDamageMult(debuff.snd_pitch_mult);
     _active_debuff.fx_vps = debuff.fx_vps;
+    _active_debuff.fx_vp_scale = debuff.fx_vp_scale;
     _active_debuff.fx_random_offset_percent = debuff.fx_random_offset_percent;
     _active_debuff.has_fx_random_offset_percent = debuff.has_fx_random_offset_percent;
     _active_debuff.fx_trail_only = debuff.fx_trail_only;
@@ -3136,9 +3144,7 @@ static void ypabact_SpawnDamagedFXEvent(NC_STACK_ypabact *bact)
                                                           &localOffset);
         world->SpawnAttachedStatusTransientVP(vp, bact, localOffset, 1000,
                                               bact->_damaged_fx.trail_only, rotateOffset,
-                                              vec3d(bact->_damaged_fx.vp_scale,
-                                                    bact->_damaged_fx.vp_scale,
-                                                    bact->_damaged_fx.vp_scale));
+                                              ypabact_BuildUniformStatusFXScale(bact->_damaged_fx.vp_scale));
     }
 }
 

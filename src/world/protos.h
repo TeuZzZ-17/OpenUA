@@ -233,6 +233,7 @@ struct TWeaponDebuffConfig
     float shield_malus = 0.0;
     float snd_pitch_mult = 1.0;
     std::vector<int16_t> fx_vps;
+    float fx_vp_scale = 1.0;
     float fx_random_offset_percent = 0.0;
     bool has_fx_random_offset_percent = false;
     bool fx_trail_only = false;

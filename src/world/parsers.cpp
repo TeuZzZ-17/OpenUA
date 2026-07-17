@@ -3059,6 +3059,10 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
         EnsureDebuffFXSlot(_wpn->debuff.fx_vps, debuffFxSlot);
         _wpn->debuff.fx_vps[debuffFxSlot] = vp > 0 ? vp : 0;
     }
+    else if ( !StriCmp(p1, "debuff_fx_vp_scale") )
+    {
+        _wpn->debuff.fx_vp_scale = ParseVPScaleValue(parser, p2);
+    }
     else if ( !StriCmp(p1, "debuff_fx_random_offset_percent") )
     {
         _wpn->debuff.fx_random_offset_percent = ParseAttachedFXRandomOffsetPercent(parser, p2);
