@@ -2528,8 +2528,8 @@ public:
     int32_t SpawnTransientVP(int32_t modelId, const vec3d &pos, const mat3x3 &rot, int32_t lifeTime, float scale = 1.0, const World::TVisualTint &tint = World::TVisualTint(), const vec3d &axisScale = vec3d(1.0, 1.0, 1.0), const vec3d &spin = vec3d(0.0, 0.0, 0.0));
     void SpawnChainFX(const World::TChainFXConfig &config, const vec3d &pos, const mat3x3 &rot);
     int32_t SpawnAttachedTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime, float scale = 1.0, bool useOwnerTransform = false, const World::TVisualTint &tint = World::TVisualTint(), const vec3d &axisScale = vec3d(1.0, 1.0, 1.0), const vec3d &spin = vec3d(0.0, 0.0, 0.0), bool playerFirstPersonOnly = false, const vec3d &localRotation = vec3d(0.0, 0.0, 0.0), bool hideInOwnerMissileCamera = false);
-    int32_t SpawnAttachedStatusTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime, bool trailOnly, bool rotateOffsetWithOwner);
-    bool SampleAttachedFXLocalPosition(NC_STACK_ypabact *owner, World::TAttachedFXPositionMode mode, vec3d *localPosition);
+    int32_t SpawnAttachedStatusTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime, bool trailOnly, bool rotateOffsetWithOwner, const vec3d &axisScale = vec3d(1.0, 1.0, 1.0));
+    bool SampleAttachedFXLocalPosition(NC_STACK_ypabact *owner, float randomOffsetPercent, vec3d *localPosition);
     bool UpdateRandomFXTimer(int intervalMin, int intervalMax, int32_t &nextTime);
     int32_t SpawnRandomizedTransientVP(int32_t modelId, const vec3d &ownerPos, float randomPos, const World::TVisualTint &tint = World::TVisualTint(), int32_t lifeTime = 1000, float scale = 1.0, const vec3d &offset = vec3d(0.0, 0.0, 0.0), const vec3d &axisScale = vec3d(1.0, 1.0, 1.0), const vec3d &spin = vec3d(0.0, 0.0, 0.0));
     bool HasTransientVP(int32_t id) const;

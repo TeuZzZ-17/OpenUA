@@ -605,14 +605,16 @@ static vec3d ypabact_BuildLegacyAttachedFXOffset(float overeof)
 }
 
 static bool ypabact_BuildAttachedFXOffset(NC_STACK_ypabact *bact,
-                                          World::TAttachedFXPositionMode mode,
+                                          bool hasRandomOffsetPercent,
+                                          float randomOffsetPercent,
                                           vec3d *localOffset)
 {
     if ( !bact || !localOffset )
         return false;
 
     NC_STACK_ypaworld *world = bact->getBACT_pWorld();
-    if ( world && world->SampleAttachedFXLocalPosition(bact, mode, localOffset) )
+    if ( hasRandomOffsetPercent &&
+         world && world->SampleAttachedFXLocalPosition(bact, randomOffsetPercent, localOffset) )
         return true;
 
     *localOffset = ypabact_BuildLegacyAttachedFXOffset(bact->_overeof);
@@ -646,7 +648,10 @@ static void ypabact_SpawnDebuffFXEvent(NC_STACK_ypabact *bact, int lifetime)
             continue;
 
         vec3d localOffset;
-        bool rotateOffset = ypabact_BuildAttachedFXOffset(bact, bact->_active_debuff.fx_position_mode, &localOffset);
+        bool rotateOffset = ypabact_BuildAttachedFXOffset(bact,
+                                                          bact->_active_debuff.has_fx_random_offset_percent,
+                                                          bact->_active_debuff.fx_random_offset_percent,
+                                                          &localOffset);
         world->SpawnAttachedStatusTransientVP(fxVp, bact, localOffset, lifetime,
                                               bact->_active_debuff.fx_trail_only, rotateOffset);
     }
@@ -2983,7 +2988,8 @@ void NC_STACK_ypabact::ApplyWeaponDebuff(World::TWeaponDebuffConfig &debuff, NC_
     _active_debuff.shield_malus = std::max(0.0f, std::min(debuff.shield_malus, 1.0f));
     _active_debuff.snd_pitch_mult = ypabact_SafeDamageMult(debuff.snd_pitch_mult);
     _active_debuff.fx_vps = debuff.fx_vps;
-    _active_debuff.fx_position_mode = debuff.fx_position_mode;
+    _active_debuff.fx_random_offset_percent = debuff.fx_random_offset_percent;
+    _active_debuff.has_fx_random_offset_percent = debuff.has_fx_random_offset_percent;
     _active_debuff.fx_trail_only = debuff.fx_trail_only;
     _active_debuff.source_gid = source ? source->_gid : 0;
     _active_debuff.snd_sample = NULL;
@@ -3124,9 +3130,15 @@ static void ypabact_SpawnDamagedFXEvent(NC_STACK_ypabact *bact)
         // render path intentionally does not clamp to coarse sector height, which
         // avoids the old slope bug where FX popped/floated above the unit on hills.
         vec3d localOffset;
-        bool rotateOffset = ypabact_BuildAttachedFXOffset(bact, bact->_damaged_fx.position_mode, &localOffset);
+        bool rotateOffset = ypabact_BuildAttachedFXOffset(bact,
+                                                          bact->_damaged_fx.has_random_offset_percent,
+                                                          bact->_damaged_fx.random_offset_percent,
+                                                          &localOffset);
         world->SpawnAttachedStatusTransientVP(vp, bact, localOffset, 1000,
-                                              bact->_damaged_fx.trail_only, rotateOffset);
+                                              bact->_damaged_fx.trail_only, rotateOffset,
+                                              vec3d(bact->_damaged_fx.vp_scale,
+                                                    bact->_damaged_fx.vp_scale,
+                                                    bact->_damaged_fx.vp_scale));
     }
 }
 

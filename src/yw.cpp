@@ -485,21 +485,20 @@ static bool yw_SameAttachedFXTransform(const vec3d &a, const vec3d &b)
 }
 
 bool NC_STACK_ypaworld::SampleAttachedFXLocalPosition(NC_STACK_ypabact *owner,
-                                                       World::TAttachedFXPositionMode mode,
+                                                       float randomOffsetPercent,
                                                        vec3d *localPosition)
 {
-    if ( !owner || !localPosition || mode == World::ATTACHED_FX_POSITION_LEGACY )
+    if ( !owner || !localPosition )
         return false;
 
-    if ( mode == World::ATTACHED_FX_POSITION_CENTER )
+    if ( randomOffsetPercent <= 0.0f )
     {
         *localPosition = vec3d(0.0, 0.0, 0.0);
         return true;
     }
 
-    if ( mode != World::ATTACHED_FX_POSITION_EVERYWHERE &&
-         mode != World::ATTACHED_FX_POSITION_NEAR_CENTER )
-        return false;
+    if ( randomOffsetPercent > 100.0f )
+        randomOffsetPercent = 100.0f;
 
     NC_STACK_base *source = owner->_vp_normal;
     if ( !source ) source = owner->_vp_wait;
@@ -565,8 +564,7 @@ bool NC_STACK_ypaworld::SampleAttachedFXLocalPosition(NC_STACK_ypabact *owner,
                          selected->c * (root * r2);
     }
 
-    if ( mode == World::ATTACHED_FX_POSITION_NEAR_CENTER )
-        *localPosition = *localPosition * 0.25f;
+    *localPosition = *localPosition * (randomOffsetPercent / 100.0f);
 
     return true;
 }

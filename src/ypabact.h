@@ -77,7 +77,8 @@ struct TActiveDebuffState
     float shield_malus = 0.0;
     float snd_pitch_mult = 1.0;
     std::vector<int16_t> fx_vps;
-    World::TAttachedFXPositionMode fx_position_mode = World::ATTACHED_FX_POSITION_LEGACY;
+    float fx_random_offset_percent = 0.0;
+    bool has_fx_random_offset_percent = false;
     bool fx_trail_only = false;
     TSampleData *snd_sample = NULL;
     int snd_volume = 120;
@@ -99,7 +100,8 @@ struct TActiveDebuffState
         shield_malus = 0.0;
         snd_pitch_mult = 1.0;
         fx_vps.clear();
-        fx_position_mode = World::ATTACHED_FX_POSITION_LEGACY;
+        fx_random_offset_percent = 0.0;
+        has_fx_random_offset_percent = false;
         fx_trail_only = false;
         snd_sample = NULL;
         snd_volume = 120;

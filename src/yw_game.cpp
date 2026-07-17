@@ -2620,9 +2620,11 @@ int32_t NC_STACK_ypaworld::SpawnAttachedTransientVP(int32_t modelId, NC_STACK_yp
 
 int32_t NC_STACK_ypaworld::SpawnAttachedStatusTransientVP(int32_t modelId, NC_STACK_ypabact *owner,
                                                           const vec3d &localOffset, int32_t lifeTime,
-                                                          bool trailOnly, bool rotateOffsetWithOwner)
+                                                          bool trailOnly, bool rotateOffsetWithOwner,
+                                                          const vec3d &axisScale)
 {
-    int32_t id = SpawnAttachedTransientVP(modelId, owner, localOffset, lifeTime);
+    int32_t id = SpawnAttachedTransientVP(modelId, owner, localOffset, lifeTime,
+                                          1.0, false, World::TVisualTint(), axisScale);
     if ( id <= 0 || _transientVPs.empty() )
         return id;
 

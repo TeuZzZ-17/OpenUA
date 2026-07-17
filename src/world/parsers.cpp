@@ -85,31 +85,13 @@ static void EnsureDebuffFXSlot(std::vector<int16_t> &slots, int slot)
         slots.resize(slot + 1, 0);
 }
 
-static bool ParseAttachedFXPositionMode(const std::string &value, TAttachedFXPositionMode *mode)
+static float ParseAttachedFXRandomOffsetPercent(ScriptParser::Parser &parser, const std::string &value)
 {
-    if ( !mode )
-        return false;
+    float percent = parser.stof(value, 0);
+    if ( !(percent >= 0.0f) )
+        return 0.0f;
 
-    if ( !StriCmp(value, "center") )
-    {
-        *mode = ATTACHED_FX_POSITION_CENTER;
-        return true;
-    }
-
-    if ( !StriCmp(value, "everywhere") )
-    {
-        *mode = ATTACHED_FX_POSITION_EVERYWHERE;
-        return true;
-    }
-
-    if ( !StriCmp(value, "near-center") )
-    {
-        *mode = ATTACHED_FX_POSITION_NEAR_CENTER;
-        return true;
-    }
-
-    *mode = ATTACHED_FX_POSITION_LEGACY;
-    return false;
+    return percent > 100.0f ? 100.0f : percent;
 }
 
 static float Clamp01(float value)
@@ -1448,6 +1430,10 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
         EnsureDamagedFXSlot(_vhcl->damaged_fx.vps, damagedFxSlot);
         _vhcl->damaged_fx.vps[damagedFxSlot] = vp > 0 ? vp : 0;
     }
+    else if ( !StriCmp(p1, "damaged_fx_vp_scale") )
+    {
+        _vhcl->damaged_fx.vp_scale = ParseVPScaleValue(parser, p2);
+    }
     else if ( !StriCmp(p1, "damaged_fx_threshold") )
     {
         float threshold = parser.stof(p2, 0);
@@ -1467,11 +1453,10 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     {
         _vhcl->damaged_fx.interval_max = parser.stol(p2, NULL, 0);
     }
-    else if ( !StriCmp(p1, "damaged_fx_position_mode") )
+    else if ( !StriCmp(p1, "damaged_fx_random_offset_percent") )
     {
-        if ( !ParseAttachedFXPositionMode(p2, &_vhcl->damaged_fx.position_mode) )
-            ypa_log_out("WARNING: vehicle %d unknown damaged_fx_position_mode '%s'; legacy placement used.\n",
-                        _vhclID, p2.c_str());
+        _vhcl->damaged_fx.random_offset_percent = ParseAttachedFXRandomOffsetPercent(parser, p2);
+        _vhcl->damaged_fx.has_random_offset_percent = true;
     }
     else if ( !StriCmp(p1, "damaged_fx_trail_only") )
     {
@@ -3074,11 +3059,10 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
         EnsureDebuffFXSlot(_wpn->debuff.fx_vps, debuffFxSlot);
         _wpn->debuff.fx_vps[debuffFxSlot] = vp > 0 ? vp : 0;
     }
-    else if ( !StriCmp(p1, "debuff_fx_position_mode") )
+    else if ( !StriCmp(p1, "debuff_fx_random_offset_percent") )
     {
-        if ( !ParseAttachedFXPositionMode(p2, &_wpn->debuff.fx_position_mode) )
-            ypa_log_out("WARNING: unknown debuff_fx_position_mode '%s'; legacy placement used.\n",
-                        p2.c_str());
+        _wpn->debuff.fx_random_offset_percent = ParseAttachedFXRandomOffsetPercent(parser, p2);
+        _wpn->debuff.has_fx_random_offset_percent = true;
     }
     else if ( !StriCmp(p1, "debuff_fx_trail_only") )
     {
