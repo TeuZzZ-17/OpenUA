@@ -5,6 +5,7 @@
 #include "../particle.h"
 #include "../base.h"
 #include "../utils.h"
+#include "spin.h"
 
 #include <cmath>
 
@@ -13,21 +14,6 @@ namespace World
 
 ParticleSystem::ParticleSystem()
 {
-}
-
-static mat3x3 ParticleSystem_BuildSpinMatrix(const vec3d &degreesPerSecond, int32_t age)
-{
-    vec3d angle = degreesPerSecond * ((float)age * 0.001f * C_PI_180);
-    mat3x3 spin = mat3x3::Ident();
-
-    if ( angle.x != 0.0 )
-        spin *= mat3x3::RotateX(angle.x);
-    if ( angle.y != 0.0 )
-        spin *= mat3x3::RotateY(angle.y);
-    if ( angle.z != 0.0 )
-        spin *= mat3x3::RotateZ(angle.z);
-
-    return spin;
 }
 
 static float ParticleSystem_MaxScaleAxis(const vec3d &scale)
@@ -163,7 +149,7 @@ void ParticleSystem::Render(Frak *p, const vec3d &scale, area_arg_65 *rndrParams
 
             rend.Mesh = &mesh;
 
-            mat4x4 particleForm(ParticleSystem_BuildSpinMatrix(p->Spin, visualAge) * mat3x3::Scale(scale));
+            mat4x4 particleForm(Spin::BuildMatrix(p->Spin, visualAge) * mat3x3::Scale(scale));
             particleForm.m03 = pos.x;
             particleForm.m13 = pos.y;
             particleForm.m23 = pos.z;

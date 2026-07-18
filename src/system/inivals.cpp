@@ -253,6 +253,8 @@ Common::Ini::Key IniConf::GamePushAtDeathMultiplier("game.push_at_death_mult", C
 Common::Ini::Key IniConf::GameHandBrakePower("game.handbrake_power", Common::Ini::KT_WORD, std::string("1.0"));
 Common::Ini::Key IniConf::GameHandBrakeSound("game.handbrake_sound", Common::Ini::KT_STRING, std::string("sounds/new/handbrake.wav"));
 Common::Ini::Key IniConf::GameHandBrakeRecoilReduction("game.handbrake_recoil_reduction", Common::Ini::KT_WORD, std::string("0.8"));
+Common::Ini::Key IniConf::GameGemUnlockDetailedUI("game.gem_unlock_detailed_ui", Common::Ini::KT_BOOL, false);
+Common::Ini::Key IniConf::GameGemUnlockSound("game.gem_unlock_sound", Common::Ini::KT_STRING, std::string());
 
 // OpenUA custom: Black Sect "imperfect grey clone" runtime balance (owner/faction 5).
 // When enabled, live Black Sect actors get a small malus (default 5%) to effective
@@ -475,6 +477,8 @@ void IniConf::Init()
         , &GameHandBrakePower
         , &GameHandBrakeSound
         , &GameHandBrakeRecoilReduction
+        , &GameGemUnlockDetailedUI
+        , &GameGemUnlockSound
         , &GameBlackSectCloneBalance
         , &GameBlackSectCloneMalusPercent
         , &GameBlackSectCloneTint

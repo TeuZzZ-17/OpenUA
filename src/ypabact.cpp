@@ -19,6 +19,7 @@
 #include "system/inpt.h"
 #include "system/inivals.h"
 #include "world/clonebalance.h"
+#include "world/spin.h"
 
 #include "log.h"
 
@@ -182,9 +183,7 @@ static bool ypabact_ShouldApplyVPOrientation(NC_STACK_ypabact *bact, NC_STACK_ba
 
 static bool ypabact_ShouldApplyVPSpin(NC_STACK_ypabact *bact, NC_STACK_base *base)
 {
-    if ( bact->_vp_spin_speed.x == 0.0 &&
-         bact->_vp_spin_speed.y == 0.0 &&
-         bact->_vp_spin_speed.z == 0.0 )
+    if ( !World::Spin::HasStrength(bact->_vp_spin_strength) )
         return false;
 
     return ypabact_IsMainVPBase(bact, base);
@@ -203,21 +202,6 @@ static mat3x3 ypabact_BuildVPRotationMatrix(const vec3d &degrees)
         rot *= mat3x3::RotateZ(angle.z);
 
     return rot;
-}
-
-static mat3x3 ypabact_BuildVPSpinMatrix(const NC_STACK_ypabact *bact)
-{
-    vec3d angle = bact->_vp_spin_speed * ((float)bact->_clock * 0.001f * C_PI_180);
-    mat3x3 spin = mat3x3::Ident();
-
-    if ( angle.x != 0.0 )
-        spin *= mat3x3::RotateX(angle.x);
-    if ( angle.y != 0.0 )
-        spin *= mat3x3::RotateY(angle.y);
-    if ( angle.z != 0.0 )
-        spin *= mat3x3::RotateZ(angle.z);
-
-    return spin;
 }
 
 static float ypabact_GetTankWeaponRecoilVisualPitch(const NC_STACK_ypabact *bact)
@@ -1559,10 +1543,10 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _vp_scale = vec3d(1.0, 1.0, 1.0);
     _vp_tint = World::TVisualTint();
     _vp_orientation = vec3d(0.0, 0.0, 0.0);
-    _vp_spin_speed = vec3d(0.0, 0.0, 0.0);
+    _vp_spin_strength = vec3d(0.0, 0.0, 0.0);
     _vp_trail_scale = vec3d(1.0, 1.0, 1.0);
     _vp_trail_tint = World::TVisualTint();
-    _vp_trail_spin_speed = vec3d(0.0, 0.0, 0.0);
+    _vp_trail_spin_strength = vec3d(0.0, 0.0, 0.0);
     ypabact_ResetDamagedFX(this);
     _decoration_fx = World::TDecorationFXConfig();
     _decoration_fx_next_time = 0;
@@ -1825,10 +1809,10 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _vp_scale = vec3d(1.0, 1.0, 1.0);
     _vp_tint = World::TVisualTint();
     _vp_orientation = vec3d(0.0, 0.0, 0.0);
-    _vp_spin_speed = vec3d(0.0, 0.0, 0.0);
+    _vp_spin_strength = vec3d(0.0, 0.0, 0.0);
     _vp_trail_scale = vec3d(1.0, 1.0, 1.0);
     _vp_trail_tint = World::TVisualTint();
-    _vp_trail_spin_speed = vec3d(0.0, 0.0, 0.0);
+    _vp_trail_spin_strength = vec3d(0.0, 0.0, 0.0);
     _decoration_fx = World::TDecorationFXConfig();
     _decoration_fx_next_time = 0;
     _decoration_fx_persistent_id = 0;
@@ -3601,14 +3585,14 @@ void NC_STACK_ypabact::Render(baseRender_msg *arg)
             // repurposed as a lifetime multiplier so values below 1.0 shorten
             // the visible trail while 1.0 (or an absent key) stays vanilla.
             arg->particleScale = vec3d(_vp_trail_scale.x, _vp_trail_scale.y, 1.0f);
-            arg->particleSpin = _vp_trail_spin_speed;
+            arg->particleSpin = _vp_trail_spin_strength;
             arg->particleLifetimeScale = _vp_trail_scale.z;
         }
         else if ( mainBase )
         {
             arg->particleTint = arg->tint;
             arg->particleScale = shouldApplyVPScale(base) ? _vp_scale : vec3d(1.0, 1.0, 1.0);
-            arg->particleSpin = ypabact_ShouldApplyVPSpin(this, base) ? _vp_spin_speed : vec3d(0.0, 0.0, 0.0);
+            arg->particleSpin = ypabact_ShouldApplyVPSpin(this, base) ? _vp_spin_strength : vec3d(0.0, 0.0, 0.0);
             arg->particleLifetimeScale = 1.0f;
         }
         else
@@ -3640,7 +3624,7 @@ void NC_STACK_ypabact::Render(baseRender_msg *arg)
                     _current_vp->Bas->TForm().SclRot *= mat3x3::RotateX(tankRecoilPitch);
 
                 if ( ypabact_ShouldApplyVPSpin(this, _current_vp->Bas) )
-                    _current_vp->Bas->TForm().SclRot *= ypabact_BuildVPSpinMatrix(this);
+                    _current_vp->Bas->TForm().SclRot *= World::Spin::BuildMatrix(_vp_spin_strength, _clock);
 
                 if ( scaled )
                     _current_vp->Bas->TForm().SclRot *= mat3x3::Scale(_vp_scale);
@@ -3683,7 +3667,7 @@ void NC_STACK_ypabact::Render(baseRender_msg *arg)
                     bd->vp->Bas->TForm().SclRot *= ypabact_BuildVPRotationMatrix(_vp_orientation);
 
                 if ( ypabact_ShouldApplyVPSpin(this, bd->vp->Bas) )
-                    bd->vp->Bas->TForm().SclRot *= ypabact_BuildVPSpinMatrix(this);
+                    bd->vp->Bas->TForm().SclRot *= World::Spin::BuildMatrix(_vp_spin_strength, _clock);
 
                 if ( scaled )
                     bd->vp->Bas->TForm().SclRot *= mat3x3::Scale(_vp_scale);

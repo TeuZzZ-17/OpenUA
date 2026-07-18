@@ -55,6 +55,11 @@ public:
         return Get(LBL_HUDTXT + id, DefaultStrings::HudStrings[ id ]);
     }
 
+    static std::string Gem(uint32_t id)
+    {
+        return Get(LBL_GEM + id, DefaultStrings::GemStrings[ id ]);
+    }
+
     static std::string WinName(uint32_t id)
     {
         return Get(LBL_WINNAMES + id, DefaultStrings::WinNames[ id ]);

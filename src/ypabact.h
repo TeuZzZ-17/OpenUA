@@ -823,10 +823,10 @@ public:
     vec3d _vp_scale = vec3d(1.0, 1.0, 1.0);
     World::TVisualTint _vp_tint; // OpenUA custom: main VP visual-only RGBA tint multiplier
     vec3d _vp_orientation = vec3d(0.0, 0.0, 0.0);
-    vec3d _vp_spin_speed = vec3d(0.0, 0.0, 0.0);
+    vec3d _vp_spin_strength = vec3d(0.0, 0.0, 0.0);
     vec3d _vp_trail_scale = vec3d(1.0, 1.0, 1.0);
     World::TVisualTint _vp_trail_tint; // OpenUA custom: weapon embedded particle/trail tint
-    vec3d _vp_trail_spin_speed = vec3d(0.0, 0.0, 0.0);
+    vec3d _vp_trail_spin_strength = vec3d(0.0, 0.0, 0.0);
     NC_STACK_base *_vp_normal;
     NC_STACK_base *_vp_fire;
     NC_STACK_base *_vp_wait;

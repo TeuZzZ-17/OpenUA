@@ -14,6 +14,8 @@ public:
     static std::array<std::string, CMN_MAX> Commons;
     // LBL_HUDSTR 30
     static std::array<std::string, HUDSTR_MAX> HudStrings;
+    // LBL_GEM 2520
+    static std::array<std::string, GEMSTR_MAX> GemStrings;
     // LBL_WINNAMES 50
     static std::array<std::string, WINNAME_MAX> WinNames;
     // LBL_TITLES 80

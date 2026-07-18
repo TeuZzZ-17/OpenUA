@@ -372,6 +372,7 @@ enum SOUND_ID
     SOUND_ID_PLASMA = 20,
 
     SOUND_ID_CHAT = 21,
+    SOUND_ID_GEM_UNLOCK = 22,
 
     SOUND_ID_MAX
 };
@@ -1273,6 +1274,35 @@ struct TMapGem
     int16_t NwBprotoNum4 = 0;
     Engine::StringList ActionsList;
     int Type = 0;
+};
+
+struct TGemNotificationEntry
+{
+    enum TARGET_KIND
+    {
+        TARGET_VEHICLE = 0,
+        TARGET_WEAPON,
+        TARGET_BUILDING
+    };
+
+    enum CHANGE_KIND
+    {
+        CHANGE_ENABLE = 0,
+        CHANGE_ENERGY,
+        CHANGE_SHIELD,
+        CHANGE_RADAR
+    };
+
+    uint8_t TargetKind = TARGET_VEHICLE;
+    uint8_t ChangeKind = CHANGE_ENABLE;
+    int32_t TargetProtoId = 0;
+    int32_t RelatedVehicleId = 0;
+    int32_t PreviousRawValue = 0;
+    int32_t NewRawValue = 0;
+    int32_t DeltaRawValue = 0;
+    uint32_t ActionOrder = 0;
+    bool NewlyEnabled = false;
+    bool AlreadyUnlocked = false;
 };
 
 struct TBkgPicInfo
@@ -2561,6 +2591,15 @@ public:
     std::string ResolveGameplayBuildingName(uint32_t id, bool net = false) const;
     std::string ResolveGameplayBuildingName(const World::TBuildingProto &proto, bool net = false) const;
 
+    void BeginGemNotificationCapture();
+    void FinishGemNotificationCapture(bool successful);
+    void ClearGemNotificationCapture();
+    bool IsGemNotificationCaptureActive() const;
+    void RecordGemNotificationChange(uint8_t targetKind, int32_t targetProtoId,
+                                     uint8_t changeKind, int32_t previousRawValue,
+                                     int32_t newRawValue, bool newlyEnabled = false);
+    void PlayConfiguredGemUnlockSound();
+
     std::string GetLevelName(uint32_t id) const;
     std::string GetLevelName(const TLevelInfo &lvl) const;
 
@@ -2877,6 +2916,10 @@ public:
     int32_t _upgradeVehicleId = 0;
     int32_t _upgradeWeaponId = 0;
     int32_t _upgradeBuildId = 0;
+    std::vector<TGemNotificationEntry> _gemNotificationEntries;
+    bool _gemNotificationCaptureActive = false;
+    uint32_t _gemNotificationActionOrder = 0;
+    std::string _gemUnlockSoundAttemptedPath;
 
     TMapRegionsNet _globalMapRegions; // level selector
     TLevelInfo _levelInfo; // current level information

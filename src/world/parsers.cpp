@@ -8,6 +8,7 @@
 #include "../log.h"
 #include "../utils.h"
 #include "../system/inivals.h"
+#include "spin.h"
 
 #include <algorithm>
 #include <cmath>
@@ -719,19 +720,19 @@ static bool ParseVPSpinParam(ScriptParser::Parser &parser,
 {
     if ( !StriCmp(p1, prefix + "_spin_x") )
     {
-        spin.x = parser.stof(p2, 0);
+        spin.x = Spin::ClampStrength(parser.stof(p2, 0));
         return true;
     }
 
     if ( !StriCmp(p1, prefix + "_spin_y") )
     {
-        spin.y = parser.stof(p2, 0);
+        spin.y = Spin::ClampStrength(parser.stof(p2, 0));
         return true;
     }
 
     if ( !StriCmp(p1, prefix + "_spin_z") )
     {
-        spin.z = parser.stof(p2, 0);
+        spin.z = Spin::ClampStrength(parser.stof(p2, 0));
         return true;
     }
 
@@ -1301,7 +1302,14 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     }
     else if ( !StriCmp(p1, "enable") )
     {
-        _vhcl->disable_enable_bitmask |= 1 << parser.stol(p2, NULL, 0);
+        int fraction = parser.stol(p2, NULL, 0);
+        bool wasEnabled = (_vhcl->disable_enable_bitmask & (1 << fraction)) != 0;
+        _vhcl->disable_enable_bitmask |= 1 << fraction;
+
+        if ( _isModify && _o.IsGemNotificationCaptureActive() )
+            _o.RecordGemNotificationChange(TGemNotificationEntry::TARGET_VEHICLE, _vhclID,
+                                           TGemNotificationEntry::CHANGE_ENABLE,
+                                           wasEnabled ? 1 : 0, 1, !wasEnabled);
     }
     else if ( !StriCmp(p1, "disable") )
     {
@@ -1396,15 +1404,33 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     }
     else if ( !StriCmp(p1, "add_energy") )
     {
+        int previousValue = _vhcl->energy;
         _vhcl->energy += parser.stol(p2, NULL, 0);
+
+        if ( _isModify && _o.IsGemNotificationCaptureActive() )
+            _o.RecordGemNotificationChange(TGemNotificationEntry::TARGET_VEHICLE, _vhclID,
+                                           TGemNotificationEntry::CHANGE_ENERGY,
+                                           previousValue, _vhcl->energy);
     }
     else if ( !StriCmp(p1, "add_shield") )
     {
+        int previousValue = _vhcl->shield;
         _vhcl->shield += parser.stol(p2, NULL, 0);
+
+        if ( _isModify && _o.IsGemNotificationCaptureActive() )
+            _o.RecordGemNotificationChange(TGemNotificationEntry::TARGET_VEHICLE, _vhclID,
+                                           TGemNotificationEntry::CHANGE_SHIELD,
+                                           previousValue, _vhcl->shield);
     }
     else if ( !StriCmp(p1, "add_radar") )
     {
+        int previousValue = _vhcl->radar;
         _vhcl->radar += parser.stol(p2, NULL, 0);
+
+        if ( _isModify && _o.IsGemNotificationCaptureActive() )
+            _o.RecordGemNotificationChange(TGemNotificationEntry::TARGET_VEHICLE, _vhclID,
+                                           TGemNotificationEntry::CHANGE_RADAR,
+                                           previousValue, _vhcl->radar);
     }
     else if ( !StriCmp(p1, "vp_normal") )
     {
@@ -2605,6 +2631,7 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
 {
     if ( !StriCmp(word, "new_vehicle") )
     {
+        _isModify = false;
         _roboTmp = TRoboProto();
         _gunID = -1;
         _unitGunID = -1;
@@ -2776,7 +2803,17 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _unitDummyID = -1;
         _collID = -1;
         _vhclID = parser.stol(opt, NULL, 0);
+
+        if ( _vhclID < 0 || (size_t)_vhclID >= _o._vhclProtos.size() )
+        {
+            ypa_log_out("WARNING: modify_vehicle ignored invalid prototype ID %d.\n", _vhclID);
+            _vhcl = NULL;
+            _isModify = false;
+            return false;
+        }
+
         _vhcl = &_o._vhclProtos.at(_vhclID);
+        _isModify = true;
 
         _vhcl->Index = _vhclID;
 
@@ -2803,8 +2840,9 @@ bool WeaponProtoParser::IsScope(ScriptParser::Parser &parser, const std::string 
 {
     if (!StriCmp(word, "new_weapon"))
     {
-        int wpnId = parser.stol(opt, NULL, 0);
-        _wpn = &_o._weaponProtos[wpnId];
+        _isModify = false;
+        _wpnID = parser.stol(opt, NULL, 0);
+        _wpn = &_o._weaponProtos[_wpnID];
 
         *_wpn = TWeapProto();
 
@@ -2920,10 +2958,20 @@ bool WeaponProtoParser::IsScope(ScriptParser::Parser &parser, const std::string 
     }
     else if (!StriCmp(word, "modify_weapon"))
     {
-        int wpnId = parser.stol(opt, NULL, 0);
-        _wpn = &_o._weaponProtos[wpnId];
+        _wpnID = parser.stol(opt, NULL, 0);
 
-        _o._upgradeWeaponId = wpnId;
+        if ( _wpnID < 0 || (size_t)_wpnID >= _o._weaponProtos.size() )
+        {
+            ypa_log_out("WARNING: modify_weapon ignored invalid prototype ID %d.\n", _wpnID);
+            _wpn = NULL;
+            _isModify = false;
+            return false;
+        }
+
+        _wpn = &_o._weaponProtos[_wpnID];
+        _isModify = true;
+
+        _o._upgradeWeaponId = _wpnID;
         return true;
     }
 
@@ -3463,7 +3511,13 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     }
     else if ( !StriCmp(p1, "add_energy") )
     {
+        int previousValue = _wpn->energy;
         _wpn->energy += parser.stol(p2, NULL, 0);
+
+        if ( _isModify && _o.IsGemNotificationCaptureActive() )
+            _o.RecordGemNotificationChange(TGemNotificationEntry::TARGET_WEAPON, _wpnID,
+                                           TGemNotificationEntry::CHANGE_ENERGY,
+                                           previousValue, _wpn->energy);
     }
     else if ( !StriCmp(p1, "add_energy_heli") )
     {
@@ -3705,11 +3759,12 @@ bool BuildProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &
 {
     if (!StriCmp(word, "new_building"))
     {
-        int bldId = parser.stol(opt, NULL, 0);
+        _isModify = false;
+        _bldID = parser.stol(opt, NULL, 0);
 
-        _o._buildProtos[bldId] = TBuildingProto();
-        _bld = &_o._buildProtos[bldId];
-        _bld->Index = bldId;
+        _o._buildProtos[_bldID] = TBuildingProto();
+        _bld = &_o._buildProtos[_bldID];
+        _bld->Index = _bldID;
         _bld->Energy = 50000;
         _bld->TypeIcon = 65;
         _bld->SndFX.volume = 120;
@@ -3718,11 +3773,20 @@ bool BuildProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &
     }
     else if (!StriCmp(word, "modify_building"))
     {
-        int bldId = parser.stol(opt, NULL, 0);
+        _bldID = parser.stol(opt, NULL, 0);
 
-        _bld = &_o._buildProtos[bldId];
-        _bld->Index = bldId;
-        _o._upgradeBuildId = bldId;
+        if ( _bldID < 0 || (size_t)_bldID >= _o._buildProtos.size() )
+        {
+            ypa_log_out("WARNING: modify_building ignored invalid prototype ID %d.\n", _bldID);
+            _bld = NULL;
+            _isModify = false;
+            return false;
+        }
+
+        _bld = &_o._buildProtos[_bldID];
+        _bld->Index = _bldID;
+        _isModify = true;
+        _o._upgradeBuildId = _bldID;
         return true;
     }
 
@@ -3758,7 +3822,14 @@ int BuildProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1
     }
     else if ( !StriCmp(p1, "enable") )
     {
-        _bld->EnableMask |= 1 << parser.stol(p2, NULL, 0);
+        int fraction = parser.stol(p2, NULL, 0);
+        bool wasEnabled = (_bld->EnableMask & (1 << fraction)) != 0;
+        _bld->EnableMask |= 1 << fraction;
+
+        if ( _isModify && _o.IsGemNotificationCaptureActive() )
+            _o.RecordGemNotificationChange(TGemNotificationEntry::TARGET_BUILDING, _bldID,
+                                           TGemNotificationEntry::CHANGE_ENABLE,
+                                           wasEnabled ? 1 : 0, 1, !wasEnabled);
     }
     else if ( !StriCmp(p1, "disable") )
     {

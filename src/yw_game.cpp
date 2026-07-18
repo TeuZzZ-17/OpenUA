@@ -18,6 +18,7 @@
 #include "gui/uacommon.h"
 #include "system/inivals.h"
 #include "system/system.h"
+#include "world/spin.h"
 
 extern uint32_t bact_id;
 
@@ -1250,6 +1251,8 @@ void NC_STACK_ypaworld::yw_InitTechUpgradeBuildings()
     _upgradeVehicleId = 0;
     _upgradeWeaponId = 0;
     _upgradeId = -1;
+    ClearGemNotificationCapture();
+    _gemUnlockSoundAttemptedPath.clear();
 
     for (size_t i = 0; i < _techUpgrades.size(); i++)
     {
@@ -3152,22 +3155,6 @@ static void yw_UpdateBuildingSpawner(NC_STACK_ypaworld *world, cellArea &cell, c
     }
 }
 
-static mat3x3 yw_BuildTransientVPSpinMatrix(const vec3d &degreesPerSecond, int32_t age)
-{
-    const float degToRad = 0.01745329251994329577f;
-    vec3d angle = degreesPerSecond * ((float)age * 0.001f * degToRad);
-    mat3x3 spin = mat3x3::Ident();
-
-    if ( angle.x != 0.0 )
-        spin *= mat3x3::RotateX(angle.x);
-    if ( angle.y != 0.0 )
-        spin *= mat3x3::RotateY(angle.y);
-    if ( angle.z != 0.0 )
-        spin *= mat3x3::RotateZ(angle.z);
-
-    return spin;
-}
-
 static mat3x3 yw_BuildTransientVPRotationMatrix(const vec3d &degrees)
 {
     const float degToRad = 0.01745329251994329577f;
@@ -3182,11 +3169,6 @@ static mat3x3 yw_BuildTransientVPRotationMatrix(const vec3d &degrees)
         rot *= mat3x3::RotateZ(angle.z);
 
     return rot;
-}
-
-static bool yw_HasTransientVPSpin(const vec3d &spin)
-{
-    return spin.x != 0.0 || spin.y != 0.0 || spin.z != 0.0;
 }
 
 static bool yw_HasTransientVPRotation(const vec3d &rotation)
@@ -3289,8 +3271,8 @@ static void yw_RenderTransientVPs(NC_STACK_ypaworld *world, std::list<NC_STACK_y
         mat3x3 renderRot = it->rot.Transpose();
         if ( yw_HasTransientVPRotation(it->localRotation) )
             renderRot *= yw_BuildTransientVPRotationMatrix(it->localRotation);
-        if ( yw_HasTransientVPSpin(it->spin) )
-            renderRot *= yw_BuildTransientVPSpinMatrix(it->spin, it->age);
+        if ( World::Spin::HasStrength(it->spin) )
+            renderRot *= World::Spin::BuildMatrix(it->spin, it->age);
 
         it->vp->Bas->TForm().Pos = it->pos;
         it->vp->Bas->TForm().SclRot = renderRot * mat3x3::Scale(renderScale);

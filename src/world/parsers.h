@@ -175,7 +175,7 @@ class VhclProtoParser : public ScriptParser::DataHandler, public FxParser
 {
 friend FxParser;
 public:
-    VhclProtoParser(NC_STACK_ypaworld *o) : _o(*o), _vhcl(NULL), _vhclID(-1), _gunID(-1), _unitGunID(-1), _unitDummyID(-1), _collID(-1) {} ;
+    VhclProtoParser(NC_STACK_ypaworld *o) : _o(*o), _vhcl(NULL), _vhclID(-1), _isModify(false), _gunID(-1), _unitGunID(-1), _unitDummyID(-1), _collID(-1) {} ;
     virtual int Handle(ScriptParser::Parser &parser, const std::string &p1, const std::string &p2);
     virtual bool IsScope(ScriptParser::Parser &parser, const std::string &word, const std::string &opt);
 protected:
@@ -184,6 +184,7 @@ protected:
     NC_STACK_ypaworld &_o;
     TVhclProto *_vhcl;
     int32_t _vhclID;
+    bool _isModify;
     int32_t _gunID;
     int32_t _unitGunID;
     int32_t _unitDummyID;
@@ -196,7 +197,7 @@ class WeaponProtoParser : public ScriptParser::DataHandler, public FxParser
 {
 friend FxParser;
 public:
-    WeaponProtoParser(NC_STACK_ypaworld *o) : _o(*o), _wpn(NULL) {} ;
+    WeaponProtoParser(NC_STACK_ypaworld *o) : _o(*o), _wpn(NULL), _wpnID(-1), _isModify(false) {} ;
     virtual int Handle(ScriptParser::Parser &parser, const std::string &p1, const std::string &p2);
     virtual bool IsScope(ScriptParser::Parser &parser, const std::string &word, const std::string &opt);
 protected:
@@ -204,17 +205,21 @@ protected:
 
     NC_STACK_ypaworld &_o;
     TWeapProto *_wpn;
+    int32_t _wpnID;
+    bool _isModify;
 };
 
 class BuildProtoParser : public ScriptParser::DataHandler
 {
 public:
-    BuildProtoParser(NC_STACK_ypaworld *o) : _o(*o), _bld(NULL), _gunID(-1) {} ;
+    BuildProtoParser(NC_STACK_ypaworld *o) : _o(*o), _bld(NULL), _bldID(-1), _isModify(false), _gunID(-1) {} ;
     virtual int Handle(ScriptParser::Parser &parser, const std::string &p1, const std::string &p2);
     virtual bool IsScope(ScriptParser::Parser &parser, const std::string &word, const std::string &opt);
 protected:
     NC_STACK_ypaworld &_o;
     TBuildingProto *_bld;
+    int32_t _bldID;
+    bool _isModify;
     size_t _gunID;
 };
 

@@ -18,6 +18,7 @@
 #include "font.h"
 #include "yparobo.h"
 #include "windp.h"
+#include "wav.h"
 #include "yw_net.h"
 #include "gui/uacommon.h"
 #include "gui/uamsgbox.h"
@@ -2083,6 +2084,178 @@ size_t NC_STACK_ypaworld::Process(base_64arg *arg)
     return 1;
 }
 
+static bool yw_VehicleReferencesWeapon(const World::TVhclProto &vehicle, int32_t weaponId)
+{
+    if ( vehicle.weapon == weaponId )
+        return true;
+
+    for (int16_t extraWeaponId : vehicle.extra_weapons)
+    {
+        if ( extraWeaponId == weaponId )
+            return true;
+    }
+
+    if ( vehicle.lowhp_weapon_enable && vehicle.lowhp_weapon == weaponId )
+        return true;
+
+    if ( vehicle.mgun_set && vehicle.mgun == weaponId )
+        return true;
+
+    if ( vehicle.seek_and_explode && vehicle.seek_and_explode_weapon == weaponId )
+        return true;
+
+    return vehicle.proximity_defense_enable && vehicle.proximity_defense_weapon == weaponId;
+}
+
+void NC_STACK_ypaworld::BeginGemNotificationCapture()
+{
+    _gemNotificationEntries.clear();
+    _gemNotificationActionOrder = 0;
+    _gemNotificationCaptureActive = true;
+}
+
+void NC_STACK_ypaworld::ClearGemNotificationCapture()
+{
+    _gemNotificationCaptureActive = false;
+    _gemNotificationActionOrder = 0;
+    _gemNotificationEntries.clear();
+}
+
+bool NC_STACK_ypaworld::IsGemNotificationCaptureActive() const
+{
+    return _gemNotificationCaptureActive;
+}
+
+void NC_STACK_ypaworld::RecordGemNotificationChange(uint8_t targetKind, int32_t targetProtoId,
+                                                     uint8_t changeKind, int32_t previousRawValue,
+                                                     int32_t newRawValue, bool newlyEnabled)
+{
+    if ( !_gemNotificationCaptureActive )
+        return;
+
+    if ( (targetKind == TGemNotificationEntry::TARGET_VEHICLE &&
+          (targetProtoId < 0 || (size_t)targetProtoId >= _vhclProtos.size())) ||
+         (targetKind == TGemNotificationEntry::TARGET_WEAPON &&
+          (targetProtoId < 0 || (size_t)targetProtoId >= _weaponProtos.size())) ||
+         (targetKind == TGemNotificationEntry::TARGET_BUILDING &&
+          (targetProtoId < 0 || (size_t)targetProtoId >= _buildProtos.size())) )
+        return;
+
+    TGemNotificationEntry entry;
+    entry.TargetKind = targetKind;
+    entry.ChangeKind = changeKind;
+    entry.TargetProtoId = targetProtoId;
+    entry.PreviousRawValue = previousRawValue;
+    entry.NewRawValue = newRawValue;
+    entry.DeltaRawValue = newRawValue - previousRawValue;
+    entry.ActionOrder = _gemNotificationActionOrder++;
+    entry.NewlyEnabled = changeKind == TGemNotificationEntry::CHANGE_ENABLE && newlyEnabled;
+    entry.AlreadyUnlocked = changeKind == TGemNotificationEntry::CHANGE_ENABLE &&
+                            previousRawValue != 0 && newRawValue != 0;
+    _gemNotificationEntries.push_back(entry);
+}
+
+void NC_STACK_ypaworld::FinishGemNotificationCapture(bool successful)
+{
+    _gemNotificationCaptureActive = false;
+
+    if ( !successful )
+    {
+        _gemNotificationEntries.clear();
+        return;
+    }
+
+    for (TGemNotificationEntry &entry : _gemNotificationEntries)
+    {
+        if ( entry.TargetKind != TGemNotificationEntry::TARGET_WEAPON )
+            continue;
+
+        std::vector<int32_t> candidates;
+        for (const TGemNotificationEntry &other : _gemNotificationEntries)
+        {
+            if ( other.TargetKind != TGemNotificationEntry::TARGET_VEHICLE ||
+                 other.TargetProtoId < 0 ||
+                 (size_t)other.TargetProtoId >= _vhclProtos.size() ||
+                 !yw_VehicleReferencesWeapon(_vhclProtos[other.TargetProtoId], entry.TargetProtoId) )
+                continue;
+
+            if ( std::find(candidates.begin(), candidates.end(), other.TargetProtoId) == candidates.end() )
+                candidates.push_back(other.TargetProtoId);
+        }
+
+        if ( candidates.size() == 1 )
+        {
+            entry.RelatedVehicleId = candidates.front();
+            continue;
+        }
+
+        if ( !candidates.empty() )
+            continue;
+
+        for (size_t vehicleId = 0; vehicleId < _vhclProtos.size(); ++vehicleId)
+        {
+            if ( yw_VehicleReferencesWeapon(_vhclProtos[vehicleId], entry.TargetProtoId) )
+                candidates.push_back(vehicleId);
+
+            if ( candidates.size() > 1 )
+                break;
+        }
+
+        if ( candidates.size() == 1 )
+            entry.RelatedVehicleId = candidates.front();
+    }
+}
+
+void NC_STACK_ypaworld::PlayConfiguredGemUnlockSound()
+{
+    if ( !_GameShell )
+        return;
+
+    const std::string path = System::IniConf::GameGemUnlockSound.Get<std::string>();
+    if ( path.empty() )
+        return;
+
+    const size_t soundId = World::SOUND_ID_GEM_UNLOCK;
+    if ( soundId >= _GameShell->samples1.size() || soundId >= _GameShell->samples1_info.Sounds.size() )
+        return;
+
+    NC_STACK_sample *&sample = _GameShell->samples1[soundId];
+    TSoundSource &source = _GameShell->samples1_info.Sounds[soundId];
+
+    if ( _gemUnlockSoundAttemptedPath != path )
+    {
+        if ( sample )
+        {
+            SFXEngine::SFXe.sub_424000(&_GameShell->samples1_info, soundId);
+            SFXEngine::SFXe.ForceStopSource(&_GameShell->samples1_info, soundId);
+            sample->Delete();
+            sample = NULL;
+            source.PSample = NULL;
+            source.SampleVariants.clear();
+        }
+
+        _gemUnlockSoundAttemptedPath = path;
+        std::string previousRsrc = Common::Env.SetPrefix("rsrc", "data:");
+        NC_STACK_wav *wav = Nucleus::CInit<NC_STACK_wav>({{NC_STACK_rsrc::RSRC_ATT_NAME, path}});
+        Common::Env.SetPrefix("rsrc", previousRsrc);
+
+        if ( !wav )
+        {
+            ypa_log_out("Warning: Could not load GEM unlock sample %s. Using vanilla GEM audio only.\n", path.c_str());
+            return;
+        }
+
+        sample = wav;
+        source.PSample = wav->GetSampleData();
+    }
+
+    if ( !sample )
+        return;
+
+    source.PSample = sample->GetSampleData();
+    SFXEngine::SFXe.startSound(&_GameShell->samples1_info, soundId);
+}
+
 void sub_47C1EC(NC_STACK_ypaworld *yw, TMapGem *gemProt, int *a3, int *a4)
 {
     switch ( yw->_GameShell->netPlayerOwner )
@@ -2127,17 +2300,36 @@ void sub_47C29C(NC_STACK_ypaworld *yw, cellArea *cell, int a3)
     yw->_upgradeWeaponId = 0;
     yw->_upgradeBuildId = a4;
 
+    bool detailedCapture = System::IniConf::GameGemUnlockDetailedUI.Get<bool>();
+    if ( detailedCapture )
+        yw->BeginGemNotificationCapture();
+    else
+        yw->ClearGemNotificationCapture();
+
     if ( a3a )
     {
+        bool wasEnabled = (yw->_vhclProtos[a3a].disable_enable_bitmask &
+                           (1 << yw->_GameShell->netPlayerOwner)) != 0;
         yw->_vhclProtos[a3a].disable_enable_bitmask = 0;
         yw->_vhclProtos[a3a].disable_enable_bitmask |= 1 << yw->_GameShell->netPlayerOwner;
+        yw->RecordGemNotificationChange(TGemNotificationEntry::TARGET_VEHICLE, a3a,
+                                        TGemNotificationEntry::CHANGE_ENABLE,
+                                        wasEnabled ? 1 : 0, 1, !wasEnabled);
     }
 
     if ( a4 )
     {
+        bool wasEnabled = (yw->_buildProtos[a4].EnableMask &
+                           (1 << yw->_GameShell->netPlayerOwner)) != 0;
         yw->_buildProtos[a4].EnableMask = 0;
         yw->_buildProtos[a4].EnableMask |= 1 << yw->_GameShell->netPlayerOwner;
+        yw->RecordGemNotificationChange(TGemNotificationEntry::TARGET_BUILDING, a4,
+                                        TGemNotificationEntry::CHANGE_ENABLE,
+                                        wasEnabled ? 1 : 0, 1, !wasEnabled);
     }
+
+    if ( detailedCapture )
+        yw->FinishGemNotificationCapture(true);
 
     yw_arg159 v14;
     v14.txt = Locale::Text::Feedback(Locale::FEEDBACK_TECHUP);
@@ -2150,6 +2342,7 @@ void sub_47C29C(NC_STACK_ypaworld *yw, cellArea *cell, int a3)
         v14.MsgID = 0;
 
     yw->ypaworld_func159(&v14);
+    yw->PlayConfiguredGemUnlockSound();
 
     if ( yw->_isNetGame && yw->_netExclusiveGem )
     {
@@ -2214,11 +2407,19 @@ void NC_STACK_ypaworld::yw_ActivateWunderstein(cellArea *cell, int gemid)
     _upgradeId = gemid;
     _upgradeTimeStamp = _timeStamp;
 
+    bool detailedCapture = System::IniConf::GameGemUnlockDetailedUI.Get<bool>();
+    if ( detailedCapture )
+        BeginGemNotificationCapture();
+    else
+        ClearGemNotificationCapture();
+
     TMapGem &gem = _techUpgrades[gemid];
+    bool parseSuccessful = false;
 
     if ( !gem.ScriptFile.empty() )
     {
-        if ( !LoadProtosScript(gem.ScriptFile) )
+        parseSuccessful = LoadProtosScript(gem.ScriptFile);
+        if ( !parseSuccessful )
             ypa_log_out("yw_ActivateWunderstein: ERROR parsing script %s.\n", gem.ScriptFile.c_str());
     }
     else
@@ -2231,9 +2432,12 @@ void NC_STACK_ypaworld::yw_ActivateWunderstein(cellArea *cell, int gemid)
             new World::Parsers::BuildProtoParser(this)
         };
 
-        ScriptParser::ParseStringList(gem.ActionsList, parsers, ScriptParser::FLAG_NO_SCOPE_SKIP);
+        parseSuccessful = ScriptParser::ParseStringList(gem.ActionsList, parsers, ScriptParser::FLAG_NO_SCOPE_SKIP);
         Common::Env.SetPrefix("rsrc", tmp);
     }
+
+    if ( detailedCapture )
+        FinishGemNotificationCapture(parseSuccessful);
 
     yw_arg159 arg159;
     arg159.unit = NULL;
@@ -2246,6 +2450,9 @@ void NC_STACK_ypaworld::yw_ActivateWunderstein(cellArea *cell, int gemid)
         arg159.MsgID = 0;
 
     ypaworld_func159(&arg159);
+
+    if ( parseSuccessful )
+        PlayConfiguredGemUnlockSound();
 
     cell->PurposeType = cellArea::PT_TECHDEACTIVE;
 }
@@ -3014,10 +3221,10 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
             bacto->_vp_tint.Clamp();
         }
         bacto->_vp_orientation = vhcl.vp_orientation;
-        bacto->_vp_spin_speed = vhcl.vp_spin;
+        bacto->_vp_spin_strength = vhcl.vp_spin;
         bacto->_vp_trail_scale = vec3d(1.0, 1.0, 1.0);
         bacto->_vp_trail_tint = World::TVisualTint();
-        bacto->_vp_trail_spin_speed = vec3d(0.0, 0.0, 0.0);
+        bacto->_vp_trail_spin_strength = vec3d(0.0, 0.0, 0.0);
         bacto->_damaged_fx = vhcl.damaged_fx;
         bacto->_damaged_fx_next_time = 0;
         bacto->_decoration_fx = vhcl.decoration_fx;
@@ -3275,10 +3482,10 @@ NC_STACK_ypamissile * NC_STACK_ypaworld::ypaworld_func147(ypaworld_arg146 *arg)
     wobj->_vp_scale = wproto.vp_scale;
     wobj->_vp_tint = wproto.vp_tint;
     wobj->_vp_orientation = wproto.vp_orientation;
-    wobj->_vp_spin_speed = wproto.vp_spin;
+    wobj->_vp_spin_strength = wproto.vp_spin;
     wobj->_vp_trail_scale = wproto.vp_trail_scale;
     wobj->_vp_trail_tint = wproto.vp_trail_tint;
-    wobj->_vp_trail_spin_speed = wproto.vp_trail_spin;
+    wobj->_vp_trail_spin_strength = wproto.vp_trail_spin;
 
     // Physical projectiles use the same cached VP compound generation as
     // vehicles when radius is absent or auto_collision is explicit. Beam
@@ -3943,6 +4150,8 @@ void NC_STACK_ypaworld::BeginLevelTeardown()
     _upgradeVehicleId = 0;
     _upgradeWeaponId = 0;
     _upgradeBuildId = 0;
+    ClearGemNotificationCapture();
+    _gemUnlockSoundAttemptedPath.clear();
 }
 
 void NC_STACK_ypaworld::EndLevelTeardown()
