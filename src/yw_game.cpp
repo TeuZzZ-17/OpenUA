@@ -2418,7 +2418,13 @@ void NC_STACK_ypaworld::RenderFillers(baseRender_msg *arg)
     }
 }
 
-int32_t NC_STACK_ypaworld::SpawnTransientVP(int32_t modelId, const vec3d &pos, const mat3x3 &rot, int32_t lifeTime, float scale, const World::TVisualTint &tint, const vec3d &axisScale, const vec3d &spin)
+static void yw_ApplyTransientVPTrailOnly(NC_STACK_ypaworld::TTransientVP &fx, bool trailOnly)
+{
+    if ( trailOnly && fx.vp )
+        fx.vp->skipGeometry = true;
+}
+
+int32_t NC_STACK_ypaworld::SpawnTransientVP(int32_t modelId, const vec3d &pos, const mat3x3 &rot, int32_t lifeTime, float scale, const World::TVisualTint &tint, const vec3d &axisScale, const vec3d &spin, bool trailOnly)
 {
     if ( modelId <= 0 || modelId >= (int32_t)_vhclModels.size() || lifeTime < 0 )
         return 0;
@@ -2436,6 +2442,7 @@ int32_t NC_STACK_ypaworld::SpawnTransientVP(int32_t modelId, const vec3d &pos, c
                              axisScale.z > 0.0f ? axisScale.z : 1.0f);
         fx.spin = spin;
         fx.tint = tint;
+        yw_ApplyTransientVPTrailOnly(fx, trailOnly);
         return fx.id;
     }
 
@@ -2520,7 +2527,7 @@ bool NC_STACK_ypaworld::UpdateRandomFXTimer(int intervalMin, int intervalMax, in
     return true;
 }
 
-int32_t NC_STACK_ypaworld::SpawnRandomizedTransientVP(int32_t modelId, const vec3d &ownerPos, float randomPos, const World::TVisualTint &tint, int32_t lifeTime, float scale, const vec3d &offset, const vec3d &axisScale, const vec3d &spin)
+int32_t NC_STACK_ypaworld::SpawnRandomizedTransientVP(int32_t modelId, const vec3d &ownerPos, float randomPos, const World::TVisualTint &tint, int32_t lifeTime, float scale, const vec3d &offset, const vec3d &axisScale, const vec3d &spin, bool trailOnly)
 {
     if ( modelId <= 0 )
         return 0;
@@ -2533,7 +2540,7 @@ int32_t NC_STACK_ypaworld::SpawnRandomizedTransientVP(int32_t modelId, const vec
         pos.z += (((float)rand() / (float)RAND_MAX) * 2.0 - 1.0) * randomPos;
     }
 
-    return SpawnTransientVP(modelId, pos, mat3x3::Ident(), lifeTime, scale, tint, axisScale, spin);
+    return SpawnTransientVP(modelId, pos, mat3x3::Ident(), lifeTime, scale, tint, axisScale, spin, trailOnly);
 }
 
 void NC_STACK_ypaworld::UpdateDecorationFX(const World::TDecorationFXConfig &config, int32_t &nextTime, const vec3d &ownerPos, int32_t *persistentId)
@@ -2548,7 +2555,7 @@ void NC_STACK_ypaworld::UpdateDecorationFX(const World::TDecorationFXConfig &con
             return;
 
         if ( !HasTransientVP(*persistentId) )
-            *persistentId = SpawnTransientVP(config.vp, ownerPos + config.offset, mat3x3::Ident(), 0, 1.0, tint, config.vp_scale, config.vp_spin);
+            *persistentId = SpawnTransientVP(config.vp, ownerPos + config.offset, mat3x3::Ident(), 0, 1.0, tint, config.vp_scale, config.vp_spin, config.trail_only);
 
         return;
     }
@@ -2582,10 +2589,11 @@ void NC_STACK_ypaworld::UpdateDecorationFX(const World::TDecorationFXConfig &con
                                    1.0,
                                    config.offset,
                                    config.vp_scale,
-                                   config.vp_spin);
+                                   config.vp_spin,
+                                   config.trail_only);
 }
 
-int32_t NC_STACK_ypaworld::SpawnAttachedTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime, float scale, bool useOwnerTransform, const World::TVisualTint &tint, const vec3d &axisScale, const vec3d &spin, bool playerFirstPersonOnly, const vec3d &localRotation, bool hideInOwnerMissileCamera)
+int32_t NC_STACK_ypaworld::SpawnAttachedTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime, float scale, bool useOwnerTransform, const World::TVisualTint &tint, const vec3d &axisScale, const vec3d &spin, bool playerFirstPersonOnly, const vec3d &localRotation, bool hideInOwnerMissileCamera, bool trailOnly)
 {
     if ( !owner || modelId <= 0 || modelId >= (int32_t)_vhclModels.size() )
         return 0;
@@ -2615,6 +2623,7 @@ int32_t NC_STACK_ypaworld::SpawnAttachedTransientVP(int32_t modelId, NC_STACK_yp
                          axisScale.z > 0.0f ? axisScale.z : 1.0f);
     fx.spin = spin;
     fx.tint = tint;
+    yw_ApplyTransientVPTrailOnly(fx, trailOnly);
     return fx.id;
 }
 
@@ -2624,7 +2633,9 @@ int32_t NC_STACK_ypaworld::SpawnAttachedStatusTransientVP(int32_t modelId, NC_ST
                                                           const vec3d &axisScale)
 {
     int32_t id = SpawnAttachedTransientVP(modelId, owner, localOffset, lifeTime,
-                                          1.0, false, World::TVisualTint(), axisScale);
+                                          1.0, false, World::TVisualTint(), axisScale,
+                                          vec3d(0.0, 0.0, 0.0), false,
+                                          vec3d(0.0, 0.0, 0.0), false, trailOnly);
     if ( id <= 0 || _transientVPs.empty() )
         return id;
 
@@ -2633,8 +2644,6 @@ int32_t NC_STACK_ypaworld::SpawnAttachedStatusTransientVP(int32_t modelId, NC_ST
         return id;
 
     fx.followRotateOffset = rotateOffsetWithOwner;
-    if ( trailOnly && fx.vp )
-        fx.vp->skipGeometry = true;
 
     return id;
 }

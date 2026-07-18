@@ -3222,7 +3222,8 @@ static void ypabact_SpawnDecorationFXEvent(NC_STACK_ypabact *bact)
                                         bact->_decoration_fx.vp_spin,
                                         false,
                                         vec3d(0.0, 0.0, 0.0),
-                                        true);
+                                        true,
+                                        bact->_decoration_fx.trail_only);
     }
 }
 
@@ -3283,7 +3284,8 @@ void NC_STACK_ypabact::UpdateDecorationFX(update_msg *)
                                                  _decoration_fx.vp_spin,
                                                  false,
                                                  vec3d(0.0, 0.0, 0.0),
-                                                 true);
+                                                 true,
+                                                 _decoration_fx.trail_only);
         }
 
         return;

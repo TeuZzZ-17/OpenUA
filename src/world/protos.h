@@ -46,6 +46,7 @@ struct TDecorationFXConfig
 {
     uint8_t mode = DECORATION_FX_PERIODIC;
     int16_t vp = 0;
+    bool trail_only = false;
     int interval_min = 0;
     int interval_max = 0;
     int count_min = 0;

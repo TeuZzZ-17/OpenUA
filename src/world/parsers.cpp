@@ -776,6 +776,12 @@ static bool ParseDecorationFXParam(ScriptParser::Parser &parser,
         return true;
     }
 
+    if ( !StriCmp(p1, "decoration_fx_trail_only") )
+    {
+        config.trail_only = parser.stol(p2, NULL, 0) != 0;
+        return true;
+    }
+
     if ( !StriCmp(p1, "decoration_fx_mode") )
     {
         if ( !StriCmp(p2, "persistent") )
