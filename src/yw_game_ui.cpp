@@ -10008,10 +10008,54 @@ static int yw_GemDisplayedValue(const TGemNotificationEntry &entry, int rawValue
         return rawValue;
 
     if ( entry.TargetKind == TGemNotificationEntry::TARGET_WEAPON )
-        return rawValue / 100;
+        return rawValue;
 
     // Keep the exact vehicle-energy units used by yw_RenderInfoLifebar.
     return (rawValue + 99) / 100;
+}
+
+static std::string yw_GemFormatHundredths(int value, bool includeSign)
+{
+    int64_t magnitude = value;
+    if ( magnitude < 0 )
+        magnitude = -magnitude;
+
+    const char *sign = value < 0 ? "-" : (includeSign ? "+" : "");
+    int whole = (int)(magnitude / 100);
+    int fraction = (int)(magnitude % 100);
+
+    if ( fraction == 0 )
+        return fmt::sprintf("%s%d", sign, whole);
+
+    if ( (fraction % 10) == 0 )
+        return fmt::sprintf("%s%d.%d", sign, whole, fraction / 10);
+
+    return fmt::sprintf("%s%d.%02d", sign, whole, fraction);
+}
+
+static bool yw_GemIsWeaponDamageChange(const TGemNotificationEntry &entry)
+{
+    if ( entry.TargetKind != TGemNotificationEntry::TARGET_WEAPON )
+        return false;
+
+    switch ( entry.ChangeKind )
+    {
+    case TGemNotificationEntry::CHANGE_ENERGY:
+    case TGemNotificationEntry::CHANGE_ENERGY_HELI:
+    case TGemNotificationEntry::CHANGE_ENERGY_TANK:
+    case TGemNotificationEntry::CHANGE_ENERGY_FLYER:
+    case TGemNotificationEntry::CHANGE_ENERGY_ROBO:
+        return true;
+
+    default:
+        return false;
+    }
+}
+
+static bool yw_GemIsShotTimeChange(const TGemNotificationEntry &entry)
+{
+    return entry.ChangeKind == TGemNotificationEntry::CHANGE_SHOT_TIME ||
+           entry.ChangeKind == TGemNotificationEntry::CHANGE_SHOT_TIME_USER;
 }
 
 static std::string yw_GemTargetName(NC_STACK_ypaworld *yw, const TGemNotificationEntry &entry)
@@ -10047,7 +10091,31 @@ static std::string yw_GemChangeLabel(const TGemNotificationEntry &entry)
         return Locale::Text::Gem(Locale::GEMSTR_ENERGY);
 
     case TGemNotificationEntry::CHANGE_RADAR:
+    return Locale::Text::Gem(Locale::GEMSTR_RADAR);
+
+    case TGemNotificationEntry::CHANGE_UNHIDE_RADAR:
         return Locale::Text::Gem(Locale::GEMSTR_RADAR);
+
+    case TGemNotificationEntry::CHANGE_NUM_WEAPONS:
+        return Locale::Text::Gem(Locale::GEMSTR_WEAPONS);
+
+    case TGemNotificationEntry::CHANGE_SHOT_TIME:
+        return Locale::Text::Gem(Locale::GEMSTR_AI_COOLDOWN);
+
+    case TGemNotificationEntry::CHANGE_SHOT_TIME_USER:
+        return Locale::Text::Gem(Locale::GEMSTR_PLAYER_COOLDOWN);
+
+    case TGemNotificationEntry::CHANGE_ENERGY_HELI:
+        return Locale::Text::Gem(Locale::GEMSTR_HELI_DAMAGE);
+
+    case TGemNotificationEntry::CHANGE_ENERGY_TANK:
+        return Locale::Text::Gem(Locale::GEMSTR_TANK_DAMAGE);
+
+    case TGemNotificationEntry::CHANGE_ENERGY_FLYER:
+        return Locale::Text::Gem(Locale::GEMSTR_FLYER_DAMAGE);
+
+    case TGemNotificationEntry::CHANGE_ENERGY_ROBO:
+        return Locale::Text::Gem(Locale::GEMSTR_ROBO_DAMAGE);
 
     default:
         return std::string();
@@ -10056,7 +10124,7 @@ static std::string yw_GemChangeLabel(const TGemNotificationEntry &entry)
 
 static std::string yw_GemCategoryLabel(const TGemNotificationEntry &entry)
 {
-    if ( entry.TargetKind == TGemNotificationEntry::TARGET_WEAPON )
+    if ( yw_GemIsWeaponDamageChange(entry) )
         return Locale::Text::Gem(Locale::GEMSTR_ATTACK_UPGRADE);
 
     switch ( entry.ChangeKind )
@@ -10070,6 +10138,16 @@ static std::string yw_GemCategoryLabel(const TGemNotificationEntry &entry)
     case TGemNotificationEntry::CHANGE_RADAR:
         return Locale::Text::Gem(Locale::GEMSTR_RADAR_UPGRADE);
 
+    case TGemNotificationEntry::CHANGE_UNHIDE_RADAR:
+        return Locale::Text::Gem(Locale::GEMSTR_RADAR_UPGRADE);
+
+    case TGemNotificationEntry::CHANGE_NUM_WEAPONS:
+        return Locale::Text::Gem(Locale::GEMSTR_WEAPON_COUNT_UPGRADE);
+
+    case TGemNotificationEntry::CHANGE_SHOT_TIME:
+    case TGemNotificationEntry::CHANGE_SHOT_TIME_USER:
+        return Locale::Text::Gem(Locale::GEMSTR_FIRE_RATE_UPGRADE);
+
     default:
         return std::string();
     }
@@ -10077,18 +10155,38 @@ static std::string yw_GemCategoryLabel(const TGemNotificationEntry &entry)
 
 static std::string yw_GemFormatValue(const TGemNotificationEntry &entry, int value)
 {
+    if ( yw_GemIsWeaponDamageChange(entry) )
+        return yw_GemFormatHundredths(value, false);
+
     if ( entry.ChangeKind == TGemNotificationEntry::CHANGE_SHIELD )
         return fmt::sprintf("%d%%", value);
+
+    if ( yw_GemIsShotTimeChange(entry) )
+        return fmt::sprintf("%d ms", value);
 
     return fmt::sprintf("%d", value);
 }
 
 static std::string yw_GemFormatDelta(const TGemNotificationEntry &entry, int value)
 {
+    if ( yw_GemIsWeaponDamageChange(entry) )
+        return yw_GemFormatHundredths(value, true);
+
     if ( entry.ChangeKind == TGemNotificationEntry::CHANGE_SHIELD )
         return fmt::sprintf("%+d%%", value);
 
+    if ( yw_GemIsShotTimeChange(entry) )
+        return fmt::sprintf("%+d ms", value);
+
     return fmt::sprintf("%+d", value);
+}
+
+static std::string yw_GemAppliedValue(const TGemNotificationEntry &entry, int previousValue, int newValue)
+{
+    if ( entry.ChangeKind == TGemNotificationEntry::CHANGE_NUM_WEAPONS )
+        return yw_GemFormatValue(entry, newValue);
+
+    return yw_GemFormatDelta(entry, newValue - previousValue);
 }
 
 static std::string yw_GemTargetKey(const TGemNotificationEntry &entry)
@@ -10097,6 +10195,95 @@ static std::string yw_GemTargetKey(const TGemNotificationEntry &entry)
         return fmt::sprintf("v:%d", entry.RelatedVehicleId);
 
     return fmt::sprintf("%d:%d", entry.TargetKind, entry.TargetProtoId);
+}
+
+static void yw_GemAppendSpacer(std::vector<GemNotificationLine> *lines)
+{
+    lines->push_back({std::string(), std::string()});
+}
+
+static void yw_GemAppendNumericUpgradeLines(std::vector<GemNotificationLine> *lines,
+                                            const GemNotificationView &view)
+{
+    const TGemNotificationEntry &entry = *view.Entry;
+    std::string category = yw_GemCategoryLabel(entry);
+    if ( !category.empty() )
+        lines->push_back({category, std::string()});
+
+    lines->push_back({yw_GemAppliedValue(entry, view.PreviousDisplayedValue, view.NewDisplayedValue), std::string()});
+    yw_GemAppendSpacer(lines);
+
+    std::string stable = fmt::sprintf("%s: %s -> ",
+                                      yw_GemChangeLabel(entry),
+                                      yw_GemFormatValue(entry, view.PreviousDisplayedValue));
+    lines->push_back({stable, yw_GemFormatValue(entry, view.NewDisplayedValue)});
+}
+
+static void yw_GemAddUniqueFallbackTarget(std::vector<std::string> *targets, const std::string &name)
+{
+    if ( name.empty() )
+        return;
+
+    if ( std::find(targets->begin(), targets->end(), name) == targets->end() )
+        targets->push_back(name);
+}
+
+static int yw_GemFindPrimaryVehicleForWeapon(NC_STACK_ypaworld *yw, int weaponId)
+{
+    if ( weaponId <= 0 )
+        return 0;
+
+    for (size_t vehicleId = 0; vehicleId < yw->_vhclProtos.size(); ++vehicleId)
+    {
+        if ( yw->_vhclProtos[vehicleId].weapon == weaponId )
+            return (int)vehicleId;
+    }
+
+    return 0;
+}
+
+static void yw_GemBuildFallbackLines(NC_STACK_ypaworld *yw, std::vector<GemNotificationLine> *lines)
+{
+    std::vector<std::string> targets;
+
+    if ( yw->_upgradeVehicleId > 0 && (size_t)yw->_upgradeVehicleId < yw->_vhclProtos.size() )
+        yw_GemAddUniqueFallbackTarget(&targets, yw->ResolveGameplayVehicleName(yw->_upgradeVehicleId));
+
+    if ( yw->_upgradeWeaponId > 0 && (size_t)yw->_upgradeWeaponId < yw->_weaponProtos.size() )
+    {
+        int relatedVehicleId = yw_GemFindPrimaryVehicleForWeapon(yw, yw->_upgradeWeaponId);
+        if ( relatedVehicleId > 0 )
+            yw_GemAddUniqueFallbackTarget(&targets, yw->ResolveGameplayVehicleName(relatedVehicleId));
+        else
+            yw_GemAddUniqueFallbackTarget(&targets, yw->ResolveGameplayWeaponName(yw->_upgradeWeaponId));
+    }
+
+    if ( yw->_upgradeBuildId > 0 && (size_t)yw->_upgradeBuildId < yw->_buildProtos.size() )
+        yw_GemAddUniqueFallbackTarget(&targets, yw->ResolveGameplayBuildingName(yw->_upgradeBuildId, yw->_isNetGame));
+
+    if ( targets.empty() &&
+         yw->_upgradeId >= 0 && (size_t)yw->_upgradeId < yw->_techUpgrades.size() &&
+         !yw->_techUpgrades[yw->_upgradeId].MsgDefault.empty() )
+        yw_GemAddUniqueFallbackTarget(&targets, yw->_techUpgrades[yw->_upgradeId].MsgDefault);
+
+    lines->push_back({Locale::Text::Gem(Locale::GEMSTR_UPGRADE_UNLOCKED), std::string()});
+
+    if ( targets.empty() )
+    {
+        lines->push_back({Locale::Text::Gem(Locale::GEMSTR_UNLOCKED), std::string()});
+        return;
+    }
+
+    yw_GemAppendSpacer(lines);
+
+    for (size_t i = 0; i < targets.size(); ++i)
+    {
+        if ( i != 0 )
+            yw_GemAppendSpacer(lines);
+
+        lines->push_back({targets[i], std::string()});
+        lines->push_back({Locale::Text::Gem(Locale::GEMSTR_UNLOCKED), std::string()});
+    }
 }
 
 static void yw_DrawGemPanelOutline(NC_STACK_ypaworld *yw, int halfWidth, int top, int bottom)
@@ -10120,9 +10307,17 @@ static void yw_DrawGemPanelOutline(NC_STACK_ypaworld *yw, int halfWidth, int top
     }
 }
 
+static bool yw_HasActiveDetailedGemNotification(const NC_STACK_ypaworld *yw)
+{
+    return System::IniConf::GameGemUnlockDetailedUI.Get<bool>() &&
+           yw->_upgradeId != -1 &&
+           yw->_timeStamp - yw->_upgradeTimeStamp < 10000;
+}
+
 static bool yw_RenderDetailedGemNotification(NC_STACK_ypaworld *yw)
 {
     std::vector<GemNotificationView> views;
+    std::vector<GemNotificationLine> lines;
     bool hasRealChange = false;
 
     for (const TGemNotificationEntry &entry : yw->_gemNotificationEntries)
@@ -10142,21 +10337,20 @@ static bool yw_RenderDetailedGemNotification(NC_STACK_ypaworld *yw)
         {
             view.PreviousDisplayedValue = yw_GemDisplayedValue(entry, entry.PreviousRawValue);
             view.NewDisplayedValue = yw_GemDisplayedValue(entry, entry.NewRawValue);
-            if ( view.PreviousDisplayedValue == view.NewDisplayedValue )
+            if ( view.PreviousDisplayedValue == view.NewDisplayedValue &&
+                 entry.ChangeKind != TGemNotificationEntry::CHANGE_NUM_WEAPONS )
                 continue;
 
-            hasRealChange = true;
+            if ( !entry.AlreadyUnlocked )
+                hasRealChange = true;
         }
 
         view.TargetName = yw_GemTargetName(yw, entry);
         if ( view.TargetName.empty() )
-            return false;
+            continue;
 
         views.push_back(view);
     }
-
-    if ( views.empty() )
-        return false;
 
     if ( hasRealChange )
     {
@@ -10167,113 +10361,104 @@ static bool yw_RenderDetailedGemNotification(NC_STACK_ypaworld *yw)
     }
 
     if ( views.empty() )
-        return false;
-
-    std::vector<GemNotificationLine> lines;
-    const TGemNotificationEntry &firstEntry = *views.front().Entry;
-
-    std::string title;
-    if ( !hasRealChange )
     {
-        title = Locale::Text::Gem(Locale::GEMSTR_ALREADY_UNLOCKED);
-    }
-    else if ( views.size() == 1 && firstEntry.ChangeKind == TGemNotificationEntry::CHANGE_ENABLE )
-    {
-        title = firstEntry.TargetKind == TGemNotificationEntry::TARGET_BUILDING
-              ? Locale::Text::Gem(Locale::GEMSTR_NEW_BUILDING_UNLOCKED)
-              : Locale::Text::Gem(Locale::GEMSTR_NEW_UNIT_UNLOCKED);
-    }
-    else if ( views.size() == 1 )
-    {
-        title = Locale::Text::Gem(Locale::GEMSTR_UPGRADE_UNLOCKED);
+        yw_GemBuildFallbackLines(yw, &lines);
     }
     else
     {
-        title = Locale::Text::Gem(Locale::GEMSTR_UPGRADES_UNLOCKED);
+        const bool singleNewUnlock = hasRealChange && views.size() == 1 &&
+                                     views.front().Entry->ChangeKind == TGemNotificationEntry::CHANGE_ENABLE;
+        if ( hasRealChange && !singleNewUnlock )
+        {
+            std::string title = views.size() == 1
+                              ? Locale::Text::Gem(Locale::GEMSTR_UPGRADE_UNLOCKED)
+                              : Locale::Text::Gem(Locale::GEMSTR_UPGRADES_UNLOCKED);
+            lines.push_back({title, std::string()});
+            yw_GemAppendSpacer(&lines);
+        }
+
+        std::string previousTargetKey;
+        for (size_t i = 0; i < views.size(); ++i)
+        {
+            const GemNotificationView &view = views[i];
+            const TGemNotificationEntry &entry = *view.Entry;
+            std::string targetKey = yw_GemTargetKey(entry);
+
+            if ( targetKey != previousTargetKey )
+            {
+                if ( !previousTargetKey.empty() )
+                    yw_GemAppendSpacer(&lines);
+
+                lines.push_back({view.TargetName, std::string()});
+                previousTargetKey = targetKey;
+            }
+
+            if ( entry.AlreadyUnlocked )
+            {
+                lines.push_back({Locale::Text::Gem(Locale::GEMSTR_ALREADY_UNLOCKED), std::string()});
+                continue;
+            }
+
+            if ( entry.ChangeKind == TGemNotificationEntry::CHANGE_ENABLE )
+            {
+                lines.push_back({Locale::Text::Gem(Locale::GEMSTR_UNLOCKED), std::string()});
+                continue;
+            }
+
+            yw_GemAppendNumericUpgradeLines(&lines, view);
+        }
     }
 
-    lines.push_back({title, std::string()});
-    lines.push_back({std::string(), std::string()});
-
-    std::string previousTargetKey;
-    for (size_t i = 0; i < views.size(); ++i)
-    {
-        const GemNotificationView &view = views[i];
-        const TGemNotificationEntry &entry = *view.Entry;
-        std::string targetKey = yw_GemTargetKey(entry);
-
-        if ( targetKey != previousTargetKey )
-        {
-            if ( !previousTargetKey.empty() )
-                lines.push_back({std::string(), std::string()});
-
-            lines.push_back({view.TargetName, std::string()});
-            previousTargetKey = targetKey;
-        }
-
-        if ( views.size() == 1 && entry.ChangeKind != TGemNotificationEntry::CHANGE_ENABLE )
-        {
-            lines.push_back({yw_GemCategoryLabel(entry), std::string()});
-            lines.push_back({std::string(), std::string()});
-        }
-
-        if ( entry.ChangeKind == TGemNotificationEntry::CHANGE_ENABLE )
-        {
-            lines.push_back({entry.AlreadyUnlocked
-                             ? Locale::Text::Gem(Locale::GEMSTR_ALREADY_UNLOCKED)
-                             : Locale::Text::Gem(Locale::GEMSTR_AVAILABLE_FOR_CONSTRUCTION),
-                             std::string()});
-            continue;
-        }
-
-        int delta = view.NewDisplayedValue - view.PreviousDisplayedValue;
-        std::string stable = fmt::sprintf("%s: %s -> ",
-                                          yw_GemChangeLabel(entry),
-                                          yw_GemFormatValue(entry, view.PreviousDisplayedValue));
-        std::string blinking = fmt::sprintf("%s (%s)",
-                                            yw_GemFormatValue(entry, view.NewDisplayedValue),
-                                            yw_GemFormatDelta(entry, delta));
-        lines.push_back({stable, blinking});
-    }
-
-    int lineHeight = std::max(yw->_fontH + 2, 12);
+    const int lineHeight = std::max(yw->_fontH + 2, 12);
     int contentHeight = (int)lines.size() * lineHeight;
-    if ( contentHeight + 24 > yw->_screenSize.y )
-        return false;
 
     TileMap *fontTiles = yw->_guiTiles[15];
+    auto measureText = [fontTiles](const std::string &text)
+    {
+        int width = GFX::Engine.MeasureScreenTextWidth(text);
+        return width > 0 ? width : fontTiles->GetWidth(text);
+    };
+
     int widestLine = 0;
     for (const GemNotificationLine &line : lines)
-        widestLine = std::max(widestLine, fontTiles->GetWidth(line.StableText + line.BlinkText));
+        widestLine = std::max(widestLine, measureText(line.StableText + line.BlinkText));
 
     int panelWidth = std::max(180, widestLine + 32);
     panelWidth = std::min(panelWidth, yw->_screenSize.x - 40);
     int halfWidth = panelWidth / 2;
 
-    int centerY = -yw->_screenSize.y / 4;
-    int halfScreenHeight = yw->_screenSize.y / 2;
+    const int halfScreenHeight = yw->_screenSize.y / 2;
+    const int topSafeMargin = std::max(64, yw->_fontH * 3);
+    const int bottomSafeMargin = 24;
+    const int topLimit = -halfScreenHeight + topSafeMargin;
+    const int bottomLimit = halfScreenHeight - bottomSafeMargin;
+    const int safeHeight = bottomLimit - topLimit;
+    const int centerY = (topLimit + bottomLimit) / 2;
     int contentTop = centerY - contentHeight / 2;
     int contentBottom = contentTop + contentHeight;
 
-    if ( contentTop < -halfScreenHeight + 20 )
+    if ( contentHeight <= safeHeight && contentTop < topLimit )
     {
-        contentTop = -halfScreenHeight + 20;
+        contentTop = topLimit;
         contentBottom = contentTop + contentHeight;
     }
-    if ( contentBottom > halfScreenHeight - 20 )
+    if ( contentHeight <= safeHeight && contentBottom > bottomLimit )
     {
-        contentBottom = halfScreenHeight - 20;
+        contentBottom = bottomLimit;
         contentTop = contentBottom - contentHeight;
     }
 
-    yw_DrawGemPanelOutline(yw, halfWidth, contentTop - 8, contentBottom + 8);
+    // Match the vanilla GEM/HUD upgrade blink cadence: the complete notification
+    // (frame and text) is visible only during the active 200 ms phase.
+    if ( ((yw->_timeStamp / 200) & 1) == 0 )
+        return true;
+
+    const int panelTopPadding = std::max(yw->_fontH + 4, 16);
+    yw_DrawGemPanelOutline(yw, halfWidth, contentTop - panelTopPadding, contentBottom + 8);
 
     CmdStream buffer;
     buffer.reserve(256 + lines.size() * 96);
     FontUA::select_tileset(&buffer, 15);
-
-    uint32_t elapsed = yw->_timeStamp - yw->_upgradeTimeStamp;
-    bool showBlinkText = elapsed >= 1600 || ((elapsed / 200) & 1) != 0;
 
     for (size_t i = 0; i < lines.size(); ++i)
     {
@@ -10292,8 +10477,8 @@ static bool yw_RenderDetailedGemNotification(NC_STACK_ypaworld *yw)
             continue;
         }
 
-        int stableWidth = fontTiles->GetWidth(line.StableText);
-        int blinkWidth = fontTiles->GetWidth(line.BlinkText);
+        int stableWidth = measureText(line.StableText);
+        int blinkWidth = measureText(line.BlinkText);
         int startX = -(stableWidth + blinkWidth) / 2;
 
         FontUA::set_center_xpos(&buffer, startX);
@@ -10301,13 +10486,10 @@ static bool yw_RenderDetailedGemNotification(NC_STACK_ypaworld *yw)
         FontUA::copy_position(&buffer);
         FontUA::add_txt(&buffer, stableWidth, 0, line.StableText);
 
-        if ( showBlinkText )
-        {
-            FontUA::set_center_xpos(&buffer, startX + stableWidth);
-            FontUA::set_center_ypos(&buffer, y - yw->_fontH / 2);
-            FontUA::copy_position(&buffer);
-            FontUA::add_txt(&buffer, blinkWidth, 0, line.BlinkText);
-        }
+        FontUA::set_center_xpos(&buffer, startX + stableWidth);
+        FontUA::set_center_ypos(&buffer, y - yw->_fontH / 2);
+        FontUA::copy_position(&buffer);
+        FontUA::add_txt(&buffer, blinkWidth, 0, line.BlinkText);
     }
 
     FontUA::set_end(&buffer);
@@ -10330,7 +10512,7 @@ int sb_0x4d7c08__sub0__sub0__sub0(NC_STACK_ypaworld *yw)
     if ( yw->_upgradeId == -1 || yw->_timeStamp - yw->_upgradeTimeStamp >= 10000 )
         return 0;
 
-    if ( System::IniConf::GameGemUnlockDetailedUI.Get<bool>() && yw_RenderDetailedGemNotification(yw) )
+    if ( yw_HasActiveDetailedGemNotification(yw) && yw_RenderDetailedGemNotification(yw) )
         return 1;
 
     if ( !yw->_upgradeVehicleId && !yw->_upgradeWeaponId && !yw->_upgradeBuildId )
@@ -11189,6 +11371,7 @@ void yw_RenderHUDTarget(NC_STACK_ypaworld *yw, sklt_wis *wis)
     UAskeleton::Data *wpn_wure = NULL;
     UAskeleton::Data *wpn_wure2 = NULL;
 
+    const bool hideWireframes = yw_HasActiveDetailedGemNotification(yw);
     float v86 = (yw->_timeStamp - wis->field_76 - 350) / 200.0;
 
     if ( v86 > 0.0 )
@@ -11247,13 +11430,13 @@ void yw_RenderHUDTarget(NC_STACK_ypaworld *yw, sklt_wis *wis)
             wis->field_7E = NULL;
         }
 
-        if ( hud_wure )
+        if ( !hideWireframes && hud_wure )
         {
             SDL_Color v14 = yw->GetColor(34);
             yw_RenderVector2D(yw, hud_wure, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.99, 0.99, v14, NULL, NULL, true);
         }
 
-        if ( yw->_guiVisor.field_0 )
+        if ( !hideWireframes && yw->_guiVisor.field_0 )
         {
             if ( mg_wure )
             {
@@ -11285,7 +11468,7 @@ void yw_RenderHUDTarget(NC_STACK_ypaworld *yw, sklt_wis *wis)
             }
         }
 
-        if ( yw->_guiVisor.field_4 )
+        if ( !hideWireframes && yw->_guiVisor.field_4 )
         {
             bool locked = yw->_guiVisor.field_18 != NULL;
             yw_RenderHUDWeaponLockMarker(yw, wis, wpn_wure, wpn_wure2, locked,

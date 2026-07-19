@@ -1290,7 +1290,15 @@ struct TGemNotificationEntry
         CHANGE_ENABLE = 0,
         CHANGE_ENERGY,
         CHANGE_SHIELD,
-        CHANGE_RADAR
+        CHANGE_RADAR,
+        CHANGE_NUM_WEAPONS,
+        CHANGE_SHOT_TIME,
+        CHANGE_SHOT_TIME_USER,
+        CHANGE_ENERGY_HELI,
+        CHANGE_ENERGY_TANK,
+        CHANGE_ENERGY_FLYER,
+        CHANGE_ENERGY_ROBO,
+        CHANGE_UNHIDE_RADAR
     };
 
     uint8_t TargetKind = TARGET_VEHICLE;

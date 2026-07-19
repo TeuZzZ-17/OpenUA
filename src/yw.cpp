@@ -2150,8 +2150,8 @@ void NC_STACK_ypaworld::RecordGemNotificationChange(uint8_t targetKind, int32_t 
     entry.DeltaRawValue = newRawValue - previousRawValue;
     entry.ActionOrder = _gemNotificationActionOrder++;
     entry.NewlyEnabled = changeKind == TGemNotificationEntry::CHANGE_ENABLE && newlyEnabled;
-    entry.AlreadyUnlocked = changeKind == TGemNotificationEntry::CHANGE_ENABLE &&
-                            previousRawValue != 0 && newRawValue != 0;
+    entry.AlreadyUnlocked = (changeKind == TGemNotificationEntry::CHANGE_ENABLE &&
+                             previousRawValue != 0 && newRawValue != 0);
     _gemNotificationEntries.push_back(entry);
 }
 
@@ -2253,6 +2253,8 @@ void NC_STACK_ypaworld::PlayConfiguredGemUnlockSound()
         return;
 
     source.PSample = sample->GetSampleData();
+    source.Volume = 100;
+    source.Pitch = 0;
     SFXEngine::SFXe.startSound(&_GameShell->samples1_info, soundId);
 }
 

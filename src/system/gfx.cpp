@@ -562,6 +562,17 @@ void GFXEngine::DrawScreenText()
     _font.entries.clear();
 }
 
+int GFXEngine::MeasureScreenTextWidth(const std::string &text) const
+{
+    int width = 0;
+    int height = 0;
+
+    if ( _font.ttfFont && TTF_SizeUTF8(_font.ttfFont, text.c_str(), &width, &height) == 0 )
+        return width;
+
+    return 0;
+}
+
 void GFXEngine::initPolyEngine()
 {
     _states = GfxStates();

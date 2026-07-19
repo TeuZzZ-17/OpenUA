@@ -709,6 +709,7 @@ public:
     void DrawVtxQuad(const std::array<GFX::TVertex, 4> &vtx);
 
     int LoadFontByDescr(const std::string &fontname);
+    int MeasureScreenTextWidth(const std::string &text) const;
     void matrixAspectCorrection(mat3x3 &inout, bool invert);
     void getAspectCorrection(float &cW, float &cH, bool invert);
 

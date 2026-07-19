@@ -19,6 +19,11 @@ namespace World
 namespace Parsers
 {
 
+static int GemFloatHundredths(float value)
+{
+    return (int)std::lround((double)value * 100.0);
+}
+
 static int ParseSampleVariantId(const std::string &token)
 {
     if ( token.size() < 6 || StriCmp(token.substr(0, 6), "sample") )
@@ -2118,7 +2123,13 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     }
     else if ( !StriCmp(p1, "num_weapons") )
     {
+        int previousValue = _vhcl->num_weapons;
         _vhcl->num_weapons = parser.stol(p2, NULL, 0);
+
+        if ( _isModify && _o.IsGemNotificationCaptureActive() )
+            _o.RecordGemNotificationChange(TGemNotificationEntry::TARGET_VEHICLE, _vhclID,
+                                           TGemNotificationEntry::CHANGE_NUM_WEAPONS,
+                                           previousValue, _vhcl->num_weapons);
     }
     else if ( !StriCmp(p1, "kill_after_shot") )
     {
@@ -2613,12 +2624,18 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     }
     else if ( !StriCmp(p1, "add_unhide_radar") )
     {
+        int previousValue = _vhcl->unhideRadar;
         _vhcl->unhideRadar += parser.stol(p2, NULL, 0);
 
         if (_vhcl->unhideRadar < 0)
             _vhcl->unhideRadar = 0;
         else if (_vhcl->unhideRadar > _vhcl->radar)
             _vhcl->unhideRadar = _vhcl->radar + 1;
+
+        if ( _isModify && _o.IsGemNotificationCaptureActive() )
+            _o.RecordGemNotificationChange(TGemNotificationEntry::TARGET_VEHICLE, _vhclID,
+                                           TGemNotificationEntry::CHANGE_UNHIDE_RADAR,
+                                           previousValue, _vhcl->unhideRadar);
     }
     else
         return ParseSndFX(parser, p1, p2);
@@ -3521,27 +3538,63 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     }
     else if ( !StriCmp(p1, "add_energy_heli") )
     {
+        int previousValue = GemFloatHundredths(_wpn->energy_heli);
         _wpn->energy_heli += parser.stol(p2, NULL, 0);
+
+        if ( _isModify && _o.IsGemNotificationCaptureActive() )
+            _o.RecordGemNotificationChange(TGemNotificationEntry::TARGET_WEAPON, _wpnID,
+                                           TGemNotificationEntry::CHANGE_ENERGY_HELI,
+                                           previousValue, GemFloatHundredths(_wpn->energy_heli));
     }
     else if ( !StriCmp(p1, "add_energy_tank") )
     {
+        int previousValue = GemFloatHundredths(_wpn->energy_tank);
         _wpn->energy_tank += parser.stol(p2, NULL, 0);
+
+        if ( _isModify && _o.IsGemNotificationCaptureActive() )
+            _o.RecordGemNotificationChange(TGemNotificationEntry::TARGET_WEAPON, _wpnID,
+                                           TGemNotificationEntry::CHANGE_ENERGY_TANK,
+                                           previousValue, GemFloatHundredths(_wpn->energy_tank));
     }
     else if ( !StriCmp(p1, "add_energy_flyer") )
     {
+        int previousValue = GemFloatHundredths(_wpn->energy_flyer);
         _wpn->energy_flyer += parser.stol(p2, NULL, 0);
+
+        if ( _isModify && _o.IsGemNotificationCaptureActive() )
+            _o.RecordGemNotificationChange(TGemNotificationEntry::TARGET_WEAPON, _wpnID,
+                                           TGemNotificationEntry::CHANGE_ENERGY_FLYER,
+                                           previousValue, GemFloatHundredths(_wpn->energy_flyer));
     }
     else if ( !StriCmp(p1, "add_energy_Robo") )
     {
+        int previousValue = GemFloatHundredths(_wpn->energy_robo);
         _wpn->energy_robo += parser.stol(p2, NULL, 0);
+
+        if ( _isModify && _o.IsGemNotificationCaptureActive() )
+            _o.RecordGemNotificationChange(TGemNotificationEntry::TARGET_WEAPON, _wpnID,
+                                           TGemNotificationEntry::CHANGE_ENERGY_ROBO,
+                                           previousValue, GemFloatHundredths(_wpn->energy_robo));
     }
     else if ( !StriCmp(p1, "add_shot_time") )
     {
+        int previousValue = _wpn->shot_time;
         _wpn->shot_time += parser.stol(p2, NULL, 0);
+
+        if ( _isModify && _o.IsGemNotificationCaptureActive() )
+            _o.RecordGemNotificationChange(TGemNotificationEntry::TARGET_WEAPON, _wpnID,
+                                           TGemNotificationEntry::CHANGE_SHOT_TIME,
+                                           previousValue, _wpn->shot_time);
     }
     else if ( !StriCmp(p1, "add_shot_time_user") )
     {
+        int previousValue = _wpn->shot_time_user;
         _wpn->shot_time_user += parser.stol(p2, NULL, 0);
+
+        if ( _isModify && _o.IsGemNotificationCaptureActive() )
+            _o.RecordGemNotificationChange(TGemNotificationEntry::TARGET_WEAPON, _wpnID,
+                                           TGemNotificationEntry::CHANGE_SHOT_TIME_USER,
+                                           previousValue, _wpn->shot_time_user);
     }
     else if ( !StriCmp(p1, "vp_normal") )
     {
@@ -5153,6 +5206,20 @@ bool LevelGemParser::IsScope(ScriptParser::Parser &parser, const std::string &wo
     return true;
 }
 
+static bool SetGemMbStatus(TMapGem *gem, const std::string &value)
+{
+    if ( !StriCmp(value, "known") )
+        gem->MbStatus = 0;
+    else if ( !StriCmp(value, "unknown") )
+        gem->MbStatus = 1;
+    else if ( !StriCmp(value, "hidden") )
+        gem->MbStatus = 2;
+    else
+        return false;
+
+    return true;
+}
+
 int LevelGemParser::Handle(ScriptParser::Parser &parser, const std::string &p1, const std::string &p2)
 {
     if ( !StriCmp(p1, "end") )
@@ -5208,22 +5275,8 @@ int LevelGemParser::Handle(ScriptParser::Parser &parser, const std::string &p1, 
     }
     else if ( !StriCmp(p1, "mb_status") )
     {
-        if ( !StriCmp(p2, "known") )
-        {
-            _g->MbStatus = 0;
-        }
-        else if ( !StriCmp(p2, "unknown") )
-        {
-            _g->MbStatus = 1;
-        }
-        else if ( !StriCmp(p2, "hidden") )
-        {
-            _g->MbStatus = 2;
-        }
-        else
-        {
+        if ( !SetGemMbStatus(_g, p2) )
             return ScriptParser::RESULT_BAD_DATA;
-        }
     }
     else if ( !StriCmp(p1, "nw_vproto_num") )
     {
@@ -5268,7 +5321,25 @@ int LevelGemParser::Handle(ScriptParser::Parser &parser, const std::string &p1, 
         std::string tmp;
 
         while( parser.ReadLine(&tmp) && (tmp.find("end_action") == std::string::npos) )
+        {
+            std::string actionLine = tmp;
+            size_t commentPos = actionLine.find_first_of(";\n\r");
+            if ( commentPos != std::string::npos )
+                actionLine.erase(commentPos);
+
+            Stok stok(actionLine, "= \t");
+            std::string actionKey;
+            std::string actionValue;
+            if ( stok.GetNext(&actionKey) && !StriCmp(actionKey, "mb_status") )
+            {
+                if ( !stok.GetNext(&actionValue) || !SetGemMbStatus(_g, actionValue) )
+                    return ScriptParser::RESULT_BAD_DATA;
+
+                continue;
+            }
+
             _g->ActionsList.push_back(tmp);
+        }
     }
     else
         return ScriptParser::RESULT_UNKNOWN;
