@@ -6368,19 +6368,20 @@ bool NC_STACK_yparobo::MakeSquad(const std::vector<int> &VhclIDS, vec3d pos, boo
     squad_commander->_aggr = 60;
 
     setState_msg arg78;
-    arg78.newStatus = BACT_STATUS_NORMAL;
+    arg78.newStatus = BACT_STATUS_IDLE;
     arg78.setFlags = 0;
     arg78.unsetFlags = 0;
 
     squad_commander->SetState(&arg78);
 
     setTarget_msg arg67;
-    arg67.tgt_type = BACT_TGT_TYPE_CELL;
+    // The squad is already at its spawn position. A CELL target here is not a
+    // real order: in a hostile sector TargetAssess() treats it as an attack and
+    // makes the newly created squad fire at the ground around itself.
+    arg67.tgt_type = BACT_TGT_TYPE_NONE;
     arg67.priority = 0;
-    arg67.tgt_pos.x = arg146.pos.x;
-    arg67.tgt_pos.z = arg146.pos.z;
 
-    squad_commander->SetTarget(&arg67); //Set target
+    squad_commander->SetTarget(&arg67);
 
     for ( curid = 1; curid < VhclIDS.size(); curid++)
     {
@@ -6396,9 +6397,7 @@ bool NC_STACK_yparobo::MakeSquad(const std::vector<int> &VhclIDS, vec3d pos, boo
 
         squad_commander->AddSubject(next_bact); // Add to squad commander list
 
-        arg67.tgt_pos.x = arg146.pos.x;
-        arg67.tgt_pos.z = arg146.pos.z;
-        next_bact->SetTarget(&arg67); //Set target
+        next_bact->SetTarget(&arg67);
 
         next_bact->setBACT_bactCollisions( getBACT_bactCollisions() );
 
