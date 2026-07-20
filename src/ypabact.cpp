@@ -4007,22 +4007,33 @@ void NC_STACK_ypabact::AI_layer1(update_msg *arg)
     {
         if ( _host_station && _primT_cmdID )
         {
-            v36.priority = _primT_cmdID;
-
-            if ( _host_station->yparobo_func132(&v36) )
+            // While the player is driving, a destroyed UNIT target must not be
+            // converted invisibly into a CELL at its last position.  That CELL
+            // only becomes visible after control returns to the AI, as cannon
+            // and optional MGUN fire into empty ground.
+            if ( _oflags & BACT_OFLAG_USERINPT )
             {
-                v36.priority = 0;
+                _primT_cmdID = 0;
             }
             else
             {
-                _primT_cmdID = 0;
+                v36.priority = _primT_cmdID;
 
-                v36.tgt_type = BACT_TGT_TYPE_CELL;
-                v36.priority = 0;
-                v36.tgt_pos = _primTpos;
+                if ( _host_station->yparobo_func132(&v36) )
+                {
+                    v36.priority = 0;
+                }
+                else
+                {
+                    _primT_cmdID = 0;
+
+                    v36.tgt_type = BACT_TGT_TYPE_CELL;
+                    v36.priority = 0;
+                    v36.tgt_pos = _primTpos;
+                }
+
+                SetTarget(&v36);
             }
-
-            SetTarget(&v36);
         }
     }
 
@@ -6040,6 +6051,12 @@ void NC_STACK_ypabact::FightWithSect(bact_arg75 *arg)
 
 void NC_STACK_ypabact::CopyWaypointsStuff( NC_STACK_ypabact *bact)
 {
+    // _m_cmdID/_m_owner identify a waypoint path that is following a unit.
+    // They are part of the path state even when the path contains only one
+    // step and therefore has no BACT_STFLAG_WAYPOINT flag.
+    _m_cmdID = bact->_m_cmdID;
+    _m_owner = bact->_m_owner;
+
     if ( bact->_status_flg & BACT_STFLAG_WAYPOINT )
     {
         for (int i = 0; i < 32; i++)
@@ -14185,18 +14202,27 @@ void NC_STACK_ypabact::DoTargetWaypoint()
         {
             if ( _m_cmdID )
             {
-                NC_STACK_ypabact *v9 = _world->FindBactByCmdOwn(_m_cmdID, _m_owner);
+                NC_STACK_ypabact *trackedUnit = _world->FindBactByCmdOwn(_m_cmdID, _m_owner);
 
-                if ( v9 )
+                if ( trackedUnit && trackedUnit != this &&
+                     trackedUnit->_status != BACT_STATUS_DEAD &&
+                     !(trackedUnit->_status_flg & BACT_STFLAG_DEATH1) &&
+                     trackedUnit->_pSector && trackedUnit->_pSector->IsCanSee(_owner) )
                 {
-                    if ( v9->_pSector->IsCanSee(_owner) )
-                    {
-                        arg67.tgt.pbact = v9;
-                        arg67.tgt_type = BACT_TGT_TYPE_UNIT;
-                        arg67.priority = 0;
+                    arg67.tgt.pbact = trackedUnit;
+                    arg67.tgt_type = BACT_TGT_TYPE_UNIT;
+                    arg67.priority = 0;
 
-                        SetTarget(&arg67);
-                    }
+                    SetTarget(&arg67);
+                }
+                else
+                {
+                    // This CELL was only the last waypoint toward a unit.  If
+                    // that unit is gone, hidden or resolves to ourselves after
+                    // squad deputy promotion, it must not become a sector attack.
+                    arg67.tgt_type = BACT_TGT_TYPE_NONE;
+                    arg67.priority = 0;
+                    SetTarget(&arg67);
                 }
             }
 
@@ -14288,20 +14314,24 @@ size_t NC_STACK_ypabact::TargetAssess(bact_arg110 *arg)
             if ( !enemy->_pSector->IsCanSee(_owner) )
                 return TA_CANCEL;
 
-            if ( _aggr >= 100 )
-            {
-                if ( isSecTgt && enemyDistance > 2160.0 )
-                    return TA_CANCEL;
-
-                return TA_FIGHT;
-            }
-
+            // Aggression controls how strongly an AI fights hostile targets;
+            // it must not override the existing friendly/neutral follow logic.
+            // Otherwise aggression 100 turns a same-owner tracked unit into a
+            // deliberate cannon/MGUN target.
             if ( enemy->_owner == 0 || enemy->_owner == _owner )
             {
                 if ( enemyDistance < 300.0 )
                     return TA_IGNORE;
 
                 return TA_MOVE;
+            }
+
+            if ( _aggr >= 100 )
+            {
+                if ( isSecTgt && enemyDistance > 2160.0 )
+                    return TA_CANCEL;
+
+                return TA_FIGHT;
             }
 
             if ( _status_flg & BACT_STFLAG_ESCAPE )
@@ -14391,6 +14421,38 @@ size_t NC_STACK_ypabact::TargetAssess(bact_arg110 *arg)
 
             aggr = 25;
             isSecTgt = false;
+        }
+
+        // Ground units represent a short path toward another unit as a CELL
+        // plus _m_cmdID, but paths with one step do not set WAYPOINT.  Resolve
+        // that unit-follow state before the CELL can be assessed as a sector.
+        if ( !isSecTgt && _m_cmdID && !(_status_flg & BACT_STFLAG_WAYPOINT) )
+        {
+            NC_STACK_ypabact *trackedUnit = _world->FindBactByCmdOwn(_m_cmdID, _m_owner);
+
+            _m_cmdID = 0;
+            _m_owner = 0;
+            _waypoints_count = 0;
+            _current_waypoint = 0;
+            _status_flg &= ~(BACT_STFLAG_WAYPOINT | BACT_STFLAG_WAYPOINTCCL);
+
+            setTarget_msg trackedTarget = {};
+            trackedTarget.priority = 0;
+
+            if ( trackedUnit && trackedUnit != this &&
+                 trackedUnit->_status != BACT_STATUS_DEAD &&
+                 !(trackedUnit->_status_flg & BACT_STFLAG_DEATH1) &&
+                 trackedUnit->_pSector && trackedUnit->_pSector->IsCanSee(_owner) )
+            {
+                trackedTarget.tgt_type = BACT_TGT_TYPE_UNIT;
+                trackedTarget.tgt.pbact = trackedUnit;
+                SetTarget(&trackedTarget);
+                return TA_MOVE;
+            }
+
+            trackedTarget.tgt_type = BACT_TGT_TYPE_NONE;
+            SetTarget(&trackedTarget);
+            return TA_IGNORE;
         }
 
         if ( (_status_flg & BACT_STFLAG_WAYPOINT) && !isSecTgt )
@@ -15947,6 +16009,13 @@ void NC_STACK_ypabact::setBACT_inputting(bool inpt)
     }
     else
     {
+        // Keep a live UNIT pointer so the AI may finish the current fight, but
+        // drop the command-group fallback inherited from player control.  If
+        // that unit dies after the handoff, AI_layer1 must not reinterpret its
+        // last position as a sector attack.
+        if ( _oflags & BACT_OFLAG_USERINPT )
+            _primT_cmdID = 0;
+
         _oflags &= ~BACT_OFLAG_USERINPT;
     }
 }
