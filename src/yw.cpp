@@ -3090,45 +3090,6 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
 
         if ( useAutomaticBounds )
         {
-            static std::vector<bool> loggedAutomaticBounds;
-            if ( loggedAutomaticBounds.size() <= (size_t)vhcl_id->vehicle_id )
-                loggedAutomaticBounds.resize((size_t)vhcl_id->vehicle_id + 1, false);
-            if ( !loggedAutomaticBounds[vhcl_id->vehicle_id] )
-            {
-                loggedAutomaticBounds[vhcl_id->vehicle_id] = true;
-                float largestSphere = 0.0f;
-                float minX = std::numeric_limits<float>::max();
-                float maxX = -std::numeric_limits<float>::max();
-                float minZ = std::numeric_limits<float>::max();
-                float maxZ = -std::numeric_limits<float>::max();
-                float highestCenterY = -std::numeric_limits<float>::max();
-                for (const World::TRoboColl &sphere : spawnColl.roboColls)
-                {
-                    if ( sphere.robo_coll_radius <= 0.01f )
-                        continue;
-                    largestSphere = std::max(largestSphere, sphere.robo_coll_radius);
-                    minX = std::min(minX, (float)sphere.coll_pos.x - sphere.robo_coll_radius);
-                    maxX = std::max(maxX, (float)sphere.coll_pos.x + sphere.robo_coll_radius);
-                    minZ = std::min(minZ, (float)sphere.coll_pos.z - sphere.robo_coll_radius);
-                    maxZ = std::max(maxZ, (float)sphere.coll_pos.z + sphere.robo_coll_radius);
-                    highestCenterY = std::max(highestCenterY, (float)sphere.coll_pos.y);
-                }
-
-                ypa_log_out("[AUTO_BOUNDS] vehicle=%d model=%d spheres=%u"
-                            " legacy=(radius=%.3f vwr_radius=%.3f overeof=%.3f vwr_overeof=%.3f)"
-                            " automatic=(radius=%.3f vwr_radius=%.3f overeof=%.3f vwr_overeof=%.3f)"
-                            " compound=(largest_sphere=%.3f span_x=%.3f span_z=%.3f max_center_y=%.3f)"
-                            " model_y=(valid=%d min=%.3f max=%.3f)\n",
-                            vhcl_id->vehicle_id, vhcl.model_id,
-                            (unsigned)spawnColl.roboColls.size(),
-                            vhcl.radius, vhcl.vwr_radius, vhcl.overeof, vhcl.vwr_overeof,
-                            automaticRadius, automaticViewerRadius,
-                            automaticOvereof, automaticOvereof,
-                            largestSphere, maxX - minX, maxZ - minZ, highestCenterY,
-                            spawnColl.modelBoundsValid,
-                            spawnColl.modelMin.y, spawnColl.modelMax.y);
-            }
-
             if ( !vhcl.radius_defined )
                 bacto->_radius = automaticRadius;
             if ( !vhcl.vwr_radius_defined )
