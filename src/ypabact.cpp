@@ -4052,6 +4052,27 @@ void NC_STACK_ypabact::AI_layer1(update_msg *arg)
     AI_layer2(arg);
 }
 
+static void ypabact_RunPlayerUserLayer(NC_STACK_ypabact *bact, update_msg *arg)
+{
+    if ( !bact )
+        return;
+
+    NC_STACK_ypaworld *world = bact->getBACT_pWorld();
+    if ( !arg || !arg->inpt || !world ||
+         !world->IsNewGemNotificationBlockingPlayerWeapons(bact) )
+    {
+        bact->User_layer(arg);
+        return;
+    }
+
+    TInputState blockedInput = *arg->inpt;
+    blockedInput.Buttons.UnSet({0, 1, 2});
+
+    update_msg blockedArg = *arg;
+    blockedArg.inpt = &blockedInput;
+    bact->User_layer(&blockedArg);
+}
+
 void NC_STACK_ypabact::AI_layer2(update_msg *arg)
 {
     constexpr float CurSectrLength = 1.05 * World::CVSectorLength;
@@ -4064,7 +4085,7 @@ void NC_STACK_ypabact::AI_layer2(update_msg *arg)
        || _status == BACT_STATUS_BEAM )
     {
         if ( _oflags & BACT_OFLAG_USERINPT )
-            User_layer(arg);
+            ypabact_RunPlayerUserLayer(this, arg);
         else
             AI_layer3(arg);
 
@@ -4086,7 +4107,7 @@ void NC_STACK_ypabact::AI_layer2(update_msg *arg)
         SetTarget(&arg67);
 
         if ( _oflags & BACT_OFLAG_USERINPT )
-            User_layer(arg);
+            ypabact_RunPlayerUserLayer(this, arg);
         else
             AI_layer3(arg);
         return;
@@ -4218,7 +4239,7 @@ void NC_STACK_ypabact::AI_layer2(update_msg *arg)
     }
 
     if ( _oflags & BACT_OFLAG_USERINPT )
-        User_layer(arg);
+        ypabact_RunPlayerUserLayer(this, arg);
     else
         AI_layer3(arg);
 }
@@ -10178,6 +10199,9 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
     if ( _world && _world->IsSpectatorBact(this) )
         return 0;
 
+    if ( _world && _world->IsNewGemNotificationBlockingPlayerWeapons(this) )
+        return 0;
+
     NC_STACK_ypamissile *wobj = NULL;
 
     bool useLowHPWeapon = arg->weapon == _weapon && ypabact_IsLowHPWeaponActive(this);
@@ -13138,6 +13162,9 @@ static bool ypabact_GetMinigunSpreadImpactPoint(const vec3d &origin, const vec3d
 size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
 {
     if ( _world && _world->IsSpectatorBact(this) )
+        return 0;
+
+    if ( _world && _world->IsNewGemNotificationBlockingPlayerWeapons(this) )
         return 0;
 
     int a5 = 0;

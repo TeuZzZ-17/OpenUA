@@ -53,6 +53,8 @@ GuiList stru_5C91D0;
 
 uint32_t bact_id = 0x10000;
 
+static constexpr uint32_t GEM_NEW_UI_NOTIFICATION_DURATION_MS = 8000;
+
 // method 169
 uint32_t dword_5A7A80;
 
@@ -2126,6 +2128,18 @@ bool NC_STACK_ypaworld::IsGemNotificationCaptureActive() const
     return _gemNotificationCaptureActive;
 }
 
+bool NC_STACK_ypaworld::HasActiveNewGemNotification() const
+{
+    return System::IniConf::GameGemUnlockNewUI.Get<bool>() &&
+           _upgradeId != -1 &&
+           _timeStamp - _upgradeTimeStamp < GEM_NEW_UI_NOTIFICATION_DURATION_MS;
+}
+
+bool NC_STACK_ypaworld::IsNewGemNotificationBlockingPlayerWeapons(const NC_STACK_ypabact *bact) const
+{
+    return bact && bact == _userUnit && HasActiveNewGemNotification();
+}
+
 void NC_STACK_ypaworld::RecordGemNotificationChange(uint8_t targetKind, int32_t targetProtoId,
                                                      uint8_t changeKind, int32_t previousRawValue,
                                                      int32_t newRawValue, bool newlyEnabled)
@@ -2147,7 +2161,6 @@ void NC_STACK_ypaworld::RecordGemNotificationChange(uint8_t targetKind, int32_t 
     entry.TargetProtoId = targetProtoId;
     entry.PreviousRawValue = previousRawValue;
     entry.NewRawValue = newRawValue;
-    entry.DeltaRawValue = newRawValue - previousRawValue;
     entry.ActionOrder = _gemNotificationActionOrder++;
     entry.NewlyEnabled = changeKind == TGemNotificationEntry::CHANGE_ENABLE && newlyEnabled;
     entry.AlreadyUnlocked = (changeKind == TGemNotificationEntry::CHANGE_ENABLE &&
@@ -2302,8 +2315,8 @@ void sub_47C29C(NC_STACK_ypaworld *yw, cellArea *cell, int a3)
     yw->_upgradeWeaponId = 0;
     yw->_upgradeBuildId = a4;
 
-    bool detailedCapture = System::IniConf::GameGemUnlockDetailedUI.Get<bool>();
-    if ( detailedCapture )
+    bool newUiCapture = System::IniConf::GameGemUnlockNewUI.Get<bool>();
+    if ( newUiCapture )
         yw->BeginGemNotificationCapture();
     else
         yw->ClearGemNotificationCapture();
@@ -2330,7 +2343,7 @@ void sub_47C29C(NC_STACK_ypaworld *yw, cellArea *cell, int a3)
                                         wasEnabled ? 1 : 0, 1, !wasEnabled);
     }
 
-    if ( detailedCapture )
+    if ( newUiCapture )
         yw->FinishGemNotificationCapture(true);
 
     yw_arg159 v14;
@@ -2409,8 +2422,8 @@ void NC_STACK_ypaworld::yw_ActivateWunderstein(cellArea *cell, int gemid)
     _upgradeId = gemid;
     _upgradeTimeStamp = _timeStamp;
 
-    bool detailedCapture = System::IniConf::GameGemUnlockDetailedUI.Get<bool>();
-    if ( detailedCapture )
+    bool newUiCapture = System::IniConf::GameGemUnlockNewUI.Get<bool>();
+    if ( newUiCapture )
         BeginGemNotificationCapture();
     else
         ClearGemNotificationCapture();
@@ -2438,7 +2451,7 @@ void NC_STACK_ypaworld::yw_ActivateWunderstein(cellArea *cell, int gemid)
         Common::Env.SetPrefix("rsrc", tmp);
     }
 
-    if ( detailedCapture )
+    if ( newUiCapture )
         FinishGemNotificationCapture(parseSuccessful);
 
     yw_arg159 arg159;

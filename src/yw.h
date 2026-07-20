@@ -1307,7 +1307,6 @@ struct TGemNotificationEntry
     int32_t RelatedVehicleId = 0;
     int32_t PreviousRawValue = 0;
     int32_t NewRawValue = 0;
-    int32_t DeltaRawValue = 0;
     uint32_t ActionOrder = 0;
     bool NewlyEnabled = false;
     bool AlreadyUnlocked = false;
@@ -2603,6 +2602,8 @@ public:
     void FinishGemNotificationCapture(bool successful);
     void ClearGemNotificationCapture();
     bool IsGemNotificationCaptureActive() const;
+    bool HasActiveNewGemNotification() const;
+    bool IsNewGemNotificationBlockingPlayerWeapons(const NC_STACK_ypabact *bact) const;
     void RecordGemNotificationChange(uint8_t targetKind, int32_t targetProtoId,
                                      uint8_t changeKind, int32_t previousRawValue,
                                      int32_t newRawValue, bool newlyEnabled = false);
