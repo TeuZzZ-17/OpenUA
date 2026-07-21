@@ -44,6 +44,7 @@
 #include "system/movie.h"
 #include "system/inivals.h"
 #include "world/clonebalance.h"
+#include "crashdiag.h"
 #include "obj3d.h"
 
 
@@ -66,6 +67,14 @@ enum GAME_SCREEN_MODE {
 GAME_SCREEN_MODE GameScreenMode;
 UserData userdata;
 
+int CrashDiagLevelId()
+{
+    if (!ypaworld || (GameScreenMode != GAME_SCREEN_MODE_GAME && GameScreenMode != GAME_SCREEN_MODE_REPLAY))
+        return -1;
+
+    return ypaworld->GetLevelInfo().LevelID;
+}
+
 int ProcessGameplayFrame()
 {
     ypaworld->Process(&world_update_arg);
@@ -80,6 +89,7 @@ int ProcessGameplayFrame()
     case TLevelInfo::STATE_COMPLETED:
     case TLevelInfo::STATE_ABORTED:
     {
+        CrashDiag::Breadcrumb("DeleteLevel");
         ypaworld->DeleteLevel();
 
         if ( dword_513638 || levelInfo.State == TLevelInfo::STATE_ABORTED )
@@ -116,7 +126,9 @@ int ProcessGameplayFrame()
 
         if ( ypaworld->OpenGameShell() )
         {
+            CrashDiag::Breadcrumb("GameShell opened");
             GameScreenMode = GAME_SCREEN_MODE_MENU;
+            CrashDiag::Breadcrumb("entered menu");
             Input::Engine.QueryInput(&input_states);
 
             if (!v0)
@@ -133,10 +145,22 @@ int ProcessGameplayFrame()
 
     case TLevelInfo::STATE_RESTART:
     {
+        CrashDiag::SetLastOperation("restart");
+        CrashDiag::Breadcrumb("restart");
+        CrashDiag::Breadcrumb("DeleteLevel");
         ypaworld->DeleteLevel();
 
+        CrashDiag::Breadcrumb("level load started");
         if ( !ypaworld->LoadGame( fmt::sprintf("save:%s/%d.rst", userdata.UserName, levelInfo.LevelID) ) )
+        {
+            CrashDiag::Breadcrumb("level load failed");
             ypa_log_out("Warning, load error\n");
+        }
+        else
+        {
+            CrashDiag::Breadcrumb("level load completed");
+            CrashDiag::Breadcrumb("entered gameplay");
+        }
 
         Input::Engine.QueryInput(&input_states);
     }
@@ -144,8 +168,15 @@ int ProcessGameplayFrame()
 
     case TLevelInfo::STATE_SAVE:
     {
+        CrashDiag::SetLastOperation("save game");
+        CrashDiag::Breadcrumb("save started");
         if ( !ypaworld->SaveGame( fmt::sprintf("save:%s/%d.sgm", userdata.UserName, 0) ) )
+        {
+            CrashDiag::Breadcrumb("save failed");
             ypa_log_out("Warning, Save error\n");
+        }
+        else
+            CrashDiag::Breadcrumb("save completed");
 
         Input::Engine.QueryInput(&input_states);
     }
@@ -153,10 +184,21 @@ int ProcessGameplayFrame()
 
     case TLevelInfo::STATE_LOAD:
     {
+        CrashDiag::SetLastOperation("load game");
+        CrashDiag::Breadcrumb("load started");
+        CrashDiag::Breadcrumb("DeleteLevel");
         ypaworld->DeleteLevel();
 
         if ( !ypaworld->LoadGame( fmt::sprintf("save:%s/%d.sgm", userdata.UserName, 0) ) )
+        {
+            CrashDiag::Breadcrumb("load failed");
             ypa_log_out("Warning, load error\n");
+        }
+        else
+        {
+            CrashDiag::Breadcrumb("load completed");
+            CrashDiag::Breadcrumb("entered gameplay");
+        }
 
         Input::Engine.QueryInput(&input_states);
     }
@@ -289,9 +331,12 @@ int ProcessReplayFrame()
             return 0;
         }
 
+        CrashDiag::Breadcrumb("GameShell opened");
+
         userdata.p_YW->_levelInfo.State = TLevelInfo::STATE_MENU;
 
         GameScreenMode = GAME_SCREEN_MODE_MENU;
+        CrashDiag::Breadcrumb("entered menu");
 
         input_states = TInputState();
 
@@ -314,6 +359,7 @@ int ProcessMenuFrame()
     {
         userdata.SaveSettings();
         ypaworld->CloseGameShell();
+        CrashDiag::Breadcrumb("GameShell closed");
 
         GameScreenMode = GAME_SCREEN_MODE_UNKNOWN;
 
@@ -323,15 +369,22 @@ int ProcessMenuFrame()
         yw_arg161 v22;
         v22.lvlID = userdata.envAction.params[0];
         v22.field_4 = 0;
+        CrashDiag::UpdateRuntimeState(GameScreenMode, v22.lvlID,
+                                      world_update_arg.TimeStamp, world_update_arg.DTime);
+        CrashDiag::SetLastOperation("load level");
+        CrashDiag::Breadcrumb("level load started");
 
         if ( !ypaworld->ypaworld_func183(&v22) )
         {
+            CrashDiag::Breadcrumb("level load failed");
             ypa_log_out("Sorry, unable to init this level!\n");
 
             ypaworld->DeinitGameShell();
             return 0;
         }
+        CrashDiag::Breadcrumb("level load completed");
         GameScreenMode = GAME_SCREEN_MODE_GAME;
+        CrashDiag::Breadcrumb("entered gameplay");
         Input::Engine.QueryInput(&input_states);
     }
     else if ( userdata.envAction.action == EnvAction::ACTION_LOAD )
@@ -342,18 +395,24 @@ int ProcessMenuFrame()
 
         userdata.SaveSettings();
         ypaworld->CloseGameShell();
+        CrashDiag::Breadcrumb("GameShell closed");
 
         if ( !userdata.SaveBuildProtoState() )
             return 0;
 
+        CrashDiag::SetLastOperation("load game");
+        CrashDiag::Breadcrumb("load started");
         if ( !ypaworld->LoadGame( fmt::sprintf("save:%s/%d.sgm", userdata.UserName, 0) ) )
         {
+            CrashDiag::Breadcrumb("load failed");
             ypa_log_out("Error while loading level (level %d, User %s\n", a4.LevelID, userdata.UserName.c_str());
 
             ypaworld->DeinitGameShell();
             return 0;
         }
+        CrashDiag::Breadcrumb("load completed");
         GameScreenMode = GAME_SCREEN_MODE_GAME;
+        CrashDiag::Breadcrumb("entered gameplay");
         Input::Engine.QueryInput(&input_states);
     }
     else if ( userdata.envAction.action == EnvAction::ACTION_NETPLAY )
@@ -366,22 +425,30 @@ int ProcessMenuFrame()
         dword_513638 = 1;
 
         ypaworld->CloseGameShell();
+        CrashDiag::Breadcrumb("GameShell closed");
 
         yw_arg161 v22;
         v22.lvlID = userdata.envAction.params[0];
         v22.field_4 = 0;
 
         GameScreenMode = GAME_SCREEN_MODE_UNKNOWN;
+        CrashDiag::UpdateRuntimeState(GameScreenMode, v22.lvlID,
+                                      world_update_arg.TimeStamp, world_update_arg.DTime);
+        CrashDiag::SetLastOperation("load network level");
+        CrashDiag::Breadcrumb("level load started");
 
         if ( !ypaworld->ypaworld_func179(&v22) )
         {
+            CrashDiag::Breadcrumb("level load failed");
             ypa_log_out("Sorry, unable to init this level for network!\n");
             ypaworld->DeinitGameShell();
 
             return 0;
         }
 
+        CrashDiag::Breadcrumb("level load completed");
         GameScreenMode = GAME_SCREEN_MODE_GAME;
+        CrashDiag::Breadcrumb("entered gameplay");
         Input::Engine.QueryInput(&input_states);
     }
     else if ( userdata.envAction.action == EnvAction::ACTION_REPLAY )
@@ -399,16 +466,21 @@ int ProcessMenuFrame()
         dword_513638 = 1;
 
         ypaworld->CloseGameShell();
+        CrashDiag::Breadcrumb("GameShell closed");
 
         GameScreenMode = GAME_SCREEN_MODE_UNKNOWN;
+        CrashDiag::SetLastOperation("load replay");
+        CrashDiag::Breadcrumb("level load started");
 
         if ( ypaworld->ypaworld_func162(repname) )
         {
+            CrashDiag::Breadcrumb("level load completed");
             dword_513630 = 1;
             GameScreenMode = GAME_SCREEN_MODE_REPLAY;
         }
         else
         {
+            CrashDiag::Breadcrumb("level load failed");
             ypa_log_out("Sorry, unable to init player!\n");
             world_update_arg.TimeStamp = 0;
             userdata.lastInputEvent = 0;
@@ -420,7 +492,9 @@ int ProcessMenuFrame()
                 return 0;
             }
 
+            CrashDiag::Breadcrumb("GameShell opened");
             GameScreenMode = GAME_SCREEN_MODE_MENU;
+            CrashDiag::Breadcrumb("entered menu");
         }
 
         Input::Engine.QueryInput(&input_states);
@@ -485,6 +559,10 @@ int ProcessNextFrame()
     world_update_arg.field_8 = &input_states;
 
     world_update_arg.TimeStamp += input_states.Period;
+
+    if (CrashDiag::IsEnabled())
+        CrashDiag::UpdateRuntimeState(GameScreenMode, CrashDiagLevelId(),
+                                      world_update_arg.TimeStamp, world_update_arg.DTime);
 
 
     // If mouse captured, enable releative mouse control
@@ -582,6 +660,7 @@ int WinMain__sub0__sub0()
         deinit_globl_engines();
         return 0;
     }
+    CrashDiag::Breadcrumb("Nucleus classes initialized");
 
     Common::Env.AddGlobalIniKey("gfx.display  = win3d.class");
     Common::Env.AddGlobalIniKey("gfx.display2 = windd.class");
@@ -712,6 +791,7 @@ void sub_4113E8()
     {
         if ( GameScreenMode == GAME_SCREEN_MODE_GAME )
         {
+            CrashDiag::Breadcrumb("DeleteLevel");
             ypaworld->DeleteLevel();
             ypaworld->DeinitGameShell();
         }
@@ -719,6 +799,7 @@ void sub_4113E8()
         {
             userdata.SaveSettings();
             ypaworld->CloseGameShell();
+            CrashDiag::Breadcrumb("GameShell closed");
             ypaworld->DeinitGameShell();
         }
 
@@ -744,6 +825,7 @@ int WinMain__sub0__sub1()
         ypa_log_out("Unable to init ypaworld.class\n");
         return 0;
     }
+    CrashDiag::Breadcrumb("ypaworld created");
 
     if ( !ypaworld->InitGameShell(&userdata) )
     {
@@ -757,13 +839,17 @@ int WinMain__sub0__sub1()
         return 0;
     }
 
-    if ( !userdata.HasInited && !ypaworld->OpenGameShell())
+    const bool mustOpenGameShell = !userdata.HasInited;
+    if ( mustOpenGameShell && !ypaworld->OpenGameShell())
     {
         ypa_log_out("Error: Unable to open Gameshell\n");
         return 0;
     }
 
+    CrashDiag::Breadcrumb("GameShell opened");
+
     GameScreenMode = GAME_SCREEN_MODE_MENU;
+    CrashDiag::Breadcrumb("entered menu");
     ReadSnapsDir();
 
     return 1;
@@ -797,20 +883,30 @@ int main(int argc, char *argv[])
     System::IniConf::Init();
     FSMgr::iDir::setBaseDir("");
 
-    System::IniConf::ReadFromNucleusIni();
+    const bool nucleusIniRead = System::IniConf::ReadFromNucleusIni();
+    CrashDiag::Initialize(System::IniConf::GameCrashDiagnostics.Get<bool>());
+    CrashDiag::Breadcrumb(nucleusIniRead ? "Nucleus.ini read" : "Nucleus.ini read failed");
     bool gfxVbo = System::IniConf::GfxVBO.Get<bool>();
 
     System::Init(!gfxVbo);
+    CrashDiag::Breadcrumb("SDL/system initialized");
 
     GFX::Engine.Init();
+    CrashDiag::Breadcrumb("GFX initialized");
     System::Movie.Init();
+    CrashDiag::Breadcrumb("Movie initialized");
 
     Gui::UA::Init();
+    CrashDiag::Breadcrumb("GUI initialized");
 
     if ( !WinMain__sub0() )
+    {
+        CrashDiag::Breadcrumb("startup failed");
         return 0;
+    }
 
     System::IniConf::ReadFromNucleusIni();
+    CrashDiag::Breadcrumb("Nucleus.ini reread");
 
     // OpenUA: cache the Black Sect clone-balance config once, after the INI is parsed.
     World::CloneBalance::Init();
@@ -820,6 +916,7 @@ int main(int argc, char *argv[])
     Gui::Root::Instance.SetHwCompose(true);
     ypaworld->LoadGuiFonts();
     ypaworld->CreateNewGuiElements();
+    CrashDiag::Breadcrumb("entered menu");
 
 
     //Gui::Root::Instance.AddPortal( Common::Point(640, 480), Common::Rect(0, 0, 300, 300));
@@ -905,12 +1002,14 @@ int main(int argc, char *argv[])
 
     }
 
+    CrashDiag::Breadcrumb("shutdown begin");
     ypaworld->DeleteNewGuiElements();
 
     sub_4113E8();
     Gui::UA::Deinit();
 
     System::Deinit();
+    CrashDiag::ShutdownComplete();
 
     return 0;
 }

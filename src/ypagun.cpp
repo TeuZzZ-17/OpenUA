@@ -378,6 +378,9 @@ void NC_STACK_ypagun::AI_layer3(update_msg *arg)
 
         FightWithBact(&arg75);
 
+        if ( _secndTtype != BACT_TGT_TYPE_UNIT || !_secndT.pbact )
+            break;
+
         if ( !TestTargetSector(_secndT.pbact) )
         {
             setTarget_msg arg67;

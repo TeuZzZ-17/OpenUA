@@ -226,6 +226,7 @@ Common::Ini::Key IniConf::NetVersionCheck("net.versioncheck", Common::Ini::KT_BO
 
 Common::Ini::Key IniConf::GameDebug("game.debug", Common::Ini::KT_BOOL);
 Common::Ini::Key IniConf::GameNewDebug("game.new.debug", Common::Ini::KT_WORD, std::string("no"));
+Common::Ini::Key IniConf::GameCrashDiagnostics("game.crash_diagnostics", Common::Ini::KT_BOOL, false);
 
 // Yparobo keys
 Common::Ini::Key IniConf::GameNewAI("game.newai",    Common::Ini::KT_BOOL, true);
@@ -460,6 +461,7 @@ void IniConf::Init()
 
         , &GameDebug
         , &GameNewDebug
+        , &GameCrashDiagnostics
 
         , &GameNewAI
         , &GameFixedTick

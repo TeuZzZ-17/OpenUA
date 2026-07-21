@@ -15,6 +15,7 @@ set(SOURCES
     base.cpp
     bmpAnm.cpp
     button.cpp
+    crashdiag.cpp
     crc32.cpp
     def_parser.cpp
     embed.cpp
@@ -171,6 +172,10 @@ target_link_libraries(
 
     PkgConfig::FFMPEG
 )
+
+if(WIN32)
+    target_link_libraries(OpenUA dbghelp)
+endif()
 
 target_include_directories(
     OpenUA

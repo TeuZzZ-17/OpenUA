@@ -219,6 +219,7 @@ public:
 
     static Common::Ini::Key GameDebug;
     static Common::Ini::Key GameNewDebug;
+    static Common::Ini::Key GameCrashDiagnostics;
     static bool IsGameNewDebugEnabled();
 
     static Common::Ini::Key GameNewAI;
