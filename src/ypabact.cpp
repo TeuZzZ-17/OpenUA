@@ -204,6 +204,10 @@ static mat3x3 ypabact_BuildVPRotationMatrix(const vec3d &degrees)
     return rot;
 }
 
+static constexpr int WEAPON_RECOIL_VISUAL_DURATION_MS = 220;
+static constexpr float WEAPON_RECOIL_VISUAL_DEGREES_PER_UNIT = 0.75f;
+static constexpr float WEAPON_RECOIL_VISUAL_MAX_DEGREES = 5.0f;
+
 static float ypabact_GetTankWeaponRecoilVisualPitch(const NC_STACK_ypabact *bact)
 {
     // OpenUA tank recoil: keep the physical recoil stable/horizontal, but add
@@ -232,20 +236,50 @@ static void ypabact_StartTankWeaponRecoilVisual(NC_STACK_ypabact *bact, float re
     if ( bact->_bact_type != BACT_TYPES_TANK || recoil <= 0.0f )
         return;
 
-    const int durationMs = 220;
-
-    float degrees = recoil * 0.75f;
+    float degrees = recoil * WEAPON_RECOIL_VISUAL_DEGREES_PER_UNIT;
     if ( degrees < 0.0f )
         degrees = 0.0f;
-    else if ( degrees > 5.0f )
-        degrees = 5.0f;
+    else if ( degrees > WEAPON_RECOIL_VISUAL_MAX_DEGREES )
+        degrees = WEAPON_RECOIL_VISUAL_MAX_DEGREES;
 
     if ( degrees <= 0.0f )
         return;
 
-    bact->_weaponRecoilVisualDuration = durationMs;
-    bact->_weaponRecoilVisualEndTime = bact->_clock + durationMs;
+    bact->_weaponRecoilVisualDuration = WEAPON_RECOIL_VISUAL_DURATION_MS;
+    bact->_weaponRecoilVisualEndTime = bact->_clock + WEAPON_RECOIL_VISUAL_DURATION_MS;
     bact->_weaponRecoilVisualPitch = degrees * C_PI_180;
+}
+
+static float ypabact_GetGunMinigunRecoilVisualPitch(const NC_STACK_ypabact *bact)
+{
+    if ( bact->_bact_type != BACT_TYPES_GUN ||
+         bact->_mgunRecoilVisualDuration <= 0 ||
+         bact->_mgunRecoilVisualPitch == 0.0f ||
+         bact->_clock >= bact->_mgunRecoilVisualEndTime )
+        return 0.0f;
+
+    float remain = (float)(bact->_mgunRecoilVisualEndTime - bact->_clock) /
+                   (float)bact->_mgunRecoilVisualDuration;
+    if ( remain <= 0.0f )
+        return 0.0f;
+    if ( remain > 1.0f )
+        remain = 1.0f;
+
+    return bact->_mgunRecoilVisualPitch * remain * remain;
+}
+
+static void ypabact_StartGunMinigunRecoilVisual(NC_STACK_ypabact *bact)
+{
+    if ( bact->_bact_type != BACT_TYPES_GUN || bact->_mgun_recoil_visual_intensity <= 0.0f )
+        return;
+
+    float degrees = std::min(
+        bact->_mgun_recoil_visual_intensity * WEAPON_RECOIL_VISUAL_DEGREES_PER_UNIT,
+        WEAPON_RECOIL_VISUAL_MAX_DEGREES);
+
+    bact->_mgunRecoilVisualDuration = WEAPON_RECOIL_VISUAL_DURATION_MS;
+    bact->_mgunRecoilVisualEndTime = bact->_clock + WEAPON_RECOIL_VISUAL_DURATION_MS;
+    bact->_mgunRecoilVisualPitch = degrees * C_PI_180;
 }
 
 static bool ypabact_IsAiTankWeaponRecoilUnit(const NC_STACK_ypabact *unit)
@@ -1534,6 +1568,11 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _weaponRecoilVisualEndTime = 0;
     _weaponRecoilVisualDuration = 0;
     _weaponRecoilVisualPitch = 0.0f;
+    _mgunRecoilVisualEndTime = 0;
+    _mgunRecoilVisualDuration = 0;
+    _mgunRecoilVisualPitch = 0.0f;
+    _mgunRecoilVisualNextKickTime = 0;
+    _mgunRecoilVisualLastFireTime = -1;
     _weaponRecoilVisualOffset = vec3d(0.0, 0.0, 0.0);
     _weaponRecoilAiRecoveryEndTime = 0;
     _weaponRecoilPlayerRecoveryEndTime = 0;
@@ -1605,6 +1644,8 @@ NC_STACK_ypabact::NC_STACK_ypabact()
     _num_mguns = 1;
     _mgun_shot_time = 0;
     _mgun_shot_time_user = 0;
+    _mgun_recoil_visual_intensity = 0.0f;
+    _mgun_recoil_visual_frequency = 0;
     _mgun_vp_dead = 0;
     _mgun_vp_megadeth = 0;
     _mgun_power = 0.0;
@@ -1761,6 +1802,11 @@ size_t NC_STACK_ypabact::Init(IDVList &stak)
     _weaponRecoilVisualEndTime = 0;
     _weaponRecoilVisualDuration = 0;
     _weaponRecoilVisualPitch = 0.0f;
+    _mgunRecoilVisualEndTime = 0;
+    _mgunRecoilVisualDuration = 0;
+    _mgunRecoilVisualPitch = 0.0f;
+    _mgunRecoilVisualNextKickTime = 0;
+    _mgunRecoilVisualLastFireTime = -1;
     _weaponRecoilVisualOffset = vec3d(0.0, 0.0, 0.0);
     _weaponRecoilAiRecoveryEndTime = 0;
     _weaponRecoilPlayerRecoveryEndTime = 0;
@@ -3207,7 +3253,7 @@ static void ypabact_SpawnDecorationFXEvent(NC_STACK_ypabact *bact)
                                         false,
                                         vec3d(0.0, 0.0, 0.0),
                                         true,
-                                        bact->_decoration_fx.trail_only);
+                                        NC_STACK_ypaworld::TTransientVPParticleControls(bact->_decoration_fx));
     }
 }
 
@@ -3269,7 +3315,7 @@ void NC_STACK_ypabact::UpdateDecorationFX(update_msg *)
                                                  false,
                                                  vec3d(0.0, 0.0, 0.0),
                                                  true,
-                                                 _decoration_fx.trail_only);
+                                                 NC_STACK_ypaworld::TTransientVPParticleControls(_decoration_fx));
         }
 
         return;
@@ -3619,9 +3665,13 @@ void NC_STACK_ypabact::Render(baseRender_msg *arg)
                 if ( ypabact_ShouldApplyVPOrientation(this, _current_vp->Bas) )
                     _current_vp->Bas->TForm().SclRot *= ypabact_BuildVPRotationMatrix(_vp_orientation);
 
-                float tankRecoilPitch = ypabact_GetTankWeaponRecoilVisualPitch(this);
-                if ( tankRecoilPitch != 0.0f && ypabact_IsMainVPBase(this, _current_vp->Bas) )
-                    _current_vp->Bas->TForm().SclRot *= mat3x3::RotateX(tankRecoilPitch);
+                float visualRecoilPitch = ypabact_GetTankWeaponRecoilVisualPitch(this) +
+                                          ypabact_GetGunMinigunRecoilVisualPitch(this);
+                visualRecoilPitch = std::min(
+                    visualRecoilPitch,
+                    (float)(WEAPON_RECOIL_VISUAL_MAX_DEGREES * C_PI_180));
+                if ( visualRecoilPitch != 0.0f && ypabact_IsMainVPBase(this, _current_vp->Bas) )
+                    _current_vp->Bas->TForm().SclRot *= mat3x3::RotateX(visualRecoilPitch);
 
                 if ( ypabact_ShouldApplyVPSpin(this, _current_vp->Bas) )
                     _current_vp->Bas->TForm().SclRot *= World::Spin::BuildMatrix(_vp_spin_strength, _clock);
@@ -10129,10 +10179,24 @@ static void ypabact_BuildFireXRandomOrder(NC_STACK_ypabact *unit)
     unit->_fire_x_slot_index = 0;
 }
 
-static float ypabact_GetProjectileFireX(NC_STACK_ypabact *unit, float vanillaFireX)
+static float ypabact_GetProjectileFireX(NC_STACK_ypabact *unit, float vanillaFireX,
+                                        int projectileIndex, int projectileCount)
 {
     if ( !unit || unit->_fire_x_mode == World::TVhclProto::FIRE_X_MODE_VANILLA )
         return vanillaFireX;
+
+    if ( unit->_fire_x_mode == World::TVhclProto::FIRE_X_MODE_SALVE_SEQUENCE )
+        return (unit->_fire_x_slot_index & 1) ? -unit->_fire_pos.x : unit->_fire_pos.x;
+
+    if ( unit->_fire_x_mode == World::TVhclProto::FIRE_X_MODE_SALVE_MIRROR )
+    {
+        int shotsPerSide = projectileCount / 2;
+        if ( projectileIndex < shotsPerSide )
+            return unit->_fire_pos.x;
+        if ( projectileIndex < shotsPerSide * 2 )
+            return -unit->_fire_pos.x;
+        return 0.0f;
+    }
 
     if ( !unit->_fire_x_advanced )
     {
@@ -10169,6 +10233,10 @@ static float ypabact_GetProjectileFireX(NC_STACK_ypabact *unit, float vanillaFir
 static void ypabact_ConsumeProjectileFireX(NC_STACK_ypabact *unit)
 {
     if ( !unit || unit->_fire_x_mode == World::TVhclProto::FIRE_X_MODE_VANILLA )
+        return;
+
+    if ( unit->_fire_x_mode == World::TVhclProto::FIRE_X_MODE_SALVE_SEQUENCE ||
+         unit->_fire_x_mode == World::TVhclProto::FIRE_X_MODE_SALVE_MIRROR )
         return;
 
     if ( !unit->_fire_x_advanced )
@@ -10366,7 +10434,7 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
             v37 = (i * 2) * v14 / (v13 - 1) - v14;
         }
 
-        v37 = ypabact_GetProjectileFireX(this, v37);
+        v37 = ypabact_GetProjectileFireX(this, v37, i, v13);
 
         ypaworld_arg146 arg147;
         arg147.vehicle_id = selectedWeapon;
@@ -10549,6 +10617,9 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
                 wobj->SetLifeTime(life_time_nt);
         }
     }
+
+    if ( _fire_x_mode == World::TVhclProto::FIRE_X_MODE_SALVE_SEQUENCE )
+        _fire_x_slot_index = (_fire_x_slot_index + 1) & 1;
 
     if ( wproto.recoil > 0.0f && recoilShotCount > 0 )
     {
@@ -12279,6 +12350,8 @@ void NC_STACK_ypabact::Renew()
     _num_mguns = 1;
     _mgun_shot_time = 0;
     _mgun_shot_time_user = 0;
+    _mgun_recoil_visual_intensity = 0.0f;
+    _mgun_recoil_visual_frequency = 0;
     _mgun_vp_dead = 0;
     _mgun_vp_megadeth = 0;
     _mgun_power = 0.0;
@@ -12369,6 +12442,11 @@ void NC_STACK_ypabact::Renew()
     _weaponRecoilVisualEndTime = 0;
     _weaponRecoilVisualDuration = 0;
     _weaponRecoilVisualPitch = 0.0f;
+    _mgunRecoilVisualEndTime = 0;
+    _mgunRecoilVisualDuration = 0;
+    _mgunRecoilVisualPitch = 0.0f;
+    _mgunRecoilVisualNextKickTime = 0;
+    _mgunRecoilVisualLastFireTime = -1;
     _weaponRecoilVisualOffset = vec3d(0.0, 0.0, 0.0);
     _heliLandingVisualOffsetY = 0.0f;
     _weaponRecoilAiRecoveryEndTime = 0;
@@ -13159,6 +13237,34 @@ static bool ypabact_GetMinigunSpreadImpactPoint(const vec3d &origin, const vec3d
     return true;
 }
 
+static void ypabact_UpdateGunMinigunRecoilVisual(NC_STACK_ypabact *bact, const bact_arg105 *arg)
+{
+    if ( bact->_bact_type != BACT_TYPES_GUN ||
+         bact->_mgun_recoil_visual_intensity <= 0.0f ||
+         bact->_mgun_recoil_visual_frequency <= 0 )
+    {
+        bact->_mgunRecoilVisualLastFireTime = -1;
+        bact->_mgunRecoilVisualNextKickTime = 0;
+        return;
+    }
+
+    int frameDeltaMs = std::max(1, (int)(arg->field_C * 1000.0f + 0.5f));
+    bool continuousFire = bact->_mgunRecoilVisualLastFireTime >= 0 &&
+                          arg->field_10 >= bact->_mgunRecoilVisualLastFireTime &&
+                          arg->field_10 - bact->_mgunRecoilVisualLastFireTime <= frameDeltaMs + 1;
+
+    if ( !continuousFire )
+        bact->_mgunRecoilVisualNextKickTime = arg->field_10;
+
+    bact->_mgunRecoilVisualLastFireTime = arg->field_10;
+
+    if ( arg->field_10 >= bact->_mgunRecoilVisualNextKickTime )
+    {
+        ypabact_StartGunMinigunRecoilVisual(bact);
+        bact->_mgunRecoilVisualNextKickTime = arg->field_10 + bact->_mgun_recoil_visual_frequency;
+    }
+}
+
 size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
 {
     if ( _world && _world->IsSpectatorBact(this) )
@@ -13174,6 +13280,8 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
 
     if ( !HasMinigun() )
         return 0;
+
+    ypabact_UpdateGunMinigunRecoilVisual(this, arg);
 
     World::TWeapProto *mgunProto = _mgun != -1 ? &_world->GetWeaponsProtos().at(_mgun) : NULL;
     bool vehicleTimedMgun = UsesVehicleMinigunTiming();

@@ -356,6 +356,10 @@ int yw_write_item_modifers(NC_STACK_ypaworld *yw, FSMgr::FileHandle *fil)
                 fil->printf("    fire_x_mode    = sequence\n");
             else if ( proto.fire_x_mode == World::TVhclProto::FIRE_X_MODE_RANDOM )
                 fil->printf("    fire_x_mode    = random\n");
+            else if ( proto.fire_x_mode == World::TVhclProto::FIRE_X_MODE_SALVE_SEQUENCE )
+                fil->printf("    fire_x_mode    = salve_sequence\n");
+            else if ( proto.fire_x_mode == World::TVhclProto::FIRE_X_MODE_SALVE_MIRROR )
+                fil->printf("    fire_x_mode    = salve_mirror\n");
             if ( proto.fire_x_start_defined )
                 fil->printf("    fire_x_start   = %4.2f\n", proto.fire_x_start);
             if ( proto.fire_x_step_defined )

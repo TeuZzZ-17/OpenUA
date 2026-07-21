@@ -805,6 +805,11 @@ public:
     int _weaponRecoilVisualEndTime = 0; // OpenUA: render-only tank firing tilt, does not affect physics
     int _weaponRecoilVisualDuration = 0;
     float _weaponRecoilVisualPitch = 0.0f;
+    int _mgunRecoilVisualEndTime = 0;
+    int _mgunRecoilVisualDuration = 0;
+    float _mgunRecoilVisualPitch = 0.0f;
+    int _mgunRecoilVisualNextKickTime = 0;
+    int _mgunRecoilVisualLastFireTime = -1;
     vec3d _weaponRecoilVisualOffset = vec3d(0.0, 0.0, 0.0); // OpenUA: render-only AI tank recoil translation
     int _weaponRecoilAiRecoveryEndTime = 0; // OpenUA: short AI tank forward-thrust pause after fake recoil
     int _weaponRecoilPlayerRecoveryEndTime = 0; // OpenUA: short player tank forward-input damping after fake recoil
@@ -909,6 +914,8 @@ public:
     int _num_mguns;
     int _mgun_shot_time;
     int _mgun_shot_time_user;
+    float _mgun_recoil_visual_intensity;
+    int _mgun_recoil_visual_frequency;
     int _mgun_vp_dead;
     int _mgun_vp_megadeth;
     float _mgun_power;

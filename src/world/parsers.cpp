@@ -687,7 +687,7 @@ static bool ParseTintParam(ScriptParser::Parser &parser,
 static float ParseVPScaleValue(ScriptParser::Parser &parser, const std::string &value)
 {
     float scale = parser.stof(value, 0);
-    return scale > 0.0 ? scale : 1.0;
+    return std::isfinite(scale) && scale > 0.0 ? scale : 1.0;
 }
 
 static bool ParseVPScaleParam(ScriptParser::Parser &parser,
@@ -782,12 +782,6 @@ static bool ParseDecorationFXParam(ScriptParser::Parser &parser,
         return true;
     }
 
-    if ( !StriCmp(p1, "decoration_fx_trail_only") )
-    {
-        config.trail_only = parser.stol(p2, NULL, 0) != 0;
-        return true;
-    }
-
     if ( !StriCmp(p1, "decoration_fx_mode") )
     {
         if ( !StriCmp(p2, "persistent") )
@@ -861,12 +855,22 @@ static bool ParseDecorationFXParam(ScriptParser::Parser &parser,
         return true;
     }
 
+    if ( ParseVPScaleParam(parser, "decoration_fx_vp_trail", p1, p2, config.vp_trail_scale) )
+    {
+        return true;
+    }
+
     if ( ParseVPSpinParam(parser, "decoration_fx_vp", p1, p2, config.vp_spin) )
     {
         return true;
     }
 
     if ( ParseTintParam(parser, "decoration_fx_vp_tint", p1, p2, config.vp_tint) )
+    {
+        return true;
+    }
+
+    if ( ParseTintParam(parser, "decoration_fx_vp_trail_tint", p1, p2, config.vp_trail_tint) )
     {
         return true;
     }
@@ -1193,7 +1197,9 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
                                  std::abs(fireXLast) <= (double)std::numeric_limits<float>::max();
         }
 
-        if ( _vhcl->fire_x_mode != TVhclProto::FIRE_X_MODE_VANILLA )
+        bool fireXAdvancedMode = _vhcl->fire_x_mode == TVhclProto::FIRE_X_MODE_SEQUENCE ||
+                                 _vhcl->fire_x_mode == TVhclProto::FIRE_X_MODE_RANDOM;
+        if ( fireXAdvancedMode )
         {
             _vhcl->fire_x_advanced = fireXAdvancedValid;
 
@@ -1203,6 +1209,8 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
                             _vhclID, TVhclProto::FIRE_X_MAX_SLOTS);
             }
         }
+        else
+            _vhcl->fire_x_advanced = false;
 
         if ( _vhcl->model_id == BACT_TYPES_ROBO )
         {
@@ -1937,6 +1945,24 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     {
         _vhcl->mgun_shot_time_user = parser.stol(p2, NULL, 0);
     }
+    else if ( !StriCmp(p1, "mgun_recoil_visual_intensity") )
+    {
+        float intensity = parser.stof(p2, 0);
+        if ( !std::isfinite(intensity) || intensity < 0.0f )
+            intensity = 0.0f;
+        else if ( intensity > 10.0f )
+            intensity = 10.0f;
+        _vhcl->mgun_recoil_visual_intensity = intensity;
+    }
+    else if ( !StriCmp(p1, "mgun_recoil_visual_frequency") )
+    {
+        int frequency = parser.stol(p2, NULL, 0);
+        if ( frequency > 0 && frequency < 100 )
+            frequency = 100;
+        else if ( frequency > 10000 )
+            frequency = 10000;
+        _vhcl->mgun_recoil_visual_frequency = frequency > 0 ? frequency : 0;
+    }
     else if ( !StriCmp(p1, "mgun_vp_dead") )
     {
         _vhcl->mgun_vp_dead = parser.stol(p2, NULL, 0);
@@ -2014,6 +2040,10 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
             _vhcl->fire_x_mode = TVhclProto::FIRE_X_MODE_SEQUENCE;
         else if ( !StriCmp(p2, "random") )
             _vhcl->fire_x_mode = TVhclProto::FIRE_X_MODE_RANDOM;
+        else if ( !StriCmp(p2, "salve_sequence") )
+            _vhcl->fire_x_mode = TVhclProto::FIRE_X_MODE_SALVE_SEQUENCE;
+        else if ( !StriCmp(p2, "salve_mirror") )
+            _vhcl->fire_x_mode = TVhclProto::FIRE_X_MODE_SALVE_MIRROR;
         else
         {
             _vhcl->fire_x_mode = TVhclProto::FIRE_X_MODE_VANILLA;
@@ -2673,6 +2703,8 @@ bool VhclProtoParser::IsScope(ScriptParser::Parser &parser, const std::string &w
         _vhcl->num_mguns = 1;
         _vhcl->mgun_shot_time = 0;
         _vhcl->mgun_shot_time_user = 0;
+        _vhcl->mgun_recoil_visual_intensity = 0.0f;
+        _vhcl->mgun_recoil_visual_frequency = 0;
         _vhcl->mgun_vp_dead = 0;
         _vhcl->mgun_vp_megadeth = 0;
         _vhcl->mgun_power = 0.0;

@@ -3143,6 +3143,8 @@ NC_STACK_ypabact * NC_STACK_ypaworld::ypaworld_func146(ypaworld_arg146 *vhcl_id)
         bacto->_num_mguns = vhcl.num_mguns > 0 ? vhcl.num_mguns : 1;
         bacto->_mgun_shot_time = vhcl.mgun_shot_time;
         bacto->_mgun_shot_time_user = vhcl.mgun_shot_time_user;
+        bacto->_mgun_recoil_visual_intensity = vhcl.mgun_recoil_visual_intensity;
+        bacto->_mgun_recoil_visual_frequency = vhcl.mgun_recoil_visual_frequency;
         bacto->_mgun_vp_dead = vhcl.mgun_vp_dead;
         bacto->_mgun_vp_megadeth = vhcl.mgun_vp_megadeth;
         bacto->_mgun_power = vhcl.mgun_power;

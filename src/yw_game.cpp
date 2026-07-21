@@ -2421,13 +2421,7 @@ void NC_STACK_ypaworld::RenderFillers(baseRender_msg *arg)
     }
 }
 
-static void yw_ApplyTransientVPTrailOnly(NC_STACK_ypaworld::TTransientVP &fx, bool trailOnly)
-{
-    if ( trailOnly && fx.vp )
-        fx.vp->skipGeometry = true;
-}
-
-int32_t NC_STACK_ypaworld::SpawnTransientVP(int32_t modelId, const vec3d &pos, const mat3x3 &rot, int32_t lifeTime, float scale, const World::TVisualTint &tint, const vec3d &axisScale, const vec3d &spin, bool trailOnly)
+int32_t NC_STACK_ypaworld::SpawnTransientVP(int32_t modelId, const vec3d &pos, const mat3x3 &rot, int32_t lifeTime, float scale, const World::TVisualTint &tint, const vec3d &axisScale, const vec3d &spin, const TTransientVPParticleControls &particleControls)
 {
     if ( modelId <= 0 || modelId >= (int32_t)_vhclModels.size() || lifeTime < 0 )
         return 0;
@@ -2445,7 +2439,7 @@ int32_t NC_STACK_ypaworld::SpawnTransientVP(int32_t modelId, const vec3d &pos, c
                              axisScale.z > 0.0f ? axisScale.z : 1.0f);
         fx.spin = spin;
         fx.tint = tint;
-        yw_ApplyTransientVPTrailOnly(fx, trailOnly);
+        fx.particleControls = particleControls;
         return fx.id;
     }
 
@@ -2530,7 +2524,7 @@ bool NC_STACK_ypaworld::UpdateRandomFXTimer(int intervalMin, int intervalMax, in
     return true;
 }
 
-int32_t NC_STACK_ypaworld::SpawnRandomizedTransientVP(int32_t modelId, const vec3d &ownerPos, float randomPos, const World::TVisualTint &tint, int32_t lifeTime, float scale, const vec3d &offset, const vec3d &axisScale, const vec3d &spin, bool trailOnly)
+int32_t NC_STACK_ypaworld::SpawnRandomizedTransientVP(int32_t modelId, const vec3d &ownerPos, float randomPos, const World::TVisualTint &tint, int32_t lifeTime, float scale, const vec3d &offset, const vec3d &axisScale, const vec3d &spin, const TTransientVPParticleControls &particleControls)
 {
     if ( modelId <= 0 )
         return 0;
@@ -2543,7 +2537,7 @@ int32_t NC_STACK_ypaworld::SpawnRandomizedTransientVP(int32_t modelId, const vec
         pos.z += (((float)rand() / (float)RAND_MAX) * 2.0 - 1.0) * randomPos;
     }
 
-    return SpawnTransientVP(modelId, pos, mat3x3::Ident(), lifeTime, scale, tint, axisScale, spin, trailOnly);
+    return SpawnTransientVP(modelId, pos, mat3x3::Ident(), lifeTime, scale, tint, axisScale, spin, particleControls);
 }
 
 void NC_STACK_ypaworld::UpdateDecorationFX(const World::TDecorationFXConfig &config, int32_t &nextTime, const vec3d &ownerPos, int32_t *persistentId)
@@ -2558,7 +2552,7 @@ void NC_STACK_ypaworld::UpdateDecorationFX(const World::TDecorationFXConfig &con
             return;
 
         if ( !HasTransientVP(*persistentId) )
-            *persistentId = SpawnTransientVP(config.vp, ownerPos + config.offset, mat3x3::Ident(), 0, 1.0, tint, config.vp_scale, config.vp_spin, config.trail_only);
+            *persistentId = SpawnTransientVP(config.vp, ownerPos + config.offset, mat3x3::Ident(), 0, 1.0, tint, config.vp_scale, config.vp_spin, TTransientVPParticleControls(config));
 
         return;
     }
@@ -2593,10 +2587,10 @@ void NC_STACK_ypaworld::UpdateDecorationFX(const World::TDecorationFXConfig &con
                                    config.offset,
                                    config.vp_scale,
                                    config.vp_spin,
-                                   config.trail_only);
+                                   TTransientVPParticleControls(config));
 }
 
-int32_t NC_STACK_ypaworld::SpawnAttachedTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime, float scale, bool useOwnerTransform, const World::TVisualTint &tint, const vec3d &axisScale, const vec3d &spin, bool playerFirstPersonOnly, const vec3d &localRotation, bool hideInOwnerMissileCamera, bool trailOnly)
+int32_t NC_STACK_ypaworld::SpawnAttachedTransientVP(int32_t modelId, NC_STACK_ypabact *owner, const vec3d &localOffset, int32_t lifeTime, float scale, bool useOwnerTransform, const World::TVisualTint &tint, const vec3d &axisScale, const vec3d &spin, bool playerFirstPersonOnly, const vec3d &localRotation, bool hideInOwnerMissileCamera, const TTransientVPParticleControls &particleControls)
 {
     if ( !owner || modelId <= 0 || modelId >= (int32_t)_vhclModels.size() )
         return 0;
@@ -2626,7 +2620,7 @@ int32_t NC_STACK_ypaworld::SpawnAttachedTransientVP(int32_t modelId, NC_STACK_yp
                          axisScale.z > 0.0f ? axisScale.z : 1.0f);
     fx.spin = spin;
     fx.tint = tint;
-    yw_ApplyTransientVPTrailOnly(fx, trailOnly);
+    fx.particleControls = particleControls;
     return fx.id;
 }
 
@@ -2638,7 +2632,7 @@ int32_t NC_STACK_ypaworld::SpawnAttachedStatusTransientVP(int32_t modelId, NC_ST
     int32_t id = SpawnAttachedTransientVP(modelId, owner, localOffset, lifeTime,
                                           1.0, false, World::TVisualTint(), axisScale,
                                           vec3d(0.0, 0.0, 0.0), false,
-                                          vec3d(0.0, 0.0, 0.0), false, trailOnly);
+                                          vec3d(0.0, 0.0, 0.0), false);
     if ( id <= 0 || _transientVPs.empty() )
         return id;
 
@@ -2647,6 +2641,8 @@ int32_t NC_STACK_ypaworld::SpawnAttachedStatusTransientVP(int32_t modelId, NC_ST
         return id;
 
     fx.followRotateOffset = rotateOffsetWithOwner;
+    if ( trailOnly && fx.vp )
+        fx.vp->skipGeometry = true;
 
     return id;
 }
@@ -3284,10 +3280,20 @@ static void yw_RenderTransientVPs(NC_STACK_ypaworld *world, std::list<NC_STACK_y
         vec3d oldParticleScale = arg->particleScale;
         vec3d oldParticleSpin = arg->particleSpin;
         float oldParticleLifetimeScale = arg->particleLifetimeScale;
-        arg->particleTint = GFX::TGLColor(it->tint.r, it->tint.g, it->tint.b, it->tint.a);
-        arg->particleScale = renderScale;
+        if ( it->particleControls.enabled )
+        {
+            const World::TVisualTint &particleTint = it->particleControls.tint;
+            arg->particleTint = GFX::TGLColor(particleTint.r, particleTint.g, particleTint.b, particleTint.a);
+            arg->particleScale = it->particleControls.scale;
+            arg->particleLifetimeScale = it->particleControls.lifetimeScale;
+        }
+        else
+        {
+            arg->particleTint = GFX::TGLColor(it->tint.r, it->tint.g, it->tint.b, it->tint.a);
+            arg->particleScale = renderScale;
+            arg->particleLifetimeScale = 1.0f;
+        }
         arg->particleSpin = it->spin;
-        arg->particleLifetimeScale = 1.0f;
 
         bool tinted = !it->tint.IsNeutral();
         if ( tinted )

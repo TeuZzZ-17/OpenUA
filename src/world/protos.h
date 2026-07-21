@@ -46,7 +46,6 @@ struct TDecorationFXConfig
 {
     uint8_t mode = DECORATION_FX_PERIODIC;
     int16_t vp = 0;
-    bool trail_only = false;
     int interval_min = 0;
     int interval_max = 0;
     int count_min = 0;
@@ -57,6 +56,8 @@ struct TDecorationFXConfig
     vec3d vp_spin = vec3d(0.0, 0.0, 0.0);
     vec3d offset;
     TVisualTint vp_tint;
+    vec3d vp_trail_scale = vec3d(1.0, 1.0, 1.0);
+    TVisualTint vp_trail_tint;
 };
 
 struct TChainFXVPModel
@@ -341,7 +342,9 @@ struct TVhclProto
     {
         FIRE_X_MODE_VANILLA = 0,
         FIRE_X_MODE_SEQUENCE = 1,
-        FIRE_X_MODE_RANDOM = 2
+        FIRE_X_MODE_RANDOM = 2,
+        FIRE_X_MODE_SALVE_SEQUENCE = 3,
+        FIRE_X_MODE_SALVE_MIRROR = 4
     };
 
     enum { FIRE_X_MAX_SLOTS = 256 };
@@ -399,6 +402,8 @@ struct TVhclProto
     int16_t num_mguns = 1;
     int mgun_shot_time = 0;
     int mgun_shot_time_user = 0;
+    float mgun_recoil_visual_intensity = 0.0f;
+    int mgun_recoil_visual_frequency = 0;
     int16_t mgun_vp_dead = 0;
     int16_t mgun_vp_megadeth = 0;
     float mgun_power = 0.0;
