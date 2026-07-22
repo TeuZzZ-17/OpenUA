@@ -10365,7 +10365,7 @@ static bool yw_RenderNewGemNotification(NC_STACK_ypaworld *yw)
 
     // Match the vanilla GEM/HUD upgrade blink cadence: the complete notification
     // (frame and text) is visible only during the active 200 ms phase.
-    if ( ((yw->_timeStamp / 200) & 1) == 0 )
+    if ( ((yw->GetNewGemNotificationElapsedTime() / 200) & 1) == 0 )
         return true;
 
     const int panelTopPadding = std::max(yw->_fontH + 4, 16);

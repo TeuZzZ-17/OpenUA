@@ -54,6 +54,60 @@ GuiList stru_5C91D0;
 uint32_t bact_id = 0x10000;
 
 static constexpr uint32_t GEM_NEW_UI_NOTIFICATION_DURATION_MS = 8000;
+static constexpr float GEM_NEW_UI_MIN_TIME_SCALE = 0.05f;
+
+static float yw_GetGemUnlockTimeScale()
+{
+    const std::string value = System::IniConf::GameGemUnlockTimeScale.Get<std::string>();
+    if ( value.empty() || value.find(',') != std::string::npos )
+        return 1.0f;
+
+    try
+    {
+        size_t pos = 0;
+        float scale = std::stof(value, &pos);
+        if ( value.find_first_not_of(" \t\r\n", pos) != std::string::npos ||
+             !isfinite(scale) || scale <= 0.0f )
+            return 1.0f;
+
+        return std::max(GEM_NEW_UI_MIN_TIME_SCALE, std::min(scale, 1.0f));
+    }
+    catch (...)
+    {
+        return 1.0f;
+    }
+}
+
+static int32_t yw_GetGemScaledFrameTime(NC_STACK_ypaworld *yw, int32_t frameTime)
+{
+    if ( !yw || yw->_isNetGame || !yw->HasActiveNewGemNotification() )
+    {
+        if ( yw )
+            yw->_gemUnlockTimeScaleRemainder = 0.0;
+        return frameTime;
+    }
+
+    const float scale = yw_GetGemUnlockTimeScale();
+    if ( scale >= 1.0f )
+    {
+        yw->_gemUnlockTimeScaleRemainder = 0.0;
+        return frameTime;
+    }
+
+    const double scaledExact = (double)frameTime * scale + yw->_gemUnlockTimeScaleRemainder;
+    int32_t scaledFrameTime = (int32_t)floor(scaledExact);
+    yw->_gemUnlockTimeScaleRemainder = scaledExact - scaledFrameTime;
+
+    // Several legacy paths require a positive integral delta. Preserve that
+    // invariant at extremely high frame rates.
+    if ( scaledFrameTime < 1 )
+    {
+        scaledFrameTime = 1;
+        yw->_gemUnlockTimeScaleRemainder = 0.0;
+    }
+
+    return scaledFrameTime;
+}
 
 // method 169
 uint32_t dword_5A7A80;
@@ -1814,6 +1868,12 @@ size_t NC_STACK_ypaworld::Process(base_64arg *arg)
 
         bool gameplayFrozen = openUADebug && _debugGameplayFrozen;
 
+        const int32_t unscaledFrameTime = arg->DTime;
+        if ( !gameplayFrozen )
+            arg->DTime = yw_GetGemScaledFrameTime(this, arg->DTime);
+        else
+            _gemUnlockTimeScaleRemainder = 0.0;
+
         if ( !gameplayFrozen )
             _timeStamp += arg->DTime;
 
@@ -1825,7 +1885,7 @@ size_t NC_STACK_ypaworld::Process(base_64arg *arg)
         _updateMessage.frameTime = arg->DTime;
         _updateMessage.units_count = 0;
         _updateMessage.inpt = arg->field_8;
-        _FPS = 1024 / arg->DTime;
+        _FPS = 1024 / unscaledFrameTime;
         _profileVals[PFID_FPS] = _FPS;
 
         if ( !gameplayFrozen )
@@ -2132,12 +2192,18 @@ bool NC_STACK_ypaworld::HasActiveNewGemNotification() const
 {
     return System::IniConf::GameGemUnlockNewUI.Get<bool>() &&
            _upgradeId != -1 &&
-           _timeStamp - _upgradeTimeStamp < GEM_NEW_UI_NOTIFICATION_DURATION_MS;
+           GetNewGemNotificationElapsedTime() < GEM_NEW_UI_NOTIFICATION_DURATION_MS;
+}
+
+uint32_t NC_STACK_ypaworld::GetNewGemNotificationElapsedTime() const
+{
+    return SDL_GetTicks() - _upgradeTimeStamp;
 }
 
 bool NC_STACK_ypaworld::IsNewGemNotificationBlockingPlayerWeapons(const NC_STACK_ypabact *bact) const
 {
-    return bact && bact == _userUnit && HasActiveNewGemNotification();
+    return bact && bact == _userUnit && bact->_bact_type != BACT_TYPES_UFO &&
+           HasActiveNewGemNotification();
 }
 
 void NC_STACK_ypaworld::RecordGemNotificationChange(uint8_t targetKind, int32_t targetProtoId,
@@ -2309,13 +2375,14 @@ void sub_47C29C(NC_STACK_ypaworld *yw, cellArea *cell, int a3)
     int a3a, a4;
     sub_47C1EC(yw, &gem, &a3a, &a4);
 
+    bool newUiCapture = System::IniConf::GameGemUnlockNewUI.Get<bool>();
+
     yw->_upgradeId = a3;
-    yw->_upgradeTimeStamp = yw->_timeStamp;
+    yw->_upgradeTimeStamp = newUiCapture ? SDL_GetTicks() : yw->_timeStamp;
     yw->_upgradeVehicleId = a3a;
     yw->_upgradeWeaponId = 0;
     yw->_upgradeBuildId = a4;
 
-    bool newUiCapture = System::IniConf::GameGemUnlockNewUI.Get<bool>();
     if ( newUiCapture )
         yw->BeginGemNotificationCapture();
     else
@@ -2419,10 +2486,11 @@ void NC_STACK_ypaworld::yw_ActivateWunderstein(cellArea *cell, int gemid)
     _upgradeBuildId = 0;
     _upgradeWeaponId = 0;
 
-    _upgradeId = gemid;
-    _upgradeTimeStamp = _timeStamp;
-
     bool newUiCapture = System::IniConf::GameGemUnlockNewUI.Get<bool>();
+
+    _upgradeId = gemid;
+    _upgradeTimeStamp = newUiCapture ? SDL_GetTicks() : _timeStamp;
+
     if ( newUiCapture )
         BeginGemNotificationCapture();
     else
@@ -4125,6 +4193,7 @@ void NC_STACK_ypaworld::BeginLevelTeardown()
     _playerInHSGun = false;
     _upgradeId = 0;
     _upgradeTimeStamp = 0;
+    _gemUnlockTimeScaleRemainder = 0.0;
     _upgradeVehicleId = 0;
     _upgradeWeaponId = 0;
     _upgradeBuildId = 0;

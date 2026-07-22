@@ -2620,6 +2620,7 @@ public:
     void ClearGemNotificationCapture();
     bool IsGemNotificationCaptureActive() const;
     bool HasActiveNewGemNotification() const;
+    uint32_t GetNewGemNotificationElapsedTime() const;
     bool IsNewGemNotificationBlockingPlayerWeapons(const NC_STACK_ypabact *bact) const;
     void RecordGemNotificationChange(uint8_t targetKind, int32_t targetProtoId,
                                      uint8_t changeKind, int32_t previousRawValue,
@@ -2940,6 +2941,7 @@ public:
     std::vector<TMapGem> _techUpgrades; // tech upgrades in level
     int32_t _upgradeId = 0;
     uint32_t _upgradeTimeStamp = 0;
+    double _gemUnlockTimeScaleRemainder = 0.0;
     int32_t _upgradeVehicleId = 0;
     int32_t _upgradeWeaponId = 0;
     int32_t _upgradeBuildId = 0;
