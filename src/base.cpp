@@ -17,6 +17,28 @@
 #include "system/inivals.h"
 #include "particle.h"
 
+namespace
+{
+class SetLooseBaseObjectScope
+{
+public:
+    explicit SetLooseBaseObjectScope(bool active) : _active(active)
+    {
+        if (_active)
+            IFFile::BeginSetLooseBaseObjectScope();
+    }
+
+    ~SetLooseBaseObjectScope()
+    {
+        if (_active)
+            IFFile::EndSetLooseBaseObjectScope();
+    }
+
+private:
+    bool _active = false;
+};
+}
+
 
 size_t NC_STACK_base::Init(IDVList &stak)
 {
@@ -831,6 +853,7 @@ NC_STACK_base *NC_STACK_base::LoadBaseFromFile(const std::string &fname)
     std::replace(scanName.begin(), scanName.end(), '\\', '/');
     bool traceSetBas = !StriCmp(scanName, "rsrc:objects/set.base") || !StriCmp(scanName, "rsrc:objects/set.bas") ||
                        !StriCmp(scanName, "objects/set.base") || !StriCmp(scanName, "objects/set.bas");
+    SetLooseBaseObjectScope baseObjectScope(traceSetBas);
 
     IFFile mfile = IFFile::UAOpenIFFile(fname, "rb", "NC_STACK_base::LoadBaseFromFile");
     if ( !mfile.OK() )

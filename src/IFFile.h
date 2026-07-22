@@ -116,6 +116,7 @@ public:
 
     static bool FindSetLooseOverride(const std::string &filename, const std::string &mode, SetLooseOverride *out, const char *sourceFunction = NULL);
     static bool FindSetLooseEmbeddedOverride(const std::string &filename, const std::string &mode, SetLooseOverride *out, const char *sourceFunction = NULL);
+    static bool FindSetLooseBaseObjectOverride(const std::string &objectName, const std::string &mode, SetLooseOverride *out, const char *sourceFunction = NULL);
     static bool FindSetLooseEmrsOverride(const std::string &filename, const std::string &mode, const std::string &className, const std::string &payload, SetLooseOverride *out, const char *sourceFunction = NULL, size_t currentOffset = (size_t)-1);
     static bool FindSetLooseEmrsPngOverride(const std::string &filename, const std::string &mode, const std::string &className, const std::string &payload, SetLooseOverride *out, const char *sourceFunction = NULL, size_t currentOffset = (size_t)-1);
     static bool FindSetHiEffectPngOverride(const std::string &filename, const std::string &mode, SetLooseOverride *out, const char *sourceFunction = NULL);
@@ -138,6 +139,10 @@ public:
     static IFFile UAOpenIFFileWithSetLooseEmrsOverride(const std::string &filename, const std::string &mode, const std::string &className, const std::string &payload, SetLooseOverride *out, const char *sourceFunction = NULL, size_t currentOffset = (size_t)-1);
     static IFFile *RsrcOpenIFFile(const std::string &filename, const std::string &mode, const char *sourceFunction = NULL);
     static IFFile UAOpenIFFile(const std::string &filename, const std::string &mode, const char *sourceFunction = NULL);
+
+    static void BeginSetLooseBaseObjectScope();
+    static void EndSetLooseBaseObjectScope();
+    static bool IsSetLooseBaseObjectScopeActive();
 
 protected:
     FSMgr::FileHandle file_handle;

@@ -1,6 +1,114 @@
+#include <algorithm>
+#include <cctype>
+#include <utility>
+#include <vector>
+
 #include "includes.h"
 #include "nucleas.h"
+#include "base.h"
 #include "utils.h"
+
+namespace
+{
+thread_local std::vector<std::string> g_activeSetLooseBaseObjects;
+
+std::string SetLooseBaseObjectKey(std::string name)
+{
+    std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) {
+        return (char)std::tolower(c);
+    });
+    return name;
+}
+
+bool IsSetLooseBaseObjectActive(const std::string &name)
+{
+    const std::string key = SetLooseBaseObjectKey(name);
+    return std::find(g_activeSetLooseBaseObjects.begin(), g_activeSetLooseBaseObjects.end(), key) !=
+           g_activeSetLooseBaseObjects.end();
+}
+
+class SetLooseBaseObjectGuard
+{
+public:
+    explicit SetLooseBaseObjectGuard(const std::string &name) : _key(SetLooseBaseObjectKey(name))
+    {
+        g_activeSetLooseBaseObjects.push_back(_key);
+    }
+
+    ~SetLooseBaseObjectGuard()
+    {
+        if (!g_activeSetLooseBaseObjects.empty())
+            g_activeSetLooseBaseObjects.pop_back();
+    }
+
+private:
+    std::string _key;
+};
+
+NC_STACK_base *LoadLooseBaseObjectFile(IFFile *mfile)
+{
+    if ( !mfile || mfile->parse() )
+        return NULL;
+
+    if ( !mfile->GetCurrentChunk().Is(TAG_FORM, TAG_MC2) || mfile->parse() )
+        return NULL;
+
+    if ( !mfile->GetCurrentChunk().Is(TAG_FORM, TAG_OBJT) )
+        return NULL;
+
+    return dynamic_cast<NC_STACK_base *>(NC_STACK_nucleus::LoadObjectFromIFF(mfile));
+}
+
+NC_STACK_base *TryLoadSetLooseBaseObject(const std::string &objectName)
+{
+    if ( objectName.empty() || IsSetLooseBaseObjectActive(objectName) ||
+         !IFFile::IsSetLooseBaseObjectScopeActive() )
+        return NULL;
+
+    IFFile::SetLooseOverride overrideInfo;
+    if ( !IFFile::FindSetLooseBaseObjectOverride(objectName,
+                                                  "rb",
+                                                  &overrideInfo,
+                                                  "NC_STACK_nucleus::LoadObjectFromIFF") )
+        return NULL;
+
+    FSMgr::FileHandle looseHandle = FSMgr::iDir::openFile(overrideInfo.resolvedPath, "rb");
+    if ( !looseHandle.OK() )
+    {
+        IFFile::ReportSetLooseOverrideFailed(overrideInfo, "loose BASE object existed but failed to open; embedded SET.BAS object retained.");
+        ypa_log_out("WARNING: OpenUA SET loose BASE override failed to open for %s (%s); embedded object retained.\n",
+                    objectName.c_str(), overrideInfo.resolvedPath.c_str());
+        return NULL;
+    }
+
+    IFFile looseFile(std::move(looseHandle));
+    SetLooseBaseObjectGuard guard(objectName);
+    NC_STACK_base *overrideObject = LoadLooseBaseObjectFile(&looseFile);
+
+    if ( !overrideObject )
+    {
+        IFFile::ReportSetLooseOverrideFailed(overrideInfo, "loose BASE object failed to parse; embedded SET.BAS object retained.");
+        ypa_log_out("WARNING: OpenUA SET loose BASE override failed to parse for %s (%s); embedded object retained.\n",
+                    objectName.c_str(), overrideInfo.resolvedPath.c_str());
+        return NULL;
+    }
+
+    if ( StriCmp(overrideObject->getName(), objectName) )
+    {
+        const std::string loadedName = overrideObject->getName();
+        overrideObject->Delete();
+        IFFile::ReportSetLooseOverrideFailed(overrideInfo, "loose BASE object NAME does not match the embedded object; embedded SET.BAS object retained.");
+        ypa_log_out("WARNING: OpenUA SET loose BASE override name mismatch: expected %s, loaded %s (%s); embedded object retained.\n",
+                    objectName.c_str(), loadedName.c_str(), overrideInfo.resolvedPath.c_str());
+        return NULL;
+    }
+
+    IFFile::ReportSetLooseOverrideUsed(overrideInfo);
+    ypa_log_out("OpenUA SET loose BASE override used: %s -> %s\n",
+                objectName.c_str(), overrideInfo.resolvedPath.c_str());
+    return overrideObject;
+}
+}
 
 namespace Nucleus
 {
@@ -193,6 +301,18 @@ NC_STACK_nucleus *NC_STACK_nucleus::LoadObjectFromIFF(IFFile *mfile)
             {
                 delete obj;
                 return NULL;
+            }
+
+            if ( obj && !StriCmp(clss->_classname, NC_STACK_base::__ClassName) )
+            {
+                NC_STACK_base *embeddedBase = dynamic_cast<NC_STACK_base *>(obj);
+                NC_STACK_base *looseBase = embeddedBase ? TryLoadSetLooseBaseObject(embeddedBase->getName()) : NULL;
+
+                if ( looseBase )
+                {
+                    obj->Delete();
+                    obj = looseBase;
+                }
             }
         }
         else

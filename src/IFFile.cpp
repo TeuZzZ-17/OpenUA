@@ -101,6 +101,7 @@ bool g_setBasParseTraceActive = false;
 int32_t g_setBasParseTraceSetId = 0;
 size_t g_setBasParseTraceCount = 0;
 const size_t SETBAS_PARSE_TRACE_LIMIT = 200;
+int g_setLooseBaseObjectScopeDepth = 0;
 
 std::string setLooseNormalizeSlashes(std::string path)
 {
@@ -1323,6 +1324,80 @@ bool IFFile::FindSetLooseEmbeddedOverride(const std::string &filename, const std
     return false;
 }
 
+bool IFFile::FindSetLooseBaseObjectOverride(const std::string &objectName, const std::string &mode, SetLooseOverride *out, const char *sourceFunction)
+{
+    if (out)
+        *out = SetLooseOverride();
+
+    if ( !setLooseIsReadMode(mode) || !IsSetLooseBaseObjectScopeActive() )
+        return false;
+
+    int32_t setId = setLooseCurrentSetId();
+    if ( !setId )
+        return false;
+
+    std::string cleanName = setLooseTrimResourceName(objectName);
+    if ( cleanName.empty() || cleanName == "." || cleanName == ".." ||
+         cleanName.find_first_of("/\\:") != std::string::npos )
+        return false;
+
+    if ( !setLooseEnsureReport(setId) )
+        return false;
+
+    const std::string looseRoot = "Data/Set" + std::to_string(setId) + "/Loose/";
+
+    struct CandidateGroup
+    {
+        std::string folder;
+        std::string label;
+    };
+
+    const CandidateGroup groups[] = {
+        {"Base", "BASE object override (Base folder)"},
+        // OpenUAStudio currently exports the companion BASE beside the SKLT.
+        {"Skeleton", "BASE object override (Skeleton folder compatibility)"}
+    };
+
+    for (const CandidateGroup &group : groups)
+    {
+        const std::string requested = group.folder + "/" + cleanName + ".BASE";
+        const std::string originalCandidate = looseRoot + requested;
+        const std::string legacyCandidate = setLooseNormalizeSlashes(correctSeparatorAndExt(originalCandidate));
+
+        std::string originalOpenPath;
+        std::string legacyOpenPath;
+        const bool originalExists = setLooseResolveReadableFile(originalCandidate, &originalOpenPath);
+        const bool legacyExists = legacyCandidate != setLooseNormalizeSlashes(originalCandidate) &&
+                                  setLooseResolveReadableFile(legacyCandidate, &legacyOpenPath);
+
+        setLooseAddLookup(setId,
+                          requested,
+                          originalCandidate,
+                          originalExists,
+                          legacyCandidate,
+                          legacyExists,
+                          sourceFunction,
+                          true);
+
+        if ( !originalExists && !legacyExists )
+            continue;
+
+        if (out)
+        {
+            out->active = true;
+            out->setId = setId;
+            out->requested = requested;
+            out->resolvedPath = originalExists ? originalOpenPath : legacyOpenPath;
+            out->extensionForm = group.label;
+            out->embedded = true;
+            out->sourceFunction = sourceFunction ? sourceFunction : "NC_STACK_nucleus::LoadObjectFromIFF";
+        }
+        return true;
+    }
+
+    return false;
+}
+
 bool IFFile::FindSetLooseEmrsOverride(const std::string &filename, const std::string &mode, const std::string &className, const std::string &payload, SetLooseOverride *out, const char *sourceFunction, size_t currentOffset)
 {
     (void)currentOffset;
@@ -1349,10 +1424,6 @@ bool IFFile::FindSetLooseEmrsOverride(const std::string &filename, const std::st
         return false;
 
     std::string looseRoot = "Data/Set" + std::to_string(setId) + "/Loose/";
-    std::string originalPath = looseRoot + assetPath;
-    std::string legacyPath = setLooseNormalizeSlashes(correctSeparatorAndExt(originalPath));
-    bool originalExists = FSMgr::iDir::fileExist(originalPath);
-    bool legacyExists = FSMgr::iDir::fileExist(legacyPath);
 
     g_setLooseReports[setId].emrsResourcesChecked++;
 
@@ -1364,10 +1435,42 @@ bool IFFile::FindSetLooseEmrsOverride(const std::string &filename, const std::st
     };
 
     std::vector<Candidate> candidates;
-    candidates.push_back({originalPath, "original requested extension form", originalExists});
+    const bool isTexture = setLooseLower(className) == "ilbm.class";
+    const std::string candidatePrefixes[] = {
+        isTexture ? "Texture/" : "",
+        ""
+    };
 
-    if ( legacyPath != setLooseNormalizeSlashes(originalPath) )
-        candidates.push_back({legacyPath, "legacy 3-letter extension form", legacyExists});
+    for (size_t prefixIndex = 0; prefixIndex < 2; ++prefixIndex)
+    {
+        const std::string &prefix = candidatePrefixes[prefixIndex];
+        if ( prefixIndex == 1 && prefix.empty() && !isTexture )
+            break;
+
+        const std::string originalPath = looseRoot + prefix + assetPath;
+        const std::string legacyPath = setLooseNormalizeSlashes(correctSeparatorAndExt(originalPath));
+        const bool originalExists = FSMgr::iDir::fileExist(originalPath);
+        const bool legacyExists = FSMgr::iDir::fileExist(legacyPath);
+        const std::string locationLabel = prefix.empty() ? "legacy Loose root" : "Texture folder";
+
+        setLooseAddLookup(setId,
+                          prefix + assetPath,
+                          originalPath,
+                          originalExists,
+                          legacyPath,
+                          legacyExists,
+                          sourceFunction,
+                          true);
+
+        candidates.push_back({originalPath,
+                              locationLabel + ", original requested extension form",
+                              originalExists});
+
+        if ( legacyPath != setLooseNormalizeSlashes(originalPath) )
+            candidates.push_back({legacyPath,
+                                  locationLabel + ", legacy 3-letter extension form",
+                                  legacyExists});
+    }
 
     for (const Candidate &candidate : candidates)
     {
@@ -1432,16 +1535,31 @@ bool IFFile::FindSetLooseEmrsPngOverride(const std::string &filename, const std:
         return false;
 
     std::string looseRoot = "Data/Set" + std::to_string(setId) + "/Loose/";
-    std::vector<std::string> candidates;
-    candidates.push_back(looseRoot + setLooseReplaceExtension(assetPath, ".PNG"));
-    std::string lowerCandidate = looseRoot + setLooseReplaceExtension(assetPath, ".png");
-    if ( setLooseNormalizeSlashes(lowerCandidate) != setLooseNormalizeSlashes(candidates.front()) )
-        candidates.push_back(lowerCandidate);
 
-    for (const std::string &candidate : candidates)
+    struct Candidate
+    {
+        std::string path;
+        std::string locationLabel;
+    };
+
+    std::vector<Candidate> candidates;
+    const std::string candidatePrefixes[] = {"Texture/", ""};
+
+    for (const std::string &prefix : candidatePrefixes)
+    {
+        const std::string upperCandidate = looseRoot + prefix + setLooseReplaceExtension(assetPath, ".PNG");
+        const std::string lowerCandidate = looseRoot + prefix + setLooseReplaceExtension(assetPath, ".png");
+        const std::string locationLabel = prefix.empty() ? "legacy Loose root" : "Texture folder";
+
+        candidates.push_back({upperCandidate, locationLabel});
+        if ( setLooseNormalizeSlashes(lowerCandidate) != setLooseNormalizeSlashes(upperCandidate) )
+            candidates.push_back({lowerCandidate, locationLabel});
+    }
+
+    for (const Candidate &candidate : candidates)
     {
         std::string openPath;
-        if ( setLooseResolveReadableFile(candidate, &openPath) )
+        if ( setLooseResolveReadableFile(candidate.path, &openPath) )
         {
             if (out)
             {
@@ -1449,7 +1567,7 @@ bool IFFile::FindSetLooseEmrsPngOverride(const std::string &filename, const std:
                 out->setId = setId;
                 out->requested = assetPath;
                 out->resolvedPath = openPath;
-                out->extensionForm = "PNG texture override";
+                out->extensionForm = "PNG texture override (" + candidate.locationLabel + ")";
                 out->embedded = true;
                 out->sourceFunction = sourceFunction ? sourceFunction : "NC_STACK_embed::LoadingFromIFF";
                 out->emrs = true;
@@ -1707,6 +1825,22 @@ IFFile IFFile::UAOpenIFFileWithSetLooseEmrsOverride(const std::string &filename,
         *out = overrideInfo;
 
     return result;
+}
+
+void IFFile::BeginSetLooseBaseObjectScope()
+{
+    g_setLooseBaseObjectScopeDepth++;
+}
+
+void IFFile::EndSetLooseBaseObjectScope()
+{
+    if ( g_setLooseBaseObjectScopeDepth > 0 )
+        g_setLooseBaseObjectScopeDepth--;
+}
+
+bool IFFile::IsSetLooseBaseObjectScopeActive()
+{
+    return g_setLooseBaseObjectScopeDepth > 0;
 }
 
 bool IFFile::IsSetLooseOverride() const
