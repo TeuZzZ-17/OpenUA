@@ -257,6 +257,7 @@ Common::Ini::Key IniConf::GameHandBrakeRecoilReduction("game.handbrake_recoil_re
 Common::Ini::Key IniConf::GameGemUnlockNewUI("game.gem_unlock_new_ui", Common::Ini::KT_BOOL, false);
 Common::Ini::Key IniConf::GameGemUnlockSound("game.gem_unlock_sound", Common::Ini::KT_STRING, std::string());
 Common::Ini::Key IniConf::GameGemUnlockTimeScale("game.gem_unlock_time_scale", Common::Ini::KT_WORD, std::string("1.0"));
+Common::Ini::Key IniConf::GameWorldSelectionMaxDistance("game.world_selection_max_distance", Common::Ini::KT_WORD, std::string("2500"));
 
 // OpenUA custom: Black Sect "imperfect grey clone" runtime balance (owner/faction 5).
 // When enabled, live Black Sect actors get a small malus (default 5%) to effective
@@ -483,6 +484,7 @@ void IniConf::Init()
         , &GameGemUnlockNewUI
         , &GameGemUnlockSound
         , &GameGemUnlockTimeScale
+        , &GameWorldSelectionMaxDistance
         , &GameBlackSectCloneBalance
         , &GameBlackSectCloneMalusPercent
         , &GameBlackSectCloneTint

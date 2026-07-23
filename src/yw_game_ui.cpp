@@ -743,6 +743,11 @@ typedef int (*mapFunc)(NC_STACK_ypaworld *yw, int x, int y);
 
 NC_STACK_ypaworld *dword_5BAA60; // For sort func
 
+static void yw_ResetWorldSelectionDrag(NC_STACK_ypaworld *yw);
+static void yw_WorldSelectionDragInput(NC_STACK_ypaworld *yw, TInputState *inpt);
+static void yw_RenderWorldSelectionDrag(NC_STACK_ypaworld *yw);
+static void yw_RenderMoveOrderFeedback(NC_STACK_ypaworld *yw);
+
 
 ///////// up panel ///////////
 energPanel up_panel;
@@ -4048,6 +4053,9 @@ int sb_0x451034(NC_STACK_ypaworld *yw)
     yw->_mouseCursorHidden = false;
     yw->_prevMousePos = Common::Point();
     yw->_bactPrevClicked = NULL;
+    yw_ResetWorldSelectionDrag(yw);
+    yw->_worldSelectHighlightCmdrID = -1;
+    yw->_moveOrderFeedbackActive = false;
 
     sb_0x451034__sub9(yw);
     sb_0x451034__sub8(yw);
@@ -4111,6 +4119,8 @@ void sb_0x4d7c08__sub0(NC_STACK_ypaworld *yw)
 
     if ( yw->_userUnit->_bact_type != BACT_TYPES_MISSLE )
     {
+        yw_RenderWorldSelectionDrag(yw);
+        yw_RenderMoveOrderFeedback(yw);
         sb_0x4d7c08__sub0__sub4(yw);
 
         for(GuiBaseList::iterator it = yw->_guiActive.begin(); it != yw->_guiActive.end(); it++)
@@ -7156,9 +7166,346 @@ void ypaworld_func64__sub7__sub1__sub0(NC_STACK_ypaworld *yw)
         bzda.field_1D0 = bzda.field_1CC & 0x20;
 
     if ( v13 )
+    {
         yw->_activeCmdrID = v13->_commandID;
+        yw->_worldSelectHighlightCmdrID = v13->_commandID;
+    }
+    else if ( v8 )
+    {
+        yw->_worldSelectHighlightCmdrID = -1;
+    }
 
     yw->sub_4C40AC();
+}
+
+static void yw_ResetWorldSelectionDrag(NC_STACK_ypaworld *yw)
+{
+    yw->_worldSelectDragArmed = false;
+    yw->_worldSelectDragActive = false;
+    yw->_worldSelectDragStart = Common::Point();
+    yw->_worldSelectDragCurrent = Common::Point();
+}
+
+static SDL_Color yw_GetNeutralSelectionColor()
+{
+    return GFX::Engine.Color(210, 210, 195);
+}
+
+static SDL_Color yw_GetNeutralSelectionShadowColor()
+{
+    return GFX::Engine.Color(55, 55, 50);
+}
+
+static SDL_Color yw_GetNeutralLeaderColor()
+{
+    return GFX::Engine.Color(255, 220, 32);
+}
+
+static float yw_GetWorldSelectionMaxDistance()
+{
+    constexpr float DEFAULT_DISTANCE = 2500.0f;
+    const std::string value = System::IniConf::GameWorldSelectionMaxDistance.Get<std::string>();
+
+    if ( value.empty() || value.find(',') != std::string::npos )
+        return DEFAULT_DISTANCE;
+
+    try
+    {
+        size_t pos = 0;
+        float distance = std::stof(value, &pos);
+        if ( value.find_first_not_of(" \t\r\n", pos) != std::string::npos ||
+             !isfinite(distance) || distance <= 0.0f )
+        {
+            return DEFAULT_DISTANCE;
+        }
+
+        return std::max(100.0f, std::min(distance, 20000.0f));
+    }
+    catch (...)
+    {
+        return DEFAULT_DISTANCE;
+    }
+}
+
+static bool yw_ProjectWorldSelectionPoint(NC_STACK_ypaworld *yw, const vec3d &worldPos, Common::Point *screenPos)
+{
+    vec3d delta = worldPos - yw->_viewerPosition;
+
+    mat3x3 corrected = yw->_viewerRotation;
+    GFX::Engine.matrixAspectCorrection(corrected, false);
+
+    vec3d projected = corrected.Transform(delta);
+    if ( projected.z <= 30.0 )
+        return false;
+
+    float x = projected.x / projected.z;
+    float y = projected.y / projected.z;
+    if ( x < -1.0 || x > 1.0 || y < -1.0 || y > 1.0 )
+        return false;
+
+    screenPos->x = (int)((yw->_screenSize.x / 2) * (x + 1.0));
+    screenPos->y = (int)((yw->_screenSize.y / 2) * (y + 1.0));
+    return true;
+}
+
+static bool yw_IsWorldSelectionUnitValid(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact)
+{
+    if ( !bact ||
+         bact->_owner != yw->_userRobo->_owner ||
+         bact->_energy <= 0 ||
+         bact->_status == BACT_STATUS_CREATE ||
+         bact->_status == BACT_STATUS_BEAM ||
+         bact->_status == BACT_STATUS_DEAD ||
+         (bact->_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2 | BACT_STFLAG_CLEAN | BACT_STFLAG_NORENDER)) ||
+         bact->ShouldHideFromStrategicUI() )
+    {
+        return false;
+    }
+
+    switch ( bact->_bact_type )
+    {
+    case BACT_TYPES_BACT:
+    case BACT_TYPES_TANK:
+    case BACT_TYPES_FLYER:
+    case BACT_TYPES_UFO:
+    case BACT_TYPES_CAR:
+        return true;
+
+    default:
+        return false;
+    }
+}
+
+static void yw_SelectWorldUnitsInDrag(NC_STACK_ypaworld *yw)
+{
+    int left = std::min(yw->_worldSelectDragStart.x, yw->_worldSelectDragCurrent.x);
+    int right = std::max(yw->_worldSelectDragStart.x, yw->_worldSelectDragCurrent.x);
+    int top = std::min(yw->_worldSelectDragStart.y, yw->_worldSelectDragCurrent.y);
+    int bottom = std::max(yw->_worldSelectDragStart.y, yw->_worldSelectDragCurrent.y);
+
+    std::vector<NC_STACK_ypabact *> selected;
+    selected.reserve(32);
+    const float maxDistance = yw_GetWorldSelectionMaxDistance();
+    const float maxDistanceSquared = maxDistance * maxDistance;
+
+    auto collect = [&](NC_STACK_ypabact *bact)
+    {
+        if ( !yw_IsWorldSelectionUnitValid(yw, bact) ||
+             std::find(selected.begin(), selected.end(), bact) != selected.end() )
+        {
+            return;
+        }
+
+        float distanceX = bact->_position.x - yw->_viewerPosition.x;
+        float distanceZ = bact->_position.z - yw->_viewerPosition.z;
+        if ( distanceX * distanceX + distanceZ * distanceZ > maxDistanceSquared )
+            return;
+
+        Common::Point point;
+        if ( !yw_ProjectWorldSelectionPoint(yw, bact->_position, &point) ||
+             point.x < left || point.x > right ||
+             point.y < top || point.y > bottom )
+        {
+            return;
+        }
+
+        selected.push_back(bact);
+    };
+
+    for ( NC_STACK_ypabact *commander : yw->_cmdrsRemap )
+    {
+        collect(commander);
+
+        for ( NC_STACK_ypabact *unit : commander->_kidList )
+            collect(unit);
+    }
+
+    if ( selected.empty() )
+        return;
+
+    NC_STACK_ypabact *leader = selected.front();
+
+    bact_arg109 arg109;
+    arg109.field_4 = NULL;
+    arg109.field_0 = 3;
+    leader->ReorganizeGroup(&arg109);
+
+    for (size_t i = 1; i < selected.size(); i++)
+    {
+        arg109.field_4 = selected[i];
+        arg109.field_0 = 4;
+        leader->ReorganizeGroup(&arg109);
+    }
+
+    yw->_activeCmdrID = leader->_commandID;
+    yw->_worldSelectHighlightCmdrID = leader->_commandID;
+    yw->sub_4C40AC();
+}
+
+static bool yw_CanStartWorldSelectionDrag(NC_STACK_ypaworld *yw, TInputState *inpt)
+{
+    int viewportBottom = yw->_screenSize.y - yw->_downScreenBorder;
+    Common::Point mouse = inpt->ClickInf.move.ScreenPos;
+
+    return yw->_userRobo &&
+           yw->_viewerBact &&
+           yw->_levelInfo.State == TLevelInfo::STATE_PLAYING &&
+           !yw->IsSpectatorControlled() &&
+           !yw->_mouseGrabbed &&
+           !yw->_guiDragging &&
+           !yw->_guiDragDefaultMouse &&
+           !yw->_makingWaypointsMode &&
+           exit_menu.IsClosed() &&
+           gui_lstvw.IsClosed() &&
+           bzda.field_1D0 == 1 &&
+           inpt->ClickInf.selected_btn == NULL &&
+           mouse.x >= 0 && mouse.x < yw->_screenSize.x &&
+           mouse.y >= yw->_upScreenBorder && mouse.y < viewportBottom;
+}
+
+static Common::Point yw_ClampWorldSelectionPoint(NC_STACK_ypaworld *yw, Common::Point point)
+{
+    int viewportBottom = yw->_screenSize.y - yw->_downScreenBorder - 1;
+
+    point.x = std::max(0, std::min(point.x, yw->_screenSize.x - 1));
+    point.y = std::max(yw->_upScreenBorder, std::min(point.y, viewportBottom));
+    return point;
+}
+
+static void yw_WorldSelectionDragInput(NC_STACK_ypaworld *yw, TInputState *inpt)
+{
+    constexpr int DRAG_THRESHOLD = 6;
+    TClickBoxInf *mouse = &inpt->ClickInf;
+
+    if ( !(mouse->flag & TClickBoxInf::FLAG_OK) )
+    {
+        yw_ResetWorldSelectionDrag(yw);
+        return;
+    }
+
+    if ( !yw->_worldSelectDragArmed )
+    {
+        if ( (mouse->flag & TClickBoxInf::FLAG_LM_DOWN) &&
+             yw_CanStartWorldSelectionDrag(yw, inpt) )
+        {
+            yw->yw_MouseSelect(inpt);
+
+            if ( !(yw->_guiActFlags & (4 | 0x20)) )
+            {
+                yw->_worldSelectDragArmed = true;
+                yw->_worldSelectDragStart = yw_ClampWorldSelectionPoint(yw, mouse->move.ScreenPos);
+                yw->_worldSelectDragCurrent = yw->_worldSelectDragStart;
+                mouse->flag &= ~TClickBoxInf::FLAG_LM_DOWN;
+            }
+        }
+        return;
+    }
+
+    if ( !yw_CanStartWorldSelectionDrag(yw, inpt) )
+    {
+        yw_ResetWorldSelectionDrag(yw);
+        return;
+    }
+
+    yw->_worldSelectDragCurrent = yw_ClampWorldSelectionPoint(yw, mouse->move.ScreenPos);
+
+    if ( mouse->flag & TClickBoxInf::FLAG_LM_HOLD )
+    {
+        int dx = yw->_worldSelectDragCurrent.x - yw->_worldSelectDragStart.x;
+        int dy = yw->_worldSelectDragCurrent.y - yw->_worldSelectDragStart.y;
+        if ( dx * dx + dy * dy >= DRAG_THRESHOLD * DRAG_THRESHOLD )
+            yw->_worldSelectDragActive = true;
+
+        mouse->flag &= ~TClickBoxInf::FLAG_LM_DOWN;
+        return;
+    }
+
+    bool released = (mouse->flag & TClickBoxInf::FLAG_LM_UP) != 0;
+    bool wasDrag = yw->_worldSelectDragActive;
+
+    if ( released && wasDrag )
+    {
+        yw_SelectWorldUnitsInDrag(yw);
+        mouse->flag &= ~(TClickBoxInf::FLAG_LM_DOWN | TClickBoxInf::FLAG_LM_UP);
+    }
+    else if ( released )
+    {
+        mouse->flag |= TClickBoxInf::FLAG_LM_DOWN;
+    }
+
+    yw_ResetWorldSelectionDrag(yw);
+}
+
+static void yw_RenderWorldSelectionDrag(NC_STACK_ypaworld *yw)
+{
+    if ( !yw->_worldSelectDragActive )
+        return;
+
+    int left = std::min(yw->_worldSelectDragStart.x, yw->_worldSelectDragCurrent.x);
+    int right = std::max(yw->_worldSelectDragStart.x, yw->_worldSelectDragCurrent.x);
+    int top = std::min(yw->_worldSelectDragStart.y, yw->_worldSelectDragCurrent.y);
+    int bottom = std::max(yw->_worldSelectDragStart.y, yw->_worldSelectDragCurrent.y);
+    int halfWidth = yw->_screenSize.x / 2;
+    int halfHeight = yw->_screenSize.y / 2;
+
+    left -= halfWidth;
+    right -= halfWidth;
+    top -= halfHeight;
+    bottom -= halfHeight;
+
+    GFX::Engine.raster_func217(yw_GetNeutralSelectionShadowColor());
+    GFX::Engine.raster_func201(Common::Line(left + 1, top + 1, right + 1, top + 1));
+    GFX::Engine.raster_func201(Common::Line(right + 1, top + 1, right + 1, bottom + 1));
+    GFX::Engine.raster_func201(Common::Line(right + 1, bottom + 1, left + 1, bottom + 1));
+    GFX::Engine.raster_func201(Common::Line(left + 1, bottom + 1, left + 1, top + 1));
+
+    GFX::Engine.raster_func217(yw_GetNeutralSelectionColor());
+    GFX::Engine.raster_func201(Common::Line(left, top, right, top));
+    GFX::Engine.raster_func201(Common::Line(right, top, right, bottom));
+    GFX::Engine.raster_func201(Common::Line(right, bottom, left, bottom));
+    GFX::Engine.raster_func201(Common::Line(left, bottom, left, top));
+}
+
+static void yw_DrawNeutralDiamond(int centerX, int centerY, int radius, SDL_Color color)
+{
+    GFX::Engine.raster_func217(color);
+    GFX::Engine.raster_func201(Common::Line(centerX, centerY - radius, centerX + radius, centerY));
+    GFX::Engine.raster_func201(Common::Line(centerX + radius, centerY, centerX, centerY + radius));
+    GFX::Engine.raster_func201(Common::Line(centerX, centerY + radius, centerX - radius, centerY));
+    GFX::Engine.raster_func201(Common::Line(centerX - radius, centerY, centerX, centerY - radius));
+}
+
+static void yw_RenderMoveOrderFeedback(NC_STACK_ypaworld *yw)
+{
+    constexpr uint32_t FEEDBACK_DURATION = 720;
+
+    if ( !yw->_moveOrderFeedbackActive )
+        return;
+
+    uint32_t age = yw->_timeStamp - yw->_moveOrderFeedbackStartTime;
+    if ( age >= FEEDBACK_DURATION )
+    {
+        yw->_moveOrderFeedbackActive = false;
+        return;
+    }
+
+    Common::Point point;
+    if ( !yw_ProjectWorldSelectionPoint(yw, yw->_moveOrderFeedbackPos, &point) )
+        return;
+
+    int centerX = point.x - yw->_screenSize.x / 2;
+    int centerY = point.y - yw->_screenSize.y / 2;
+    int radius = 7 + (int)((age % 240) * 7 / 240);
+    SDL_Color pulseColor = ((age / 90) & 1) ?
+                           GFX::Engine.Color(155, 155, 145) :
+                           yw_GetNeutralSelectionColor();
+
+    yw_DrawNeutralDiamond(centerX + 1, centerY + 1, radius, yw_GetNeutralSelectionShadowColor());
+    yw_DrawNeutralDiamond(centerX, centerY, radius, pulseColor);
+
+    GFX::Engine.raster_func217(pulseColor);
+    GFX::Engine.raster_func201(Common::Line(centerX - 3, centerY, centerX + 3, centerY));
+    GFX::Engine.raster_func201(Common::Line(centerX, centerY - 3, centerX, centerY + 3));
 }
 
 void  RoboMap_InputHandle(NC_STACK_ypaworld *yw, TInputState *inpt)
@@ -8364,7 +8711,12 @@ void NC_STACK_ypaworld::ypaworld_func64__sub7(TInputState *inpt)
             ypaworld_func64__sub7__sub0(this, inpt);
             ypaworld_func64__sub7__sub7(this, inpt);
         }
+        yw_WorldSelectionDragInput(this, inpt);
         ypaworld_func64__sub7__sub2(this, inpt);
+    }
+    else
+    {
+        yw_ResetWorldSelectionDrag(this);
     }
 }
 
@@ -8512,6 +8864,10 @@ void NC_STACK_ypaworld::sub_4C40AC()
                 _activeCmdrKidsCount++;
         }
     }
+
+    if ( _worldSelectHighlightCmdrID >= 0 && _activeCmdrID != (uint32_t)_worldSelectHighlightCmdrID )
+        _worldSelectHighlightCmdrID = -1;
+
     _lastMsgSender = GetLastMsgSender();
 }
 
@@ -10929,9 +11285,115 @@ static void yw_RenderSpectatorWorldStatus(NC_STACK_ypaworld *yw, CmdStream *cur,
         yw_RenderSpectatorWorldStatus(yw, cur, kid);
 }
 
+static void yw_DrawWorldSelectionCornerLines(int centerX, int centerY, int halfWidth,
+                                            int halfHeight, int cornerLength, SDL_Color color)
+{
+    GFX::Engine.raster_func217(color);
+
+    GFX::Engine.raster_func201(Common::Line(centerX - halfWidth, centerY - halfHeight,
+                                            centerX - halfWidth + cornerLength, centerY - halfHeight));
+    GFX::Engine.raster_func201(Common::Line(centerX - halfWidth, centerY - halfHeight,
+                                            centerX - halfWidth, centerY - halfHeight + cornerLength));
+    GFX::Engine.raster_func201(Common::Line(centerX + halfWidth, centerY - halfHeight,
+                                            centerX + halfWidth - cornerLength, centerY - halfHeight));
+    GFX::Engine.raster_func201(Common::Line(centerX + halfWidth, centerY - halfHeight,
+                                            centerX + halfWidth, centerY - halfHeight + cornerLength));
+    GFX::Engine.raster_func201(Common::Line(centerX - halfWidth, centerY + halfHeight,
+                                            centerX - halfWidth + cornerLength, centerY + halfHeight));
+    GFX::Engine.raster_func201(Common::Line(centerX - halfWidth, centerY + halfHeight,
+                                            centerX - halfWidth, centerY + halfHeight - cornerLength));
+    GFX::Engine.raster_func201(Common::Line(centerX + halfWidth, centerY + halfHeight,
+                                            centerX + halfWidth - cornerLength, centerY + halfHeight));
+    GFX::Engine.raster_func201(Common::Line(centerX + halfWidth, centerY + halfHeight,
+                                            centerX + halfWidth, centerY + halfHeight - cornerLength));
+}
+
+static void yw_RenderWorldSelectionUnitMarker(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact,
+                                              float maxDistanceSquared)
+{
+    float distanceX = bact->_position.x - yw->_viewerPosition.x;
+    float distanceZ = bact->_position.z - yw->_viewerPosition.z;
+    if ( distanceX * distanceX + distanceZ * distanceZ > maxDistanceSquared )
+        return;
+
+    Common::Point point;
+    if ( !yw_ProjectWorldSelectionPoint(yw, bact->_position, &point) )
+        return;
+
+    int centerX = point.x - yw->_screenSize.x / 2;
+    int centerY = point.y - yw->_screenSize.y / 2 - yw->_screenSize.y * 4 / 100;
+    bool isSquadLeader = bact->IsParentMyRobo() && bact->_owner == yw->_userRobo->_owner;
+    float scaleX = isSquadLeader ? 0.015f : 0.0075f;
+    float scaleY = isSquadLeader ? 0.02f : 0.01f;
+    float correctionX = 1.0f;
+    float correctionY = 1.0f;
+    double maxWireX = 1.0;
+    double maxWireY = 1.0;
+    UAskeleton::Data *cursorWire = yw->_hud.sklts_intern[13];
+
+    GFX::Engine.getAspectCorrection(correctionX, correctionY, false);
+    if ( cursorWire )
+    {
+        for ( const vec3d &vertex : cursorWire->POO )
+        {
+            maxWireX = std::max(maxWireX, std::abs(vertex.x) * 0.001);
+            maxWireY = std::max(maxWireY, std::abs(vertex.z) * 0.001);
+        }
+    }
+
+    // Two pixels of empty space keep the selection corners outside the original
+    // faction-colored cursor, while two-pixel arms stay visually compact.
+    int halfWidth = std::max(6, (int)ceil(maxWireX * scaleX * correctionX *
+                                          (yw->_screenSize.x / 2)) + 2);
+    int halfHeight = std::max(6, (int)ceil(maxWireY * scaleY * correctionY *
+                                           (yw->_screenSize.y / 2)) + 2);
+    int cornerLength = 2;
+
+    SDL_Color markerColor = isSquadLeader ? yw_GetNeutralLeaderColor() :
+                                           yw_GetNeutralSelectionColor();
+
+    yw_DrawWorldSelectionCornerLines(centerX + 1, centerY + 1, halfWidth, halfHeight,
+                                     cornerLength, yw_GetNeutralSelectionShadowColor());
+    yw_DrawWorldSelectionCornerLines(centerX, centerY, halfWidth, halfHeight,
+                                     cornerLength, markerColor);
+
+}
 
 void yw_RenderOverlayCursors(NC_STACK_ypaworld *yw, CmdStream *cur)
 {
+    if ( yw->_worldSelectHighlightCmdrID >= 0 &&
+         yw->_activeCmdrID == (uint32_t)yw->_worldSelectHighlightCmdrID )
+    {
+        float maxDistance = yw_GetWorldSelectionMaxDistance();
+        float maxDistanceSquared = maxDistance * maxDistance;
+
+        for ( NC_STACK_ypabact *commander : yw->_cmdrsRemap )
+        {
+            if ( commander->_commandID != (uint32_t)yw->_worldSelectHighlightCmdrID )
+                continue;
+
+            if ( commander->_status != BACT_STATUS_CREATE &&
+                 commander->_status != BACT_STATUS_BEAM &&
+                 commander->_status != BACT_STATUS_DEAD &&
+                 !commander->ShouldHideFromStrategicUI() )
+            {
+                yw_RenderWorldSelectionUnitMarker(yw, commander, maxDistanceSquared);
+            }
+
+            for ( NC_STACK_ypabact *unit : commander->_kidList )
+            {
+                if ( unit->_status != BACT_STATUS_CREATE &&
+                     unit->_status != BACT_STATUS_BEAM &&
+                     unit->_status != BACT_STATUS_DEAD &&
+                     !unit->ShouldHideFromStrategicUI() )
+                {
+                    yw_RenderWorldSelectionUnitMarker(yw, unit, maxDistanceSquared);
+                }
+            }
+            break;
+        }
+    }
+
     if ( yw->_preferences & World::PREF_ENEMYINDICATOR )
     {
         int v5 = yw->_userUnit->_cellId.x - 1;
@@ -11444,8 +11906,9 @@ void yw_RenderCursorOverUnit(NC_STACK_ypaworld *yw, NC_STACK_ypabact *bact)
             if ( v12 )
             {
                 float a4 = v34 - 0.08;
+                bool isSquadLeader = bact->IsParentMyRobo() && bact->_owner == yw->_userRobo->_owner;
 
-                if ( bact->IsParentMyRobo() && bact->_owner == yw->_userRobo->_owner )
+                if ( isSquadLeader )
                 {
                     yw_RenderVector2D(yw, v12, a3a, a4, 1.0, 0.0, 0.0, 1.0, 0.015, 0.02, v11, NULL, NULL, true);
                     yw_RenderVector2D(yw, v12, a3a, a4, 1.0, 0.0, 0.0, 1.0, 0.005, 0.00666, v11, NULL, NULL, true);
@@ -12564,6 +13027,9 @@ void NC_STACK_ypaworld::ypaworld_func64__sub21__sub5(int arg)
             {
                 _activeCmdrID = _bactOnMouse->_commandID;
                 sub_4C40AC();
+
+                if ( _guiActFlags & 8 )
+                    _worldSelectHighlightCmdrID = _activeCmdrID;
             }
         }
 
@@ -12584,6 +13050,15 @@ void NC_STACK_ypaworld::ypaworld_func64__sub21__sub5(int arg)
                 _updateMessage.target_Sect = _cellOnMouse;
                 _updateMessage.target_point = _cellMouseIsectPos;
                 _updateMessage.target_Bact = NULL;
+
+                if ( _cellOnMouse &&
+                     _cellOnMouse->owner == _userRobo->_owner &&
+                     _cellOnMouse->IsCanSee(_userRobo->_owner) )
+                {
+                    _moveOrderFeedbackActive = true;
+                    _moveOrderFeedbackPos = _cellMouseIsectPos;
+                    _moveOrderFeedbackStartTime = _timeStamp;
+                }
             }
             else
             {
@@ -13457,6 +13932,9 @@ void NC_STACK_ypaworld::GUI_Close()
 {
     if ( _guiLoaded )
     {
+        yw_ResetWorldSelectionDrag(this);
+        _worldSelectHighlightCmdrID = -1;
+        _moveOrderFeedbackActive = false;
         ypaworld_func140(&lstvw2);
         ypaworld_func140(&exit_menu);
         ypaworld_func140(&info_log);

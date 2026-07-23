@@ -243,6 +243,7 @@ public:
     static Common::Ini::Key GameGemUnlockNewUI;
     static Common::Ini::Key GameGemUnlockSound;
     static Common::Ini::Key GameGemUnlockTimeScale;
+    static Common::Ini::Key GameWorldSelectionMaxDistance;
 
     // OpenUA: Black Sect "imperfect grey clone" runtime balance (owner/faction 5 only).
     // Pure runtime maluses applied to live actors; never mutate shared prototypes.

@@ -2850,6 +2850,14 @@ public:
     float _mouseSelDistance = 0.0;
     Common::Point _prevMousePos;
     NC_STACK_ypabact *_bactPrevClicked = NULL; // used for dblclick
+    bool _worldSelectDragArmed = false;
+    bool _worldSelectDragActive = false;
+    Common::Point _worldSelectDragStart;
+    Common::Point _worldSelectDragCurrent;
+    int32_t _worldSelectHighlightCmdrID = -1;
+    bool _moveOrderFeedbackActive = false;
+    vec3d _moveOrderFeedbackPos;
+    uint32_t _moveOrderFeedbackStartTime = 0;
 
     bool _makingWaypointsMode = false;
     int32_t _waypointCount = 0;
