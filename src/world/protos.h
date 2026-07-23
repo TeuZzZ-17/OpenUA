@@ -233,6 +233,7 @@ struct TWeaponDebuffConfig
     int duration = 5000;
     bool disorient = false;
     float disorient_motion_level = 0.0f;
+    bool disorient_fire = true;
     float force_malus = 0.0;
     float maxrot_malus = 0.0;
     float shield_malus = 0.0;

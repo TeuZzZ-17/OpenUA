@@ -3149,6 +3149,10 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
         _wpn->debuff.disorient_motion_level =
             std::max(0.0f, std::min(motionLevel, 1.0f));
     }
+    else if ( !StriCmp(p1, "debuff_disorient_fire") )
+    {
+        _wpn->debuff.disorient_fire = parser.stol(p2, NULL, 0) != 0;
+    }
     else if ( !StriCmp(p1, "debuff_force_malus") )
     {
         float malus = parser.stof(p2, 0);

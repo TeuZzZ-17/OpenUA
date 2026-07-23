@@ -74,6 +74,7 @@ struct TActiveDebuffState
     int next_tick_time = 0;
     bool disorient = false;
     float disorient_motion_level = 0.0f;
+    bool disorient_fire = true;
     int disorient_move_phase = 0;
     int disorient_next_move_time = 0;
     bool disorient_floor_close = false;
@@ -104,6 +105,7 @@ struct TActiveDebuffState
         next_tick_time = 0;
         disorient = false;
         disorient_motion_level = 0.0f;
+        disorient_fire = true;
         disorient_move_phase = 0;
         disorient_next_move_time = 0;
         disorient_floor_close = false;
@@ -497,6 +499,7 @@ public:
     void UpdateActiveDebuff(update_msg *arg);
     void ClearActiveDebuff();
     bool IsActiveDebuffDisorientingAI(bool requireMovementLevel = true) const;
+    bool IsActiveDebuffDisorientFireBlocked() const;
     float GetActiveDebuffDisorientTraction(float currentTraction, bool supportsReverse) const;
     void RunAIWithActiveDebuffDisorient(update_msg *arg);
     void UpdateActiveDebuffDisorientMoveIntent();

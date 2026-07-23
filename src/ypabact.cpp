@@ -3031,6 +3031,7 @@ void NC_STACK_ypabact::ApplyWeaponDebuff(World::TWeaponDebuffConfig &debuff, NC_
     _active_debuff.next_tick_time = _clock + _active_debuff.tick_time;
     _active_debuff.disorient = debuff.disorient;
     _active_debuff.disorient_motion_level = disorientMotionLevel;
+    _active_debuff.disorient_fire = debuff.disorient_fire;
     if ( startDisorientMovement )
     {
         _active_debuff.disorient_move_phase = 0;
@@ -8182,6 +8183,9 @@ static void ypabact_FireMortarShotAndAdvance(NC_STACK_ypabact *unit, int weaponI
 
 void NC_STACK_ypabact::UpdateMortar(update_msg *arg)
 {
+    if ( IsActiveDebuffDisorientFireBlocked() )
+        return;
+
     if ( !_world )
         return;
 
@@ -9295,6 +9299,12 @@ void NC_STACK_ypabact::StopLaser()
 
 void NC_STACK_ypabact::UpdateLaser(update_msg *arg)
 {
+    if ( IsActiveDebuffDisorientFireBlocked() )
+    {
+        StopLaser();
+        return;
+    }
+
     (void)arg;
 
     bool requested = _laser_fire_request;
@@ -9887,6 +9897,12 @@ void NC_STACK_ypabact::StopVerticalLaser()
 
 void NC_STACK_ypabact::UpdateVerticalLaser(update_msg *arg)
 {
+    if ( IsActiveDebuffDisorientFireBlocked() )
+    {
+        StopVerticalLaser();
+        return;
+    }
+
     (void)arg;
 
     bool requested = _vertical_laser_fire_request;
@@ -10304,6 +10320,9 @@ static void ypabact_ConsumeProjectileFireX(NC_STACK_ypabact *unit)
 
 size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
 {
+    if ( IsActiveDebuffDisorientFireBlocked() )
+        return 0;
+
     if ( _world && _world->IsSpectatorBact(this) )
         return 0;
 
@@ -10877,6 +10896,14 @@ bool NC_STACK_ypabact::IsActiveDebuffDisorientingAI(bool requireMovementLevel) c
     }
 }
 
+bool NC_STACK_ypabact::IsActiveDebuffDisorientFireBlocked() const
+{
+    return _active_debuff.active &&
+           _active_debuff.disorient &&
+           !_active_debuff.disorient_fire &&
+           !(_oflags & BACT_OFLAG_USERINPT);
+}
+
 void NC_STACK_ypabact::UpdateActiveDebuffDisorientMoveIntent()
 {
     if ( !IsActiveDebuffDisorientingAI() )
@@ -10922,7 +10949,9 @@ float NC_STACK_ypabact::GetActiveDebuffDisorientTraction(float currentTraction,
 
 void NC_STACK_ypabact::UpdateActiveDebuffDisorientFire(update_msg *arg)
 {
-    if ( !arg || !IsActiveDebuffDisorientingAI(false) )
+    if ( !arg ||
+         IsActiveDebuffDisorientFireBlocked() ||
+         !IsActiveDebuffDisorientingAI(false) )
         return;
 
     vec3d fireDirection = _rotation.AxisZ();
@@ -13580,6 +13609,9 @@ static void ypabact_UpdateGunMinigunRecoilVisual(NC_STACK_ypabact *bact, const b
 
 size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
 {
+    if ( IsActiveDebuffDisorientFireBlocked() )
+        return 0;
+
     if ( _world && _world->IsSpectatorBact(this) )
         return 0;
 
