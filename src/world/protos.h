@@ -229,7 +229,10 @@ struct TWeaponDebuffConfig
     float damage_percent = 0.0;
     bool mindcontrol = false;
     int tick_time = 1000;
+    bool has_tick_time = false;
     int duration = 5000;
+    bool disorient = false;
+    float disorient_motion_level = 0.0f;
     float force_malus = 0.0;
     float maxrot_malus = 0.0;
     float shield_malus = 0.0;

@@ -3004,6 +3004,9 @@ void NC_STACK_ypabact::ApplyWeaponDebuff(World::TWeaponDebuffConfig &debuff, NC_
     if ( !debuff.allow || debuff.duration <= 0 )
         return;
 
+    if ( _bact_type == BACT_TYPES_ROBO )
+        return;
+
     if ( !ypabact_CanUseGameplayStatusMechanics(this) )
         return;
 
@@ -3011,6 +3014,12 @@ void NC_STACK_ypabact::ApplyWeaponDebuff(World::TWeaponDebuffConfig &debuff, NC_
         return;
 
     bool canMindcontrol = debuff.mindcontrol;
+    float disorientMotionLevel =
+        std::max(0.0f, std::min(debuff.disorient_motion_level, 1.0f));
+    bool startDisorientMovement = debuff.disorient && disorientMotionLevel > 0.0f &&
+                                  (!_active_debuff.active ||
+                                   !_active_debuff.disorient ||
+                                   _active_debuff.disorient_motion_level <= 0.0f);
 
     _active_debuff.active = true;
     _active_debuff.name = debuff.name.empty() ? "debuff" : debuff.name;
@@ -3020,6 +3029,22 @@ void NC_STACK_ypabact::ApplyWeaponDebuff(World::TWeaponDebuffConfig &debuff, NC_
     _active_debuff.tick_time = debuff.tick_time > 0 ? debuff.tick_time : 1000;
     _active_debuff.expire_time = _clock + debuff.duration;
     _active_debuff.next_tick_time = _clock + _active_debuff.tick_time;
+    _active_debuff.disorient = debuff.disorient;
+    _active_debuff.disorient_motion_level = disorientMotionLevel;
+    if ( startDisorientMovement )
+    {
+        _active_debuff.disorient_move_phase = 0;
+        _active_debuff.disorient_next_move_time = 0;
+        _active_debuff.disorient_floor_close = false;
+        _active_debuff.disorient_next_floor_check_time = 0;
+    }
+    else if ( disorientMotionLevel <= 0.0f )
+    {
+        _active_debuff.disorient_move_phase = 0;
+        _active_debuff.disorient_next_move_time = 0;
+        _active_debuff.disorient_floor_close = false;
+        _active_debuff.disorient_next_floor_check_time = 0;
+    }
     _active_debuff.force_malus = std::max(0.0f, std::min(debuff.force_malus, 1.0f));
     _active_debuff.maxrot_malus = std::max(0.0f, std::min(debuff.maxrot_malus, 1.0f));
     _active_debuff.shield_malus = std::max(0.0f, std::min(debuff.shield_malus, 1.0f));
@@ -3040,6 +3065,8 @@ void NC_STACK_ypabact::ApplyWeaponDebuff(World::TWeaponDebuffConfig &debuff, NC_
     if ( _debuff_soundcarrier.Sounds.empty() )
         _debuff_soundcarrier.Resize(1);
 
+    SFXEngine::SFXe.StopCarrier(&_debuff_soundcarrier);
+
     TSoundSource &snd = _debuff_soundcarrier.Sounds[0];
     snd.PSample = _active_debuff.snd_sample;
     snd.SampleVariants.clear();
@@ -3048,7 +3075,8 @@ void NC_STACK_ypabact::ApplyWeaponDebuff(World::TWeaponDebuffConfig &debuff, NC_
     snd.Volume = _active_debuff.snd_volume;
     snd.Pitch = _active_debuff.snd_pitch;
     snd.PriorityBias = 0;
-    snd.SetLoop(false);
+    const bool loopDebuffSound = !debuff.has_tick_time && snd.PSample;
+    snd.SetLoop(loopDebuffSound);
     snd.SetFragmented(false);
 
     if ( debuff.tick_snd.sndPrm.slot )
@@ -3072,6 +3100,11 @@ void NC_STACK_ypabact::ApplyWeaponDebuff(World::TWeaponDebuffConfig &debuff, NC_
         snd.PShkFx = NULL;
         snd.SetShk(false);
     }
+
+    if ( loopDebuffSound )
+        ypabact_StartStatusSoundIfIdle(this, &_debuff_soundcarrier,
+                                       _active_debuff.snd_volume,
+                                       _active_debuff.snd_pitch);
 
     if ( canMindcontrol )
         ypabact_ApplyMindcontrol(this, source);
@@ -4137,7 +4170,7 @@ void NC_STACK_ypabact::AI_layer2(update_msg *arg)
         if ( _oflags & BACT_OFLAG_USERINPT )
             ypabact_RunPlayerUserLayer(this, arg);
         else
-            AI_layer3(arg);
+            RunAIWithActiveDebuffDisorient(arg);
 
         return;
     }
@@ -4159,7 +4192,7 @@ void NC_STACK_ypabact::AI_layer2(update_msg *arg)
         if ( _oflags & BACT_OFLAG_USERINPT )
             ypabact_RunPlayerUserLayer(this, arg);
         else
-            AI_layer3(arg);
+            RunAIWithActiveDebuffDisorient(arg);
         return;
     }
 
@@ -4291,7 +4324,7 @@ void NC_STACK_ypabact::AI_layer2(update_msg *arg)
     if ( _oflags & BACT_OFLAG_USERINPT )
         ypabact_RunPlayerUserLayer(this, arg);
     else
-        AI_layer3(arg);
+        RunAIWithActiveDebuffDisorient(arg);
 }
 
 void AI_layer3__sub1(NC_STACK_ypabact *bact, update_msg *arg)
@@ -4418,6 +4451,12 @@ void NC_STACK_ypabact::AI_layer3(update_msg *arg)
     if ( v77 > 0.0 )
         _target_dir = _target_vec / v77;
 
+    if ( IsActiveDebuffDisorientingAI() )
+    {
+        UpdateActiveDebuffDisorientMoveIntent();
+        v77 = 1200.0f;
+    }
+
     int v82 = _oflags & BACT_OFLAG_VIEWER;
     int v70 = _oflags & BACT_OFLAG_EXACTCOLL;
 
@@ -4442,7 +4481,7 @@ void NC_STACK_ypabact::AI_layer3(update_msg *arg)
             }
         }
 
-        if ( !_primTtype && !_secndTtype )
+        if ( !_primTtype && !_secndTtype && !IsActiveDebuffDisorientingAI() )
         {
             _status = BACT_STATUS_IDLE;
 
@@ -4680,6 +4719,7 @@ void NC_STACK_ypabact::AI_layer3(update_msg *arg)
             bact->fly_dir_length *= 0.95;*/
 
         _thraction = (0.85 - _target_dir.y) * _force;
+        _thraction = GetActiveDebuffDisorientTraction(_thraction, false);
 
         move_msg arg74;
         arg74.flag = 0;
@@ -10398,7 +10438,7 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
     int maxTargets = ypabact_GetMissileMultiTargetLimit(wproto, v13);
     bool missileMultiTarget = maxTargets > 1;
     bool homingBomb = ypabact_IsHomingBombWeapon(wproto);
-    if ( missileMultiTarget )
+    if ( missileMultiTarget && !(arg->flags & BACT_ARG79_FLAG_NO_AUTO_TARGETS) )
     {
         weaponTargets = ypabact_CollectMissileMultiTargets(this, arg, wproto, maxTargets);
     }
@@ -10408,9 +10448,9 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
     {
         maxTargets = ypabact_GetBombMultiTargetLimit(wproto, v13);
         bombMultiTarget = maxTargets > 1;
-        if ( bombMultiTarget )
+        if ( bombMultiTarget && !(arg->flags & BACT_ARG79_FLAG_NO_AUTO_TARGETS) )
             weaponTargets = ypabact_CollectHomingBombTargets(this, arg, wproto, maxTargets);
-        else if ( homingBomb )
+        else if ( homingBomb && !(arg->flags & BACT_ARG79_FLAG_NO_AUTO_TARGETS) )
             weaponTargets = ypabact_CollectHomingBombTargets(this, arg, wproto, 1);
     }
 
@@ -10659,6 +10699,279 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
         _current_weapon_id = selectedWeapon;
 
     return 1;
+}
+
+static int ypabact_GetDisorientPhaseDuration(const NC_STACK_ypabact *bact, int phase)
+{
+    const bool ufo = bact->_bact_type == BACT_TYPES_UFO;
+    const bool turning = phase == 0 || phase == 1;
+    float baseDuration;
+
+    if ( turning )
+    {
+        const float effectiveMaxRot = fabs(bact->_maxrot);
+        baseDuration = effectiveMaxRot > 0.001f
+                           ? C_2PI * 1000.0f / effectiveMaxRot
+                           : 12000.0f;
+    }
+    else if ( ufo )
+    {
+        static const int ufoDurations[] = {0, 0, 1200, 1500, 1400, 1400};
+        baseDuration = (float)ufoDurations[phase % 6];
+    }
+    else
+    {
+        static const int durations[] = {0, 0, 1200, 1500};
+        baseDuration = (float)durations[phase & 3];
+    }
+
+    const float motionLevel =
+        std::max(0.0f, std::min(bact->_active_debuff.disorient_motion_level, 1.0f));
+    return std::max(120, (int)(baseDuration * motionLevel + 0.5f));
+}
+
+static int ypabact_GetNextDisorientPhase(const NC_STACK_ypabact *bact, int currentPhase)
+{
+    if ( bact->_bact_type != BACT_TYPES_UFO )
+        return (currentPhase + 1) & 3;
+
+    int nextPhase = rand() % 6;
+    if ( nextPhase == currentPhase )
+        nextPhase = (nextPhase + 1) % 6;
+    return nextPhase;
+}
+
+static void ypabact_AdvanceDisorientPhase(NC_STACK_ypabact *bact, int clock)
+{
+    TActiveDebuffState &debuff = bact->_active_debuff;
+
+    if ( debuff.disorient_next_move_time <= 0 )
+    {
+        if ( bact->_bact_type == BACT_TYPES_UFO )
+            debuff.disorient_move_phase = rand() % 6;
+        else
+            debuff.disorient_move_phase = 0;
+
+        debuff.disorient_next_move_time =
+            clock + ypabact_GetDisorientPhaseDuration(bact, debuff.disorient_move_phase);
+        return;
+    }
+
+    while ( clock >= debuff.disorient_next_move_time )
+    {
+        debuff.disorient_move_phase =
+            ypabact_GetNextDisorientPhase(bact, debuff.disorient_move_phase);
+        debuff.disorient_next_move_time +=
+            ypabact_GetDisorientPhaseDuration(bact, debuff.disorient_move_phase);
+    }
+}
+
+static vec3d ypabact_BuildDisorientIntent(const mat3x3 &rotation, bool verticalUnit,
+                                          bool ufo, int phase)
+{
+    float forward = 0.0f;
+    float side = 0.0f;
+    float vertical = 0.0f;
+
+    if ( ufo )
+    {
+        switch ( phase % 6 )
+        {
+        case 0: side = 1.0f; break;
+        case 1: side = -1.0f; break;
+        case 2: forward = -1.0f; break;
+        case 3: forward = 1.0f; break;
+        case 4: forward = 0.15f; vertical = -1.0f; break;
+        default: forward = 0.15f; vertical = 1.0f; break;
+        }
+    }
+    else
+    {
+        switch ( phase & 3 )
+        {
+        case 0: forward = 0.55f; side = 1.0f; vertical = verticalUnit ? -0.7f : 0.0f; break;
+        case 1: forward = -0.55f; side = -1.0f; vertical = verticalUnit ? 0.7f : 0.0f; break;
+        case 2: forward = -1.0f; side = 0.55f; vertical = verticalUnit ? 0.45f : 0.0f; break;
+        default: forward = 1.0f; side = -0.55f; vertical = verticalUnit ? -0.45f : 0.0f; break;
+        }
+    }
+
+    vec3d intent =
+        rotation.AxisZ() * forward +
+        rotation.AxisX() * side +
+        vec3d::OY(vertical);
+    if ( intent.normalise() <= 0.001f )
+        intent = rotation.AxisZ();
+
+    return intent;
+}
+
+static void ypabact_UpdateDisorientFloorSafety(NC_STACK_ypabact *bact)
+{
+    NC_STACK_ypaworld *world = bact ? bact->getBACT_pWorld() : NULL;
+    if ( !bact || !ypabact_IsAirVehicle(bact) || !world )
+        return;
+
+    TActiveDebuffState &debuff = bact->_active_debuff;
+
+    if ( bact->_status_flg & BACT_STFLAG_LAND )
+    {
+        debuff.disorient_floor_close = true;
+    }
+    else if ( debuff.disorient_next_floor_check_time <= 0 ||
+              bact->_clock >= debuff.disorient_next_floor_check_time )
+    {
+        debuff.disorient_next_floor_check_time = bact->_clock + 100;
+
+        const float probeDistance =
+            std::max(150.0f, std::max(bact->_height, bact->_radius * 2.0f));
+
+        ypaworld_arg136 floorProbe = {};
+        floorProbe.stPos = bact->_position;
+        floorProbe.vect = vec3d::OY(probeDistance);
+        floorProbe.flags = 0;
+
+        world->ypaworld_func136(&floorProbe);
+
+        const float safeClearance = std::max(50.0f, bact->_radius * 1.25f);
+        debuff.disorient_floor_close =
+            floorProbe.isect && floorProbe.tVal * probeDistance <= safeClearance;
+    }
+
+    if ( debuff.disorient_floor_close && bact->_target_dir.y > -0.35f )
+    {
+        bact->_target_dir.y = -0.35f;
+        bact->_target_dir.normalise();
+    }
+}
+
+bool NC_STACK_ypabact::IsActiveDebuffDisorientingAI(bool requireMovementLevel) const
+{
+    if ( !_active_debuff.active ||
+         !_active_debuff.disorient ||
+         !_world ||
+         (_oflags & BACT_OFLAG_USERINPT) ||
+         _isDummy ||
+         _energy <= 0 ||
+         _status == BACT_STATUS_DEAD ||
+         (_status_flg & (BACT_STFLAG_DEATH1 | BACT_STFLAG_DEATH2)) )
+        return false;
+
+    if ( requireMovementLevel && _active_debuff.disorient_motion_level <= 0.0f )
+        return false;
+
+    switch ( _bact_type )
+    {
+    case BACT_TYPES_BACT:
+    case BACT_TYPES_TANK:
+    case BACT_TYPES_ZEPP:
+    case BACT_TYPES_FLYER:
+    case BACT_TYPES_UFO:
+    case BACT_TYPES_CAR:
+    case BACT_TYPES_GUN:
+    case BACT_TYPES_HOVER:
+        return true;
+
+    default:
+        return false;
+    }
+}
+
+void NC_STACK_ypabact::UpdateActiveDebuffDisorientMoveIntent()
+{
+    if ( !IsActiveDebuffDisorientingAI() )
+        return;
+
+    const bool ufo = _bact_type == BACT_TYPES_UFO;
+    const bool verticalUnit = ypabact_IsAirVehicle(this) ||
+                              _bact_type == BACT_TYPES_ZEPP ||
+                              _bact_type == BACT_TYPES_GUN;
+
+    ypabact_AdvanceDisorientPhase(this, _clock);
+    _target_dir = ypabact_BuildDisorientIntent(
+        _rotation, verticalUnit, ufo, _active_debuff.disorient_move_phase);
+    ypabact_UpdateDisorientFloorSafety(this);
+}
+
+float NC_STACK_ypabact::GetActiveDebuffDisorientTraction(float currentTraction,
+                                                          bool supportsReverse) const
+{
+    if ( !IsActiveDebuffDisorientingAI() )
+        return currentTraction;
+
+    const int phase = _active_debuff.disorient_move_phase;
+    if ( _active_debuff.disorient_floor_close && ypabact_IsAirVehicle(this) )
+        return currentTraction;
+
+    if ( _bact_type == BACT_TYPES_UFO )
+    {
+        if ( phase == 0 || phase == 1 )
+            return currentTraction * 0.2f;
+
+        if ( phase == 2 )
+            return supportsReverse ? -_force * 0.55f : currentTraction * 0.05f;
+
+        return currentTraction;
+    }
+
+    if ( phase == 1 || phase == 2 )
+        return supportsReverse ? -_force * 0.55f : currentTraction * 0.05f;
+
+    return currentTraction;
+}
+
+void NC_STACK_ypabact::UpdateActiveDebuffDisorientFire(update_msg *arg)
+{
+    if ( !arg || !IsActiveDebuffDisorientingAI(false) )
+        return;
+
+    vec3d fireDirection = _rotation.AxisZ();
+    if ( fireDirection.normalise() <= 0.001f )
+        return;
+
+    bool firedPrimary = false;
+    if ( ypabact_IsValidFireWeaponId(this, _weapon) )
+    {
+        World::TWeapProto &wproto = _world->GetWeaponsProtos().at(_weapon);
+        if ( !wproto.IsLaser() && !wproto.IsVerticalLaser() && !wproto.IsMortar() )
+        {
+            bact_arg79 fireArg = {};
+            fireArg.direction = fireDirection;
+            fireArg.start_point = _fire_pos;
+            fireArg.tgType = BACT_TGT_TYPE_DRCT;
+            fireArg.tgt_pos = fireArg.direction;
+            fireArg.weapon = _weapon;
+            fireArg.g_time = _clock;
+            fireArg.flags = BACT_ARG79_FLAG_NO_AUTO_TARGETS;
+            LaunchMissile(&fireArg);
+            firedPrimary = true;
+        }
+    }
+
+    if ( !firedPrimary && HasMinigun() )
+    {
+        bact_arg105 fireArg;
+        fireArg.field_0 = fireDirection;
+        fireArg.field_C = arg->frameTime / 1000.0f;
+        fireArg.field_10 = _clock;
+        FireMinigun(&fireArg);
+    }
+}
+
+void NC_STACK_ypabact::RunAIWithActiveDebuffDisorient(update_msg *arg)
+{
+    if ( IsActiveDebuffDisorientingAI() )
+    {
+        if ( _status == BACT_STATUS_IDLE )
+        {
+            setState_msg state;
+            state.newStatus = BACT_STATUS_NORMAL;
+            SetState(&state);
+        }
+    }
+
+    UpdateActiveDebuffDisorientFire(arg);
+    AI_layer3(arg);
 }
 
 size_t NC_STACK_ypabact::SetPosition(bact_arg80 *arg)

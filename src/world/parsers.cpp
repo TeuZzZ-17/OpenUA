@@ -3130,11 +3130,24 @@ int WeaponProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p
     {
         int tickTime = parser.stol(p2, NULL, 0);
         _wpn->debuff.tick_time = tickTime > 0 ? tickTime : 1000;
+        _wpn->debuff.has_tick_time = true;
     }
     else if ( !StriCmp(p1, "debuff_duration") )
     {
         int duration = parser.stol(p2, NULL, 0);
         _wpn->debuff.duration = duration > 0 ? duration : 0;
+    }
+    else if ( !StriCmp(p1, "debuff_disorient") )
+    {
+        _wpn->debuff.disorient = parser.stol(p2, NULL, 0) != 0;
+    }
+    else if ( !StriCmp(p1, "debuff_disorient_motion_level") )
+    {
+        float motionLevel = parser.stof(p2, 0);
+        if ( !std::isfinite(motionLevel) )
+            motionLevel = 0.0f;
+        _wpn->debuff.disorient_motion_level =
+            std::max(0.0f, std::min(motionLevel, 1.0f));
     }
     else if ( !StriCmp(p1, "debuff_force_malus") )
     {

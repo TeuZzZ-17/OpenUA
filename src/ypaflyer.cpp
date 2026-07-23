@@ -285,6 +285,12 @@ void NC_STACK_ypaflyer::AI_layer3(update_msg *arg)
     if ( v88 > 0.0 )
         _target_dir = _target_vec / v88;
 
+    if ( IsActiveDebuffDisorientingAI() )
+    {
+        UpdateActiveDebuffDisorientMoveIntent();
+        v88 = 1200.0f;
+    }
+
     bool isViewer = getBACT_viewer();
     int v82 = getBACT_exactCollisions();
     int v79 = getBACT_bactCollisions();
@@ -312,7 +318,7 @@ void NC_STACK_ypaflyer::AI_layer3(update_msg *arg)
             }
         }
 
-        if ( !_primTtype && !_secndTtype )
+        if ( !_primTtype && !_secndTtype && !IsActiveDebuffDisorientingAI() )
         {
             _status = BACT_STATUS_IDLE;
 
@@ -545,6 +551,7 @@ void NC_STACK_ypaflyer::AI_layer3(update_msg *arg)
         ApplySeekAndExplodeRammingGuidance();
 
         ypaflyer_func70__sub0(a2a);
+        _thraction = GetActiveDebuffDisorientTraction(_thraction, true);
 
         move_msg arg74;
         arg74.flag = 0;

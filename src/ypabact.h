@@ -72,6 +72,12 @@ struct TActiveDebuffState
     int tick_time = 1000;
     int expire_time = 0;
     int next_tick_time = 0;
+    bool disorient = false;
+    float disorient_motion_level = 0.0f;
+    int disorient_move_phase = 0;
+    int disorient_next_move_time = 0;
+    bool disorient_floor_close = false;
+    int disorient_next_floor_check_time = 0;
     float force_malus = 0.0;
     float maxrot_malus = 0.0;
     float shield_malus = 0.0;
@@ -96,6 +102,12 @@ struct TActiveDebuffState
         tick_time = 1000;
         expire_time = 0;
         next_tick_time = 0;
+        disorient = false;
+        disorient_motion_level = 0.0f;
+        disorient_move_phase = 0;
+        disorient_next_move_time = 0;
+        disorient_floor_close = false;
+        disorient_next_floor_check_time = 0;
         force_malus = 0.0;
         maxrot_malus = 0.0;
         shield_malus = 0.0;
@@ -358,6 +370,7 @@ struct bact_arg79
 // first-person/viewer control and holds the handbrake while firing, weapon
 // recoil is reduced without touching push_resistance, push or ApplyImpulse().
 static const int BACT_ARG79_FLAG_RECOIL_BRAKE_HELD = 0x100;
+static const int BACT_ARG79_FLAG_NO_AUTO_TARGETS = 0x200;
 
 struct bact_arg75
 {
@@ -483,6 +496,11 @@ public:
     void ApplyWeaponDebuff(World::TWeaponDebuffConfig &debuff, NC_STACK_ypabact *source);
     void UpdateActiveDebuff(update_msg *arg);
     void ClearActiveDebuff();
+    bool IsActiveDebuffDisorientingAI(bool requireMovementLevel = true) const;
+    float GetActiveDebuffDisorientTraction(float currentTraction, bool supportsReverse) const;
+    void RunAIWithActiveDebuffDisorient(update_msg *arg);
+    void UpdateActiveDebuffDisorientMoveIntent();
+    void UpdateActiveDebuffDisorientFire(update_msg *arg);
     virtual void ApplyImpulse(bact_arg83 *arg);
     virtual void ModifyEnergy(bact_arg84 *arg);
     float GetEffectiveShield() const;
