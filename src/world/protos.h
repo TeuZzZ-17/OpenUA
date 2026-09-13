@@ -285,6 +285,7 @@ struct TChainFXConfig
     float ground_decal_size = 0.0f;
     TVisualTint ground_decal_tint;
     bool ground_decal_random_rotation = false;
+    float ground_decal_edge_fade = 0.0f;
 };
 
 struct TRoboColl

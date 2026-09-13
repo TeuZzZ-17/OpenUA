@@ -739,7 +739,7 @@ void NC_STACK_ypaufo::User_layer(update_msg *arg)
             arg79.start_point.y = _fire_pos.y;
             arg79.start_point.z = _fire_pos.z;
             arg79.flags = (arg->inpt->Buttons.Is(5) ? 1 : 0);
-            if ( (_oflags & BACT_OFLAG_VIEWER) && arg->inpt->Buttons.Is(3) )
+            if ( (_oflags & BACT_OFLAG_VIEWER) && arg->inpt->HandBrakePressed )
                 arg79.flags |= BACT_ARG79_FLAG_RECOIL_BRAKE_HELD;
 
             LaunchMissile(&arg79);

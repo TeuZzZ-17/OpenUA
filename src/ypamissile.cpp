@@ -489,8 +489,7 @@ void NC_STACK_ypamissile::StartWeaponTracer()
     // mesh_tracer_pos_* is a projectile-local visual offset. Apply it to every
     // sampled tracer point, starting here at launch, so the complete trail stays
     // attached to the authored position relative to the projectile transform.
-    const vec3d point = _position +
-        _rotation.Transpose().Transform(_weaponTracer.pos);
+    const vec3d point = GetWeaponTracerPosition();
     if ( !ypamissile_WeaponTracerFinite(point) )
     {
         _weaponTracerStarted = false;
@@ -505,6 +504,17 @@ void NC_STACK_ypamissile::StartWeaponTracer()
     sample.pos = point;
     sample.time = _clock;
     _weaponTracerPoints.push_back(sample);
+}
+
+vec3d NC_STACK_ypamissile::GetWeaponTracerPosition() const
+{
+    // Reuse the same final motion delta as the projectile VP and attached FX.
+    // Physics owns the centre trajectory; Chaos/Spiral affect its rendered pose.
+    vec3d visualOffset;
+    mat3x3 visualRotationDelta;
+    GetProjectileVisualMotionDelta(&visualOffset, &visualRotationDelta);
+    const mat3x3 renderRotation = _rotation.Transpose() * visualRotationDelta;
+    return _position + visualOffset + renderRotation.Transform(_weaponTracer.pos);
 }
 
 void NC_STACK_ypamissile::UpdateWeaponTracer()
@@ -531,10 +541,7 @@ void NC_STACK_ypamissile::UpdateWeaponTracer()
         return;
     }
 
-    // Keep the same projectile-local offset for the whole sampled path. With a
-    // zero offset this is exactly the previous/vanilla-safe projectile centre.
-    const vec3d point = _position +
-        _rotation.Transpose().Transform(_weaponTracer.pos);
+    const vec3d point = GetWeaponTracerPosition();
 
     if ( ypamissile_WeaponTracerFinite(point) )
     {
@@ -570,7 +577,7 @@ void NC_STACK_ypamissile::UpdateWeaponTracer()
 void NC_STACK_ypamissile::RenderWeaponTracer(baseRender_msg *arg)
 {
     if ( !arg || !_weaponTracerStarted || !_world || _world->_isNetGame ||
-         _status != BACT_STATUS_NORMAL || _weaponTracerPoints.size() < 2 )
+         _status != BACT_STATUS_NORMAL || _weaponTracerPoints.empty() )
         return;
 
     struct TVisibleTracerSegment
@@ -584,28 +591,31 @@ void NC_STACK_ypamissile::RenderWeaponTracer(baseRender_msg *arg)
     float remainingLength = _weaponTracer.size_z;
     float visibleLength = 0.0f;
 
-    for (size_t index = _weaponTracerPoints.size() - 1;
+    // History is sampled at 16 ms; the head must follow the current pose even
+    // between samples or after a later shared movement update in this frame.
+    vec3d newer = GetWeaponTracerPosition();
+    for (size_t index = _weaponTracerPoints.size();
          index > 0 && remainingLength > 0.01f; index--)
     {
         const TWeaponTracerPoint &older = _weaponTracerPoints[index - 1];
-        const TWeaponTracerPoint &newer = _weaponTracerPoints[index];
 
-        vec3d segment = newer.pos - older.pos;
+        vec3d segment = newer - older.pos;
         const float segmentLength = segment.length();
         if ( !std::isfinite(segmentLength) || segmentLength <= 0.01f )
             continue;
 
         TVisibleTracerSegment item;
         item.start = older.pos;
-        item.end = newer.pos;
+        item.end = newer;
         item.length = std::min(segmentLength, remainingLength);
 
         if ( segmentLength > remainingLength )
-            item.start = newer.pos - segment * (remainingLength / segmentLength);
+            item.start = newer - segment * (remainingLength / segmentLength);
 
         visible.push_back(item);
         visibleLength += item.length;
         remainingLength -= item.length;
+        newer = older.pos;
     }
 
     if ( visible.empty() || visibleLength <= 0.01f )

@@ -8,6 +8,7 @@
 #include "../env.h"
 #include "../includes.h"
 #include "../loaders.h"
+#include "../nucleas.h"
 #include "../yw_internal.h"
 #include "../system/inivals.h"
 
@@ -298,7 +299,8 @@ static float GroundDecalShapeBoundaryRadius(
 
 static GFX::TGLColor GroundDecalProceduralColor(
     const std::vector<TGroundDecalShapePoint> &shape,
-    const TGroundDecalClipVertex &point)
+    const TGroundDecalClipVertex &point,
+    float edgeFade)
 {
     const float dx = point.u - 0.5f;
     const float dy = point.v - 0.5f;
@@ -307,7 +309,17 @@ static GFX::TGLColor GroundDecalProceduralColor(
     const float normalized = std::max(0.0f, std::min(radius / boundary, 1.0f));
     const float radial = normalized * normalized * (3.0f - 2.0f * normalized);
     const float darkness = 0.10f + radial * 0.12f;
-    const float alpha = radius <= boundary + 0.0001f ? 1.0f : 0.0f;
+    const bool inside = radius <= boundary + 0.0001f;
+    float alpha = inside ? 1.0f : 0.0f;
+    // edgeFade 0 = legacy hard edge; 10 = smooth falloff across the whole decal.
+    const float fade = std::max(0.0f, std::min(edgeFade / 10.0f, 1.0f));
+    if ( inside && fade > 0.0f )
+    {
+        const float start = 1.0f - fade;
+        float t = (normalized - start) / std::max(fade, 0.0001f);
+        t = std::max(0.0f, std::min(t, 1.0f));
+        alpha = 1.0f - t * t * (3.0f - 2.0f * t);
+    }
     return GFX::TGLColor(darkness, darkness, darkness, alpha);
 }
 
@@ -386,6 +398,7 @@ static bool GroundDecalAppendClippedRegion(
     const vec3d &normal,
     const vec3d &center,
     const std::vector<TGroundDecalShapePoint> &shape,
+    float edgeFade,
     int maxTriangles,
     std::vector<GFX::TVertex> *vertices,
     std::vector<GFX::IndexType> *indices,
@@ -427,7 +440,7 @@ static bool GroundDecalAppendClippedRegion(
             const vec3d biasedPoint = point.pos + bias;
             vertices->emplace_back(vec3f(biasedPoint - center),
                                    tUtV(point.u, point.v),
-                                   GroundDecalProceduralColor(shape, point));
+                                   GroundDecalProceduralColor(shape, point, edgeFade));
         }
 
         indices->push_back(first);
@@ -448,6 +461,7 @@ static bool GroundDecalAppendClippedTriangle(const vec3d &a,
                                              float cosine,
                                              float sine,
                                              const std::vector<TGroundDecalShapePoint> &shape,
+                                             float edgeFade,
                                              int maxTriangles,
                                              std::vector<GFX::TVertex> *vertices,
                                              std::vector<GFX::IndexType> *indices,
@@ -470,7 +484,7 @@ static bool GroundDecalAppendClippedTriangle(const vec3d &a,
             shapeCenter, shapeStart, shapeEnd};
 
         if ( GroundDecalAppendClippedRegion(source, fullWedge, normal, center,
-                                            shape, maxTriangles, vertices, indices,
+                                            shape, edgeFade, maxTriangles, vertices, indices,
                                             limitExceeded) )
             appended = true;
 
@@ -488,6 +502,7 @@ static bool GroundDecalAppendPolygon(const std::vector<vec3d> &points,
                                      float cosine,
                                      float sine,
                                      const std::vector<TGroundDecalShapePoint> &shape,
+                                     float edgeFade,
                                      int maxTriangles,
                                      std::vector<GFX::TVertex> *vertices,
                                      std::vector<GFX::IndexType> *indices,
@@ -498,7 +513,7 @@ static bool GroundDecalAppendPolygon(const std::vector<vec3d> &points,
     {
         if ( GroundDecalAppendClippedTriangle(points[0], points[i], points[i + 1],
                                               normal, center, size, cosine, sine,
-                                              shape, maxTriangles, vertices, indices,
+                                              shape, edgeFade, maxTriangles, vertices, indices,
                                               limitExceeded) )
             appended = true;
 
@@ -525,6 +540,7 @@ static bool GroundDecalBuildGeometry(NC_STACK_ypaworld *world,
                                      float angle,
                                      int shapePoints,
                                      float jaggedness,
+                                     float edgeFade,
                                      int maxTriangles,
                                      std::vector<GFX::TVertex> *vertices,
                                      std::vector<GFX::IndexType> *indices)
@@ -575,7 +591,7 @@ static bool GroundDecalBuildGeometry(NC_STACK_ypaworld *world,
     bool limitExceeded = false;
 
     GroundDecalAppendPolygon(centralPoints, centralNormal, hit.isectPos, size,
-                             cosine, sine, shape, maxTriangles,
+                             cosine, sine, shape, edgeFade, maxTriangles,
                              vertices, indices, &limitExceeded);
     if ( limitExceeded )
         return false;
@@ -685,7 +701,7 @@ static bool GroundDecalBuildGeometry(NC_STACK_ypaworld *world,
                     continue;
 
                 GroundDecalAppendPolygon(points, normal, hit.isectPos, size,
-                                         cosine, sine, shape, maxTriangles,
+                                         cosine, sine, shape, edgeFade, maxTriangles,
                                          vertices, indices, &limitExceeded);
                 if ( limitExceeded )
                     return false;
@@ -719,6 +735,103 @@ static NC_STACK_bitmap *GroundDecalTexture(NC_STACK_ypaworld *world,
     return texture;
 }
 
+static NC_STACK_bitmap *GroundDecalBakedEdgeFadeTexture(NC_STACK_ypaworld *world,
+                                                        const std::string &path,
+                                                        NC_STACK_bitmap *loaded,
+                                                        float edgeFade)
+{
+    // Bakes the radial edge fade into a cached texture copy, pixel by pixel.
+    // Unlike the per-vertex fade, this does not depend on terrain tessellation
+    // density, so the falloff stays exact even when the whole decal sits inside
+    // a single large collision polygon. Static single-frame textures only; any
+    // failure falls back to the unmodified texture without breaking the decal.
+    if ( !world || !loaded || !loaded->GetBitmap() || !(edgeFade > 0.0f) ||
+         loaded->GetFramesCount() != 1 )
+        return loaded;
+
+    const std::string key = path + "#edgefade=" + std::to_string(edgeFade);
+    auto found = world->_groundDecalTextures.find(key);
+    if ( found != world->_groundDecalTextures.end() )
+        return found->second;
+
+    NC_STACK_bitmap *result = loaded;
+    SDL_Surface *src = loaded->GetSwTex();
+
+    if ( src && src->w > 0 && src->h > 0 )
+    {
+        SDL_Surface *work = SDL_ConvertSurfaceFormat(src, SDL_PIXELFORMAT_RGBA32, 0);
+        if ( work )
+        {
+            const float fade = std::max(0.0f, std::min(edgeFade / 10.0f, 1.0f));
+            const float start = 1.0f - fade;
+            const float span = std::max(fade, 0.0001f);
+
+            bool ok = !SDL_MUSTLOCK(work);
+            if ( !ok )
+                ok = SDL_LockSurface(work) == 0;
+
+            if ( ok )
+            {
+                for (int y = 0; y < work->h; ++y)
+                {
+                    Uint8 *row = (Uint8 *)work->pixels + (size_t)y * (size_t)work->pitch;
+                    for (int x = 0; x < work->w; ++x)
+                    {
+                        Uint32 *slot = (Uint32 *)(row + (size_t)x * 4u);
+                        Uint8 r, g, b, a;
+                        SDL_GetRGBA(*slot, work->format, &r, &g, &b, &a);
+                        const float dx = ((float)x + 0.5f) / (float)work->w - 0.5f;
+                        const float dy = ((float)y + 0.5f) / (float)work->h - 0.5f;
+                        float rn = std::sqrt(dx * dx + dy * dy) * 2.0f;
+                        rn = std::max(0.0f, std::min(rn, 1.0f));
+                        float t = (rn - start) / span;
+                        t = std::max(0.0f, std::min(t, 1.0f));
+                        const float mult = 1.0f - t * t * (3.0f - 2.0f * t);
+                        a = (Uint8)((float)a * mult + 0.5f);
+                        *slot = SDL_MapRGBA(work->format, r, g, b, a);
+                    }
+                }
+
+                if ( SDL_MUSTLOCK(work) )
+                    SDL_UnlockSurface(work);
+
+                NC_STACK_bitmap *baked = Nucleus::CInit<NC_STACK_bitmap>({
+                    {NC_STACK_rsrc::RSRC_ATT_NAME, key},
+                    {NC_STACK_rsrc::RSRC_ATT_TRYSHARED, (int32_t)1},
+                    {NC_STACK_bitmap::BMD_ATT_WIDTH, (int32_t)work->w},
+                    {NC_STACK_bitmap::BMD_ATT_HEIGHT, (int32_t)work->h}});
+                if ( baked && baked->GetSwTex() )
+                {
+                    // Copy semantics: the fade must be transferred exactly,
+                    // never blended with the fresh surface.
+                    SDL_SetSurfaceBlendMode(work, SDL_BLENDMODE_NONE);
+                    if ( SDL_BlitSurface(work, NULL, baked->GetSwTex(), NULL) == 0 )
+                    {
+                        baked->PrepareTexture(false);
+                        result = baked;
+                    }
+                    else
+                    {
+                        baked->Delete();
+                    }
+                }
+                else if ( baked )
+                {
+                    baked->Delete();
+                }
+            }
+
+            SDL_FreeSurface(work);
+        }
+    }
+
+    // Cache only genuinely new bitmaps: storing the fallback twice would
+    // double-delete it in ClearGroundDecals.
+    if ( result != loaded )
+        world->_groundDecalTextures[key] = result;
+    return result;
+}
+
 }
 
 bool NC_STACK_ypaworld::SpawnGroundDecal(const World::TChainFXConfig &config,
@@ -739,6 +852,32 @@ bool NC_STACK_ypaworld::SpawnGroundDecal(const World::TChainFXConfig &config,
 
     const float angle = GroundDecalRotation(this, hit,
                                             config.ground_decal_random_rotation);
+    const float edgeFade = std::isfinite(config.ground_decal_edge_fade)
+                             ? std::max(0.0f, std::min(config.ground_decal_edge_fade, 10.0f))
+                             : 0.0f;
+    float buildFade = edgeFade;
+    NC_STACK_bitmap *texture = NULL;
+    // Textured decals carry the edge fade inside the baked texture copy, so
+    // the falloff is pixel-exact at any terrain tessellation; the vertex mask
+    // then stays hard to avoid fading twice. Untextured decals only have the
+    // per-vertex fade.
+    if ( !config.ground_decal_texture.empty() )
+    {
+        texture = GroundDecalTexture(this, config.ground_decal_texture);
+        if ( texture && texture->GetBitmap() && edgeFade > 0.0f )
+        {
+            NC_STACK_bitmap *baked = GroundDecalBakedEdgeFadeTexture(
+                this, config.ground_decal_texture, texture, edgeFade);
+            if ( baked && baked != texture )
+            {
+                texture = baked;
+                buildFade = 0.0f;
+            }
+        }
+        if ( !texture || !texture->GetBitmap() )
+            return false;
+    }
+
     std::vector<GFX::TVertex> vertices;
     std::vector<GFX::IndexType> indices;
     vertices.reserve((size_t)maxTriangles * 3);
@@ -747,16 +886,12 @@ bool NC_STACK_ypaworld::SpawnGroundDecal(const World::TChainFXConfig &config,
     if ( !GroundDecalBuildGeometry(this, hit, config.ground_decal_size, angle,
                                    config.ground_decal_points,
                                    config.ground_decal_jaggedness,
+                                   buildFade,
                                    maxTriangles, &vertices, &indices) )
         return false;
 
-    NC_STACK_bitmap *texture = NULL;
-    if ( !config.ground_decal_texture.empty() )
+    if ( texture )
     {
-        texture = GroundDecalTexture(this, config.ground_decal_texture);
-        if ( !texture || !texture->GetBitmap() )
-            return false;
-
         // Textured decals preserve the procedural alpha mask but leave RGB
         // neutral so the scorch detail is not darkened a second time.
         for (GFX::TVertex &vertex : vertices)

@@ -198,6 +198,7 @@ protected:
     void RememberChainHit(NC_STACK_ypabact *target);
     bool IsChainHit(NC_STACK_ypabact *target) const;
     void UpdateArtilleryShellBallistic(update_msg *arg); // OpenNeoUA custom: ballistic shell flight + timed impact
+    vec3d GetWeaponTracerPosition() const;
     void UpdateWeaponTracer();
     void RenderWeaponTracer(baseRender_msg *arg);
 

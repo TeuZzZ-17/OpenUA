@@ -650,6 +650,7 @@ public:
     bool IsCockpitCameraActive() const;
     bool IsPlayerFirstPersonCameraActive() const;
     bool ShouldRenderCockpitCameraBody() const;
+    vec3d GetBodyPosition() const;
     vec3d GetCockpitCameraPosition() const;
     vec3d GetCockpitCameraViewPosition() const;
     virtual float GetPlayerViewZoom() const { return 1.0f; }

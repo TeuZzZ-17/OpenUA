@@ -1935,6 +1935,7 @@ static int ParseChainFXBlock(ScriptParser::Parser &parser,
     float groundDecalSize = 0.0f;
     TVisualTint groundDecalTint;
     bool groundDecalRandomRotation = false;
+    float groundDecalEdgeFade = 0.0f;
     World::TChainFXConfig::Trigger trigger = World::TChainFXConfig::TRIGGER_NONE;
     bool hasTrigger = false;
     bool badTrigger = false;
@@ -2038,6 +2039,7 @@ static int ParseChainFXBlock(ScriptParser::Parser &parser,
                     chain.ground_decal_size = groundDecalSize;
                     chain.ground_decal_tint = groundDecalTint;
                     chain.ground_decal_random_rotation = groundDecalRandomRotation;
+                    chain.ground_decal_edge_fade = groundDecalEdgeFade;
                     out->push_back(chain);
                 }
             }
@@ -2173,29 +2175,36 @@ static int ParseChainFXBlock(ScriptParser::Parser &parser,
             else
                 physicalVehicle = parser.stol(p2, NULL, 0);
         }
-        else if ( !StriCmp(p1, "ground_decal_texture") )
+        else if ( !StriCmp(p1, "texture") )
             groundDecalTexture = p2;
-        else if ( ParseBoundedIntegerParam("ground_decal_points", p1, p2,
+        else if ( ParseBoundedIntegerParam("points", p1, p2,
                                            3, 32, 12, groundDecalPoints) )
         {
         }
-        else if ( ParseBoundedIntegerParam("ground_decal_jaggedness", p1, p2,
+        else if ( ParseBoundedIntegerParam("jaggedness", p1, p2,
                                            0, 100, 35, groundDecalJaggedness) )
         {
         }
-        else if ( !StriCmp(p1, "ground_decal_size") )
+        else if ( !StriCmp(p1, "size") )
         {
             size_t parsed = 0;
             const float value = parser.stof(p2, &parsed);
             groundDecalSize = parsed == p2.size() && std::isfinite(value) && value > 0.0f
                             ? value : 0.0f;
         }
-        else if ( ParseTintParam(parser, "ground_decal_tint", p1, p2,
+        else if ( ParseTintParam(parser, "tint", p1, p2,
                                  groundDecalTint, true) )
         {
         }
-        else if ( !StriCmp(p1, "ground_decal_random_rotation") )
+        else if ( !StriCmp(p1, "random_rotation") )
             groundDecalRandomRotation = p2 == "1";
+        else if ( !StriCmp(p1, "edge_fade") )
+        {
+            size_t parsed = 0;
+            const float value = parser.stof(p2, &parsed);
+            groundDecalEdgeFade = parsed == p2.size() && std::isfinite(value)
+                                ? std::max(0.0f, std::min(value, 10.0f)) : 0.0f;
+        }
         else
         {
             if ( context == CHAIN_FX_SUPERITEM )
@@ -3314,6 +3323,14 @@ int VhclProtoParser::Handle(ScriptParser::Parser &parser, const std::string &p1,
     }
     else if ( !StriCmp(p1, "mgun_decal_random_rotation") )
         _vhcl->mgun_decal.ground_decal_random_rotation = p2 == "1";
+    else if ( !StriCmp(p1, "mgun_decal_edge_fade") )
+    {
+        size_t parsed = 0;
+        const float value = parser.stof(p2, &parsed);
+        _vhcl->mgun_decal.ground_decal_edge_fade =
+            parsed == p2.size() && std::isfinite(value)
+            ? std::max(0.0f, std::min(value, 10.0f)) : 0.0f;
+    }
     else if ( !StriCmp(p1, "mgun_decal_duration") )
         _vhcl->mgun_decal.duration = NonNegativeFiniteMilliseconds(parser, p2);
     else if ( !StriCmp(p1, "mgun_decal_fade_in") )

@@ -285,7 +285,7 @@ void NC_STACK_ypagun::AI_layer3(update_msg *arg)
         if ( stunned )
             vTgt = _target_dir;
         else
-            vTgt = _secndT.pbact->_position - _position;
+            vTgt = _secndT.pbact->_position - GetBodyPosition();
 
         float dist = vTgt.length();
 
@@ -501,7 +501,7 @@ void NC_STACK_ypagun::User_layer(update_msg *arg)
                     arg79.g_time = _clock;
                     arg79.start_point = _fire_pos;
                     arg79.flags = (arg->inpt->Buttons.Is(5) ? 1 : 0) | 2;
-                    if ( (_oflags & BACT_OFLAG_VIEWER) && arg->inpt->Buttons.Is(3) )
+                    if ( (_oflags & BACT_OFLAG_VIEWER) && arg->inpt->HandBrakePressed )
                         arg79.flags |= BACT_ARG79_FLAG_RECOIL_BRAKE_HELD;
 
                     if ( LaunchMissile(&arg79) )
@@ -598,7 +598,7 @@ void NC_STACK_ypagun::FightWithBact(bact_arg75 *arg)
     if ( ypagun_UsesArtilleryShellWeapon(this) )
         return;
 
-    vec3d vTgt = arg->target.pbact->_position - _position;
+    vec3d vTgt = arg->target.pbact->_position - GetBodyPosition();
 
     float dist = vTgt.length();
 
@@ -625,7 +625,7 @@ void NC_STACK_ypagun::FightWithBact(bact_arg75 *arg)
         {
             vec3d launchDirection;
             const vec3d launchPos =
-                _position + _rotation.Transpose().Transform(_fire_pos);
+                GetBodyPosition() + _rotation.Transpose().Transform(_fire_pos);
             arcGrenadeReachable = ypabact_TrySolveArcGrenadeDirection(
                 launchPos, arg->target.pbact->_position, wproto, &launchDirection);
         }
@@ -792,7 +792,7 @@ void NC_STACK_ypagun::Renew()
 
 bool NC_STACK_ypagun::TestTargetSector(const NC_STACK_ypabact * cel_unit) const
 {
-    vec3d vTgt = cel_unit->_position - _position;
+    vec3d vTgt = cel_unit->_position - GetBodyPosition();
 
     float dist = vTgt.length();
 

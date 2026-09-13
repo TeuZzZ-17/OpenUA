@@ -3362,7 +3362,7 @@ int32_t NC_STACK_ypaworld::SpawnAttachedTransientVP(int32_t modelId, NC_STACK_yp
     if ( !base )
         return 0;
 
-    _transientVPs.emplace_back(base, owner->_position, owner->_rotation, lifeTime);
+    _transientVPs.emplace_back(base, owner->GetBodyPosition(), owner->_rotation, lifeTime);
 
     TTransientVP &fx = _transientVPs.back();
     fx.id = _nextTransientVPId++;
@@ -3433,7 +3433,7 @@ int32_t NC_STACK_ypaworld::SpawnAttachedStatusTransientMesh(const std::string &p
     if ( !base )
         return 0;
 
-    _transientVPs.emplace_back(base, owner->_position, owner->_rotation, lifeTime);
+    _transientVPs.emplace_back(base, owner->GetBodyPosition(), owner->_rotation, lifeTime);
     TTransientVP &fx = _transientVPs.back();
     fx.id = _nextTransientVPId++;
     fx.followOwner = true;
@@ -4070,7 +4070,7 @@ static void yw_RenderTransientVPs(NC_STACK_ypaworld *world, std::list<NC_STACK_y
             // which is the intermittent "floating FX" bug seen in-game.
             if ( it->followUseOwnerTransform )
             {
-                vec3d ownerPos = owner->_position;
+                vec3d ownerPos = owner->GetBodyPosition();
                 mat3x3 ownerRenderRot = owner->_rotation.Transpose();
 
                 if ( it->followOwnerVisualTransform )
@@ -4092,7 +4092,7 @@ static void yw_RenderTransientVPs(NC_STACK_ypaworld *world, std::list<NC_STACK_y
                 vec3d offset = it->followLocalOffset;
                 if ( it->followRotateOffset )
                     offset = owner->_rotation.Transpose().Transform(offset);
-                it->pos = owner->_position + offset;
+                it->pos = owner->GetBodyPosition() + offset;
                 it->rot = mat3x3::Ident();
             }
         }

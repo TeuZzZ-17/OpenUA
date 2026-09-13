@@ -1294,9 +1294,28 @@ bool NC_STACK_ypabact::ShouldRenderCockpitCameraBody() const
     return IsCockpitCameraActive();
 }
 
+vec3d NC_STACK_ypabact::GetBodyPosition() const
+{
+    const NC_STACK_ypabact *owner = this;
+    if ( (_isUnitGunChild || _isDummy) && _parent && _parent != this )
+        owner = _parent;
+
+    vec3d position = _position;
+    if ( (owner->_bact_type == BACT_TYPES_TANK || owner->_bact_type == BACT_TYPES_CAR) &&
+         owner->IsCockpitCameraActive() )
+    {
+        // Ground controllers store the viewer origin at vwr_overeof, whereas
+        // the authored body (and existing compound collision origin) uses overeof.
+        // Camera, body, attachments and muzzle must share this conversion. Keep
+        // it while airborne too, so landing does not change their relative pose.
+        position.y += owner->_viewer_overeof - owner->_overeof;
+    }
+    return position;
+}
+
 vec3d NC_STACK_ypabact::GetCockpitCameraPosition() const
 {
-    return _position + _rotation.Transpose().Transform(_cockpit_camera_offset);
+    return GetBodyPosition() + _rotation.Transpose().Transform(_cockpit_camera_offset);
 }
 
 vec3d NC_STACK_ypabact::GetCockpitCameraViewPosition() const
@@ -3948,7 +3967,7 @@ void NC_STACK_ypabact::Update(update_msg *arg)
         GFX::Engine.matrixAspectCorrection(bact_cam.SclRot, false);
     }
 
-    _tForm.Pos = _position;
+    _tForm.Pos = GetBodyPosition();
     if ( _heliLandingVisualOffsetY != 0.0f )
         _tForm.Pos.y += _heliLandingVisualOffsetY;
 
@@ -5353,7 +5372,7 @@ void NC_STACK_ypabact::Render(baseRender_msg *arg)
         {
             if ( bd->flags & EVPROTO_FLAG_ACTIVE )
             {
-                bd->vp->Bas->TForm().Pos = bd->pos;
+                bd->vp->Bas->TForm().Pos = bd->pos + (GetBodyPosition() - _position);
                 if ( _bact_type == BACT_TYPES_BACT )
                     bd->vp->Bas->TForm().Pos.y += _heliLandingVisualOffsetY;
 
@@ -6816,7 +6835,7 @@ void NC_STACK_ypabact::User_layer(update_msg *arg)
             v61.start_point.y = _fire_pos.y;
             v61.start_point.z = _fire_pos.z;
             v61.flags = (arg->inpt->Buttons.Is(5) ? 1 : 0) | 2;
-            if ( (_oflags & BACT_OFLAG_VIEWER) && arg->inpt->Buttons.Is(3) )
+            if ( (_oflags & BACT_OFLAG_VIEWER) && arg->inpt->HandBrakePressed )
                 v61.flags |= BACT_ARG79_FLAG_RECOIL_BRAKE_HELD;
 
             LaunchMissile(&v61);
@@ -10866,7 +10885,7 @@ static vec3d ypabact_GetArtilleryShellLaunchPosition(NC_STACK_ypabact *unit)
     if ( !unit )
         return vec3d(0.0, 0.0, 0.0);
 
-    return unit->_position + unit->_rotation.Transpose().Transform(unit->_fire_pos);
+    return unit->GetBodyPosition() + unit->_rotation.Transpose().Transform(unit->_fire_pos);
 }
 
 static void ypabact_TriggerArtilleryShellFireVisual(NC_STACK_ypabact *unit)
@@ -12272,9 +12291,9 @@ static vec3d ypabact_LaserSourceOrigin(NC_STACK_ypabact *bact)
     // configured fire_x/fire_y/fire_z muzzle offset. num_weapons never expands this
     // into multiple laser sources.
     if ( bact->getBACT_viewer() )
-        return bact->_position + bact->_rotation.Transpose().Transform(bact->_viewer_position + localOffset);
+        return bact->GetBodyPosition() + bact->_rotation.Transpose().Transform(bact->_viewer_position + localOffset);
 
-    return bact->_position + bact->_rotation.Transpose().Transform(localOffset);
+    return bact->GetBodyPosition() + bact->_rotation.Transpose().Transform(localOffset);
 }
 
 static bool ypabact_LaserWorldHit(NC_STACK_ypabact *shooter, const vec3d &origin,
@@ -12940,7 +12959,7 @@ static vec3d ypabact_VerticalLaserSourceOrigin(NC_STACK_ypabact *bact, const bac
         return vec3d(0.0, 0.0, 0.0);
 
     vec3d localOffset = arg ? arg->start_point : bact->_fire_pos;
-    return bact->_position + bact->_rotation.Transpose().Transform(localOffset);
+    return bact->GetBodyPosition() + bact->_rotation.Transpose().Transform(localOffset);
 }
 
 static bool ypabact_IsVerticalLaserMultiCandidate(NC_STACK_ypabact *shooter, NC_STACK_ypabact *unit,
@@ -13751,7 +13770,7 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
     if ( cockpitDirectAim )
     {
         cockpitAimArg = *arg;
-        vec3d origin = _position + _rotation.Transpose().Transform(arg->start_point);
+        vec3d origin = GetBodyPosition() + _rotation.Transpose().Transform(arg->start_point);
         cockpitAimArg.direction = ypabact_GetCockpitAimDirection(this, origin, arg->direction, _rotation.AxisZ(), 1400.0);
         cockpitAimArg.tgt_pos = cockpitAimArg.direction;
         arg = &cockpitAimArg;
@@ -13887,7 +13906,7 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
     // or make each projectile converge independently on the same aim point.
     if ( cockpitDirectAim && v13 > 1 )
     {
-        vec3d commonOrigin = _position + _rotation.Transpose().Transform(
+        vec3d commonOrigin = GetBodyPosition() + _rotation.Transpose().Transform(
             vec3d(0.0, cockpitAimArg.start_point.y, cockpitAimArg.start_point.z));
         cockpitAimArg.direction = ypabact_GetCockpitAimDirection(
             this, commonOrigin, cockpitRequestedViewDir, _rotation.AxisZ(), 1400.0);
@@ -13956,7 +13975,7 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
 
         ypaworld_arg146 arg147;
         arg147.vehicle_id = selectedWeapon;
-        arg147.pos = _position + _rotation.Transpose().Transform( vec3d(v37, arg->start_point.y, arg->start_point.z) );
+        arg147.pos = GetBodyPosition() + _rotation.Transpose().Transform( vec3d(v37, arg->start_point.y, arg->start_point.z) );
         arg147.weapon_sound_events_enabled =
             soundEnabledProjectiles < soundEventProjectileLimit;
 
@@ -14268,8 +14287,8 @@ size_t NC_STACK_ypabact::LaunchMissile(bact_arg79 *arg)
 
         // OpenNeoUA custom: game.handbrake_power controls both braking strength
         // and recoil reduction.  The recoil part is applied only when the
-        // input path explicitly marks the shot, so AI/third-person behavior
-        // stays unchanged and remains independent from push_resistance.
+        // input path marks an explicit brake press, not joystick auto-brake.
+        // AI/third-person behavior stays independent from push_resistance.
         if ( arg->flags & BACT_ARG79_FLAG_RECOIL_BRAKE_HELD )
             recoilAmount *= 1.0f - ypabact_ReadHandBrakeRecoilReduction();
 
@@ -18105,8 +18124,8 @@ size_t NC_STACK_ypabact::FireMinigun(bact_arg105 *arg)
     for (int shotId = 0; shotId < mgunShots; shotId++)
     {
         bool cockpitAim = IsCockpitCameraActive();
-        vec3d shotPos = cockpitAim ? GetCockpitCameraPosition() : _position;
-        vec3d shotOldPos = cockpitAim ? shotPos : _old_pos;
+        vec3d shotPos = cockpitAim ? GetCockpitCameraPosition() : GetBodyPosition();
+        vec3d shotOldPos = cockpitAim ? shotPos : _old_pos + (GetBodyPosition() - _position);
         float spreadX = _mgun_spread_x;
         float spreadY = _mgun_spread_y;
         const float handBrakeSpreadScale = ypabact_GetHandBrakeRandomSpreadScale(this);
